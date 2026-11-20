@@ -41,13 +41,18 @@ BLANK_COLOR = "#3c3c3c"
 
 # What differs on every run whatever the page does, found in the words: the moment a
 # kept picture is named by (20261011T231147.943), a date or a time of day as the
-# browser writes one, and a duration as the Machine writes one (1m 2s, 1h 3m).
+# browser writes one or format.js does (2026-11-18 11:53:53), and a duration as the Machine writes one (1m 2s, 1h 3m).
 MOMENT = (
     r"\d{8}T\d{6}(?:\.\d+)?"
+    r"|\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}(?::\d{2})?"
     r"|\d{1,2}/\d{1,2}/\d{4},? \d{1,2}:\d{2}(?::\d{2})?(?:\s?[AP]M)?"
     r"|\d{1,2}:\d{2}:\d{2}(?:\.\d+)?(?:\s?[AP]M)?"
     r"|\b\d+h \d+m(?: \d+s)?\b|\b\d+m \d+s\b"
 )
+
+# The time an armed latch has left, as the Machine, its Control pad, a badge and a Site
+# row write it (``4:58``): minutes and seconds, never part of a moment's time of day.
+TIME_LEFT = r"(?<![\d:])\d+:\d\d(?![\d:])"
 
 # A temperature to its tenth beside its target (``210.2/210``), which wobbles round the
 # target from poll to poll.
@@ -144,6 +149,8 @@ def _blanked(blanks: Sequence[Blank]) -> str:
             f"{each} {{ background: {BLANK_COLOR} !important; color: transparent !important;"
             " text-shadow: none !important; border-radius: 3px; }\n"
             f"{inside} {{ visibility: hidden !important; }}\n"
+            # A canvas paints over its background: a world blanked whole is drawn black.
+            f":is({each}):is(canvas) {{ filter: brightness(0) !important; }}\n"
         )
     return style
 
@@ -260,10 +267,15 @@ def same_picture(one: bytes, other: bytes) -> bool:
     return changed <= one_image.size[0] * one_image.size[1] // 10000
 
 
+# Set by a run with --gpu (tests/e2e/conftest.py): a GPU's pixels are that machine's.
+GPU_RUN = False
+
+
 def _keep_unless_changed(path: Path, png: bytes) -> None:
     """Write the screenshot only when its pixels differ from the committed one, so a
-    run leaves an unchanged screenshot as committed."""
-    if path.exists() and same_picture(path.read_bytes(), png):
+    run leaves an unchanged screenshot as committed; a run with --gpu leaves every
+    committed one."""
+    if path.exists() and (GPU_RUN or same_picture(path.read_bytes(), png)):
         return
     path.write_bytes(png)
 

@@ -29,6 +29,12 @@
  * own projection where its next picture would lie, the drawn mat of the place it
  * lies on put away meanwhile.
  *
+ * A view whose marks the page has read (overlay(view, read): the Marks window's
+ * answer) wears them over its outlines, a heads-up layer on the picture: each mark's
+ * box in its kind's colour, an unsure one dashed, and each note as a ✎ badge where
+ * it is written, its words its own or a call to type them. A note's badge pressed
+ * hands the note to the page (onNote).
+ *
  * Mats and outlines are drawn at the site's top level only; a badge and a
  * pyramid follow their thing's level. The mat's texture comes from GET
  * /photos/pictures/file?px= (answered no-store): made once per view, reused
@@ -38,21 +44,21 @@
  * homography the piece keeps.
  *
  * mountPictureMarks({ scene, anchors, base, hostBounds, hostInView,
- * atTopLevel, floorPoint, onSelect, isSelected, onChange }):
+ * atTopLevel, floorPoint, onSelect, isSelected, onChange, onNote }):
  *   hostBounds(path) -> {min:[x,y,z], max:[x,y,z]} in the site's frame, or null;
  *   hostInView(path) -> whether the thing is at the level being looked at;
  *   atTopLevel() -> whether the site's top level is on screen;
  *   floorPoint(made) -> [x,y,z] where the floor's things stand when no view says;
  *   onSelect(path) -> the page selects a host ("" is the floor) or a camera;
  *   isSelected(path) -> whether that is the selection;
- *   onChange(attached) -> after every fetch that answered.
+ *   onChange(attached) -> after every fetch that answered;
+ *   onNote(view, mark) -> a note's badge pressed: the page opens it.
  */
 
 import * as THREE from "three";
-
-// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, as the
-// viewer's sceneAt turns it, so a picture reads as it was taken, not mirrored.
-const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
+// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, the
+// viewer's sceneAt (frames.js), so a picture reads as it was taken, not mirrored.
+import { sceneAt as toScene } from "/static/frames.js";
 // A badge's words are markup: a device's label and a picture's name are text in it.
 const escapeText = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -63,6 +69,8 @@ export const CHOSEN_COLOR = 0x66ccff;
 export const TRACE_COLOR = 0xff66cc;
 export const OVER_COLOR = 0xff5544;  // a shape over something resting on its host: flagged, not refused
 export const PYRAMID_COLOR = 0xffcc66;
+// A whiteboard's mark, by its kind: a diagram's, writing, or one the sorter cannot place.
+export const MARK_COLORS = { diagram: 0x6fb3e8, writing: 0xc3a2ec, unsure: 0xffcc66 };
 
 const MAT_LIFT = 1.0;      // mm above the top: the mat
 const HATCH_LIFT = 1.5;    // its hatch, between it and the outlines
@@ -72,6 +80,7 @@ const HATCH_COLOR = 0x8fa3b8;
 const OVER_FILL_OPACITY = 0.45; // a flagged shape's area, filled to be seen from across the room
 const OUTLINE_LIFT = 2.0;  // the outlines and their pick meshes, over the mat
 const BADGE_LIFT = 6.0;    // the badge's point, over both, so neither dims it
+const MARK_LIFT = 2.5;     // a mark's box, over the outlines
 const FLOOR_UNSIZED_MM = 600;  // an unsized floor mat's drawing width
 const TEXTURE_PX = 1024;   // the long side a mat's texture is asked at
 const GRID = 16;           // a mat's subdivisions along each side of its picture
@@ -127,7 +136,7 @@ export function onto(H, u, v) {
     return [(H[0][0] * u + H[0][1] * v + H[0][2]) / w, (H[1][0] * u + H[1][1] * v + H[1][2]) / w];
 }
 
-export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostInView, atTopLevel, floorPoint, onSelect, isSelected = () => false, onChange }) {
+export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostInView, atTopLevel, floorPoint, onSelect, isSelected = () => false, onChange, onNote = () => {} }) {
     let site = null;
     let attached = null;           // the last answer of GET /sites/{s}/attached
     let generation = 0;            // a site change makes answers still in flight stale
@@ -140,6 +149,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
     const poses = new Map();       // camera -> a pose being dragged, ahead of the server
     const textures = new Map();    // view id -> THREE.Texture, for the page's time on the site
     const groups = new Map();      // host -> { mats: Group, view, lay }
+    const overlays = new Map();    // view -> { marks, notes }: what the page read of its marks
     const cameraMarks = new Map(); // camera -> { pyramid, onCamera, live }
     const pickables = [];
 
@@ -365,7 +375,61 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
                 group.add(fill);
             }
         }
+        drawOverlay(group, view, lay);
         return group;
+    }
+
+    // A view's marks over its outlines: each mark's box in its kind's colour, an
+    // unsure one dashed; nothing for a mark said to be nothing.
+    function drawOverlay(group, view, lay) {
+        const read = overlays.get(view.id);
+        if (!read) return;
+        for (const mark of read.marks) {
+            const colour = MARK_COLORS[mark.kind];
+            if (colour === undefined) continue;
+            const [x0, y0] = [mark.min_point.x, mark.min_point.y], [x1, y1] = [mark.max_point.x, mark.max_point.y];
+            const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([u, v]) => on(lay, u, v, MARK_LIFT));
+            if (corners.some((c) => !c)) continue;
+            const material = mark.kind === "unsure"
+                ? new THREE.LineDashedMaterial({ color: colour, dashSize: 10, gapSize: 8 })
+                : new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.85 });
+            const box = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(corners.map((c) => toScene(...c))), material);
+            if (mark.kind === "unsure") box.computeLineDistances();
+            box.userData.mark = { id: mark.id, kind: mark.kind, by: mark.by };
+            group.add(box);
+        }
+    }
+
+    // A note's badge: where it is written on its view's picture, as laid now.
+    const noteKey = (viewId, mark) => `note:${viewId}:${mark}`;
+    function notePoint(viewId, note) {
+        const g = [...groups.values()].find((e) => e.view && e.view.id === viewId && e.lay && e.mats && e.mats.visible);
+        if (!g) return null;
+        const p = on(g.lay, (note.min[0] + note.max[0]) / 2, (note.min[1] + note.max[1]) / 2, BADGE_LIFT);
+        return p ? toScene(...p) : null;
+    }
+    function drawNotes(wanted) {
+        for (const g of groups.values()) {
+            const read = g.view && g.mats ? overlays.get(g.view.id) : null;
+            if (!read) continue;
+            for (const note of read.notes) {
+                const key = noteKey(g.view.id, note.id);
+                wanted.add(key);
+                let badge = anchors.get(key);
+                if (!badge) {
+                    const view = g.view.id;
+                    badge = anchors.badge(key, () => notePoint(view, note), { className: "note-mark", group: "Pictures" });
+                    badge.dataset.note = note.id;
+                    badge.addEventListener("click", () => onNote(view, note.id));
+                }
+                badge.setAttribute("aria-label", note.words ? `${note.id} says ${note.words}` : `${note.id}: type what it says`);
+                const said = note.words || note.read;
+                anchors.say(key, {
+                    icon: "✎",
+                    words: said ? `${escapeText(said)}${note.words ? "" : ' <span class="sub">as a model read it</span>'}` : '<span class="sub">type what it says, in Marks</span>',
+                });
+            }
+        }
     }
 
     // A picture on its camera: the camera's view cut at ON_CAMERA_MM in front of
@@ -415,7 +479,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const by = view.camera ? ` · by ${view.camera}` : "";
         const flagged = overShapes(view);
         const over = flagged.length ? ` · ${flagged.length} over ${[...new Set(flagged.flatMap((s) => s.overlaps))].join(", ")}` : "";
-        return `${host === FLOOR ? "floor" : host} · ${view.picture.split("/").pop()} · ${shapes}${over}${view.mat && view.mat.width ? "" : " · unsized"}${by}`;
+        const name = (view.shown_as || view.picture).split("/").pop();
+        return `${host === FLOOR ? "floor" : host} · ${name} · ${shapes}${over}${view.mat && view.mat.width ? "" : " · unsized"}${by}`;
     }
     // The place's own spot: the drawn picture's top-left corner, or with none
     // drawn, the same corner of the host's top.
@@ -524,7 +589,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             badge.classList.toggle("has-device", !!cam.device);
             anchors.say(key, { icon: "📷", words: cameraWords(cameraNamed(cam.name)) });
         }
-        for (const key of anchors.keys()) if ((key.startsWith("place:") || key.startsWith("camera:")) && !wanted.has(key)) anchors.remove(key);
+        drawNotes(wanted);
+        for (const key of anchors.keys()) if ((key.startsWith("place:") || key.startsWith("camera:") || key.startsWith("note:")) && !wanted.has(key)) anchors.remove(key);
         // A texture is kept while its view is pinned here, and no longer.
         const pinned = new Set(views().map((v) => v.id));
         for (const [id, tex] of textures) if (!pinned.has(id)) { tex.dispose(); textures.delete(id); }
@@ -676,6 +742,13 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             return true;
         },
         unchoose() { if (!chosen) return; chosen = null; redraw(); },
+        /* A view's marks and notes as the page read them, worn over its picture (null:
+         * none). Only a drawn view shows them. */
+        overlay(viewId, read) {
+            if (read) overlays.set(viewId, { marks: read.marks || [], notes: read.notes || [] });
+            else overlays.delete(viewId);
+            redraw();
+        },
         /* Draw one of a place's views: a change of what is drawn, never a site switch. */
         draw(host, viewId) {
             if (!viewsAt(host).some((v) => v.id === viewId)) return false;
@@ -774,6 +847,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
                 } : null,
                 fills: g.mats ? g.mats.children.filter((o) => o.userData.over).map((o) => ({ ...o.userData.over, colour: o.material.color.getHex() })) : [],
                 outlines: g.mats ? g.mats.children.filter((o) => o.userData.shape).map((o) => ({ ...o.userData.shape, colour: o.material.color.getHex() })) : [],
+                marks: g.mats ? g.mats.children.filter((o) => o.userData.mark).map((o) => ({ ...o.userData.mark, colour: o.material.color.getHex() })) : [],
                 texture: g.view && textures.get(g.view.id) ? { ...textures.get(g.view.id).userData } : null,
             }));
         },
@@ -792,7 +866,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             clearTrace();
             for (const tex of textures.values()) tex.dispose();
             textures.clear();
-            for (const key of anchors.keys()) if (key.startsWith("place:") || key.startsWith("camera:")) anchors.remove(key);
+            for (const key of anchors.keys()) if (key.startsWith("place:") || key.startsWith("camera:") || key.startsWith("note:")) anchors.remove(key);
+            overlays.clear();
             site = null; attached = null;
         },
     };

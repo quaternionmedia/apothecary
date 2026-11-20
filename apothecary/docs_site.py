@@ -121,7 +121,7 @@ def _inline_code(text: str) -> str:
     return "".join(out)
 
 
-def _local(url: str) -> bool:
+def is_local(url: str) -> bool:
     """A URL a page here may load: relative, or this server's own."""
     return not re.match(r"^(?:[a-z][a-z0-9+.-]*:)?//", url, re.I)
 
@@ -138,7 +138,7 @@ def _link(text: str, url: str) -> str:
 def _image(alt: str, url: str) -> str:
     # A picture from elsewhere is not fetched (the page's policy would refuse
     # it anyway); it is named, so a reader knows what the page meant.
-    if not _local(url):
+    if not is_local(url):
         return f"[picture elsewhere: {html.escape(alt or url, quote=False)}]"
     return '<img src="{}" alt="{}">'.format(
         html.escape(url, quote=True), html.escape(alt, quote=True)
@@ -412,7 +412,7 @@ NOT_MADE = (
 )
 
 
-def _generated(target: Path) -> bool:
+def is_generated(target: Path) -> bool:
     """Whether ``target`` is under docs/generated/, which is made and not committed."""
     return GENERATED_ROOT.resolve() in target.resolve().parents
 
@@ -422,7 +422,7 @@ def _resolve(root: Path, rel: str) -> Path:
     if root.resolve() not in target.parents and target != root.resolve():
         raise HTTPException(status_code=404, detail="not a documentation path")
     if not target.is_file():
-        if _generated(target):
+        if is_generated(target):
             raise HTTPException(
                 status_code=404,
                 detail=f"no such page: {rel} -- docs/generated/ is "
@@ -435,13 +435,13 @@ def _resolve(root: Path, rel: str) -> Path:
 HREF = re.compile(r'<a href="([^"#?]+)([#?][^"]*)?">(.*?)</a>')
 
 
-def _mark_absent(body: str, here: Path) -> str:
+def mark_absent(body: str, here: Path) -> str:
     """A link to a generated page that is not there yet says so, and how to make it:
     docs/generated/ is not committed, so on a fresh clone it is empty."""
 
     def mark(m: re.Match) -> str:
         href = html.unescape(m.group(1))
-        if not _local(href):
+        if not is_local(href):
             return m.group(0)
         if href.startswith("/"):
             prefix, _, rest = href.lstrip("/").partition("/")
@@ -451,7 +451,7 @@ def _mark_absent(body: str, here: Path) -> str:
             target = root / rest
         else:
             target = here / href
-        if _generated(target) and not target.exists():
+        if is_generated(target) and not target.exists():
             return f'{m.group(0)} <span class="absent">({NOT_MADE})</span>'
         return m.group(0)
 
@@ -461,12 +461,12 @@ def _mark_absent(body: str, here: Path) -> str:
 def render_page(root: Path, prefix: str, rel: str) -> HTMLResponse:
     target = _resolve(root, rel)
     body, title = render_markdown(target.read_text(encoding="utf-8"))
-    return _page(
-        _mark_absent(body, target.parent), title or target.stem, f"{prefix.strip('/')}/{rel}"
+    return as_page(
+        mark_absent(body, target.parent), title or target.stem, f"{prefix.strip('/')}/{rel}"
     )
 
 
-def _page(body: str, title: str, crumb: str, status_code: int = 200) -> HTMLResponse:
+def as_page(body: str, title: str, crumb: str, status_code: int = 200) -> HTMLResponse:
     cls, text, tip = refresh_note()
     return HTMLResponse(
         PAGE.format(
@@ -542,7 +542,7 @@ def walkthrough_index_page() -> HTMLResponse:
         "each page shows, and lists the guides beside them.</p>"
         f'<ul class="pages">{rows}</ul>'
     )
-    return _page(body, "The walkthrough", "walkthrough/")
+    return as_page(body, "The walkthrough", "walkthrough/")
 
 
 def _serve(root: Path, prefix: str, rel: str):

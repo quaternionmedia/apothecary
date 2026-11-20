@@ -54,6 +54,7 @@ KEY_SIZE = (120, 120)
 STRIP_SIZE = (800, 100)
 SIMULATED_DECK_ENV = "APOTHECARY_SIMULATED_DECK"
 EVENT_LOG = 200  # events kept per deck
+READ_HZ = 100  # how often the library's reader asks an idle deck for a report (its own: 20)
 
 KEY, KNOB_TURN, KNOB_PRESS, TOUCH = "key", "knob-turn", "knob-press", "touch"
 EVENT_KINDS = (KEY, KNOB_TURN, KNOB_PRESS, TOUCH)
@@ -133,27 +134,38 @@ def _colour(name: Optional[str]) -> str:
     raise ValueError(f"not a colour: {name!r} (one of {', '.join(COLOURS)}, or #rrggbb)")
 
 
-def render(size, text: str, colour: Optional[str] = None, small: Optional[str] = None) -> bytes:
-    """``text`` centred on ``colour`` as a JPEG of ``size``; ``small`` a line under it."""
+def render(
+    size,
+    text: str,
+    colour: Optional[str] = None,
+    small: Optional[str] = None,
+    bar: Optional[float] = None,
+) -> bytes:
+    """``text`` centred on ``colour`` as a JPEG of ``size``; ``small`` a line under it and
+    ``bar`` (0 to 1) a bar along the foot of it, that full."""
     from PIL import Image, ImageDraw
 
     img = Image.new("RGB", size, _colour(colour))
     pen = ImageDraw.Draw(img)
     big = max(12, min(size[1] // 3, size[0] // max(2, len(text) or 1)))
-    pen.text(
-        (size[0] / 2, size[1] / 2 - (size[1] // 10 if small else 0)),
-        text,
-        fill="white",
-        font=_font(big),
-        anchor="mm",
-    )
+    lift = size[1] // 10 if small else 0
+    if bar is not None:
+        lift = size[1] // 5  # the bar takes the foot: the lines move up out of its way
+    pen.text((size[0] / 2, size[1] / 2 - lift), text, fill="white", font=_font(big), anchor="mm")
     if small:
         pen.text(
-            (size[0] / 2, size[1] * 0.82),
+            (size[0] / 2, size[1] * (0.66 if bar is not None else 0.82)),
             small,
             fill="#dddddd",
             font=_font(max(10, size[1] // 7)),
             anchor="mm",
+        )
+    if bar is not None:
+        left, right = size[0] * 0.04, size[0] * 0.96
+        top, foot = size[1] * 0.82, size[1] * 0.94
+        pen.rectangle((left, top, right, foot), outline="white", width=2)
+        pen.rectangle(
+            (left, top, left + (right - left) * max(0.0, min(1.0, bar)), foot), fill="white"
         )
     out = io.BytesIO()
     img.save(out, format="JPEG", quality=90)
@@ -164,8 +176,13 @@ def render_key(text: str, colour: Optional[str] = None, small: Optional[str] = N
     return render(KEY_SIZE, text, colour, small)
 
 
-def render_strip(text: str, colour: Optional[str] = None, small: Optional[str] = None) -> bytes:
-    return render(STRIP_SIZE, text, colour, small)
+def render_strip(
+    text: str,
+    colour: Optional[str] = None,
+    small: Optional[str] = None,
+    bar: Optional[float] = None,
+) -> bytes:
+    return render(STRIP_SIZE, text, colour, small, bar)
 
 
 # --- links: the deck itself, simulated or real --------------------------------------
@@ -176,6 +193,7 @@ class Link(Protocol):
     def set_strip(self, jpeg: bytes) -> None: ...
     def set_brightness(self, percent: int) -> None: ...
     def serial(self) -> Optional[str]: ...
+    def alive(self) -> bool: ...
     def close(self) -> None: ...
 
 
@@ -189,6 +207,10 @@ class SimulatedLink:
         self.report = report
         self.brightness = 100
         self.sent: List[tuple] = []
+        self.lost = False  # a test's: the deck gone from USB, as a real one's lead pulled
+
+    def alive(self) -> bool:
+        return not self.lost
 
     def set_key(self, index: int, jpeg: bytes) -> None:
         self.sent.append(("key", index, len(jpeg)))
@@ -219,9 +241,15 @@ class HidLink:
                 f"the Stream Deck + is found but would not open ({exc}): this account may not "
                 "write its USB device; docs/stream-deck.md gives the udev rule"
             ) from exc
+        device.set_poll_frequency(READ_HZ)
         device.set_key_callback(self._key)
         device.set_dial_callback(self._dial)
         device.set_touchscreen_callback(self._touch)
+
+    def alive(self) -> bool:
+        """Whether the library's reader is still reading: it ends, and closes the device,
+        the first time the transport fails -- the deck gone from USB."""
+        return bool(getattr(self.device, "run_read_thread", True))
 
     def _key(self, deck, key, state) -> None:
         self.report(KEY, int(key), bool(state))
@@ -236,8 +264,9 @@ class HidLink:
     def _touch(self, deck, event, value) -> None:
         name = getattr(event, "name", str(event)).lower()
         kind = {"short": "short", "long": "long", "drag": "drag"}.get(name, name)
-        point = dict(zip(("x", "y", "x_out", "y_out"), (value or ()), strict=False))
-        self.report(TOUCH, 0, {"kind": kind, **{k: int(v) for k, v in point.items()}})
+        # The library's value is a dict: x and y, and x_out and y_out for a drag.
+        point = {k: int(value[k]) for k in ("x", "y", "x_out", "y_out") if k in (value or {})}
+        self.report(TOUCH, 0, {"kind": kind, **point})
 
     def set_key(self, index: int, jpeg: bytes) -> None:
         with self.device:
@@ -284,7 +313,12 @@ class Deck:
         self._events: Deque[DeckEvent] = deque(maxlen=EVENT_LOG)
         self._seq = 0
         self._listeners: List[Listener] = []
+        self._settled: Dict[Listener, Callable[[], None]] = {}
         self._lock = threading.Lock()
+        self._make_link = make_link
+        self._mending = threading.Lock()
+        self.mended = 0  # times the deck was lost and opened again
+        self.lost_at: Optional[float] = None  # when it was last found lost, until mended
         self.link = make_link(self._heard)
         serial = self.link.serial()
         if serial:
@@ -299,25 +333,89 @@ class Deck:
                 f"no key {index}: a {self.info.model} has keys 0 to {self.info.keys - 1}"
             )
         jpeg = render_key(text, colour, small)
-        self.link.set_key(index, jpeg)
+        self._send(lambda link: link.set_key(index, jpeg))
         with self._lock:
             self.keys[index] = {"text": text, "small": small, "colour": colour, "jpeg": jpeg}
         return jpeg
 
     def set_strip(
-        self, text: str, colour: Optional[str] = None, small: Optional[str] = None
+        self,
+        text: str,
+        colour: Optional[str] = None,
+        small: Optional[str] = None,
+        bar: Optional[float] = None,
     ) -> bytes:
-        jpeg = render_strip(text, colour, small)
-        self.link.set_strip(jpeg)
+        jpeg = render_strip(text, colour, small, bar)
+        self._send(lambda link: link.set_strip(jpeg))
         with self._lock:
-            self.strip = {"text": text, "small": small, "colour": colour, "jpeg": jpeg}
+            self.strip = {"text": text, "small": small, "colour": colour, "bar": bar, "jpeg": jpeg}
         return jpeg
 
     def set_brightness(self, percent: int) -> None:
         if not 0 <= percent <= 100:
             raise ValueError("brightness is 0 to 100 per cent")
-        self.link.set_brightness(percent)
+        self._send(lambda link: link.set_brightness(percent))
         self.brightness = percent
+
+    # a deck lost and found: a lead knocked, a hub that dropped it for a moment
+    def alive(self) -> bool:
+        return self.link.alive()
+
+    def _send(self, write: Callable[[Link], None]) -> None:
+        """``write`` to the deck; a deck that will not take it is opened again and asked
+        once more, and ``DeckUnavailable`` says it is gone when that fails too."""
+        link = self.link
+        try:
+            if link.alive():
+                write(link)
+                return
+        except DeckUnavailable:
+            raise
+        except Exception:  # noqa: BLE001 -- the library's TransportError: the deck went away
+            pass
+        self.mend(failed=link)
+        try:
+            write(self.link)
+        except DeckUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- gone again between the two
+            raise DeckUnavailable(f"{self.info.id} is not answering on USB ({exc})") from exc
+
+    def mend(self, failed: Optional[Link] = None) -> bool:
+        """A deck whose link is lost opened again, and drawn as it was: every key, the
+        strip and its brightness sent afresh, its listeners kept. ``failed`` is a link a
+        write just failed on, lost whatever it says of itself. False when the link is
+        alive, or another thread has mended it since (nothing to do); ``DeckUnavailable``
+        while the deck is not back on USB."""
+        with self._mending:
+            if self.link.alive() and self.link is not failed:
+                return False
+            if self.lost_at is None:
+                self.lost_at = time.time()
+            try:
+                self.link.close()
+            except Exception:  # noqa: BLE001 -- already gone
+                pass
+            try:
+                link = self._make_link(self._heard)
+            except DeckUnavailable:
+                raise
+            except Exception as exc:  # noqa: BLE001 -- not back yet: KeyError, TransportError
+                raise DeckUnavailable(f"{self.info.id} is not back on USB yet ({exc})") from exc
+            self.link = link
+            with self._lock:
+                keys, strip = dict(self.keys), self.strip
+            try:
+                link.set_brightness(self.brightness)
+                for index, key in keys.items():
+                    link.set_key(index, key["jpeg"])
+                if strip is not None:
+                    link.set_strip(strip["jpeg"])
+            except Exception as exc:  # noqa: BLE001 -- lost again while being drawn
+                raise DeckUnavailable(f"{self.info.id} went away again ({exc})") from exc
+            self.mended += 1
+            self.lost_at = None
+            return True
 
     # hearing
     def _heard(self, kind: str, index: int, value: object) -> None:
@@ -338,21 +436,35 @@ class Deck:
             raise DeckUnavailable(f"{self.info.id} is a real deck: it reports for itself")
         _check_event(kind, index, value, self.info)
         self._heard(kind, index, value)
-        return self._events[-1]
+        event = self._events[-1]
+        # A listener that acts on its own thread has acted by the time this returns: what
+        # a test or the page reads next is what the event did.
+        with self._lock:
+            waits = list(self._settled.values())
+        for wait in waits:
+            wait()
+        return event
 
     def events(self, since: int = 0) -> List[DeckEvent]:
         with self._lock:
             return [e for e in self._events if e.seq > since]
 
-    def listen(self, listener: Listener) -> Callable[[], None]:
-        """``listener`` told of each event from now on; the call that stops it."""
+    def listen(
+        self, listener: Listener, settled: Optional[Callable[[], None]] = None
+    ) -> Callable[[], None]:
+        """``listener`` told of each event from now on, on the thread that heard it, so it
+        returns at once; the call that stops it. ``settled`` returns when the listener has
+        acted on everything it was told: an event given to a simulated deck waits for it."""
         with self._lock:
             self._listeners.append(listener)
+            if settled is not None:
+                self._settled[listener] = settled
 
         def stop() -> None:
             with self._lock:
                 if listener in self._listeners:
                     self._listeners.remove(listener)
+                self._settled.pop(listener, None)
 
         return stop
 
@@ -372,6 +484,9 @@ class Deck:
                 if self.strip is None
                 else {k: v for k, v in self.strip.items() if k != "jpeg"},
                 "last_event": self._seq,
+                "alive": self.link.alive(),
+                "mended": self.mended,
+                "lost_at": self.lost_at,
             }
 
 
@@ -456,7 +571,18 @@ class Decks:
 
     def __init__(self):
         self._open: Dict[str, Deck] = {}
+        self._failed: Dict[str, str] = {}  # why each deck's last opening failed, until one works
         self._lock = threading.RLock()
+
+    def opened(self, deck_id: str) -> Optional[Deck]:
+        """The deck, if it is open; nothing is opened by asking."""
+        with self._lock:
+            return self._open.get(deck_id)
+
+    def failed(self, deck_id: str) -> Optional[str]:
+        """Why the last opening of ``deck_id`` failed, while none has worked since."""
+        with self._lock:
+            return self._failed.get(deck_id)
 
     def list(self) -> List[DeckInfo]:
         """Every deck found, simulated or real, none of them opened. Raises
@@ -477,13 +603,27 @@ class Decks:
             if _engine() == "simulated":
                 if deck_id not in simulated_ids():
                     raise KeyError(deck_id)
-                deck = Deck(DeckInfo(id=deck_id, simulated=True), SimulatedLink)
+                info, make_link = DeckInfo(id=deck_id, simulated=True), SimulatedLink
             else:
-                device = next((d for info, d in _real_devices() if info.id == deck_id), None)
-                if device is None:
+                if not any(info.id == deck_id for info, _ in _real_devices()):
                     raise KeyError(deck_id)
-                deck = Deck(DeckInfo(id=deck_id), lambda report: HidLink(device, report))
+
+                def link(report: Report, deck_id: str = deck_id) -> HidLink:
+                    # Looked for afresh each time it is opened: a deck that left USB and
+                    # came back is another device to the library, at the same place.
+                    device = next((d for info, d in _real_devices() if info.id == deck_id), None)
+                    if device is None:
+                        raise DeckUnavailable(f"{deck_id} is not on USB")
+                    return HidLink(device, report)
+
+                info, make_link = DeckInfo(id=deck_id), link
+            try:
+                deck = Deck(info, make_link)
+            except DeckUnavailable as exc:
+                self._failed[deck_id] = str(exc)  # what its answer says until it opens
+                raise
             self._open[deck_id] = deck
+            self._failed.pop(deck_id, None)
             return deck
 
     def release(self, deck_id: str) -> bool:

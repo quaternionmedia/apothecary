@@ -1,16 +1,30 @@
-"""The universe: every registered part a leaf, and every other site one piece.
+"""The universe: a sphere of nested shells, every registered part a leaf on one and
+every other site one piece on the outermost.
 
 A prototype, under hierarchy.py's draft record. The universe is a Site in the same
 ``Assembly`` shape the garage example uses, so the fractal viewer reaches a part by
 navigating down to it and a site by stepping into its piece:
 
-- every registered part is a leaf (``role="part"``), on a catalog grid. The layout is
-  a catalog, not a build: nothing constrains where a leaf sits (``validate_universe``);
+- every registered part is a leaf (``role="part"``). Its **shell** is its composition
+  depth (``composition.py``, ``orbitals.py``): a part built from no other registered
+  part is innermost, and each shell outward holds the parts compounded from the shells
+  inside it. The shells are dense, so none is empty. A leaf stands on its shell facing
+  outward: its ``turn`` stands its up along the ray from the middle of the universe,
+  and its footprint's middle is on the shell. A leaf carries its part's ``category``,
+  and the leaves of one category sit together on their shell; it carries what it is
+  ``built_from``, and each of those stands as nearly under it as its shell allows --
+  under the first by name, of the leaves that are built from one. The layout is a
+  catalog, not a build: nothing constrains it (``validate_universe``);
 - every other registered site is one piece (``role="site"``, ``site_ref`` naming it),
-  in a cell of its own in the row in front of the grid. It is drawn in miniature: its
-  site's top-level pieces as boxes, scaled into the cell, never larger than they are.
-  The boxes are read from the site as it stands, so a piece follows its site
-  (``represent``), and nothing is rendered to draw one.
+  on the shell outside every part's, upright. It is drawn in miniature: its site's
+  top-level pieces as boxes, scaled to fit, never larger than they are. The boxes are
+  read from the site as it stands, so a piece follows its site (``represent``), and
+  nothing is rendered to draw one.
+
+The layout is the whole answer to where anything stands: it is made again, from the
+footprints and depths, whenever the universe is drawn, so a piece moved by hand
+returns, and a site added that nests no part moves only what is on the outermost shell, and one that
+nests a part in another moves that one to the shell its depth then gives it.
 
 A site's piece is not a level: a step into it goes to its site. The universe does not
 hold itself.
@@ -18,22 +32,20 @@ hold itself.
 
 from __future__ import annotations
 
-from typing import List, Mapping, NamedTuple, Optional, Set, Tuple
+import math
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Set
 
-from .hierarchy import Assembly, LayoutReport, Site
+from pydantic import PrivateAttr
+
+from .composition import nesting_fingerprint, nesting_of, scad_children, with_nesting
+from .hierarchy import Assembly, LayoutReport
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
+from .orbitals import composition_depths, dense_shells, lay_out, turned
 from .primitives import Cube
 from .projects.parts.skeleton import ROOT
 from .projects.registry import load_parts
 from .site_names import UNIVERSE_SHOWN
-
-# Catalog grid layout (mm) -- generous fixed pitch so parts of varying size
-# don't need individual placement; visual sensibility only, since layout
-# validity isn't a meaningful constraint for a browsing catalog (see
-# validate_universe).
-GRID_COLUMNS = 5
-CELL_PITCH = 300.0
 
 # Fallback footprint for a part whose wrapper has no default_bounds set, and for
 # the piece of a site that holds nothing with a size -- still gives it a real,
@@ -56,17 +68,6 @@ NOT_ON_THE_BENCH = {"building"}
 def piece_name(site_name: str) -> str:
     """The name of ``site_name``'s piece in the universe."""
     return f"{PIECE_PREFIX}{site_name}"
-
-
-def _grid_position(index: int) -> Vector3D:
-    row, col = divmod(index, GRID_COLUMNS)
-    return Vector3D(x=col * CELL_PITCH, y=row * CELL_PITCH, z=0)
-
-
-def _site_cell(index: int) -> Vector3D:
-    """The ``index``-th cell of the sites' rows, in front of the parts' (-y)."""
-    row, col = divmod(index, GRID_COLUMNS)
-    return Vector3D(x=col * CELL_PITCH, y=-(row + 1) * CELL_PITCH, z=0)
 
 
 class Box(NamedTuple):
@@ -172,36 +173,114 @@ def real_size(site: Assembly) -> Optional[Vector3D]:
     return extent.size if extent is not None else None
 
 
+def _bounding_radius(box: BoundingBox3D) -> float:
+    """The radius of the sphere about a footprint's middle that holds the footprint."""
+    return 0.5 * math.sqrt(box.width**2 + box.height**2 + box.depth**2)
+
+
+def arrange(universe: Assembly) -> None:
+    """Every leaf and every piece of ``universe`` on its shell, from their footprints.
+
+    A leaf's shell is its ``depth`` ranked among the depths that occur; the pieces
+    stand on the shell outside the last. On a shell the nodes of one ``category`` sit
+    together, and a leaf another is ``built_from`` stands under it -- under the first by
+    name, where several are built from it (``orbitals.lay_out``). Nothing already placed
+    is read, so a hand-moved node goes back, and the pieces, being outermost and built
+    into nothing, move no leaf."""
+    leaves = [c for c in universe.children if c.part_ref and c.footprint is not None]
+    pieces = [c for c in universe.children if c.site_ref and c.footprint is not None]
+    shells = dense_shells({leaf.name: leaf.depth or 0 for leaf in leaves})
+    outermost = max(shells.values(), default=-1) + 1
+    shell_of = {**shells, **{piece.name: outermost for piece in pieces}}
+    size_of = {node.name: _bounding_radius(node.footprint) for node in (*leaves, *pieces)}
+    category_of = {node.name: node.category for node in (*leaves, *pieces)}
+    built_into: dict = {}
+    for leaf in leaves:
+        for child in leaf.built_from or ():
+            built_into.setdefault(child, []).append(leaf.name)
+    parent_of = {child: min(parents) for child, parents in built_into.items()}
+    placed = lay_out(shell_of, size_of, category_of=category_of, parent_of=parent_of)
+    for node in (*leaves, *pieces):
+        where = placed[node.name]
+        # The middle of the footprint, turned with the node, lands on the shell's point.
+        turn = (
+            Vector3D(x=where.turn[0], y=where.turn[1], z=where.turn[2]) if node.part_ref else None
+        )
+        middle = node.footprint.center
+        carried = (
+            turned((turn.x, turn.y, turn.z), (middle.x, middle.y, middle.z))
+            if turn is not None
+            else (middle.x, middle.y, middle.z)
+        )
+        node.turn = turn
+        node.shell = where.shell
+        node.position = Vector3D(
+            x=where.point[0] - carried[0],
+            y=where.point[1] - carried[1],
+            z=where.point[2] - carried[2],
+        )
+
+
+class Universe(Assembly):
+    """The universe's root: an ``Assembly`` that also keeps what its leaves' composition
+    was read from, so the depths can follow the sites as they stand (``represent``).
+    Not part of what is sent: a private attribute is no field."""
+
+    _own: Dict[str, Set[str]] = PrivateAttr(default_factory=dict)
+    _explicit: Set[str] = PrivateAttr(default_factory=set)
+    _nesting: Any = PrivateAttr(default=None)
+
+
+def follow_nesting(universe: Assembly, sites: Mapping[str, Assembly]) -> bool:
+    """Read each leaf's depth from the sites as they stand now, when what they nest has
+    changed since it was last read. True when it was read again.
+
+    Walking the sites for the parts they hold costs a pass over their nodes, which a
+    fetch pays each time; the depths, the leaves' ``built_from`` and so the layout change
+    only when that fingerprint does, so a site that nests nothing new moves no part.
+    A universe not made by ``create_universe_site`` has no composition to read and keeps
+    the depths it was given."""
+    if not isinstance(universe, Universe) or not universe._own:
+        return False
+    nesting = nesting_of(sites.values())
+    fingerprint = nesting_fingerprint(nesting)
+    if fingerprint == universe._nesting:
+        return False
+    children = with_nesting(universe._own, universe._explicit, nesting)
+    depths = composition_depths(children)
+    for leaf in universe.children:
+        if leaf.part_ref in children:
+            leaf.depth = depths[leaf.part_ref]
+            leaf.built_from = children[leaf.part_ref] or None
+    universe._nesting = fingerprint
+    return True
+
+
 def represent(universe: Assembly, sites: Mapping[str, Assembly]) -> None:
     """One piece in ``universe`` for each of ``sites``, drawn from it as it stands.
 
-    A site new to the register gets its piece, in the first cell of the sites' rows
-    no piece stands in; a site that left it loses its piece; a piece already there
-    keeps its place and is drawn again, so it follows a site whose pieces moved. The
-    pieces come first among the universe's own, by their sites' names."""
+    A site new to the register gets its piece; a site that left it loses its piece; a
+    piece already there is drawn again, so it follows a site whose pieces moved. Then
+    the universe is arranged (``arrange``): the pieces on the outermost shell, wherever
+    a piece stood before. The pieces come first among the universe's own, by their
+    sites' names."""
+    follow_nesting(universe, sites)
     standing = {child.site_ref: child for child in universe.children if child.site_ref}
-    kept = {name: piece for name, piece in standing.items() if name in sites}
-    taken: Set[Tuple[float, float]] = {(p.position.x, p.position.y) for p in kept.values()}
     pieces: List[Assembly] = []
     for name in sorted(sites):
-        piece = kept.get(name)
-        if piece is None:
-            cell = next(
-                c
-                for c in map(_site_cell, range(len(sites) + len(taken)))
-                if (c.x, c.y) not in taken
-            )
-            taken.add((cell.x, cell.y))
-            piece = Assembly(name=piece_name(name), role="site", site_ref=name, position=cell)
+        piece = standing.get(name) or Assembly(name=piece_name(name), role="site", site_ref=name)
         _draw(piece, sites[name])
         pieces.append(piece)
     universe.children = [*pieces, *(c for c in universe.children if not c.site_ref)]
+    arrange(universe)
 
 
 def create_universe_site(sites: Optional[Mapping[str, Assembly]] = None) -> Assembly:
-    """The universe: one leaf for each registered ``parts/`` entry, and one piece for
-    each of ``sites``, the other registered sites by their names. A building one of
-    ``sites`` holds is that site's, and no leaf."""
+    """The universe: one leaf for each registered ``parts/`` entry, on the shell its
+    composition depth gives it, and one piece for each of ``sites``, the other
+    registered sites by their names, outside them. A building one of ``sites`` holds
+    is that site's, and no leaf. The depths follow the sites each time the universe is
+    arranged (``follow_nesting``)."""
     sites = sites or {}
     theirs = set().union(*(parts_held(site) for site in sites.values())) if sites else set()
     # A part that does not load is left off the grid; `apothecary problems` reports it.
@@ -210,17 +289,25 @@ def create_universe_site(sites: Optional[Mapping[str, Assembly]] = None) -> Asse
         for item, part in load_parts(ROOT).parts
         if not (part.category in NOT_ON_THE_BENCH and item.name in theirs)
     }
+    own = scad_children(parts)
+    explicit = {name for name, part in parts.items() if part.parts is not None}
+    children = with_nesting(own, explicit, nesting_of(sites.values()))
+    depths = composition_depths(children)
     leaves = [
         Assembly(
             name=name,
             role="part",
             part_ref=name,
-            position=_grid_position(index),
+            category=parts[name].category,
+            depth=depths[name],
+            built_from=children[name] or None,
             footprint=parts[name].get_bounds() or FALLBACK_BOUNDS,
         )
-        for index, name in enumerate(sorted(parts))
+        for name in sorted(parts)
     ]
-    universe = Site(name=UNIVERSE_SHOWN, structures=leaves)
+    universe = Universe(name=UNIVERSE_SHOWN, role="site", children=leaves)
+    universe._own, universe._explicit = own, explicit
+    universe._nesting = nesting_fingerprint(nesting_of(sites.values()))
     represent(universe, sites)
     return universe
 

@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary import jobs
-from apothecary.api import _site_store, app
+from apothecary import jobs, sites
+from apothecary.api import app
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware.models import DeviceInfo, PrinterInfo
 from apothecary.hierarchy import Structure
@@ -27,9 +27,9 @@ AT = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
 
 @pytest.fixture(autouse=True)
 def reset_garage_site():
-    _site_store.reset("garage")
+    sites.store.reset("garage")
     yield
-    _site_store.reset("garage")
+    sites.store.reset("garage")
 
 
 def _status(printer):
@@ -117,7 +117,8 @@ def test_the_openapi_shows_the_jobs_routes():
 def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     fake_arduino_cli, monkeypatch
 ):
-    """A printer pinned in the garage offers print, and a print there can name the
+    """A printer pinned in the garage offers print and tune (a heater loop's experiment,
+    which runs no file), and a print there can name the
     garage's parts and pieces: every node built from a part, and every piece made
     from a picture, but nothing of the printer itself. Pinned nowhere, it names none;
     a board that is no machine offers nothing."""
@@ -135,10 +136,11 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     }
     assert loose["site"] is None and loose["parts"] == []
     assert loose["operations"] == [
-        {"kind": "print", "label": "Print", "inputs": [".gcode", ".gco", ".g"]}
+        {"kind": "print", "label": "Print", "inputs": [".gcode", ".gco", ".g"]},
+        {"kind": "tune", "label": "Tune", "inputs": []},
     ]
 
-    garage = _site_store.get("garage")
+    garage = sites.store.get("garage")
     garage.children.append(Structure(name="bin_1"))  # as a piece made from a picture stands
     made = {"bin_1": SimpleNamespace(word="bin", picture="captures/bench.png", camera="camera_1")}
     assert client.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}).is_success
@@ -159,7 +161,14 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     assert parts["arduino_uno"] == "arduino_uno"
     assert parts["bin_1"] == "bin"
     assert not [p for p in parts if p == "printer_1" or p.startswith("printer_1.")]
-    assert list(parts) == sorted(parts)
+    # The site's own first, then every registered part no node has the path of, by
+    # its name: any part of the apothecary can be made where the printer stands.
+    here_first = [p["path"] for p in here["parts"] if not p["registered"]]
+    registered = [p["path"] for p in here["parts"] if p["registered"]]
+    assert list(parts) == here_first + registered
+    assert here_first == sorted(here_first) and registered == sorted(registered)
+    assert "calibration_cube" in registered and parts["calibration_cube"] == "calibration_cube"
+    assert "footpedal" not in registered and "esp32_devkitc" in registered
     # A made piece carries the picture and the camera it came from, for the job's
     # record (kept, and not shown in a job's row); a part carries neither.
     by_path = {p["path"]: p for p in here["parts"]}
@@ -168,6 +177,7 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
         "name": "bin",
         "picture": "captures/bench.png",
         "camera": "camera_1",
+        "registered": False,
     }
     assert by_path["footpedal"]["picture"] is None and by_path["footpedal"]["camera"] is None
 

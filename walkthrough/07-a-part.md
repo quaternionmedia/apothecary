@@ -21,8 +21,8 @@ otherwise the wrapper found by sanitising the name.
     >>> part_named("arduino_uno", ROOT).sidecar_path.name
     'part.json'
 
-    >>> from apothecary.projects.registry import scan_projects, _sanitize_module_name
-    >>> _sanitize_module_name("datum_core")
+    >>> from apothecary.projects.registry import scan_projects, sanitize_module_name
+    >>> sanitize_module_name("datum_core")
     'datum_core'
 
 The wrapper is what gives a part a description, a category and an envelope,

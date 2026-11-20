@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import struct
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 Triangle = Tuple[Tuple[float, float, float], Tuple[float, float, float], Tuple[float, float, float]]
 
@@ -167,6 +167,77 @@ def bounds(
     if lo[0] == math.inf:
         raise MeshError("a mesh with no triangles has no bounds")
     return (lo[0], lo[1], lo[2]), (hi[0], hi[1], hi[2])
+
+
+def section_radii(
+    triangles: Iterable[Triangle],
+    point: Tuple[float, float, float],
+    axis: Tuple[float, float, float],
+) -> Optional[Tuple[float, float]]:
+    """Where the plane through ``point`` square to ``axis`` (a unit vector) cuts the
+    mesh, the nearest and the furthest the cut comes to the line through ``point``
+    along ``axis``: a tube's bore and outside radii, cut across. None where the plane
+    cuts nothing. A corner that lies on the plane counts as cut."""
+    px, py, pz = point
+    ax, ay, az = axis
+    near, far = math.inf, -math.inf
+
+    def radius(q) -> float:
+        dx, dy, dz = q[0] - px, q[1] - py, q[2] - pz
+        along = dx * ax + dy * ay + dz * az
+        rx, ry, rz = dx - along * ax, dy - along * ay, dz - along * az
+        return math.sqrt(rx * rx + ry * ry + rz * rz)
+
+    for triangle in triangles:
+        side = [(c[0] - px) * ax + (c[1] - py) * ay + (c[2] - pz) * az for c in triangle]
+        if min(side) > 0 or max(side) < 0:
+            continue
+        for i in range(3):
+            a, b = triangle[i], triangle[(i + 1) % 3]
+            da, db = side[i], side[(i + 1) % 3]
+            if da == 0:
+                cut = [a]
+            elif da * db < 0:
+                t = da / (da - db)
+                cut = [
+                    (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
+                ]
+            else:
+                cut = []
+            for q in cut:
+                r = radius(q)
+                near, far = min(near, r), max(far, r)
+    if far < 0:
+        return None
+    return near, far
+
+
+def crossings(
+    triangles: Iterable[Triangle], point: Tuple[float, float, float], axis: int
+) -> List[float]:
+    """Where the line through ``point`` along axis ``axis`` (0, 1 or 2: X, Y or Z)
+    crosses the mesh's surface, as that axis's coordinates, in order: the faces a
+    caliper's jaws closing along that line would meet. A crossing two triangles share
+    (an edge the line passes through) is counted once."""
+    u, v = [i for i in range(3) if i != axis]
+    pu, pv = point[u], point[v]
+    found: List[float] = []
+    for a, b, c in triangles:
+        # The triangle seen down the axis: is (pu, pv) inside it, and where along the axis?
+        d = (b[u] - a[u]) * (c[v] - a[v]) - (c[u] - a[u]) * (b[v] - a[v])
+        if abs(d) < 1e-12:
+            continue  # edge-on to the line
+        s = ((pu - a[u]) * (c[v] - a[v]) - (c[u] - a[u]) * (pv - a[v])) / d
+        t = ((b[u] - a[u]) * (pv - a[v]) - (pu - a[u]) * (b[v] - a[v])) / d
+        if s < -1e-9 or t < -1e-9 or s + t > 1 + 1e-9:
+            continue
+        found.append(a[axis] + s * (b[axis] - a[axis]) + t * (c[axis] - a[axis]))
+    found.sort()
+    out: List[float] = []
+    for x in found:
+        if not out or x - out[-1] > 1e-6:
+            out.append(x)
+    return out
 
 
 def transform(triangles: Iterable[Triangle], scale: float = 1.0, up: str = "z") -> List[Triangle]:

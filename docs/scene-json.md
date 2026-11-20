@@ -14,7 +14,7 @@ Example:
 
 ```json
 {
-  "name": "demo",
+  "name": "example",
   "objects": [
     {
       "type": "cube",

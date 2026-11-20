@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 from playwright.sync_api import Page, expect
 from rings import labels, on_row, press
 from rings import open_on_row as ring_on
-from viewer_ready import settled
+from viewer_ready import OCCLUSION_TESTED, settled
 from views_helpers import png
 
 # How long the page may take to show its rows, or to say something.
@@ -90,6 +90,22 @@ def attached(page: Page, url: str) -> dict:
 def drawn(page: Page, host: str):
     """The pictures drawn at a host, as the page holds them; None where none is."""
     return next((entry for entry in page.evaluate(STATE) if entry["host"] == host), None)
+
+
+# Straight down on a mat from 1400 mm over its middle, a little in front.
+LOOK_DOWN = """([x, y, z]) => {
+    const v = window.fractalViewer;
+    v.orbitControls.target.copy(v.sceneAt(x, y, z));
+    v.camera.position.copy(v.sceneAt(x, y - 70, z + 1400));
+    v.orbitControls.update();
+}"""
+
+
+def look_down(page: Page, host: str) -> None:
+    """The camera turned to look straight down on the picture pinned at ``host``, as a
+    person orbits it there, and the world drawn so."""
+    page.evaluate(LOOK_DOWN, drawn(page, host)["mat"]["centre"])
+    settled(page, frames=OCCLUSION_TESTED)
 
 
 def picture(pen_shapes: bool = True) -> bytes:

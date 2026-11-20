@@ -43,7 +43,6 @@ class TestCalibrationCubePart:
         assert DEFAULT.name == "calibration_cube"
         assert DEFAULT.category == "calibration"
         assert "test" in DEFAULT.tags
-        assert "demo" in DEFAULT.tags
 
     def test_bounds_default(self):
         """Default bounds match 10mm cube (axes are preview-only)."""

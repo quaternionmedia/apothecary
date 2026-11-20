@@ -33,9 +33,9 @@ depth including a single ``Feature``.
 from __future__ import annotations
 
 import itertools
-from typing import List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .booleans import Difference, Union
 from .core import OpenSCADObject
@@ -43,9 +43,10 @@ from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
 from .objects import SceneObject
+from .orbitals import turned
 from .primitives import Cylinder, Import
 from .scene import Scene
-from .transforms import Translate
+from .transforms import Rotate, Translate
 
 
 def part_stl_path(part_ref: str) -> Optional[str]:
@@ -68,6 +69,34 @@ def part_stl_path(part_ref: str) -> Optional[str]:
     return None
 
 
+class Connection(BaseModel):
+    """Two of a node's children meeting, an interface of each: ``a`` and ``b`` are
+    ``child.interface``, the child by its name among its siblings and the interface
+    by its name on the child's part. A connection is no composition -- neither part
+    is built from the other -- and it moves nothing by itself: ``connections.place``
+    puts the parts where their interfaces meet, ``connections.check`` says whether
+    they do and how they fit (docs/connections.md)."""
+
+    a: str
+    b: str
+
+    @field_validator("a", "b")
+    @classmethod
+    def _child_dot_interface(cls, value: str) -> str:
+        node, _, interface = value.rpartition(".")
+        if not node or not interface:
+            raise ValueError(f"{value!r} is not child.interface")
+        return value
+
+    def ends(self) -> Tuple[Tuple[str, str], Tuple[str, str]]:
+        """((child, interface), (child, interface))."""
+        a, b = self.a.rpartition("."), self.b.rpartition(".")
+        return (a[0], a[2]), (b[0], b[2])
+
+    def __str__(self) -> str:
+        return f"{self.a} ↔ {self.b}"
+
+
 class Assembly(BaseModel):
     """One generic, self-similar recursive node — the fractal core.
 
@@ -87,6 +116,26 @@ class Assembly(BaseModel):
     site's piece in the universe (``universe.py``), drawn in miniature. It is
     not a level of its own; a viewer that steps into it goes to the site.
 
+    ``turn``, when set, turns the node about its own origin, in degrees, as OpenSCAD's
+    ``rotate([rx, ry, rz])`` does (about x, then y, then z), before ``position``
+    places it: the node's frame, and ``footprint`` in it, are what is turned, and
+    ``world_bounds`` is the box that contains the turned footprint. None (the default)
+    turns nothing and changes nothing. This is a node's place in a layout; it is not a
+    part's pose (``display_rotation``, refused in ``parts/base.py``, which would turn
+    the part itself after it renders): a part's own geometry stays as it prints. The
+    reported tree (``api._assembly_tree``) follows a turn for the node itself; a node
+    that holds nodes of its own and is turned is compiled correctly, but the tree's
+    world frame does not carry the turn into what it holds, so only a node that holds
+    nothing is turned in the universe.
+
+    ``depth`` and ``shell``, when set, say where the universe (``universe.py``) lays the
+    node: how deep its part is composed (0: built from no other registered part) and
+    which spherical shell that puts it on (0 innermost, a dense rank among the depths
+    that occur; the sites' pieces stand on the outermost). ``built_from`` names the
+    registered parts it is built from that the universe holds (``composition.py``), so
+    the universe can stand them under it and a viewer can draw what joins them. None
+    everywhere else.
+
     ``category``, when set, names the subsystem this node belongs to (a
     viewer's domain, e.g. "wall"/"furniture"/"mechanical"/"fluid"/
     "electrical" -- a project invents its own vocabulary, same as ``role``).
@@ -101,6 +150,17 @@ class Assembly(BaseModel):
     sitting on the bench. A ``part_ref`` node needs no ``sketch_ref``: its
     part folder's sketch is found automatically (``firmware.bindings``).
 
+    ``connections``, when any, pair an interface of one child with an interface of
+    another (``Connection``): how two parts that stand side by side meet, which
+    ``connections.place`` turns into the children's positions and turns. Children a
+    connection joins are not checked for overlap with each other: one goes into the
+    other by design. Empty everywhere else.
+
+    ``params``, on a ``part_ref`` node, are the parameters its part stands at where
+    they are not its defaults -- a preset's, or a person's own: a hose's end and a
+    port as two nodes of one part. ``connections`` reads its interfaces and its
+    bounds at them. None everywhere else; a viewer draws the part at its defaults.
+
     ``build_origin``, on a node with a ``build_volume``, says where that
     volume's (0, 0, 0) is in the node's own frame -- where the nozzle stands
     at home, on the bed's surface. A machine drawn as it is (an Ender 3's
@@ -112,6 +172,10 @@ class Assembly(BaseModel):
     name: str
     role: str = "assembly"
     position: Vector3D = Field(default_factory=Vector3D)
+    turn: Optional[Vector3D] = None
+    depth: Optional[int] = None
+    shell: Optional[int] = None
+    built_from: Optional[List[str]] = None
     footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
     build_volume: Optional[Vector3D] = None
@@ -123,21 +187,46 @@ class Assembly(BaseModel):
     children: List["Assembly"] = Field(default_factory=list)
     comment: Optional[str] = None
     part_ref: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
     site_ref: Optional[str] = None
     category: Optional[str] = None
     sketch_ref: Optional[str] = None
+    connections: List[Connection] = Field(default_factory=list)
 
     def world_bounds(self) -> Optional[BoundingBox3D]:
         """This node's ``footprint``, offset by ``position`` into the parent's frame.
 
         Returns ``None`` if no ``footprint`` was given — bounds are opt-in
-        metadata, not derived from the rendered geometry.
+        metadata, not derived from the rendered geometry. A node with a ``turn``
+        reports the box that contains its turned footprint.
         """
         if self.footprint is None:
             return None
+        if self.turn is not None:
+            return self.turned_bounds(self.position)
         return BoundingBox3D(
             min_point=self.footprint.min_point + self.position,
             max_point=self.footprint.max_point + self.position,
+        )
+
+    def turned_bounds(self, at: Vector3D) -> Optional[BoundingBox3D]:
+        """The box that contains this node's footprint after its ``turn``, with the
+        node's origin at ``at``; the footprint offset by ``at`` when it has no turn."""
+        if self.footprint is None:
+            return None
+        if self.turn is None:
+            return BoundingBox3D(
+                min_point=self.footprint.min_point + at, max_point=self.footprint.max_point + at
+            )
+        lo, hi = self.footprint.min_point, self.footprint.max_point
+        corners = [
+            turned((self.turn.x, self.turn.y, self.turn.z), (x, y, z))
+            for x in (lo.x, hi.x)
+            for y in (lo.y, hi.y)
+            for z in (lo.z, hi.z)
+        ]
+        return BoundingBox3D.from_points(
+            [Vector3D(x=x + at.x, y=y + at.y, z=z + at.z) for x, y, z in corners]
         )
 
     def to_scad_object(self, strict: bool = False) -> OpenSCADObject:
@@ -150,7 +239,7 @@ class Assembly(BaseModel):
         and reusing it directly would silently overwrite that inner label
         instead of nesting around it), subtract ``subtractions`` if any, tag
         the result with a ``"Role: name"`` comment, and wrap in a translate if
-        ``position`` is non-zero.
+        ``position`` is non-zero, after turning it about its own origin if it has a ``turn``.
         """
         positives: List[OpenSCADObject] = []
         if self.base is not None:
@@ -203,6 +292,8 @@ class Assembly(BaseModel):
             positive.comment = self.comment or label
             body = positive
 
+        if self.turn is not None and self.turn != Vector3D():
+            body = Rotate(a=self.turn, children=[body])
         if self.position != Vector3D():
             return Translate(v=self.position, children=[body])
         return body
@@ -281,7 +372,9 @@ def _path(parent: str, name: str) -> str:
     return f"{parent}.{name}" if parent else name
 
 
-def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutViolation]:
+def check_no_overlaps(
+    nodes: List["Assembly"], parent: str = "", joined: Iterable[Iterable[str]] = ()
+) -> List[LayoutViolation]:
     """Pairwise overlap check between every sibling node that carries a footprint.
 
     A node without a ``footprint`` is skipped, not treated as
@@ -289,13 +382,17 @@ def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutV
     merely touch (e.g. one resting on another's surface) are not violations;
     see :func:`_penetrates`. ``parent`` is the siblings' parent's dotted path
     from the site ("" for the site's own pieces), so each violation names its
-    pieces by path as well as by name.
+    pieces by path as well as by name. ``joined`` names pairs of siblings a
+    connection joins, which overlap by design: a spigot is in its socket.
     """
     bounded = [(n, n.world_bounds()) for n in nodes]
     bounded = [(n, b) for n, b in bounded if b is not None]
+    pairs = {frozenset(pair) for pair in joined}
 
     violations: List[LayoutViolation] = []
     for (node_a, bounds_a), (node_b, bounds_b) in itertools.combinations(bounded, 2):
+        if frozenset((node_a.name, node_b.name)) in pairs:
+            continue
         if _penetrates(bounds_a, bounds_b):
             violations.append(
                 LayoutViolation(
@@ -311,10 +408,30 @@ def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutV
 def _validate_tree(assembly: "Assembly", path: str = "") -> LayoutReport:
     """Every level's siblings checked; ``path`` is ``assembly``'s from the root
     being validated ("" for the root itself)."""
-    violations = list(check_no_overlaps(assembly.children, path))
+    joined = [(a[0], b[0]) for a, b in (c.ends() for c in assembly.connections)]
+    violations = list(check_no_overlaps(assembly.children, path, joined))
     for child in assembly.children:
         violations.extend(_validate_tree(child, _path(path, child.name)).violations)
     return LayoutReport(violations=violations)
+
+
+def find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
+    """Resolve a dotted, site-rooted path (e.g. ``printer_1.gantry_system``)
+    to the Assembly node it names, walking ``children``/``additions``/
+    ``subtractions`` together -- the same three-list-as-one-tree shape
+    ``GET /sites/{name}``'s tree exposes to the client, so a path the viewer
+    displays is always resolvable back here. Returns None if any segment
+    doesn't match, rather than raising, so callers can choose their own 404
+    wording.
+    """
+    node = site
+    for segment in path.split("."):
+        candidates = [*node.children, *node.additions, *node.subtractions]
+        found = next((c for c in candidates if c.name == segment), None)
+        if found is None:
+            return None
+        node = found
+    return node
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +567,7 @@ class Feature:
 
 __all__ = [
     "Assembly",
+    "Connection",
     "LayoutViolation",
     "LayoutReport",
     "check_no_overlaps",

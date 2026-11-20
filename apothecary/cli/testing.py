@@ -9,6 +9,7 @@ same process that starts a loop of its own is refused ("asyncio.run() cannot be
 called from a running event loop").
 """
 
+import functools
 import importlib.util
 import os
 import subprocess
@@ -17,7 +18,7 @@ import sys
 import click
 
 from ..projects.parts.skeleton import ROOT
-from . import coverage_summary
+from . import coverage_summary, green
 from .retired import retired
 
 # Named on every argv: pytest ignores testpaths once it is given a path.
@@ -35,13 +36,34 @@ def _pytest_argv(*args: str) -> list[str]:
 # waiting on the crashed file forever.
 FILES_WHOLE = ["--dist", "loadfile", "--max-worker-restart", "0"]
 
+# The unit part's workers when --workers names none (`test run`, `test changed`, `test
+# group`): one fewer than the machine's cores, at least one and at most
+# UNIT_WORKERS_AT_MOST. A core is left to what shares the machine -- a browser run, a
+# server's own test loop -- and a browser part keeps one worker unless --workers names more.
+UNIT_WORKERS_AT_MOST = 4
+A_CORE_LEFT = "a core fewer than the machine has, 1 to 4"
 
-def unit_command(slow: bool = False, files: list[str] | None = None, workers: int = 1) -> list[str]:
+
+def unit_workers(named: int | None = None, cores: int | None = None) -> int:
+    """The unit part's workers: ``named``, else one fewer than ``cores`` (this
+    machine's), at least one and at most UNIT_WORKERS_AT_MOST."""
+    if named is not None:
+        return named
+    cores = cores if cores is not None else (os.cpu_count() or 1)
+    return max(1, min(UNIT_WORKERS_AT_MOST, cores - 1))
+
+
+def unit_command(
+    slow: bool = False,
+    files: list[str] | None = None,
+    workers: int = 1,
+    walkthrough: bool = True,
+) -> list[str]:
     """The walkthrough's pages and the unit suite, without a browser: every unit file, or
     only ``files`` (tests/groups.py's); with ``workers`` above one, that many in
-    parallel, a file's tests together."""
+    parallel, a file's tests together. Without ``walkthrough``, the unit files alone."""
     tests = ["tests", f"--ignore={BROWSER}"] if files is None else files
-    argv = _pytest_argv(WALKTHROUGH, *tests)
+    argv = _pytest_argv(*([WALKTHROUGH] if walkthrough else []), *tests)
     if workers > 1:
         argv += ["-n", str(workers), *FILES_WHOLE]
     if slow:
@@ -133,11 +155,21 @@ HELP = """Run the test suite, exiting as pytest does.
                         while working, and before each commit: the walkthrough
                         and the unit files of the groups a change reaches, then
                         the browser files of the areas it reaches (--since REF;
-                        the branch's upstream by default)
+                        the branch's upstream by default); a unit file or the
+                        walkthrough unchanged since a run in which it passed is
+                        said not run, unchanged since green, and
+                        --even-unchanged runs it too
   apothecary test group [NAME...]
                         the unit suite's groups; with names, their unit files and
                         the walkthrough
   uv run pytest         the quick inner loop, browser tests skipped
+
+`test run`, `test changed` and `test group` run the unit part on a core fewer
+than the machine has (pytest-xdist, a file's tests together); --workers 1
+runs it in one process.
+`test all` runs it in one process, as the gate: state an earlier test leaves in
+the same process is found by that order only, and --workers N gives up that
+evidence for time.
 
 The walkthrough's demonstration and every browser test drive Chromium:
 `uv run playwright install chromium` once per machine. CONTRIBUTING.md has the rest.
@@ -164,23 +196,27 @@ def _every_browser_test_is_test_all(ctx, param, value):
 @click.option(
     "--workers",
     type=click.IntRange(min=1),
-    default=1,
-    show_default=True,
-    help="The unit part in parallel, a file's tests together (pytest-xdist).",
+    default=None,
+    show_default=A_CORE_LEFT,
+    help="The unit part on this many workers, a file's tests together (pytest-xdist); "
+    "1 runs it in one process.",
 )
 # Every browser test is `test all`'s; the flag stays, hidden, to say so.
 @click.option(
     "--e2e", is_flag=True, hidden=True, expose_value=False, callback=_every_browser_test_is_test_all
 )
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test_run(slow: bool, workers: int, pytest_args: tuple[str, ...]):
+def test_run(slow: bool, workers: int | None, pytest_args: tuple[str, ...]):
     """The ordinary command: the unit tests and the walkthrough, whose demonstration
     drives Chromium in a pytest of its own; further arguments go to pytest.
 
     They go to both pytests, and it exits with the first failing code; a part that
     selects no test is not a failure when the other ran some.
     """
-    codes = [_pytest(argv + list(pytest_args)) for argv in run_commands(slow=slow, workers=workers)]
+    kept = Kept.before(pytest_args)
+    commands = run_commands(slow=slow, workers=unit_workers(workers))
+    codes = [_pytest(argv + list(pytest_args)) for argv in commands]
+    _say(kept.keep([WALKTHROUGH, *unit_files()], codes[0], pytest_args))
     raise SystemExit(_first_failure(codes))
 
 
@@ -193,7 +229,9 @@ def test_run(slow: bool, workers: int, pytest_args: tuple[str, ...]):
     type=click.IntRange(min=1),
     default=1,
     show_default=True,
-    help="Both parts in parallel, a file's tests together (pytest-xdist).",
+    help="Both parts in parallel, a file's tests together (pytest-xdist). The unit part "
+    "runs in one process unless this names more: the whole suite's own order finds what "
+    "parallel runs do not.",
 )
 @click.option(
     "--coverage",
@@ -218,10 +256,12 @@ def test_all(slow: bool, workers: int, coverage: bool, since: str, pytest_args: 
     included, and says what they covered, as `test coverage` does. Before a stack is
     pulled it runs once on its head: docs/integration-checklist.md, box by box."""
     env = coverage_env() if coverage else None
+    kept = Kept.before(pytest_args)
     codes = [
         _pytest(argv + list(pytest_args), env=env)
         for argv in all_commands(slow=slow, workers=workers, coverage=coverage)
     ]
+    _say(kept.keep([WALKTHROUGH, *unit_files()], codes[0], pytest_args))
     if coverage:
         try:
             click.echo(_covered(since))
@@ -273,6 +313,7 @@ def _areas():
     return _map(f"{BROWSER}/areas.py")
 
 
+@functools.cache
 def _groups():
     """The unit suite's groups (tests/groups.py)."""
     return _map("tests/groups.py")
@@ -298,20 +339,139 @@ def changed_paths(since: str | None) -> list[str]:
     return sorted(set(diff.stdout.split()) | set(added.stdout.split()))
 
 
+def browser_files_command(files: list[str], workers: int = 1) -> list[str]:
+    """The browser files ``files`` on a server of their own."""
+    argv = _pytest_argv(*files, "--start-server")
+    if workers > 1:
+        argv += ["-n", str(workers), *FILES_WHOLE]
+    return argv
+
+
 def changed_commands(changed: list[str], workers: int = 1) -> list[list[str]]:
-    """The argvs `apothecary test changed` runs: the walkthrough's pages with the unit
-    files the change reaches (all of them when it touches shared ground), then the
-    browser files it reaches, if it reaches any."""
+    """The argvs `apothecary test changed` runs, the record of what was green left
+    aside: the walkthrough's pages with the unit files the change reaches (all of them
+    when it touches shared ground), then the browser files it reaches, if it reaches any."""
     groups, areas = _groups(), _areas()
     units, reached = groups.reached(changed), areas.reached(changed)
     commands = [unit_command(files=None if units == groups.ALL else units, workers=workers)]
     browser = [BROWSER] if reached == areas.ALL else reached
     if browser:
-        argv = _pytest_argv(*browser, "--start-server")
-        if workers > 1:
-            argv += ["-n", str(workers), *FILES_WHOLE]
-        commands.append(argv)
+        commands.append(browser_files_command(browser, workers=workers))
     return commands
+
+
+def unit_files() -> list[str]:
+    """Every unit file, as a path from the root."""
+    return sorted(f"tests/{p.name}" for p in (ROOT / "tests").glob("test_*.py") if p.is_file())
+
+
+class Kept:
+    """The record of what was green (green.py), as one command reads it: this checkout's
+    environment, the digest of each unit file and of the walkthrough, and the record read
+    in that environment. A checkout git cannot list keeps nothing, and leaves nothing out."""
+
+    @classmethod
+    def before(cls, pytest_args):
+        """What a whole run keeps, read before it runs: nothing, when further pytest
+        arguments may narrow it, and it keeps nothing then."""
+        return cls(None) if narrows(pytest_args) else cls(_groups())
+
+    def __init__(self, groups):
+        if groups is None:
+            self.env, self.digests = None, {}
+            self.record = green.Record({}, "further pytest arguments may narrow the run")
+            return
+        try:
+            self.env = green.environment(ROOT)
+            self.digests = green.digests(ROOT, groups)
+        except (OSError, subprocess.CalledProcessError) as unread:
+            self.env, self.digests = None, {}
+            self.record = green.Record({}, f"the checkout could not be listed: {unread}")
+            return
+        self.record = green.read(ROOT, self.env)
+
+    def unchanged(self, names) -> dict[str, str]:
+        """Of ``names``, each the record holds as green at its digest now, with when."""
+        found = {}
+        for name in names:
+            digest = self.digests.get(name)
+            at = self.record.unchanged(name, digest) if digest else None
+            if at:
+                found[name] = at
+        return found
+
+    def keep(self, ran: list[str], code: int, pytest_args) -> str:
+        """Keep ``ran`` as green when its pytest passed and nothing narrowed it; say what
+        was kept, or why nothing was."""
+        if code != 0:
+            return ""
+        if narrows(pytest_args):
+            return "not kept as green: further pytest arguments may have narrowed the run"
+        if self.env is None:
+            return f"not kept as green: {self.record.distrust}"
+        green.write(ROOT, self.env, {name: self.digests[name] for name in ran})
+        files = [name for name in ran if name != WALKTHROUGH]
+        walked = " and the walkthrough" if WALKTHROUGH in ran else ""
+        return f"kept as green: {len(files)} unit file(s){walked} ({green.record_path(ROOT)})"
+
+
+# Further pytest arguments that select no fewer tests: a run given only these that
+# passes ran everything it names. Any other may narrow it (`-k`, `-m`, `--lf`, a path).
+SELECT_NO_FEWER = {
+    "-q", "-v", "-vv", "-s", "-x", "--exitfirst", "--slow", "--steps", "--gpu",
+    "--record-durations",
+}  # fmt: skip
+
+
+def narrows(pytest_args) -> bool:
+    """Whether further pytest arguments may run fewer tests than the command names."""
+    return any(arg not in SELECT_NO_FEWER for arg in pytest_args)
+
+
+def _say(line: str) -> None:
+    if line:
+        click.echo(line)
+
+
+# The command that runs, too, what the record leaves out.
+EVERY_ONE_REACHED = "apothecary test changed --even-unchanged"
+
+
+def unchanged_said(
+    files: list[str], left: dict[str, str], group_of: dict[str, str], walked: bool
+) -> list[str]:
+    """What `test changed` says of the unit part: each group the change reaches none of
+    whose files ran, on a line of its own, with when it was green, and the walkthrough
+    if it did not run; then how many groups ran and how many did not, and why; and the
+    command that runs the rest."""
+    lines, ran, not_run, partly = [], [], [], []
+    by_group: dict[str, list[str]] = {}
+    for name in files:
+        by_group.setdefault(group_of.get(name, "no group"), []).append(name)
+    for group, names in by_group.items():
+        out = [name for name in names if name in left]
+        if len(out) == len(names):
+            not_run.append(group)
+            when = min(left[name] for name in out)
+            files_said = f"{len(out)} file" + ("s" if len(out) != 1 else "")
+            lines.append(f"not run: unchanged since green at {when}: {group} ({files_said})")
+        else:
+            ran.append(group)
+            if out:
+                partly.append(f"{group} {len(out)} of {len(names)}")
+    if WALKTHROUGH in left:
+        lines.append(f"not run: unchanged since green at {left[WALKTHROUGH]}: the walkthrough")
+    said = f"unit groups the change reaches: {len(ran)} ran"
+    said += f" ({', '.join(ran)})" if ran else ""
+    if partly:
+        said += f", files unchanged since green not run in {', '.join(partly)}"
+    said += f"; {len(not_run)} not run, unchanged since green"
+    said += f" ({', '.join(not_run)})" if not_run else ""
+    said += "; the walkthrough " + ("ran" if walked else "not run, unchanged since green")
+    lines.append(said)
+    if left:
+        lines.append(f"`{EVERY_ONE_REACHED}` runs what was not run too")
+    return lines
 
 
 @test.command("changed", context_settings={"ignore_unknown_options": True})
@@ -320,40 +480,84 @@ def changed_commands(changed: list[str], workers: int = 1) -> list[list[str]]:
     "--list",
     "only_list",
     is_flag=True,
-    help="Name the browser files the change reaches, and run nothing.",
+    help="Name the files the change reaches, and what of them is not run, and run nothing.",
 )
 @click.option(
     "--workers",
     type=click.IntRange(min=1),
-    default=1,
-    show_default=True,
-    help="Both parts in parallel, a file's tests together (pytest-xdist).",
+    default=None,
+    show_default=f"the unit part on {A_CORE_LEFT}, the browser part on one",
+    help="Both parts on this many workers, a file's tests together (pytest-xdist).",
+)
+@click.option(
+    "--even-unchanged",
+    is_flag=True,
+    help="Run every unit file the change reaches, those unchanged since green too.",
 )
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test_changed(since: str | None, only_list: bool, workers: int, pytest_args: tuple[str, ...]):
+def test_changed(
+    since: str | None,
+    only_list: bool,
+    workers: int | None,
+    even_unchanged: bool,
+    pytest_args: tuple[str, ...],
+):
     """The walkthrough and the unit files of the groups a change reaches
     (tests/groups.py), then the browser files of the areas it reaches
     (tests/e2e/areas.py): every file of a part when the change touches its shared
     ground, a file itself when it changes, none when it reaches no group or area. The
     change is what this checkout holds against --since, uncommitted and new files
-    included; without it, against the branch's upstream. It is for while working: the
-    run before a merge is `test all`'s, the whole suite, on the stack's head."""
+    included; without it, against the branch's upstream.
+
+    A unit file, or the walkthrough, unchanged since a run in which it passed is not
+    run, and said apart: not run, unchanged since green at a time, counted on its own
+    (apothecary/cli/green.py says what unchanged is, and what makes the record not
+    trusted). --even-unchanged runs them too. A unit part that passes, given no further
+    pytest arguments, keeps what it ran as green, as `test run`, `test all` and `test
+    group` do. It is for while working: the run before a merge is `test all`'s, the
+    whole suite, on the stack's head."""
     changed = changed_paths(since)
+    groups, areas = _groups(), _areas()
+    units, reached = groups.reached(changed), areas.reached(changed)
+    every = units == groups.ALL
+    files = unit_files() if every else units
+    kept = Kept(groups)
+    left = {} if even_unchanged else kept.unchanged([WALKTHROUGH, *files])
+    run = [name for name in files if name not in left]
+    walked = WALKTHROUGH not in left
+    group_of = {f"tests/{n}": g for g, held in groups.GROUPS.items() for n in held["tests"]}
+    said = unchanged_said(files, left, group_of, walked)
+    if kept.record.distrust and not even_unchanged:
+        said.insert(0, f"nothing left out as unchanged: {kept.record.distrust}")
+    browser = [BROWSER] if reached == areas.ALL else reached
     if only_list:
-        groups, areas = _groups(), _areas()
-        units, reached = groups.reached(changed), areas.reached(changed)
-        if units == groups.ALL:
+        if every and not left:
             click.echo("every unit file (tests): the change touches shared ground")
         else:
-            click.echo("\n".join(units) if units else "no unit file")
+            click.echo("\n".join(run) if run else "no unit file")
         if reached == areas.ALL:
             click.echo(f"every browser file ({BROWSER}): the change touches shared ground")
         else:
             click.echo("\n".join(reached) if reached else "no browser file")
+        for line in said:
+            if line.startswith("not run"):
+                click.echo(line)
         return
-    commands = changed_commands(changed, workers=workers)
-    codes = [_pytest(argv + list(pytest_args)) for argv in commands]
-    raise SystemExit(_first_failure(codes))
+    codes, ran = [], []
+    if run or walked:
+        whole = every and not left  # the ordinary argv, which names no file
+        unit = unit_command(
+            files=None if whole else run, workers=unit_workers(workers), walkthrough=walked
+        )
+        codes.append(_pytest(unit + list(pytest_args)))
+        ran = ([WALKTHROUGH] if walked else []) + (files if whole else run)
+    if browser:
+        argv = browser_files_command(browser, workers=workers or 1)
+        codes.append(_pytest(argv + list(pytest_args)))
+    if ran:
+        said.append(kept.keep(ran, codes[0], pytest_args))
+    click.echo("\n".join(line for line in said if line))
+    raise SystemExit(_first_failure(codes) if codes else 0)
 
 
 @test.command("group", context_settings={"ignore_unknown_options": True})
@@ -361,11 +565,12 @@ def test_changed(since: str | None, only_list: bool, workers: int, pytest_args: 
 @click.option(
     "--workers",
     type=click.IntRange(min=1),
-    default=1,
-    show_default=True,
-    help="Unit files in parallel, a file's tests together (pytest-xdist).",
+    default=None,
+    show_default=A_CORE_LEFT,
+    help="Unit files on this many workers, a file's tests together (pytest-xdist); 1 runs "
+    "them in one process.",
 )
-def test_group(names: tuple[str, ...], workers: int):
+def test_group(names: tuple[str, ...], workers: int | None):
     """The walkthrough and the unit files of the groups NAMES (tests/groups.py): one part
     of the package at a time, as quick as that part. Without a name, the groups, each
     with what it holds. Further pytest arguments follow `--`."""
@@ -381,4 +586,7 @@ def test_group(names: tuple[str, ...], workers: int):
         files = groups.files([n for n in names if not n.startswith("-")])
     except KeyError as unknown:
         raise click.ClickException(unknown.args[0]) from None
-    raise SystemExit(_pytest(unit_command(files=files, workers=workers) + pytest_args))
+    kept = Kept.before(pytest_args)
+    code = _pytest(unit_command(files=files, workers=unit_workers(workers)) + pytest_args)
+    _say(kept.keep([WALKTHROUGH, *files], code, pytest_args))
+    raise SystemExit(code)

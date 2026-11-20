@@ -1,4 +1,4 @@
-# The Working space
+# The Workspace
 
 A site as every kind of evidence has it: what is there, what state it is in,
 how that is known, and what changed. The plan it builds toward, its decisions
@@ -19,9 +19,13 @@ poll of a port no pin names is kept as a sighting, `usb:<its identity>`.
 Only what changed is written: a word when it changes, a number past its
 tolerance, the board's `present` at least once a minute while polled, and
 every value at least every few hours. The poll an observation rests on is
-written beside it with every line the printer sent.
+written beside it with every line the printer sent. A value holds until a
+poll changes it: it is current while its board answers, and once the board
+has not answered within `HEARD_S` (`apothecary/evidence/view.py`) it is last
+known at the board's last answer, which said it again, not at the poll that
+last changed it.
 
-A frame the Working space keeps with a poll is kept under the picture root's
+A frame the Workspace keeps with a poll is kept under the picture root's
 `captures/`, as any camera's frame is, and recorded beside that poll. It is
 not the camera's view. A printer's kept frames live under a budget, 5 GB
 unless set otherwise; past it the oldest are forgotten first. A picture taken
@@ -39,21 +43,24 @@ site, private to the account, and is never sent anywhere:
 
 ## The window
 
-*Working space* is a window of the viewer, closed until asked for.
+*Workspace* is a window of the viewer, closed until asked for.
 [Walkthrough 18](../walkthrough/18-the-working-space.md) goes through it from
 each of its doors, written by the browser test that does it.
 
 Its first line, under the title, names the next step and carries the button
 that takes it, whichever door opened it: choose a printer; add a camera above
 it; choose a camera's device; or, with every camera this browser's, when
-frames are kept and Keep a set now. The status line says the same.
+frames are kept and Keep a set now. Opened on the site, it says it is reading
+the site's machines until it has read them, and only then whether any is
+pinned. The status line says the same.
 
-- **⊞ Windows › Working space**, or **Panels › Site › Workspace** on the
+- **⊞ Windows › Workspace**, or **Panels › Site › Workspace** on the
   canvas ring, opens it on the whole site: a row for each printer a board
   pinned here drives -- what it is doing, whether it is answering, how many
   cameras look at it, and its hour's button -- then every subject the log has
   said of, named as a person names it (printer_1 › bed heater), each value
-  with how it is known and when.
+  with how it is known and when; a list, as a router's pins, reads as its
+  items, or none.
 - **Camera › Workspace** on a machine's ring, or its row's button, opens it on
   that printer: its state as a strip and its heaters as lines over the last
   hour, a key under them, and a row for each camera that looks at it, with the

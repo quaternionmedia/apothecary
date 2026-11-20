@@ -217,6 +217,43 @@ def test_probe_treats_esp8266_as_espressif(fake_arduino_cli, monkeypatch):
 # --- observed: listen / stream ----------------------------------------------------------
 
 
+def test_a_listen_counts_its_window_from_the_first_line_however_late_it_comes(monkeypatch):
+    """A monitor that says nothing for longer than the window -- arduino-cli finding the
+    port, a monitor process starting on a busy machine -- is waited for, five seconds
+    past the window at most; the window begins at its first line."""
+    import itertools
+    import types
+
+    def a_clock():  # a second a reading, for the module that listens alone
+        ticks = itertools.count()
+        return types.SimpleNamespace(time=lambda: float(next(ticks)), sleep=time.sleep)
+
+    monkeypatch.setattr(devices, "time", a_clock())
+
+    def a_slow_start(port, baud, cli, streams, keepalive, stop):
+        said = ["", "apothecary esp32_blink: hello", "blink 1", "blink 2"]
+        for item in [None, None, None, *said]:  # silent while it starts, a second each
+            if stop.is_set():
+                return
+            yield item
+
+    monkeypatch.setattr(devices, "stream_lines", a_slow_start)
+    heard = devices.listen("/dev/ttyFAKE0", seconds=2.0)
+    assert heard.running_sketch == "esp32_blink"
+
+    silences = []
+
+    def silent(port, baud, cli, streams, keepalive, stop):
+        while not stop.is_set():
+            silences.append(None)
+            yield None
+
+    monkeypatch.setattr(devices, "stream_lines", silent)
+    monkeypatch.setattr(devices, "time", a_clock())
+    assert devices.listen("/dev/ttyFAKE0", seconds=2.0).lines == []
+    assert len(silences) == 7  # it ends at 2 + 5 seconds
+
+
 def test_listen_captures_banner_and_releases_port(fake_arduino_cli):
     result = devices.listen("/dev/ttyFAKE0", seconds=0.6)
     assert result.running_sketch == "fake_blink" and result.chip_line.startswith("FAKE-CHIP")

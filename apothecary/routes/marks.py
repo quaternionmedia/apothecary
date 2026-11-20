@@ -10,6 +10,9 @@
 - ``PUT /sites/{s}/views/{id}/notes/{mark}`` ``{text}`` is what a note says, as a
   person typed it.
 
+Each word is kept with when it was given. ``?as_of=`` on the marks reads them with
+the words given up to that moment, as a whiteboard's timeline asks.
+
 The words are kept with the views, in this server's memory, and go when it
 stops; what may be kept longer waits on the draft record *Personal data stays on
 the device*, as a view does (docs/pictures.md).
@@ -19,15 +22,16 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import surfaces
 from ..vision import marks, notes
 from ..vision import views as viewing
 from ..vision.cache import picture_hash
-from .views import _answer, _picture_at, _picture_size, _view_or_404
+from .views import picture_at, picture_size, view_answer_in, view_or_404
 
 router = APIRouter(tags=["views"])
 
@@ -47,25 +51,41 @@ def forget(site_name: str, view_id: str) -> None:
         _kept.pop((site_name, view_id), None)
 
 
-def _read(site_name: str, view_id: str) -> Tuple[List[marks.Mark], List[notes.Note]]:
-    view = _view_or_404(site_name, view_id)
-    where = _picture_at(view.picture)
-    held = kept_for(site_name, view_id)
+def keep(site_name: str, view_id: str, answers: marks.Answers) -> None:
+    """Words kept for a view as given: a whiteboard's moment placed elsewhere, or
+    words carried to a later photograph."""
+    with _lock:
+        _kept[(site_name, view_id)] = answers.model_copy(deep=True)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def read_marks(
+    site_name: str, view_id: str, as_of: Optional[str] = None
+) -> Tuple[List[marks.Mark], List[notes.Note]]:
+    """A view's marks and its notes, read from its picture with the words given up
+    to ``as_of``."""
+    view = view_or_404(site_name, view_id)
+    where = picture_at(view.picture)
+    held = marks.as_of(kept_for(site_name, view_id), as_of)
     try:
         found = marks.marks_in(where, held)
     except (OSError, ValueError) as exc:
         raise HTTPException(
             status_code=400, detail=f"{where.name} could not be read: {exc}"
         ) from None
-    wide, high = _picture_size(where)
+    wide, high = picture_size(where)
     return found, notes.notes_of(found, held, tallness=high / wide)
 
 
-def _said(site_name: str, view_id: str) -> Dict[str, object]:
-    found, listed = _read(site_name, view_id)
-    view = _view_or_404(site_name, view_id)
+def _said(site_name: str, view_id: str, as_of: Optional[str] = None) -> Dict[str, object]:
+    found, listed = read_marks(site_name, view_id, as_of)
+    view = view_or_404(site_name, view_id)
     return {
         "view": view_id,
+        "as_of": as_of,
         "finder": view.finder,
         "marks": [mark.model_dump(mode="json") for mark in found],
         "notes": [note.model_dump(mode="json") for note in listed],
@@ -73,9 +93,17 @@ def _said(site_name: str, view_id: str) -> Dict[str, object]:
 
 
 @router.get("/sites/{site_name}/views/{view_id}/marks")
-def view_marks(site_name: str, view_id: str):
-    """A view's marks, sorted, and its notes."""
-    return _said(site_name, view_id)
+def view_marks(site_name: str, view_id: str, as_of: Optional[str] = None):
+    """A view's marks, sorted, and its notes: with the words given up to ``as_of``,
+    ISO 8601, where it is named."""
+    if as_of:
+        try:
+            datetime.fromisoformat(as_of)
+        except ValueError:
+            raise HTTPException(
+                status_code=422, detail=f"{as_of!r} is not a moment, ISO 8601"
+            ) from None
+    return _said(site_name, view_id, as_of)
 
 
 class MarkWord(BaseModel):
@@ -88,11 +116,12 @@ def say_mark(site_name: str, view_id: str, mark_id: str, body: MarkWord):
     again with it. Answers the marks, the notes and the view as it is now."""
     from ..vision import get as get_finder
 
-    view = _view_or_404(site_name, view_id)
-    where = _picture_at(view.picture)
-    found, _ = _read(site_name, view_id)
+    view = view_or_404(site_name, view_id)
+    where = picture_at(view.picture)
+    found, _ = read_marks(site_name, view_id)
     try:
         example = marks.say(found, mark_id, body.kind, picture_hash(where))
+        example = example.model_copy(update={"at": _now()})
     except KeyError as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     with _lock:
@@ -103,7 +132,9 @@ def say_mark(site_name: str, view_id: str, mark_id: str, body: MarkWord):
         view = viewing.store().read_again(
             site_name, view_id, shapes=shapes, left_out=left_out, at=datetime.now(timezone.utc)
         )
-    return {**_said(site_name, view_id), "seen": _answer(site_name, view)}
+    said = _said(site_name, view_id)
+    surfaces.changed(WHITEBOARD_MARKS, key=f"{site_name}/{view_id}", body=said)
+    return {**said, "seen": view_answer_in(site_name, view)}
 
 
 class NoteWords(BaseModel):
@@ -113,9 +144,9 @@ class NoteWords(BaseModel):
 @router.put("/sites/{site_name}/views/{view_id}/notes/{mark_id}")
 def say_note(site_name: str, view_id: str, mark_id: str, body: NoteWords):
     """What one note says, as a person typed it."""
-    found, _ = _read(site_name, view_id)
+    found, _ = read_marks(site_name, view_id)
     try:
-        words = notes.say(found, mark_id, body.text)
+        words = notes.say(found, mark_id, body.text).model_copy(update={"at": _now()})
     except KeyError as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     except ValueError as refused:
@@ -123,7 +154,27 @@ def say_note(site_name: str, view_id: str, mark_id: str, body: NoteWords):
     with _lock:
         held = _kept.setdefault((site_name, view_id), marks.Answers())
         held.words = [w for w in held.words if (w.min, w.max) != (words.min, words.max)] + [words]
-    return _said(site_name, view_id)
+    said = _said(site_name, view_id)
+    surfaces.changed(WHITEBOARD_MARKS, key=f"{site_name}/{view_id}", body=said)
+    return said
 
 
-__all__ = ["forget", "kept_for", "router"]
+# A view's marks and notes, as a surface (apothecary/surfaces.py): read as GET .../marks
+# reads them, each mark's box in fractions of its picture, and said changed at each word.
+WHITEBOARD_MARKS = "whiteboard_marks"
+
+surfaces.register(
+    surfaces.Surface(
+        name=WHITEBOARD_MARKS,
+        frame="picture_fractions",
+        about="a view's marks, sorted, and its notes, with the words a person gave on them",
+        snapshot=lambda words: _said(words["site"], words["view"]),
+        takes=("site", "view"),
+        needs=("site", "view"),
+        tells=True,
+        owner=__name__,
+    )
+)
+
+
+__all__ = ["forget", "keep", "kept_for", "read_marks", "router"]

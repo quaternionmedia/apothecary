@@ -23,12 +23,15 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ## The loop
 
 ```bash
-uv run apothecary test changed --workers 4      # while working, and before each commit: the walkthrough, the unit groups and the browser areas the change reaches
+uv run apothecary test changed                  # while working, and before each commit: the walkthrough, the unit groups and the browser areas the change reaches, less what is unchanged since it passed
+uv run apothecary test changed --even-unchanged # the same, and what is unchanged since it passed
 uv run apothecary test group machines making    # one part of the package at a time: its unit files and the walkthrough (no name: the groups)
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
+uv run apothecary test run --workers 1          # the same, the unit part in one process
 uv run apothecary test all                      # the same, then every browser test: the run on a stack's head before it is pulled
 uv run apothecary test all --workers 2 -k part  # both parts on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
+uv run apothecary test all --gpu                # the same, the browser drawing with this machine's GPU: quicker, no picture rewritten, and not the run before a pull
 uv run apothecary test all --coverage           # the same, measured: what of the package ran, and of what the change adds or changes
 uv run apothecary test coverage --markdown      # the last measured run's coverage, as a line for a pull request's body
 uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
@@ -46,10 +49,30 @@ uv run --group preflight apothecary preflight   # the CI workflows, run here, be
 walkthrough's pages, the unit files of the groups the change reaches
 ([tests/groups.py](tests/groups.py)) and the browser files of the areas it reaches
 ([tests/e2e/areas.py](tests/e2e/areas.py)), every file of a part when the change touches
-its shared ground; `--list` names them and runs nothing. `apothecary test group NAME` runs
-one group. `apothecary test run` is the ordinary command, and runs the window manager's
-browser tests too. Those need no server, only Chromium, so `uv run pytest` runs them as well
-wherever Playwright has installed it.
+its shared ground; `--list` names them and runs nothing. Of those, a unit file or the
+walkthrough unchanged since a run in which it passed is not run: it is said apart, a group
+to a line (`not run: unchanged since green at` a time), and counted apart from the groups
+that ran, and `--even-unchanged` runs it too. Unchanged means that every file a change to
+which reaches it, by the groups' own rules, holds what it held when it passed. That record
+([apothecary/cli/green.py](apothecary/cli/green.py)) is kept under `.cache/test-changed/`,
+written only by a unit part that passed with no argument that could narrow it -- `test
+changed`, `test run`, `test all` and `test group` each keep what theirs passed -- and is
+not trusted, the run saying why, once Python, the lockfile, a conftest, `tests/groups.py`,
+the OpenSCAD the renders use, the tools folder or node is not what it was written with, or
+once it does not match its seal. `test run`, `test all` and `test group` run everything
+they name. `test run`, `test changed` and `test group` run the unit part on a core fewer
+than the machine has, one to four workers (pytest-xdist, a file's tests on one worker),
+the core left to what shares the machine; `--workers N` names another number, and
+`--workers 1` runs it in one process. `test all`, the gate, runs the unit part in one
+process too, whatever the cores: the whole suite in one order finds what parallel runs do
+not, state an earlier test leaves in the same process (a module imported first, a universe
+already built), and two faults of that kind were found by that run alone; the price is a
+unit part twice as long as `test run`'s (about 700 s against 350 s, measured on a four-core machine
+under load, [docs/dev-loop.md](docs/dev-loop.md#the-gate-keeps-one-process)), once per stack.
+`test all --workers N` gives that evidence up for time. A browser part runs on one worker
+unless `--workers` names more. `apothecary test group NAME` runs one group. `apothecary test run` is the
+ordinary command, and runs the window manager's browser tests too. Those need no server,
+only Chromium, so `uv run pytest` runs them as well wherever Playwright has installed it.
 
 **A stack is tested at its head.** The whole suite runs here before a merge, once, on the
 head of the stack being pulled merged onto its target's tip: `apothecary test all`, then
@@ -83,10 +106,10 @@ no signal reaches still ends; and a worker that crashes ends a parallel run, nam
 test. In CI a browser test's cap is also twice the time recorded for it, so a hung wait
 fails that test and names it, and a job's is twice its recorded median.
 
-`walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
-browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser
-suite alone; change their words in the test that writes them, not in the page, and commit
-the words a run rewrites.
+`walkthrough/` is executable: its pages are doctests, or the output of the browser test
+that walks them. A page's opening says which, and a written page names its test and the
+command that rewrites it: change its words in that test, not in the page, and commit the
+words a run rewrites.
 
 **A picture is committed with the page change it shows**, and a run's noise is put back;
 **the docs a stack's levels each touch are read together on its head**, since levels
@@ -154,8 +177,8 @@ The rules are in [AGENTS.md](AGENTS.md). In short:
 Prose never states a number a command computes; it names the command. The viewer's
 controls: `apothecary census` ([docs/census.md](docs/census.md) says what it counts, and
 what a change to the page keeps). What is open: `apothecary problems`. The tests:
-`uv run pytest --co -q`. Only pages a run writes (walkthrough pages 01 to 06 and 18, and
-`docs/generated/`) print such numbers.
+`uv run pytest --co -q`. Only pages a run writes (a walkthrough page written by its test,
+and `docs/generated/`) print such numbers.
 
 ## Words on the page
 

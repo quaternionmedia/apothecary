@@ -6,16 +6,33 @@
  * panels. The module names no window of the page's: the page gives it the windows a
  * remembered layout may hold (`known`), those made for the moment and never
  * remembered (`transient`), and its own layout (`defaultRoot`); each has a default.
+ * A window registered that is in neither list is lost from a remembered layout, so
+ * registering one says so on the console.
  *
  * Where a window opens when it is not in the layout is its `home`: "column", the one
  * column beside the world, right under the window it follows (`after`), where the
  * windows following that one share a stack -- a stack of its own while the column has
- * fewer than `columnStacks`, else a tab beside the window it follows; "tabs", the
- * stack where the other tabbed windows are; "beside", a stack of its own next to the
- * world, its room taken from the world's; or another window's id, a tab beside it,
- * else beside a window open with the same home. A `loud` window's tab and frame say
- * so. The world's stack maximised is the world alone (the tilde); again, everything
+ * fewer than `columnStacks`, else a tab beside the window it follows, unless that one
+ * has a least height (below), which a tab in front of it would hide; "tabs", the
+ * stack where the other tabbed windows are; "beside", next to the world (below); or
+ * another window's id, a tab beside it, else beside a window open with the same home.
+ * The page may open a window somewhere else than its home for once (open's `at`). A
+ * `loud` window's tab and frame say so, and it must be seen: wherever it is placed --
+ * opened, registered, or kept open as a view is laid out -- it is the front tab of its
+ * stack. The world's stack maximised is the world alone (the tilde); again, everything
  * back.
+ *
+ * Beside the world there is one stack of windows: a window whose home is "beside" is a
+ * tab of the stack in the world's row that holds one already. With none there, it is a
+ * stack of its own next to the world, its room taken from the world's: BESIDE per cent
+ * of the row at most, and never so much that the world is narrower than WORLD_LEAST
+ * pixels. Where the world cannot spare BESIDE_LEAST pixels, it is a tab of the stack
+ * next to the world instead -- the tallest, where a column stands there, that holds no
+ * window with a least height.
+ *
+ * A window may have a least height (`least`, pixels, its stack's tabs included): where
+ * it stands in a column, its stack is given that much as the window opens or a view is
+ * laid out, from the stacks beside it, while they keep the height of their tabs.
  *
  * A window the page says has nothing to show (setEmpty) gives its room away: in front
  * of one that has something, it gives that one the front; a stack of nothing but
@@ -37,13 +54,21 @@
  */
 
 import { GoldenLayout, LayoutConfig } from "golden-layout";
+import { setReason } from "./can.js";
 import { mayAct } from "./keys.js";
 
 const TILDE_KEYS = new Set(["`", "~"]);
 const WORLD = "world";
 const HOMES = new Set(["column", "tabs", "beside"]);
-// A window opened beside the world takes this share of the world's row (per cent).
+// A window opened beside the world takes this share of the world's row (per cent) at
+// most, and half the world's at most.
 const BESIDE = 28;
+// The least a window opened beside the world leaves the world (pixels): enough to see a
+// machine and select a piece in it.
+const WORLD_LEAST = 400;
+// The least room a stack beside the world is opened with (pixels); with less to spare,
+// the window is a tab next to the world.
+const BESIDE_LEAST = 280;
 // How low a stack goes, its tabs and a sliver: the height a minimised one is given.
 const LOWEST = 40;
 
@@ -105,7 +130,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     const knownTypes = new Set([WORLD, ...typesIn(defaultRoot), ...TRANSIENT, ...known]);
     const layout = new GoldenLayout(host);
     // The host is the page's main row, not the body: its size follows the window, the
-    // demo's banner and the status line, and the layout follows it.
+    // simulated machines' banner and the status line, and the layout follows it.
     layout.resizeWithContainerAutomatically = true;
 
     function record(id) {
@@ -119,7 +144,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const slot = document.createElement("div");
         slot.className = "panel-body-slot";
         el.append(pinned, slot);
-        r = { id, title: id, tab: null, hint: null, flag: null, home: null, after: null, group: null, loud: false, empty: false, el, slot, mount: null, filled: true, open: false,
+        r = { id, title: id, tab: null, hint: null, flag: null, home: null, after: null, group: null, loud: false, empty: false, least: 0, el, slot, mount: null, filled: true, open: false,
               registered: false, container: null, onClose: null, onOpen: null, releasing: false };
         records.set(id, r);
         return r;
@@ -236,37 +261,90 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     layout.on("stateChanged", tabsForDrops);
     const isWorldAlone = () => !!worldStack()?.isMaximised;
 
-    // Where a panel opens when it is not in the layout: its home. Added to a stack of
-    // tabs, it is in front only when `front` (opened by a person), so a panel the page
-    // registers does not take the place of the one a person was reading.
-    function addAt(r, front = true) {
+    // A window added to a stack of tabs (at `index`, else after its last), in front only
+    // when `front`.
+    function addTab(stack, config, front, index = undefined) {
+        const before = stack.getActiveComponentItem();
+        stack.addItem(config, index);
+        if (!front && before) stack.setActiveComponentItem(before, false);
+    }
+    // The stack of windows beside the world: one in the world's row holding a window
+    // whose home is "beside" (not `except`), the nearest the world where there are two.
+    function besideStack(except) {
+        const ws = worldStack(), row = ws?.parent;
+        if (!row?.isRow) return null;
+        const at = row.contentItems.indexOf(ws);
+        const beside = (c) => c !== ws && c.isStack && c.contentItems.some((ci) => ci.id !== except && records.get(ci.id)?.home === "beside");
+        const far = (c) => Math.abs(row.contentItems.indexOf(c) - at);
+        return row.contentItems.filter(beside).sort((a, b) => far(a) - far(b))[0] || null;
+    }
+    // A stack holding a window that must stay in view: one with a least height.
+    const holdsLeast = (s) => s.contentItems.some((ci) => records.get(ci.id)?.least > 0);
+    // The stack next to the world, on its right (else its left): itself, or the tallest
+    // stack of the column standing there, the first of two as tall -- never one holding
+    // a window that must stay in view (a least height), while there is another.
+    function nextToTheWorld() {
+        const ws = worldStack(), row = ws?.parent;
+        if (!row?.isRow) return null;
+        const at = row.contentItems.indexOf(ws);
+        const next = row.contentItems[at + 1] || row.contentItems[at - 1];
+        if (!next) return null;
+        if (next.isStack) return next;
+        const height = (s) => s.element.getBoundingClientRect().height;
+        const stacks = stacksOf(next);
+        const free = stacks.filter((s) => !holdsLeast(s));
+        return (free.length ? free : stacks).reduce((best, s) => (!best || height(s) > height(best) ? s : best), null);
+    }
+
+    // Where a panel opens when it is not in the layout: its home, or `home` given for
+    // this once. Added to a stack of tabs, it is in front only when `front` (opened by a
+    // person), so a panel the page registers does not take the place of the one a
+    // person was reading -- a loud one always, as it must be seen. Then every window
+    // keeps its least height.
+    function addAt(r, front = true, home = r.home) {
+        placeAt(r, front || r.loud, home);
+        keepLeast();
+    }
+    function placeAt(r, front, home) {
         const config = { type: "component", componentType: r.id, id: r.id, title: r.tab || r.title };
         const tabbed = [...records.values()].filter((o) => o.id !== r.id && o.registered && o.home === "tabs" && item(o.id));
         // A window whose home is another one goes beside it, else beside a window open
         // with the same home (an Airgap section beside another, the Airgap closed).
-        const kin = (o) => o.id !== r.id && o.home === r.home && item(o.id);
-        const beside = !HOMES.has(r.home) && r.home !== r.id
-            ? item(r.home) || item([...records.values()].find(kin)?.id) : null;
-        if ((r.home === "tabs" && tabbed.length) || beside) {
+        const kin = (o) => o.id !== r.id && o.home === home && item(o.id);
+        const beside = !HOMES.has(home) && home !== r.id
+            ? item(home) || item([...records.values()].find(kin)?.id) : null;
+        if ((home === "tabs" && tabbed.length) || beside) {
             const stack = (beside || item(tabbed[0].id)).parentItem;
-            const before = stack.getActiveComponentItem();
             // Beside its home panel, else after the stack's last tab.
-            stack.addItem(config, beside ? stack.contentItems.indexOf(beside) + 1 : undefined);
-            if (!front && before) stack.setActiveComponentItem(before, false);
+            addTab(stack, config, front, beside ? stack.contentItems.indexOf(beside) + 1 : undefined);
             return;
         }
         // A component's stack is its parentItem; a stack's row or column, its parent.
         rowForTheWorld();
         const ws = worldStack();
         const besideWorld = ws && ws.parent;
-        if (r.home === "beside" && besideWorld) {
-            // Its room is taken from the world's: the windows on the world's other side
-            // keep theirs.
+        if (home === "beside" && besideWorld) {
+            // The one stack beside the world, where there is one: a tab of it.
+            const shared = besideStack(r.id);
+            if (shared) { addTab(shared, config, front); return; }
+            // Else a stack of its own, its room taken from the world's, the windows on
+            // the world's other side keeping theirs -- unless the world cannot spare it.
             const sizes = new Map(besideWorld.contentItems.map((c) => [c, c.size]));
+            let room = Math.min(BESIDE, sizes.get(ws) / 2);
+            const worldPx = ws.element.getBoundingClientRect().width;
+            if (worldPx > 0) {
+                const perCent = worldPx / sizes.get(ws);  // pixels per per cent of the row
+                const spare = Math.min(room, (worldPx - WORLD_LEAST) / perCent);
+                if (spare * perCent >= BESIDE_LEAST) room = spare;
+                else {
+                    const next = nextToTheWorld();
+                    if (next) { addTab(next, config, front); return; }
+                    // Nothing else stands in the row: a stack of its own all the same.
+                }
+            }
             const at = besideWorld.contentItems.indexOf(ws) + 1;
             besideWorld.addItem({ type: "stack", content: [config] }, at);
             const added = besideWorld.contentItems[at];
-            const room = Math.min(BESIDE, sizes.get(ws) / 2);
             for (const [c, size] of sizes) c.size = c === ws ? size - room : size;
             added.size = room;
             besideWorld.updateSize(false);
@@ -277,13 +355,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         // else beside the world. A window that follows another, where one following the
         // same window is open there already, is a tab of that one's stack: a system's
         // sections opened in the column share one stack under it.
-        const sibling = r.after && r.home === "column"
+        const sibling = r.after && home === "column"
             ? [...records.values()].find((o) => o.id !== r.id && o.after === r.after && o.home === "column" && item(o.id)) : null;
         if (sibling) {
-            const stack = item(sibling.id).parentItem;
-            const before = stack.getActiveComponentItem();
-            stack.addItem(config);
-            if (!front && before) stack.setActiveComponentItem(before, false);
+            addTab(item(sibling.id).parentItem, config, front);
             return;
         }
         const near = r.after ? item(r.after)?.parentItem : null;
@@ -291,12 +366,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             || [...records.values()].map((o) => item(o.id)).filter(Boolean)
                 .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column");
         if (column && column.contentItems.length >= columnStacks) {
-            // The column full: a tab beside the window it follows, else at its foot.
+            // The column full: a tab beside the window it follows, else at its foot --
+            // never over a window that must stay in view (a least height): a stack of its
+            // own under that one all the same.
             const stack = near && near.parent === column ? near : column.contentItems[column.contentItems.length - 1];
-            if (stack.isStack) {
-                const before = stack.getActiveComponentItem();
-                stack.addItem(config);
-                if (!front && before) stack.setActiveComponentItem(before, false);
+            if (stack.isStack && !holdsLeast(stack)) {
+                addTab(stack, config, front);
                 return;
             }
         }
@@ -389,6 +464,27 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             if (was && stack.contentItems.includes(was)) stack.setActiveComponentItem(was, false);
             minimise(stack);
         } else unminimise(stack);
+    }
+    // A window with a least height (`least`) whose stack stands lower in a column: given
+    // it from the stacks beside it in their shares -- none minimised, each keeping its
+    // tabs' height.
+    function keepLeast() {
+        for (const r of records.values()) {
+            if (!r.least || !r.registered) continue;
+            const stack = item(r.id)?.parentItem, column = stack?.parent;
+            if (!column?.isColumn || minimised.has(stack)) continue;
+            const has = stack.element.getBoundingClientRect().height;
+            if (!has || has >= r.least - 1) continue;
+            const height = column.element.getBoundingClientRect().height - LAYOUT_SETTINGS.dimensions.borderWidth * (column.contentItems.length - 1);
+            const others = column.contentItems.filter((c) => c !== stack && !minimised.has(c));
+            const sum = others.reduce((a, c) => a + c.size, 0);
+            if (height <= 0 || !sum) continue;
+            const want = Math.min((100 * r.least) / height, stack.size + sum - (100 * LOWEST * others.length) / height);
+            if (want <= stack.size) continue;
+            for (const c of others) c.size -= (want - stack.size) * (c.size / sum);
+            stack.size = want;
+            column.updateSize(false);
+        }
     }
     function fitEveryEmpty() {
         for (const stack of [...minimised.keys()]) if (!stack.parent) minimised.delete(stack);
@@ -483,7 +579,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     function stepFocus(list, ev) {
         const keys = { ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity };
         if (!list || !(ev.key in keys)) return;
-        const buttons = [...list.querySelectorAll("button")];
+        const buttons = [...list.querySelectorAll("button:not(:disabled)")];
         if (!buttons.length) return;
         ev.preventDefault();
         const at = buttons.indexOf(document.activeElement);
@@ -537,6 +633,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
                         stack.addItem({ type: "component", componentType: r.id, id: r.id, title: r.tab || r.title });
                     }
                     api.open(r.id);
+                    chosen(r.id);
                 });
                 list.append(b);
             }
@@ -585,13 +682,28 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     spawnButtons();
     layout.on("stateChanged", spawnButtons);
 
-    function fillMenu(into, done, own) {
+    // A window a person chooses -- its tab pressed, or its entry in ⊞ Windows or a
+    // stack's + -- told to whoever asked (onChoose), after it is in front. A window the
+    // page brings forward itself is not chosen, and a tab's ✕ chooses nothing.
+    const choosers = [];
+    function chosen(id) { for (const fn of choosers) fn(id); }
+    host.addEventListener("pointerdown", (ev) => {
+        const tab = ev.target.closest(".lm_tab");
+        if (!tab || ev.target.closest(".lm_close_tab")) return;
+        for (const stack of stacksOf(layout.rootItem)) {
+            const found = (stack.header?.tabs || []).find((t) => t.element === tab);
+            if (found && found.componentItem) { const id = found.componentItem.id; setTimeout(() => chosen(id), 0); return; }
+        }
+    });
+
+    function fillMenu(into, done, own, journeys) {
         into.replaceChildren();
         const viewsHead = document.createElement("div");
         viewsHead.className = "spawn-group";
         viewsHead.textContent = "Views";
         into.append(viewsHead);
         for (const [id, v] of views) {
+            if (v.listed === false) continue;  // a journey's, laid out by entering it
             const b = document.createElement("button");
             b.type = "button";
             b.className = "window-item view-item";
@@ -599,13 +711,33 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.textContent = v.title;
             const missing = api.viewMissing(id);
             const offer = own ? own.offer(id) : { refused: missing ? `${v.title} lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ""}` : null };
-            // Greyed where it cannot be laid out now. The page's own press says why,
-            // so its entry is pressed all the same; without one it is disabled.
-            b.classList.toggle("missing", !!offer.refused);
-            b.disabled = !own && !!offer.refused;
-            b.title = offer.refused || offer.title || `The windows laid out as ${v.title}`;
+            // Greyed where it cannot be laid out now, as every control the page greys is
+            // (can.js): "Disabled: <why>. <what it does>". The page's own press says why
+            // as well, so its entry is pressed all the same, disabled to assistive
+            // technology alone (aria-disabled); without one it is disabled.
+            setReason(b, offer.refused || null, offer.title || `The windows laid out as ${v.title}`);
+            if (own) b.disabled = false;
             b.addEventListener("click", () => { if (own) own.press(id); else api.applyView(id); if (done) done(); });
             into.append(b);
+        }
+        // The page's journeys, each entered by its name: its view laid out, the rail of
+        // its steps in the header. The one entered now is marked.
+        if (journeys && journeys.list.length) {
+            const head = document.createElement("div");
+            head.className = "spawn-group";
+            head.textContent = "Journeys";
+            into.append(head);
+            for (const j of journeys.list) {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.className = "window-item journey-item";
+                b.dataset.journey = j.id;
+                b.textContent = j.name;
+                b.title = j.title;
+                if (j.current) b.setAttribute("aria-current", "true");
+                b.addEventListener("click", () => { journeys.press(j.id); if (done) done(); });
+                into.append(b);
+            }
         }
         for (const [group, rs] of windowsByGroup()) {
             const head = document.createElement("div");
@@ -615,7 +747,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             into.append(head);
             for (const r of rs) {
                 const b = windowButton(r, false);
-                b.addEventListener("click", () => { api.open(r.id); if (done) done(); });
+                b.addEventListener("click", () => { api.open(r.id); chosen(r.id); if (done) done(); });
                 into.append(b);
             }
         }
@@ -629,12 +761,18 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * ("column", "tabs", "beside", or another panel's id: a tab beside it), and
          * `after` the window it opens right under, in the column; `open`
          * whether it opens now when the layout does not hold it; `loud` a panel whose
-         * tab and frame say it must be seen. `onClose` is called when it is closed;
-         * `onOpen` when its filled body is in front of a person again. */
-        register(id, { title, tab = null, hint = null, body, home = "tabs", after = null, group = null, open = true, loud = false, onClose = null, onOpen = null } = {}) {
-            if (!knownTypes.has(id)) { knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory); }
+         * tab and frame say it must be seen; `least` the least height of its stack, in
+         * pixels, where it stands in a column (see the header). `onClose` is called when
+         * it is closed; `onOpen` when its filled body is in front of a person again. */
+        register(id, { title, tab = null, hint = null, body, home = "tabs", after = null, group = null, open = true, loud = false, least = 0, onClose = null, onOpen = null } = {}) {
+            if (!knownTypes.has(id)) {
+                // Not given in `known` or `transient`: the remembered layout was laid
+                // out without it, so a reload has closed it, its room kept from the world.
+                console.warn(`The window ${id} is not one the page gave panels.js as known or transient: a reload closes it.`);
+                knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory);
+            }
             const r = record(id);
-            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud; r.group = group; r.after = after;
+            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud; r.group = group; r.after = after; r.least = Math.max(0, Number(least) || 0);
             r.home = HOMES.has(home) || (typeof home === "string" && home && home !== id) ? home : "tabs";
             r.onClose = onClose; r.onOpen = onOpen; r.registered = true;
             if (typeof body === "function") { r.mount = body; r.filled = false; } else if (body) {
@@ -667,12 +805,14 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             records.delete(id);
             if (ci && r.onClose) r.onClose();
         },
-        /* Open a panel: shown where it is, else opened at its home, its tab in front,
-         * its body filled before this returns, so a verb sent to it next finds it. */
-        open(id) {
+        /* Open a panel: shown where it is, else opened at its home -- or at `at`, a home
+         * given for this once (a window the page opens of its own accord, in the column
+         * rather than beside the world) -- its tab in front, its body filled before this
+         * returns, so a verb sent to it next finds it. */
+        open(id, { at = null } = {}) {
             const r = records.get(id);
             if (!r || !r.registered) return false;
-            if (!item(id)) addAt(r);
+            if (!item(id)) addAt(r, true, at && at !== id ? at : r.home);
             const shown = show(id);
             const stack = item(id)?.parentItem;
             if (minimised.has(stack)) unminimise(stack);
@@ -783,8 +923,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * person opens that window (`hint`), said where the view is refused. A window a
          * view leaves out is closed; one made for the moment that was open stays open,
          * at its home. */
-        defineView(id, { title, layout: spec, requires = null, hint = null }) { views.set(id, { title: title || id, spec, requires, hint }); },
-        views() { return [...views].map(([id, v]) => ({ id, title: v.title, requires: v.requires })); },
+        defineView(id, { title, layout: spec, requires = null, hint = null, listed = true }) { views.set(id, { title: title || id, spec, requires, hint, listed }); },
+        views() { return [...views].map(([id, v]) => ({ id, title: v.title, requires: v.requires, listed: v.listed })); },
         /* The window a view needs and the page has not got now ({ id, title, hint }), else null. */
         viewMissing(id) {
             const view = views.get(id);
@@ -809,6 +949,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             minimised.clear();
             gaveFront.clear();
             fitEveryEmpty();
+            keepLeast();
             remember();
             return true;
         },
@@ -818,8 +959,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * { refused, title }, press(id) } -- why the view cannot be laid out now (else
          * null) and what its entry says, and the press itself, which may open the window
          * the view needs and says what came of it. Without it a view is laid out by
-         * applyView, and one whose window the page has not got is disabled. */
-        fillMenu(into, { done = null, views: own = null } = {}) { fillMenu(into, done, own); },
+         * applyView, and one whose window the page has not got is disabled.
+         * `journeys`, the page's: { list: [{ id, name, title, current }], press(id) },
+         * listed after the views. */
+        fillMenu(into, { done = null, views: own = null, journeys = null } = {}) { fillMenu(into, done, own, journeys); },
+        /* `fn(id)` is told of each window a person chooses: its tab, ⊞ Windows, a +. */
+        onChoose(fn) { choosers.push(fn); },
         /* Up, down, Home and End along a list's buttons: the Windows menu's keys. */
         stepFocus,
         destroy() {

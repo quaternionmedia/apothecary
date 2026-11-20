@@ -114,3 +114,32 @@ def cells_on_world(page: Page, *digits: str, at: tuple[int, int] = (40, 40)) -> 
     """The canvas ring, opened on the world, and the cells named by their digits."""
     open_on_world(page, at)
     return press_cells(page, *digits)
+
+
+def open_at(page: Page, x: int, y: int) -> None:
+    """The canvas ring, opened at a point of the screen, as a press there would open it."""
+    page.wait_for_function(
+        "() => !!(window.apothecaryRing && window.apothecaryRing.openOn)", timeout=RING_MS
+    )
+    page.evaluate("([x, y]) => window.apothecaryRing.openOn('', null, { x, y })", [x, y])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
+
+
+def cut_labels(page: Page) -> list:
+    """The open ring's labels an edge of the screen cuts: each as it reads, and where it
+    runs from and to."""
+    return page.evaluate(
+        "() => [...document.querySelectorAll('#ring-overlay .label')]"
+        ".map((t) => [t.textContent, t.getBoundingClientRect()])"
+        ".filter(([, r]) => r.left < 0 || r.right > window.innerWidth"
+        " || r.top < 0 || r.bottom > window.innerHeight)"
+        ".map(([t, r]) => `${t} ${Math.round(r.left)}..${Math.round(r.right)}`)"
+    )
+
+
+def greyed(page: Page) -> dict:
+    """The open ring's cells that cannot be chosen: cell -> the reason its wedge gives."""
+    return page.evaluate(
+        "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge.disabled')]"
+        ".map((w) => [w.dataset.cell, (w.querySelector('title') || {}).textContent || '']))"
+    )

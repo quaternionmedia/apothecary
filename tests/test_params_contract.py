@@ -53,11 +53,39 @@ class TestTheRoutesAreTheContract:
             "openscad",
             "can_build",
             "build_note",
+            "presets",
         ]
         assert (body["source"], body["openscad"]) == ("model", None)
         assert [list(f) for f in body["fields"]] == [FIELD_KEYS] * len(body["fields"])
         assert body == params_spec(CORE).model_dump(mode="json")
         assert _route("/parts/{name}/params").response_model is ParamsSpec
+
+    def test_a_part_s_presets_are_in_its_spec_by_name(self, tmp_path):
+        """A preset: a named set of a part's parameters, kept in its description and
+        checked when the part loads, so a page can offer it as a choice."""
+        import pytest
+        from pydantic import BaseModel, Field, ValidationError
+
+        from apothecary.projects.parts.base import BasePart, Preset
+
+        class Size(BaseModel):
+            size: float = Field(10.0, gt=0)
+
+        scad = tmp_path / "p.scad"
+        scad.write_text("size = 10;\ncube(size);\n")
+        part = BasePart(
+            name="p",
+            source_file=scad,
+            params_model=Size,
+            presets={"big": Preset(params={"size": 40}, description="the big one")},
+        )
+        spec = params_spec(part)
+        assert spec.presets == {"big": Preset(params={"size": 40}, description="the big one")}
+        assert part.preset("big") == {"size": 40.0}
+        with pytest.raises(ValidationError, match="preset small: 1 validation error"):
+            BasePart(name="p", source_file=scad, params_model=Size, presets={"small": {"params": {"size": -1}}})
+        with pytest.raises(KeyError, match="p has no preset 'huge'; its presets: big"):
+            part.preset("huge")
 
     def test_validate_is_the_staged_check_of_the_part(self):
         for params in ({"walls": 2.4}, {"walls": -1, "nope": 1}, {}):

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Type
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from apothecary.core import OpenSCADObject
 from apothecary.models import (
@@ -12,10 +12,12 @@ from apothecary.models import (
     BoundingBox3D,
     Color,
     PrintSettings,
-    Vector3D,
 )
+from apothecary.models.bought import Bought
+from apothecary.models.interfaces import InterfaceBase
+from apothecary.motion import Motion
 
-from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version
+from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version, scad_definitions
 
 
 class ContestedValue(BaseModel):
@@ -30,6 +32,41 @@ class ContestedValue(BaseModel):
     value: float
     source: str
     note: str = ""
+
+
+class Preset(BaseModel):
+    """A named set of a part's parameters, kept in its description: a size people
+    meet -- a 40 mm hose, a 32 mm port -- chosen instead of typed. ``params`` are
+    overrides of the part's defaults, checked as ``-p`` overrides are when the part
+    loads; ``description`` says what it stands for. It is no saved variant (a SCAD
+    edited and kept in git, ``saved.py``) and no render (``variants.py``): it ships
+    with the part, and a person's own numbers go over it."""
+
+    params: Dict[str, Any] = Field(default_factory=dict)
+    description: str = ""
+
+
+# A preset's name: what `part@preset` names at the command line and over HTTP, so
+# never a dot (which names an interface) or an @.
+PRESET_NAME = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def address(spec: str) -> Tuple[str, Optional[str], Optional[str]]:
+    """``part[@preset][.interface]`` as (part, preset, interface), each None where not
+    named: how the command line and HTTP name a part at one of its presets, and one of
+    its interfaces there."""
+    named, _, interface = spec.partition(".")
+    part, _, preset = named.partition("@")
+    return part, preset or None, interface or None
+
+
+# A part is never turned after it renders: a wrapper or a part.json that says
+# display_rotation is refused when the part loads, saying what to do instead.
+TURN_REFUSED = (
+    "display_rotation turns nothing: a part's SCAD lays it the way up it prints, which is "
+    "its STL. Lay it so in the SCAD, and declare rest, the -D definitions that draw it as "
+    "it stands in use, for how it rests (docs/parts-authoring.md#how-it-rests)"
+)
 
 
 def scad_variables(path: Path, text: Optional[str] = None) -> Set[str]:
@@ -54,7 +91,22 @@ class BasePart(BaseModel):
     # machine of that kind, and can be planned before a board is pinned to it
     # (apothecary/machine_plans.py).
     machine: Optional[str] = None
+    # A machine whose bed (or table) carries the work along Y under a tool that stands
+    # still along Y: how far into its volume, along Y, the tool stands. None: the tool
+    # moves along Y over a bed that stays (a gantry machine), or the part is no machine.
+    bed_moves_y: Optional[float] = None
+    # A machine drawn as what stands still and what moves, so a scene can move each with
+    # the axes rather than render a pose: the parameter that picks a piece, the value
+    # that draws all that stands still, where the axes stand when each piece is drawn
+    # (the part's defaults), and for each moving piece how far it moves along each
+    # axis of the part's frame per millimetre of each machine axis, e.g. a table that
+    # carries Y: {"piece": "table", "follows": {"y": -1}}. None: drawn as one.
+    kinematics: Optional[Dict[str, Any]] = None
     tags: List[str] = Field(default_factory=list)
+    # The registered parts this one is built from, when that is not what its SCAD's
+    # include/use lines and the sites that hold it say (apothecary/composition.py).
+    # None: inferred. A list, an empty one included, is the answer, and wins.
+    parts: Optional[List[str]] = None
     readme_path: Optional[Path] = None
     module_name: Optional[str] = None
 
@@ -63,9 +115,11 @@ class BasePart(BaseModel):
     preview_color: Color = Field(default_factory=lambda: GRAY)
     print_settings: Optional[PrintSettings] = None
 
-    # Display orientation: rotation [rx, ry, rz] in degrees to apply
-    # for preferred "up" orientation (Z-up, sitting on ground plane)
-    display_rotation: Vector3D = Field(default_factory=Vector3D)
+    # How it rests, where that is not how it prints: the -D definitions that make
+    # its SCAD draw it as it stands in use (the footpedal's {"print": False}). The
+    # world draws that; its STL, what is sliced, stays the print pose. None: it
+    # rests as it prints.
+    rest: Optional[Dict[str, Any]] = None
 
     # Parameters whose value is genuinely in dispute, keyed by parameter name.
     # Empty for a part nobody disagrees about, which is most of them.
@@ -75,12 +129,71 @@ class BasePart(BaseModel):
     # it (2021.01, or a snapshot's 2025.03.15); None when any will do.
     openscad_min_version: Optional[str] = None
 
+    # Its presets, by name: the sizes people meet, each a set of its parameters
+    # (``Preset``). Empty for most parts.
+    presets: Dict[str, Preset] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _not_turned(cls, data: Any) -> Any:
+        if isinstance(data, Mapping) and "display_rotation" in data:
+            raise ValueError(TURN_REFUSED)
+        return data
+
     @field_validator("openscad_min_version")
     @classmethod
     def _names_a_version(cls, value: Optional[str]) -> Optional[str]:
         if value is not None and parse_openscad_version(value) is None:
             raise ValueError(f"{value!r} is not an OpenSCAD version such as 2021.01")
         return value
+
+    @field_validator("rest")
+    @classmethod
+    def _definable(cls, value: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if value is not None:
+            try:
+                scad_definitions(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"rest: {exc}") from None
+        return value
+
+    @model_validator(mode="after")
+    def _rests_by_its_own_names(self) -> "BasePart":
+        # A -D name the SCAD does not assign draws nothing, so a rest that names one
+        # would rest as it prints and say nothing: it is refused with what is assigned.
+        if self.rest and self.source_file.exists():
+            assigned = scad_variables(self.source_file)
+            unknown = sorted(set(self.rest) - assigned)
+            if unknown:
+                raise ValueError(
+                    f"rest: {', '.join(unknown)} is not assigned in {self.source_file.name}, "
+                    "so it would draw nothing; rest names the SCAD's own variables"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _presets_are_its_parameters(self) -> "BasePart":
+        # A preset that names a parameter the part has not got, or a value it refuses,
+        # would draw something else than its name says: refused when the part loads.
+        for name, preset in self.presets.items():
+            if not PRESET_NAME.fullmatch(name):
+                raise ValueError(
+                    f"preset {name!r}: a preset's name is letters, digits, _ and -, "
+                    "since part@preset.interface names one"
+                )
+            try:
+                self.validate_overrides(preset.params)
+            except ValueError as exc:
+                raise ValueError(f"preset {name}: {exc}") from None
+        return self
+
+    def preset(self, name: str) -> Dict[str, Any]:
+        """The parameters the preset ``name`` sets, as its model coerces them;
+        KeyError naming the part's presets when it has no such one."""
+        if name not in self.presets:
+            names = ", ".join(self.presets) or "none"
+            raise KeyError(f"{self.name} has no preset {name!r}; its presets: {names}")
+        return self.validate_overrides(self.presets[name].params)
 
     @property
     def exists(self) -> bool:
@@ -145,6 +258,12 @@ class BasePart(BaseModel):
         """
         if not params:
             return {}
+        resting = sorted(set(params) & set(self.rest or {}))
+        if resting:
+            raise ValueError(
+                f"{', '.join(resting)} says how {self.name} rests, in its rest, and is no "
+                "parameter: set by hand, it would turn what a slice reads"
+            )
         if self.params_model is None:
             # No Python model: the SCAD's own top-level variables are what -D reaches.
             if scad_text is not None:
@@ -186,6 +305,57 @@ class BasePart(BaseModel):
     def has_cuts(self) -> bool:
         """Whether this part says how it is cut: its wrapper defines ``cuts``."""
         return type(self).cuts is not BasePart.cuts
+
+    def measures(self, params: Optional[Mapping[str, Any]] = None):
+        """What a person reads of this part printed, for ``params`` as ``Params`` reads
+        them (``apothecary.models.measures.MeasurePlan``): a part made to be measured
+        names each feature, its jaws and where they close. None for a part that names
+        none, which is most of them; the print tuning loop then reads its box."""
+        return None
+
+    def interfaces(self, params: Optional[Mapping[str, Any]] = None) -> List[InterfaceBase]:
+        """The places where another part meets this one, for already-validated
+        ``params`` (``apothecary.models.interfaces``): each named, in the part's own
+        frame, the frame its SCAD draws it in. Empty for a part nothing meets, which
+        is most of them; a described part reads them from its ``part.json``.
+        docs/connections.md says how two meet."""
+        return []
+
+    @property
+    def has_interfaces(self) -> bool:
+        """Whether this part says where another meets it."""
+        return bool(self.interfaces())
+
+    def interface(self, name: str, params: Optional[Mapping[str, Any]] = None) -> InterfaceBase:
+        """The interface called ``name``; KeyError naming the part's own when it has none."""
+        found = self.interfaces(params)
+        for i in found:
+            if i.name == name:
+                return i
+        names = ", ".join(i.name for i in found) or "none"
+        raise KeyError(f"{self.name} has no interface {name!r}; its interfaces: {names}")
+
+    def bought(self, params: Optional[Mapping[str, Any]] = None) -> List[Bought]:
+        """What the part needs and does not print, for already-validated ``params``
+        (``apothecary.models.bought``): each kind with its count, its size and the
+        interfaces it goes in. Never part of its STL. Empty for a part that is all
+        printed, or whose wrapper does not say."""
+        return []
+
+    def motion(self, params: Optional[Mapping[str, Any]] = None) -> Optional[Motion]:
+        """How the part's pieces move against one another as one of its parameters
+        goes, for already-validated ``params`` (``apothecary.motion``): the parameter
+        and its range, the piece that stands still and those that move, each drawn by
+        the SCAD alone in its own frame, and the wrapper's own pose function, which
+        ``GET /parts/{name}/motion`` samples into the table the page plays. None for a
+        part drawn as one, which is most of them; a machine whose pieces ride its axes
+        says so in ``kinematics`` instead."""
+        return None
+
+    @property
+    def has_motion(self) -> bool:
+        """Whether this part says how its pieces move: its wrapper defines ``motion``."""
+        return type(self).motion is not BasePart.motion
 
     def geometry(self, params: Mapping[str, Any]) -> Optional[OpenSCADObject]:
         """The part built in Python for already-validated ``params``, or None:

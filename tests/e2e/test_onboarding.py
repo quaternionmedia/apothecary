@@ -204,7 +204,10 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
     docs = page.locator("#docs-link")
     expect(docs).to_be_visible()
     expect(docs).to_have_attribute("data-address", "41", timeout=15000)
-    expect(docs).to_have_attribute("title", re.compile(r"Panels › Docs.* · ⌗41$"))
+    # Its tip says what it opens, then the address once: no path spelled out beside it.
+    expect(docs).to_have_attribute(
+        "title", re.compile(r"^The documentation in a new tab: [^⌗›]* · ⌗41$")
+    )
     tops = page.evaluate(
         "() => [...document.querySelectorAll('.toolbar > *')]"
         ".filter((el) => el.getBoundingClientRect().width > 0)"
@@ -283,12 +286,18 @@ def test_a_site_chosen_from_the_banner_keeps_the_address_for_a_reload_and_back(
     page.locator("#site-menu .site-item[data-site='datum_core']").click()
     page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
     expect(page.locator("#site-level")).to_have_text("datum_core")
+    # The address changes as a site starts to load, so each step waits for the site's
+    # name in the banner: the first crumb below steps out of the site in view, and
+    # selects the piece it left once the universe has loaded.
     page.go_back()
     page.wait_for_url(re.compile(r"/viewer/sites/garage\?focus=workbench"), timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("garage", timeout=20000)
     page.go_forward()
     page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("datum_core", timeout=20000)
     page.locator("#universe-crumb").click()
     page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
+    _said(page, "Stepped out of the site datum_core")
 
     # The ring's Site chooses the same way.
     _canvas_ring(page)
@@ -354,6 +363,31 @@ def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_m
     bench = page.locator(".panel[data-panel='bench']")
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=15000)
     expect(bench.locator(".port-select")).to_contain_text("(none detected)")
+    # The toolchain card's rows with neither tool, word for word and in order, each
+    # tool's problem under them; nothing that needs arduino-cli or esptool can be pressed.
+    rows = bench.locator(".tc-status > div").all_text_contents()
+    assert rows[0].startswith("tools dir: /") and rows[1:] == [
+        "arduino-cli: ✗ not installed",
+        "config: –",
+        "esptool: • not found (optional)",
+        "Arduino: not installed · can build, upload, find ports, listen, probe with esptool",
+        "! arduino-cli not found (run `apothecary firmware install`)",
+        "! esptool not found -- raw ESP binary flashing unavailable (arduino-cli uploads to "
+        "ESP32 still work once the esp32 core is installed)",
+    ], rows
+    expect(bench.locator(".install-btn")).to_have_text("Install arduino-cli")
+    assert bench.locator(".tc-cores li").all_text_contents() == [
+        "Arduino AVR (Uno, Nano, Mega, Leonardo) arduino:avrInstall",
+        "Espressif ESP32 (all variants) esp32:esp32Install",
+        "Espressif ESP8266 esp8266:esp8266Install",
+        "Raspberry Pi Pico / RP2040 rp2040:rp2040Install",
+        "Arduino SAMD (Zero, MKR) arduino:samdInstall",
+    ]
+    for cannot in (".core-install[data-id='arduino:avr']", ".lib-btn", ".esp-flash-btn"):
+        expect(bench.locator(cannot)).to_be_disabled()
+    expect(bench.locator(".esp-note")).to_have_text(
+        "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)."
+    )
     settled(page)
     assert failed == [], failed
 

@@ -32,6 +32,17 @@ def test_cli_check_only_warns_without_openscad(monkeypatch):
     assert "OpenSCAD not found" in result.output
 
 
+def test_cli_check_names_a_found_tool_that_has_no_version(monkeypatch):
+    """hidapi is a system library: found, it has a path and no version."""
+    from apothecary.firmware.modules import stream_deck
+
+    monkeypatch.setattr(stream_deck, "package_version", lambda: "0.9.6")
+    monkeypatch.setattr(stream_deck, "hidapi", lambda: "libhidapi-libusb.so.0")
+    result = CliRunner().invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "✓ Stream Deck + (0.9.6, hidapi)" in result.output
+
+
 def test_cli_render_does_its_job(tmp_path):
     out = tmp_path / "ex.scad"
     result = CliRunner().invoke(cli, ["render", "-o", str(out)])
@@ -55,10 +66,10 @@ def test_safe_echo_falls_back_on_a_legacy_code_page(monkeypatch):
         written.append(message)
 
     monkeypatch.setattr(utils.click, "secho", cp1252_secho)
-    utils._safe_echo("✓ Python: 3.11.12")
-    utils._safe_echo("  ✗ OpenSCAD not found", fg="yellow")
+    utils.safe_echo("✓ Python: 3.11.12")
+    utils.safe_echo("  ✗ OpenSCAD not found", fg="yellow")
     # cp1252 carries a bullet at 0x95, so this one never reaches the fallback.
-    utils._safe_echo("    • datum_core")
+    utils.safe_echo("    • datum_core")
 
     assert written == ["[OK] Python: 3.11.12", "  [X] OpenSCAD not found", "    • datum_core"]
 
@@ -140,3 +151,18 @@ def test_a_retired_name_is_no_command(name):
     assert "check" in listing and name not in {
         ln.split()[0] for ln in listing.splitlines() if ln.strip()
     }
+
+
+def test_serve_refuses_simulated_machines_on_a_persons_own_state_folder(uvicorn_runs, monkeypatch):
+    """The simulated engine named by hand has neither the simulated server's folder nor its banner:
+    it is served only on a state folder of its own."""
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
+    monkeypatch.delenv("APOTHECARY_STATE_DIR", raising=False)
+    result = CliRunner().invoke(cli, ["serve", "--port", "8126"])
+    assert result.exit_code != 0 and uvicorn_runs == []
+    assert (
+        "apothecary serve --simulated" in result.output and "APOTHECARY_STATE_DIR" in result.output
+    )
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", "/nowhere/of/its/own")
+    result = CliRunner().invoke(cli, ["serve", "--port", "8126"])
+    assert result.exit_code == 0 and len(uvicorn_runs) == 1, result.output

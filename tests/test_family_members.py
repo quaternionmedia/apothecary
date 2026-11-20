@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 from hearth import conformance
 
 from apothecary.api import app
-from apothecary.demo import BOARD, CONTROLLER, DEVKIT, PRINTER, ROUTER, SITE
 from apothecary.family import hub, members
 from apothecary.firmware import tasks as firmware_tasks
+from apothecary.simulated import BOARD, CONTROLLER, DEVKIT, PRINTER, ROUTER, SITE
 
 MACHINE_NODE = f"{SITE}:{BOARD}"
 ROUTER_NODE = f"{SITE}:{CONTROLLER}"
@@ -150,3 +150,47 @@ def test_hearths_check_finds_each_member_conforms(family_bench, served, name, ac
     report = conformance.check(f"{served}/{name}", action=action, timeout=10.0)
     failed = [f for f in report.findings if not f.ok]
     assert report.status == 0 and not failed, failed
+
+
+def test_work_queued_behind_work_that_failed_for_the_same_machine_is_not_run(
+    family_bench, monkeypatch
+):
+    """A home that fails takes with it what was queued for that machine on its strength;
+    another machine's work keeps its place."""
+    import threading
+
+    gate, homed = threading.Event(), []
+
+    def home(port):
+        if port == PRINTER:
+            assert gate.wait(10)
+            if not homed:
+                homed.append(port)
+                raise RuntimeError("the home did not finish")
+        homed.append(port)
+        return {"line": "home"}
+
+    monkeypatch.setattr(members.Machine, "_home", staticmethod(home))
+    family_bench.control.arm(PRINTER)
+    family_bench.control.arm(ROUTER)
+    first, _ = _deliver("machine", {"home": {"node": MACHINE_NODE}}, "1")
+    second, _ = _deliver("machine", {"home": {"node": MACHINE_NODE}}, "2")
+    other, _ = _deliver("machine", {"home": {"node": ROUTER_NODE}}, "3")
+    gate.set()
+    assert _ended("machine", first)["error"] == "the home did not finish"
+    dropped = _ended("machine", second)
+    assert dropped["ok"] is False
+    assert dropped["error"] == "not run: home before it failed (the home did not finish)"
+    assert _ended("machine", other)["ok"] is True
+    assert homed == [PRINTER, ROUTER]
+    assert members.hosted("machine").state()["working"] == []
+
+
+def test_a_step_never_flashes_a_machines_controller(family_bench):
+    """The router's controller is the chip a devkit's sketch is built for: a flash
+    asked of its port is refused, and changes nothing."""
+    flash = {"port": ROUTER, "sketch": f"{SKETCH}@arduino"}
+    _, outcome = _deliver("board", {"flash": flash}, number="flash")
+    assert outcome["status"] == 422 and "holds a router's controller" in outcome["error"]
+    assert firmware_tasks.get_task_runner().active is None
+    assert members.hosted("board").state()["working"] == []

@@ -3,6 +3,11 @@
 Everything is in millimetres, with the work zero at the stock's front-left top
 corner: X to the right, Y to the back, Z up, so every cut goes to a negative Z.
 That is where a person zeroes the router before a cut (``docs/cam.md``).
+
+An operation may carry a ``name``: what a person calls it, and measures it by. A
+named operation that is cut is a feature of the part a person measures with
+calipers (``Feature``), and what it measures is fed back as the router's tool
+allowance (``measured.py``).
 """
 
 from __future__ import annotations
@@ -13,6 +18,9 @@ from typing import Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 from ..firmware import grbl
+
+# An operation's name, as a person calls it: a word or two, as typed in the page.
+FEATURE_NAME = r"^[a-z][a-z ]{0,23}$"
 
 
 class Tool(BaseModel):
@@ -41,7 +49,8 @@ class Stock(BaseModel):
 
 
 class Pocket(BaseModel):
-    """A rectangular pocket, its front-left corner at (x, y), cut ``depth`` down."""
+    """A rectangular pocket, its front-left corner at (x, y), cut ``depth`` down: an
+    inside size, measured along X."""
 
     kind: Literal["pocket"] = "pocket"
     x: float
@@ -49,23 +58,25 @@ class Pocket(BaseModel):
     w: float = Field(..., gt=0)
     h: float = Field(..., gt=0)
     depth: float = Field(..., gt=0)
+    name: Optional[str] = Field(None, pattern=FEATURE_NAME)
 
 
 class Hole(BaseModel):
     """A round hole at (x, y): bored in circles when it is wider than the tool,
-    plunged when it is the tool's size."""
+    plunged when it is the tool's size. Bored, an inside size, measured across."""
 
     kind: Literal["hole"] = "hole"
     x: float
     y: float
     diameter: float = Field(..., gt=0)
     depth: float = Field(..., gt=0)
+    name: Optional[str] = Field(None, pattern=FEATURE_NAME)
 
 
 class Outline(BaseModel):
     """The part's outline, a ``w`` by ``h`` rectangle with its front-left corner at
     (x, y), cut around from outside ``depth`` down: through the stock when the depth
-    reaches its thickness."""
+    reaches its thickness: an outside size, measured along X."""
 
     kind: Literal["outline"] = "outline"
     x: float = 0.0
@@ -73,9 +84,22 @@ class Outline(BaseModel):
     w: float = Field(..., gt=0)
     h: float = Field(..., gt=0)
     depth: float = Field(..., gt=0)
+    name: Optional[str] = Field(None, pattern=FEATURE_NAME)
 
 
-Operation = Union[Pocket, Hole, Outline]
+class Disc(BaseModel):
+    """The part's outline as a circle of ``diameter`` centred at (x, y), cut around from
+    outside ``depth`` down: an outside size, measured across."""
+
+    kind: Literal["disc"] = "disc"
+    x: float
+    y: float
+    diameter: float = Field(..., gt=0)
+    depth: float = Field(..., gt=0)
+    name: Optional[str] = Field(None, pattern=FEATURE_NAME)
+
+
+Operation = Union[Pocket, Hole, Outline, Disc]
 
 
 class Cuts(BaseModel):
@@ -101,6 +125,25 @@ class OperationSaid(BaseModel):
     cut: bool  # False when it was left out, with why in the toolpath's messages
 
 
+class Feature(BaseModel):
+    """A size of the part as cut that a person measures: a named operation's, inside
+    (a pocket, a hole bored) or outside (an outline, a disc), as designed."""
+
+    name: str
+    side: Literal["inside", "outside"]
+    size: float  # mm, as designed: across a hole or a disc, along X for a rectangle
+    words: str  # what to measure, as a person reads it
+
+
+class Allowance(BaseModel):
+    """What the toolpath added to the tool's diameter in every offset it made, and
+    where that came from: the router's measured correction (``measured.py``)."""
+
+    value: float  # mm, on the tool's diameter
+    origin: Literal["measured"] = "measured"
+    source: str
+
+
 class Bounds(BaseModel):
     """Where the tool goes, work coordinates, the tool's radius included."""
 
@@ -118,6 +161,7 @@ class Toolpath(BaseModel):
     time_s: float  # at the feeds written, rapids at the router's own rapid
     bounds: Optional[Bounds] = None
     messages: List[str] = Field(default_factory=list)  # what was left out or changed, and why
+    features: List[Feature] = Field(default_factory=list)  # what a person measures of it
 
 
 class CutFor(BaseModel):
@@ -149,3 +193,5 @@ class CutRecord(BaseModel):
     bounds: Optional[Bounds] = None
     messages: List[str] = Field(default_factory=list)
     problems: List[str] = Field(default_factory=list)  # the Cut card's: why it may not be sent
+    features: List[Feature] = Field(default_factory=list)  # what a person measures of the piece
+    allowance: Optional[Allowance] = None  # the router's correction it was written with

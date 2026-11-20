@@ -12,7 +12,7 @@ from typing import Optional
 import click
 
 from .server import port_option
-from .utils import _safe_echo
+from .utils import parse_param_overrides, part_or_die, safe_echo
 
 
 def _status_lines(chosen: Optional[str] = None) -> None:
@@ -20,7 +20,7 @@ def _status_lines(chosen: Optional[str] = None) -> None:
     from ..slicer.modules import chosen_id, modules
 
     picked = chosen_id(chosen)
-    _safe_echo(f"This machine: {oi.what_install_does()}")
+    safe_echo(f"This machine: {oi.what_install_does()}")
     for module in modules():
         status = module.status()
         mark = " (used)" if module.id == picked else ""
@@ -31,15 +31,15 @@ def _status_lines(chosen: Optional[str] = None) -> None:
         )
         if status.tool.path:
             version = status.tool.version or "does not say its version"
-            _safe_echo(
+            safe_echo(
                 f"  {'✓' if status.tool.ok else '✗'} {status.tool.path} ({status.tool.found_by}): {version}"
             )
         if status.profiles:
             click.echo(f"  its printer profiles: {status.profiles}")
         for note in status.notes:
-            _safe_echo(f"  • {note}", fg="yellow")
+            safe_echo(f"  • {note}", fg="yellow")
         for problem in status.problems:
-            _safe_echo(f"  ✗ {problem}", fg="yellow")
+            safe_echo(f"  ✗ {problem}", fg="yellow")
     from ..slicer import compose
 
     kinds = (compose.START, compose.FILAMENT, compose.DECLARED)
@@ -49,7 +49,7 @@ def _status_lines(chosen: Optional[str] = None) -> None:
         if shown:
             click.secho(title, bold=True)
         for piece in shown:
-            _safe_echo(f"  • {piece.kind} {piece.id}: {piece.does}")
+            safe_echo(f"  • {piece.kind} {piece.id}: {piece.does}")
     versions = oi.installed_versions()
     if versions:
         click.secho("Installed releases:", bold=True)
@@ -57,8 +57,8 @@ def _status_lines(chosen: Optional[str] = None) -> None:
         for version in versions:
             found = oi.describe(version)
             mark = " (current)" if version == current else ""
-            _safe_echo(f"  • OrcaSlicer {version}{mark}: {found.executable}")
-            _safe_echo(f"      {found.platform} · {found.how} · {found.runs}")
+            safe_echo(f"  • OrcaSlicer {version}{mark}: {found.executable}")
+            safe_echo(f"      {found.platform} · {found.how} · {found.runs}")
 
 
 @click.group(short_help="Install OrcaSlicer; slice a part or a made piece for a printer.")
@@ -118,6 +118,15 @@ def slicer_status():
     help="For SITE/PATH: the running server's address, this machine only (apothecary serve's)",
 )
 @port_option("For SITE/PATH: its port")
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="A registered part at these parameters: rendered into the cache of variants, as "
+    "the page's Apply renders it, and that variant sliced. Repeatable.",
+)
 @click.option("--json-out/--text", default=False)
 def slicer_slice(
     part: str,
@@ -125,6 +134,7 @@ def slicer_slice(
     slicer_id: Optional[str],
     host: str,
     port: int,
+    param_pairs: tuple,
     json_out: bool,
 ):
     """Slice PART for a printer, and keep the G-code where the Print card's file
@@ -137,30 +147,54 @@ def slicer_slice(
                 serve, on this machine), where made pieces live
 
     The part's declared print settings are used, the printer's profile filling
-    the rest; each value is listed with where it came from. Nothing is sent to
-    a printer.
+    the rest; each value is listed with where it came from. With -p, a
+    registered part is sliced at those parameters, as the variant they render
+    (an adapter `apothecary parts adapter` derived, say); without, at its
+    defaults. Nothing is sent to a printer.
     """
     if "/" in part:
+        if param_pairs:
+            raise click.ClickException("-p sets a registered part's parameters, not a site's node")
         site, path = part.split("/", 1)
         record = _slice_through_server(host, port, site, path, printer, slicer_id, json_out)
     else:
-        record = _slice_here(part, printer, slicer_id, json_out)
+        record = _slice_here(part, printer, slicer_id, json_out, param_pairs)
     if json_out:
         click.echo(json.dumps(record, indent=2))
         return
     _print_record(record)
 
 
-def _slice_here(part: str, printer: Optional[str], slicer_id: Optional[str], json_out: bool):
+def _slice_here(
+    part: str, printer: Optional[str], slicer_id: Optional[str], json_out: bool, param_pairs=()
+):
     from ..slicer.modules import SlicerError
     from ..slicer.service import Here, resolve, slice_into
 
     log = (lambda _line: None) if json_out else click.echo
+    variant = _variant_at(part, param_pairs, log) if param_pairs else None
     try:
-        target, chosen = resolve(part, printer=printer)
+        target, chosen = resolve(part, printer=printer, variant=variant)
         return slice_into(target, chosen, Here(log), slicer=slicer_id).model_dump(mode="json")
     except SlicerError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+def _variant_at(name: str, param_pairs, log) -> Optional[str]:
+    """The cache key of ``name`` rendered at ``param_pairs``, as the page's Apply renders
+    it; None where they are its defaults, which its own STL is."""
+    from ..projects.parts import variants
+
+    part = part_or_die(name)
+    params = parse_param_overrides(part, param_pairs)
+    made = variants.make_variant(part, params)
+    if made.failure:
+        raise click.ClickException(
+            f"{name} at {params} was not rendered: {made.error_message or made.failure}"
+        )
+    if made.key:
+        log(f"{name}: the variant {made.key} at {params}" + (" (rendered)" if made.rendered else ""))
+    return made.key
 
 
 SITE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
@@ -179,7 +213,7 @@ def _slice_through_server(
 ) -> dict:
     """Slice a node of a site through the running server's route, as the page will:
     a made piece lives in the server's memory. Its log is echoed as it arrives."""
-    from .server import _loopback_or_die
+    from .server import loopback_or_die
 
     if not SITE_NAME.match(site) or not NODE_PATH.match(path):
         raise click.ClickException(
@@ -187,7 +221,7 @@ def _slice_through_server(
         )
     if printer is not None and not NODE_PATH.match(printer):
         raise click.ClickException(f"{printer}: not a node's path")
-    host = _loopback_or_die(host)
+    host = loopback_or_die(host)
     base = f"http://[{host}]:{port}" if ":" in host else f"http://{host}:{port}"
     try:
         _call(base, "GET", "/health")
@@ -217,7 +251,7 @@ def _slice_through_server(
         return answer["record"]
     for message in answer.get("messages") or []:
         where = f"line {message['line']}: " if message.get("line") else ""
-        _safe_echo(f"  • {message['level']}: {where}{message['text']}", fg="yellow", err=True)
+        safe_echo(f"  • {message['level']}: {where}{message['text']}", fg="yellow", err=True)
     raise click.ClickException(answer.get("error") or f"the slice {task.get('status')}")
 
 
@@ -260,6 +294,6 @@ def _print_record(record: dict) -> None:
         click.echo(f"  extrudes from ({lo[0]}, {lo[1]}, {lo[2]}) to ({hi[0]}, {hi[1]}, {hi[2]})")
     for message in record.get("messages") or []:
         where = f"line {message['line']}: " if message.get("line") else ""
-        _safe_echo(f"  • {message['level']}: {where}{message['text']}", fg="yellow")
+        safe_echo(f"  • {message['level']}: {where}{message['text']}", fg="yellow")
     for problem in record.get("problems") or []:
-        _safe_echo(f"  ✗ the Print card would refuse it: {problem}", fg="red")
+        safe_echo(f"  ✗ the Print card would refuse it: {problem}", fg="red")

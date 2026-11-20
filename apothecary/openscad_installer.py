@@ -43,8 +43,10 @@ key this program does not carry, so it is not checked.)
 Where it goes: ``tools_dir()/openscad/<date>/``, with ``install.json`` in it
 saying what was installed (how, the executable, the platform, its
 architectures, a source build's commits), and ``tools_dir()/openscad/current``
-a text file naming the date in use. The resolver in
-apothecary/projects/parts/stl_renderer.py reads it. Stdlib only.
+a text file naming the date in use. A snapshot's folder whose ``install.json``
+is missing, or names no executable or no way it was installed, is not an
+install. The resolver in apothecary/projects/parts/stl_renderer.py reads it.
+Stdlib only.
 """
 
 from __future__ import annotations
@@ -106,14 +108,14 @@ class InstallError(RuntimeError):
     """The snapshot could not be found, fetched, verified, built or put in place."""
 
 
-def _fetch(url: str, timeout: int = 300, agent: str = "apothecary-openscad-installer") -> bytes:
+def fetch_url(url: str, timeout: int = 300, agent: str = "apothecary-openscad-installer") -> bytes:
     """A tool fetch: a GET from files.openscad.org, api.github.com or
     codeload.github.com, and nowhere else.
 
     ``tool_fetch`` refuses a URL whose host is not a tool source before
     anything is opened, and holds the sockets under this call to those hosts.
     The slicer installer (apothecary/slicer/orcaslicer_installer.py) fetches
-    through this one and ``_fetch_to``, naming itself in ``agent``.
+    through this one and ``fetch_url_to``, naming itself in ``agent``.
     """
     from .stays_local import tool_fetch
 
@@ -124,10 +126,10 @@ def _fetch(url: str, timeout: int = 300, agent: str = "apothecary-openscad-insta
         return resp.read()
 
 
-def _fetch_to(
+def fetch_url_to(
     url: str, path: Path, timeout: int = 300, agent: str = "apothecary-openscad-installer"
 ) -> str:
-    """``_fetch``, written to ``path`` as it arrives rather than held in memory: the
+    """``fetch_url``, written to ``path`` as it arrives rather than held in memory: the
     SHA-256 of what arrived. For a download too large to hold whole (an
     OrcaSlicer release is a quarter of a gigabyte on macOS)."""
     from .stays_local import tool_fetch
@@ -182,7 +184,7 @@ _MACHINES = {"amd64": "x86_64", "x64": "x86_64", "x86_64": "x86_64", "aarch64": 
 SYSTEM_NAMES = {"Darwin": "macOS"}
 
 
-def _machine_name(raw: str) -> str:
+def machine_name(raw: str) -> str:
     return _MACHINES.get(raw.lower(), raw.lower())
 
 
@@ -225,7 +227,7 @@ def host() -> Tuple[str, str]:
     """This machine: ``platform.system()`` and its hardware's architecture,
     ``x86_64`` or ``arm64`` (anything else as the platform names it)."""
     system = platform.system()
-    machine = _machine_name(platform.machine())
+    machine = machine_name(platform.machine())
     if system == "Windows":
         machine = _windows_native_machine() or machine
     elif system == "Darwin" and machine == "x86_64" and _rosetta_translated():
@@ -233,13 +235,14 @@ def host() -> Tuple[str, str]:
     return system, machine
 
 
-def _platform_label(system: str, machine: str) -> str:
+def platform_label(system: str, machine: str) -> str:
     return f"{SYSTEM_NAMES.get(system, system)} {machine}"
 
 
 # --- how this machine installs -------------------------------------------------------
 
 APPIMAGE, EXTRACTED, DMG, ZIP, SOURCE = "appimage", "appimage-extracted", "dmg", "zip", "source"
+METHODS = (APPIMAGE, EXTRACTED, DMG, ZIP, SOURCE)
 
 # How each platform's snapshot is named in the listing. In 2025 the AppImage
 # carried a build number: OpenSCAD-2025.10.02.ai27993-x86_64.AppImage.
@@ -272,7 +275,7 @@ def install_method(system: Optional[str] = None, machine: Optional[str] = None) 
     if system is None or machine is None:
         here = host()
         system, machine = system or here[0], machine or here[1]
-    machine = _machine_name(machine)
+    machine = machine_name(machine)
     if system == "Linux" and machine == "x86_64":
         return APPIMAGE
     if system == "Linux" and machine == "arm64":
@@ -293,7 +296,7 @@ def install_method(system: Optional[str] = None, machine: Optional[str] = None) 
 def what_install_does() -> str:
     """This machine, and what ``apothecary openscad install`` does on it."""
     system, machine = host()
-    label = _platform_label(system, machine)
+    label = platform_label(system, machine)
     try:
         return f"{label}: an install is {WHAT_INSTALL_DOES[install_method(system, machine)]}"
     except InstallError as exc:
@@ -314,8 +317,8 @@ def snapshot_pattern(system: Optional[str] = None, machine: Optional[str] = None
 
 # --- where it lives ------------------------------------------------------------------
 
-# An install with no install.json is the AppImage itself, at <date>/openscad.
-LEGACY_EXECUTABLE = "openscad"
+# The AppImage's name in a snapshot's directory.
+APPIMAGE_EXECUTABLE = "openscad"
 
 
 def openscad_dir() -> Path:
@@ -340,11 +343,22 @@ def read_manifest(date: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def executable_for(date: str) -> Path:
-    """The executable of the snapshot of ``date``: where ``install.json`` says it
-    is, else the AppImage at ``<date>/openscad`` (an install with none)."""
-    rel = _plain(read_manifest(date).get("executable")) or LEGACY_EXECUTABLE
+def executable_for(date: str) -> Optional[Path]:
+    """The executable of the install of ``date``, where its ``install.json`` says it
+    is. None for a snapshot's folder that is not an install: one with no
+    ``install.json``, or whose ``install.json`` names no executable inside the folder
+    or none of the ways an install is made (``METHODS``)."""
+    record = read_manifest(date)
+    rel = _plain(record.get("executable"))
+    if rel is None or record.get("method") not in METHODS:
+        return None
     return openscad_dir() / check_date(date) / rel
+
+
+def installed(date: str) -> Optional[Path]:
+    """The executable of the install of ``date`` when it is there, else None."""
+    path = executable_for(date)
+    return path if path is not None and path.is_file() else None
 
 
 def installed_versions() -> list[str]:
@@ -352,9 +366,7 @@ def installed_versions() -> list[str]:
     home = openscad_dir()
     if not home.is_dir():
         return []
-    return sorted(
-        p.name for p in home.iterdir() if DATE_RE.match(p.name) and executable_for(p.name).is_file()
-    )
+    return sorted(p.name for p in home.iterdir() if DATE_RE.match(p.name) and installed(p.name))
 
 
 def current_version() -> Optional[str]:
@@ -369,10 +381,7 @@ def current_version() -> Optional[str]:
 def current_executable() -> Optional[Path]:
     """The installed snapshot in use, or None."""
     date = current_version()
-    if date is None:
-        return None
-    path = executable_for(date)
-    return path if path.is_file() else None
+    return installed(date) if date is not None else None
 
 
 def _write_current(date: str) -> None:
@@ -486,18 +495,21 @@ class Installed:
 
 
 def describe(date: str) -> Installed:
-    """The snapshot of ``date``: the platform it was installed for, how, whether
-    it runs natively here, and whether it has Manifold."""
+    """The install of ``date``: the platform it was installed for, how, whether
+    it runs natively here, and whether it has Manifold. InstallError for a
+    snapshot's folder that is not an install."""
     record = read_manifest(date)
     exe = executable_for(date)
-    method = record.get("method") if record.get("method") in HOW else APPIMAGE
+    if exe is None:
+        raise InstallError(f"snapshot {date} is not installed")
+    method = record["method"]
     archs = record.get("archs")
     if not isinstance(archs, list) or not all(isinstance(a, str) for a in archs):
         archs = binary_archs(exe)
     system, machine = host()
     label = record.get("platform")
     if not isinstance(label, str):
-        label = _platform_label(system, archs[0] if archs else machine)
+        label = platform_label(system, archs[0] if archs else machine)
     commit = record.get("commit")
     if method == EXTRACTED and record.get("extracted") == "asked":
         method = "asked"
@@ -549,7 +561,7 @@ def _published_sha256(text: str, name: str) -> str:
     raise InstallError(f"no SHA-256 published for {name}")
 
 
-def _run(executable: Path, *args: str, timeout: int = 120, cwd=None) -> Tuple[int, str]:
+def run_program(executable: Path, *args: str, timeout: int = 120, cwd=None) -> Tuple[int, str]:
     """Run ``executable`` with ``args``: its exit code and what it printed (stderr
     first; OpenSCAD writes its version there), or (-1, why it did not start)."""
     try:
@@ -569,7 +581,7 @@ def _run(executable: Path, *args: str, timeout: int = 120, cwd=None) -> Tuple[in
 
 def reported_version(executable: Path) -> Optional[str]:
     """What ``executable --version`` prints (OpenSCAD writes it to stderr)."""
-    _code, said = _run(executable, "--version")
+    _code, said = run_program(executable, "--version")
     for line in said.splitlines():
         if re.search(r"version\s+\d{4}\.", line, re.I):
             return line.strip()
@@ -668,7 +680,7 @@ def needs_fuse(said: str) -> bool:
 # --- unpacking, held inside its folder ----------------------------------------------
 
 
-def _parts(name: str) -> Optional[List[str]]:
+def member_parts(name: str) -> Optional[List[str]]:
     """An archive member's name as its parts, or None where it would land outside
     the folder it is unpacked into: absolute, on a drive, or through ``..``."""
     if name.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", name):
@@ -684,7 +696,7 @@ def unpack_portable_zip(body: bytes, dest: Path) -> str:
     with zipfile.ZipFile(io.BytesIO(body)) as zf:
         members = []
         for info in zf.infolist():
-            parts = _parts(info.filename)
+            parts = member_parts(info.filename)
             if parts is None:
                 raise InstallError(f"the zip names a path outside its folder: {info.filename!r}")
             if parts:
@@ -718,7 +730,7 @@ def unpack_tarball(body: bytes, dest: Path) -> None:
     with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as tf:
         chosen = []
         for member in tf.getmembers():
-            parts = _parts(member.name)
+            parts = member_parts(member.name)
             if parts is None:
                 raise InstallError(f"the tarball names a path outside its folder: {member.name!r}")
             rel = parts[1:]
@@ -731,7 +743,7 @@ def unpack_tarball(body: bytes, dest: Path) -> None:
                         f"the tarball links outside its folder: {member.name} -> {member.linkname}"
                     )
             elif member.islnk():
-                link = _parts(member.linkname)
+                link = member_parts(member.linkname)
                 if link is None or len(link) < 2:
                     raise InstallError(
                         f"the tarball links outside its folder: {member.name} -> {member.linkname}"
@@ -750,7 +762,7 @@ def _executable(path: Path) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _rename(src: Path, dst: Path, tries: int = 5) -> None:
+def rename(src: Path, dst: Path, tries: int = 5) -> None:
     for attempt in range(tries):
         try:
             os.replace(src, dst)
@@ -850,7 +862,7 @@ def _lib_dirs() -> List[Path]:
 
 
 def _cmake_version(cmake: str) -> Optional[Tuple[int, ...]]:
-    _code, said = _run(Path(cmake), "--version", timeout=30)
+    _code, said = run_program(Path(cmake), "--version", timeout=30)
     match = re.search(r"cmake version (\d+)\.(\d+)(?:\.(\d+))?", said)
     return tuple(int(g) for g in match.groups() if g is not None) if match else None
 
@@ -987,8 +999,8 @@ class SnapshotInstaller:
         self.extract = extract
 
     def fetch(self, url: str) -> bytes:
-        # Looked up at call time, so a test's stand-in for _fetch is the one used.
-        return (self._fetch or _fetch)(url)
+        # Looked up at call time, so a test's stand-in for fetch_url is the one used.
+        return (self._fetch or fetch_url)(url)
 
     def _floor(self) -> Optional[Tuple[int, ...]]:
         if not self.minimum:
@@ -1017,7 +1029,7 @@ class SnapshotInstaller:
             self.extract = False
         if self.snapshot is not None:
             self._refuse_below_floor(self.snapshot, floor)
-            if not self.force and executable_for(self.snapshot).is_file():
+            if not self.force and installed(self.snapshot):
                 return self._already(self.snapshot)
         if method == SOURCE:
             return self._from_source(floor)
@@ -1034,7 +1046,7 @@ class SnapshotInstaller:
                 f"(the listing keeps about a year; newest is {newest})"
             )
         self._refuse_below_floor(date, floor)
-        if not self.force and executable_for(date).is_file():
+        if not self.force and installed(date):
             return self._already(date)
 
         name, size = listing[date]
@@ -1064,7 +1076,7 @@ class SnapshotInstaller:
         """The AppImage of ``date``, installed already, extracted where it is:
         nothing fetched, the image itself not kept beside what it held."""
         record = read_manifest(date)
-        method = record.get("method") or APPIMAGE
+        method = record["method"]
         if method != APPIMAGE:
             how = HOW.get(record.get("extracted") or method, HOW.get(method, method))
             self.log(f"Nothing to extract: snapshot {date} is installed as {how}")
@@ -1087,7 +1099,7 @@ class SnapshotInstaller:
         ``why``: "asked" (``--extract``) or "no FUSE". The image itself is
         removed, unless ``keep`` (it is not in ``staging``, and goes with the
         folder it is in)."""
-        code, said = _run(image, "--appimage-extract", timeout=900, cwd=staging)
+        code, said = run_program(image, "--appimage-extract", timeout=900, cwd=staging)
         if code != 0 or not (staging / "squashfs-root" / "AppRun").exists():
             raise InstallError(f"{name} could not be extracted: {said.strip()[-500:]}")
         (staging / "squashfs-root").chmod(0o755)  # the runtime makes it the owner's alone
@@ -1113,17 +1125,17 @@ class SnapshotInstaller:
                 )
             self.log(reported)
             record.setdefault("archs", binary_archs(exe))
-            record.update(date=date, version=reported, platform=_platform_label(*host()))
+            record.update(date=date, version=reported, platform=platform_label(*host()))
             self.log(f"On this machine: {runs_here(record['archs'])}")
             (staging / MANIFEST).write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
             final = home / date
             if final.exists():
                 aside = Path(tempfile.mkdtemp(prefix=f".{date}.old.", suffix=".tmp", dir=home))
-                _rename(final, aside / date)
-                _rename(staging, final)
+                rename(final, aside / date)
+                rename(staging, final)
                 shutil.rmtree(aside, ignore_errors=True)
             else:
-                _rename(staging, final)
+                rename(staging, final)
         finally:
             if staging.exists():
                 shutil.rmtree(staging, ignore_errors=True)
@@ -1136,16 +1148,16 @@ class SnapshotInstaller:
 
     def _appimage(self, date: str, name: str, body: bytes) -> Callable[[Path], dict]:
         def populate(staging: Path) -> dict:
-            image = staging / LEGACY_EXECUTABLE
+            image = staging / APPIMAGE_EXECUTABLE
             image.write_bytes(body)
             _executable(image)
             archs = binary_archs(image)
             if self.extract:
                 self.log("Extracting the AppImage, as --extract asks: each run then starts at once")
                 return {**self._unpacked(image, staging, name, "asked"), "archs": archs}
-            code, said = _run(image, "--version")
+            code, said = run_program(image, "--version")
             if code == 0 or not needs_fuse(said):
-                return {"method": APPIMAGE, "executable": LEGACY_EXECUTABLE, "archs": archs}
+                return {"method": APPIMAGE, "executable": APPIMAGE_EXECUTABLE, "archs": archs}
             self.log("The AppImage cannot mount itself here (no FUSE); extracting it instead")
             return {**self._unpacked(image, staging, name, "no FUSE"), "archs": archs}
 
@@ -1183,7 +1195,7 @@ class SnapshotInstaller:
         if hdiutil is None:
             raise InstallError("hdiutil is not on PATH; it comes with macOS")
         mount = Path(tempfile.mkdtemp(prefix="apothecary-openscad-"))
-        code, said = _run(
+        code, said = run_program(
             Path(hdiutil),
             "attach",
             "-nobrowse",  # not shown in the Finder
@@ -1194,7 +1206,7 @@ class SnapshotInstaller:
             str(image),
         )
         if code != 0:
-            _remove_empty(mount)
+            remove_empty(mount)
             raise InstallError(f"hdiutil could not attach {name}: {said.strip()}")
         try:
             app = mount / "OpenSCAD.app"
@@ -1207,7 +1219,7 @@ class SnapshotInstaller:
             ditto = shutil.which("ditto")
             if ditto:
                 # ditto keeps what a bundle is made of: links, attributes, its signature.
-                code, said = _run(Path(ditto), str(app), str(dest), timeout=600)
+                code, said = run_program(Path(ditto), str(app), str(dest), timeout=600)
                 if code != 0:
                     raise InstallError(f"ditto could not copy {app.name}: {said.strip()}")
             else:
@@ -1217,12 +1229,12 @@ class SnapshotInstaller:
 
     def _detach(self, hdiutil: Path, mount: Path) -> None:
         for extra in ((), ("-force",)):
-            code, said = _run(hdiutil, "detach", str(mount), *extra)
+            code, said = run_program(hdiutil, "detach", str(mount), *extra)
             if code == 0:
                 break
         else:
             self.log(f"hdiutil could not detach {mount}: {said.strip()}")
-        _remove_empty(mount)
+        remove_empty(mount)
 
     # Windows --------------------------------------------------------------------------
 
@@ -1247,7 +1259,7 @@ class SnapshotInstaller:
                 raise InstallError(f"{SNAPSHOTS} lists no snapshot")
             date = max(nights)
             self._refuse_below_floor(date, floor)
-            if not self.force and executable_for(date).is_file():
+            if not self.force and installed(date):
                 return self._already(date)
         self.log(
             "files.openscad.org publishes no current OpenSCAD for Linux arm64; "
@@ -1435,7 +1447,7 @@ class SnapshotInstaller:
 
     def _check_manifold(self, exe: Path) -> str:
         """Manifold's version as the build reports it, once a cube renders with it."""
-        _code, said = _run(exe, "--info")
+        _code, said = run_program(exe, "--info")
         match = re.search(r"Manifold version:\s*(\S[^\r\n]*)", said)
         if match is None or not re.match(r"\d", match.group(1)):
             named = match.group(1).strip() if match else "its --info names no Manifold"
@@ -1443,7 +1455,9 @@ class SnapshotInstaller:
         with tempfile.TemporaryDirectory() as tmp:
             cube, stl = Path(tmp) / "cube.scad", Path(tmp) / "cube.stl"
             cube.write_text("cube(1);\n")
-            code, said = _run(exe, "--backend=manifold", "-o", str(stl), str(cube), timeout=300)
+            code, said = run_program(
+                exe, "--backend=manifold", "-o", str(stl), str(cube), timeout=300
+            )
             if code != 0 or not stl.is_file() or stl.stat().st_size == 0:
                 raise InstallError(
                     f"the build does not render with Manifold: {said.strip()[-500:]}"
@@ -1463,7 +1477,7 @@ def _bundle_executable(app: Path) -> str:
     return name if isinstance(name, str) and NAME_RE.match(name) else "OpenSCAD"
 
 
-def _remove_empty(path: Path) -> None:
+def remove_empty(path: Path) -> None:
     try:
         path.rmdir()
     except OSError:

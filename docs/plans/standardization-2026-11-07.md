@@ -1,8 +1,8 @@
 # One way of doing each thing: a plan
 
-*Built: the ten slices, as a local stack of branches, each holding its test;
-the whole suite's run on the stack's top is in the session's ledger. Nothing
-here is pushed: the owner decides when the stack goes.*
+*Built: the ten slices, as a local stack of branches, each holding its test,
+and the whole suite run once on the stack's top. Nothing here is pushed: the
+owner decides when the stack goes.*
 
 ## What this plans
 
@@ -66,7 +66,7 @@ written. Each finding names its place and what else could explain it.
 |---|---|---|
 | Retired command names, hidden, each naming its replacement | `cli/retired.py`; `inventory`, `system`, `install`, `submodules`, `testrun`, `dev`, `photo look` | `todo.md` records the rule: removed one release after they were hidden; no `v*` tag has been cut, so by that rule they stay |
 | A kept file's kind read from the slice or cut record beside it, for a file kept before files said their kind | `devices._MADE_FOR`, `devices._with_its_kind` | production's state folder has no `prints/` folder at all; the demo's state folders are rebuilt |
-| An OpenSCAD install with no manifest, read as the AppImage at `<date>/openscad` | `openscad_installer.LEGACY_EXECUTABLE` | the owner's one install, `2026.09.27`, has no manifest: the path is live and keeps a real install usable |
+| An OpenSCAD install with no manifest, read as the AppImage at `<date>/openscad` | `openscad_installer.LEGACY_EXECUTABLE` | production's tools folder holds one install, `2026.09.27`, with no manifest: the path is live and keeps a real install usable |
 | The firmware status route's top-level fields, the Arduino module's, beside the per-module list that is the standard | `arduino.legacy_status`, `arduino.from_legacy`, `ToolchainStatus`'s `arduino_cli_*` and `esptool_*`; read by `cli/firmware.py`, `cli/system.py`, the page's `toolchain.js` and `sketches.js` | the page reads them, and the page is another session's |
 
 ### Efforts that may sit outside what the project is for
@@ -120,22 +120,18 @@ top. "Holds it" is the test that fails on the code beneath the slice.
 | 4 | `build/objection-per-dialect` | `gcode.ERROR_RE` is Marlin's words; `gcode.OBJECTIONS` is every dialect's, each dialect adding its own when it is imported; `grbl.OBJECTION_RE` is `error:N` and `ALARM:N`, and `explain` reads its number from it | Marlin's pattern does not match `error:20`; GRBL's is among the link's objections; a bad line to the simulated router still raises with the words |
 | 5 | `build/board-by-part` | `_assembly_tree` loses `inside_machine` and its clause; a node is a board when `is_board(part_ref)` | an electrical leaf with no part inside a machine is not a board; the router's controller is, by its part |
 | 6 | `build/kind-from-dialect` | `PrinterInfo.machine` is computed from `dialect` through one map in `firmware/models.py`; `gcode.MACHINE` and `grbl.MACHINE` read the map; the JSON a record and the API carry keeps the key | `PrinterInfo(dialect=GRBL).machine == "router"`; a record stored with a kind that disagrees with its dialect reads as the dialect's |
-| 7 | `build/retired-names-gone` | *The owner's yes, 2026-11-07.* the seven names and `cli/inventory.py` go; `cli/retired.py` stays for `cli/testing.py`'s three, which are the test command's; `test_cli.py`'s rows; the CHANGELOG; `todo.md`'s rule | `apothecary inventory` is "No such command" |
-| 8 | `build/shims-gone` | *The owner's yes, 2026-11-07.* `t1_core_stub` moves to `projects/parts/datum_core.py`; `KiCadProvider` goes, `datum_bench` defaulting to a `StubProvider` holding the stub; `docs/fitting-a-part.md` | `apothecary.shims` does not import; `build()` serves the same board |
-| 9 | `build/kept-file-kind` | *The owner's yes, 2026-11-07.* `_MADE_FOR` and `_with_its_kind` go; a kept file's kind is what it was kept with | a kept file with no kind beside a cut record has no kind |
-| 10 | `build/one-key-per-board` | *The owner's yes, 2026-11-07, with no reader of the state file's old shape.* `models.board_key` is a board's one key, which `DeviceInfo.identity`, `occupants.key_of`, a pin and a flash record use; `DeviceInfo.names` and `bindings.same_device` tell a pin's or a record's board; a make shared by two bridges plugged in names neither; `FlashRecord.board` goes; `serial_monitor`'s devkit reads `flashed_to(port)`; the wiring names an unnamed board by its own key or its port | the router pinned by its make is found on another port and named by neither twin; a CH340 devkit flashed before its MAC was read keeps its flash, and counts for neither twin; a flash made beside a twin is the port's |
-
-Each branch's gate and run are in the session's ledger
-(the shared notes folder, `standardize-ledger.md`), with the mutation each
-test was shown to catch.
+| 7 | `build/retired-names-gone` | *Approved 2026-11-07.* The seven names and `cli/inventory.py` go; `cli/retired.py` stays for `cli/testing.py`'s three, which are the test command's; `test_cli.py`'s rows; the CHANGELOG; `todo.md`'s rule | `apothecary inventory` is "No such command" |
+| 8 | `build/shims-gone` | *Approved 2026-11-07.* `t1_core_stub` moves to `projects/parts/datum_core.py`; `KiCadProvider` goes, `datum_bench` defaulting to a `StubProvider` holding the stub; `docs/fitting-a-part.md` | `apothecary.shims` does not import; `build()` serves the same board |
+| 9 | `build/kept-file-kind` | *Approved 2026-11-07.* `_MADE_FOR` and `_with_its_kind` go; a kept file's kind is what it was kept with | a kept file with no kind beside a cut record has no kind |
+| 10 | `build/one-key-per-board` | *Approved 2026-11-07, with no reader of the state file's old shape.* `models.board_key` is a board's one key, which `DeviceInfo.identity`, `occupants.key_of`, a pin and a flash record use; `DeviceInfo.names` and `bindings.same_device` tell a pin's or a record's board; a make shared by two bridges plugged in names neither; `FlashRecord.board` goes; `serial_monitor`'s devkit reads `flashed_to(port)`; the wiring names an unnamed board by its own key or its port | the router pinned by its make is found on another port and named by neither twin; a CH340 devkit flashed before its MAC was read keeps its flash, and counts for neither twin; a flash made beside a twin is the port's |
 
 ## What was decided
 
-The owner decided four things on 2026-11-07. The three removals: the retired
+Four things were decided on 2026-11-07. The three removals: the retired
 command names (the recorded rule said one release after hiding, and no release has
 been cut), the `shims` package, and the kept file's inferred kind. And one key per
-board: "migrate, don't worry about old states we can rebuild", so the state file's
-old shape is not read: a pin kept by port stays a typed pin by port, and a flash
+board, migrated with no reader of the state file's old shape, since a state it
+would read can be rebuilt: a pin kept by port stays a typed pin by port, and a flash
 record kept by port names a board with no key of its own. The `LEGACY_EXECUTABLE`
 path is live and kept. The four named efforts stay.
 
@@ -161,4 +157,5 @@ path is live and kept. The four named efforts stay.
   sidecar wins; no part has both. A readiness problem for a part that does
   would make the rule one.
 - **The OpenSCAD manifest.** A migration writing `install.json` for an install
-  that has none, then `LEGACY_EXECUTABLE` goes; the owner's tools folder.
+  that has none, then `LEGACY_EXECUTABLE` goes; production's tools folder holds
+  the one it would migrate.

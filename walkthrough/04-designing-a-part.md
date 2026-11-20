@@ -24,7 +24,7 @@ The universe, /viewer/sites/apothecary, where every part is a leaf: calibration_
 ![Part › Edit opens the part's editor at what is drawn](screenshots/04-01-part-edit-opens-the-part-s-editor-at-what-is-drawn.png)
 
 ```
-envelope 10.00 × 10.00 × 10.00 mm · measured 10.00 × 10.00 × 10.00 mm
+envelope 10 × 10 × 10 mm · measured 10 × 10 × 10 mm
 ```
 
 ## 2. A size dragged is checked once the slider rests
@@ -40,13 +40,13 @@ size = 30;              // [10:1:50] Cube size in mm
 
 ## 3. Apply draws the variant, marked as not saved
 
-Apply: the text rendered, its size in it and nothing passed beside it, into the cache of variants, and drawn in this tab at that size, grown from where the part stood on the floor rather than centred on the envelope it had, and measured beside the envelope the part declares, Selected's Footprint following it. The editor's amber edge and its words, and an amber dot over the part in the world, say it is an applied variant and not the saved part; the status line says so too.
+Apply: the text rendered, its size in it and nothing passed beside it, into the cache of variants, and drawn in this tab at that size, grown from where the part stood rather than centred on the envelope it had, and measured beside the envelope the part declares, Selected's Footprint following it. The editor's amber edge and its words, and an amber dot over the part in the world, say it is an applied variant and not the saved part; the status line says so too.
 
 ![Apply draws the variant, marked as not saved](screenshots/04-03-apply-draws-the-variant-marked-as-not-saved.png)
 
 ```
 calibration_cube regenerated: an applied variant, not saved; Part › Save keeps it in git
-envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
+envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 ```
 
 ## 4. A reload draws what the tab applied, marked at a glance
@@ -111,7 +111,7 @@ Recent applies, in History, a tab beside Parameters, lists this tab's applies of
 
 ```
 calibration_cube: drawn again from the cache, the variant applied then; nothing rendered
-envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
+envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 ```
 
 ## 12. A size staged and not applied is kept over a reload

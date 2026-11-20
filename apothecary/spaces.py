@@ -49,6 +49,7 @@ KIND_OWNER = {
     "broken": APOTHECARY,
     "contested": HUMAN,
     "disagree": APOTHECARY,
+    "misfit": APOTHECARY,
     "drift": APOTHECARY,
     "unbounded": APOTHECARY,
     "unmeasured": MEASUREMENT,
@@ -167,6 +168,57 @@ def _readiness_problems(part, report) -> List[Problem]:
     return problems
 
 
+def _interface_problems(part) -> List[Problem]:
+    """Interfaces whose numbers are a stub's: a fit computed from them is a guess
+    until the real thing is measured (docs/connections.md)."""
+    return [
+        Problem(
+            id=f"unmeasured:{part.name}:interface-{interface.name}",
+            kind="unmeasured",
+            subject=part.name,
+            summary=f"{part.name}.{interface.name}: its numbers are a stub's",
+            owner=KIND_OWNER["unmeasured"],
+            closes_with=(
+                "measure the real thing and set the interface's source to measured, "
+                "or cite the datasheet or standard it is drawn to"
+            ),
+            detail=interface.notes or "",
+        )
+        for interface in part.interfaces()
+        if interface.is_stub
+    ]
+
+
+def _connection_problems(name: str, site) -> List[Problem]:
+    """Connections in a site that do not fit or do not stand where they meet."""
+    from .connections import check
+
+    found: List[Problem] = []
+    stack = [("", site)]
+    while stack:
+        path, node = stack.pop()
+        stack.extend((f"{path}.{c.name}" if path else c.name, c) for c in node.children)
+        if not node.connections:
+            continue
+        report = check(node)
+        wrong = [(j.connection, p) for j in report.joints for p in j.problems]
+        wrong += [(node.name, p) for p in report.problems]
+        for index, (subject, problem) in enumerate(wrong):
+            found.append(
+                Problem(
+                    id=f"misfit:{name}:{path or node.name}:{index}",
+                    kind="misfit",
+                    subject=name,
+                    summary=f"{name}: {subject}",
+                    owner=KIND_OWNER["misfit"],
+                    closes_with="change the connection or the parts, or place the site's "
+                    "parts by their connections (connections.place)",
+                    detail=problem,
+                )
+            )
+    return found
+
+
 def _site_problems(name: str, report) -> List[Problem]:
     """Layouts that do not close."""
     return [
@@ -217,17 +269,19 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
         try:
             open_here = _contested_problems(part)
             open_here += _readiness_problems(part, assess(part, build_volume=build_volume))
+            open_here += _interface_problems(part)
         except Exception as exc:  # any failure to read a part is the problem to report
             open_here = [_broken(entry.name, exc)]
         found.extend(open_here)
 
     # Sites carry layout constraints that parts do not.
-    from .api import _site_store
+    from . import sites
 
-    for name in _site_store.names():
+    for name in sites.store.names():
         try:
-            site = _site_store.get(name)
-            found.extend(_site_problems(name, _site_store.validator(name)(site)))
+            site = sites.store.get(name)
+            found.extend(_site_problems(name, sites.store.validator(name)(site)))
+            found.extend(_connection_problems(name, site))
         except Exception as exc:  # any failure to build or check a site is the problem
             found.append(_broken(name, exc))
 
@@ -262,7 +316,7 @@ def capabilities() -> List[Capability]:
             )
         )
 
-    from .api import _site_store
+    from . import sites
 
     found.extend(
         Capability(
@@ -271,7 +325,7 @@ def capabilities() -> List[Capability]:
             summary="a navigable assembly with a layout validator",
             addresses=["violation"],
         )
-        for name in _site_store.names()
+        for name in sites.store.names()
     )
 
     # The black-box seam: how an unmeasured envelope stops being one.
@@ -288,8 +342,16 @@ def capabilities() -> List[Capability]:
             Capability(
                 name="apothecary parts verify",
                 kind="gate",
-                summary="declared bounds against real geometry; exits non-zero on drift",
+                summary="declared bounds and interfaces against real geometry; exits non-zero "
+                "on drift",
                 addresses=["drift"],
+            ),
+            Capability(
+                name="apothecary parts fit",
+                kind="gate",
+                summary="how two parts' interfaces fit, and why not; exits non-zero when "
+                "nothing seats",
+                addresses=["misfit"],
             ),
             Capability(
                 name="apothecary parts checklist",

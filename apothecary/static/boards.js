@@ -15,9 +15,11 @@
  * it is watching goes quiet, so a replugged board is found without anyone asking.
  *
  * A board is polled only while something watches it live -- its Machine,
- * open, with auto-poll on -- by one self-scheduled poller at the watcher's
- * interval: never two requests in flight for one board, and a one-shot poll
- * from a button shares the one in flight. A devkit watched live is listened
+ * open, with auto-poll on; the world, for a machine it draws whose link the
+ * server holds while no Machine is open on it -- by one self-scheduled poller
+ * at the shortest live watcher's interval: never two requests in flight for
+ * one board, and a one-shot poll from a button shares the one in flight.
+ * A devkit watched live is listened
  * to instead: one serial stream per board, its lines in the board's log and
  * its hello banner as what it was heard saying. A devkit's Machine watches it
  * quiet until a person asks it to listen (its Listen), since opening the port
@@ -28,11 +30,19 @@
  * in its event as `asked`; a host that changes something a poll reports (the
  * Machine's control latch) takes a number too (tick()), and knows an answer
  * asked for before its change is stale.
+ *
+ * Every port armed, however it was armed -- its Machine, the deck's long presses,
+ * another browser -- is asked for every few seconds while the page is in front
+ * (GET /firmware/printers/armed): a board's `armedUntil` is when its arm lapses, 0
+ * when it is not armed, and the model says `control` for a board armed or let go
+ * (with `asked`, the answer's number: its Machine's own latch follows these),
+ * and each second while it is armed, so what shows the time left counts down.
  */
 
 const LOG_MAX = 5000;
 const RETRY_MS = 5000;          // a stream that stopped is opened again this long after
 const LOOK_AGAIN_MS = 10000;    // a watched board gone quiet is looked for at most this often
+const ARMED_MS = 2000;          // the ports armed are asked for this often
 const HELLO = /apothecary\s+([A-Za-z0-9_.\-]+):\s*hello/;
 
 export function mountBoards({ base = "", site = () => null } = {}) {
@@ -59,6 +69,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
                 port, device: null, expected: null, status: null, info: null, observed: null, error: null,
                 log: [], logNext: 0, logChain: Promise.resolve(),
                 watchers: new Map(), timer: null, gen: 0, polling: null, stream: null, retry: null, live: false,
+                armedUntil: 0,
             };
             all.set(port, b);
         }
@@ -215,12 +226,15 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     }
     // `who` is the watcher (any object), `kind` what it takes the board for:
     // "printer" and "router" are polled, "devkit" listened to; `live` false keeps it
-    // watched and quiet. A first live polled watcher polls at once.
+    // watched and quiet. A live polled watcher that was not live before -- the first, or
+    // a Machine opened while the world follows the board -- polls at once, sharing a poll
+    // in flight: what opens a board wants its state now, whoever else watches it.
     function watch(port, who, { kind = "printer", interval: ms = 2000, live: on = true } = {}) {
         const b = board(port);
+        const had = b.watchers.get(who);
         const was = live(b, kind).length;
         b.watchers.set(who, { kind, interval: ms, live: on });
-        follow(b, !was && on);
+        follow(b, on && (!was || !(had && had.live)));
         return () => unwatch(port, who);
     }
     function setWatch(port, who, patch) {
@@ -325,16 +339,23 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     // --- the scan ------------------------------------------------------------------------------------
     // The site's bindings and the detected ports: rows by path, the devices, and
     // any toolchain problem to show instead. One at a time; asked again while
-    // one is in flight, that one answers.
+    // one is in flight, that one answers -- for the same site only. A site's scan is
+    // of its site (`era`, which forget() ends): one asked for before the site changed
+    // is not handed to the next, and its answer, whenever it comes, changes nothing.
+    let era = 0;
     function scan({ fresh = false } = {}) {
-        if (scanning) return scanning;
+        if (scanning && scanning.era === era) return scanning.answered;
         model.scanning = true;
-        const name = site();
-        scanning = (async () => {
+        const name = site(), mine = era;
+        const answered = (async () => {
+            let data = null, problem = null;
             try {
-                const data = await api(name
+                data = await api(name
                     ? `/sites/${encodeURIComponent(name)}/devices${fresh ? "?fresh=1" : ""}`
                     : `/firmware/devices${fresh ? "?fresh=1" : ""}`);
+            } catch (e) { problem = e.message; }
+            if (mine !== era) return model;  // another site's by now: its rows are not these
+            if (data) {
                 model.rows = name ? Object.fromEntries(data.bindings.map((row) => [row.path, row])) : {};
                 model.devices = data.devices || [];
                 model.problem = data.problem || null;
@@ -346,20 +367,20 @@ export function mountBoards({ base = "", site = () => null } = {}) {
                     takeView(b, { device: row.device, expected: row.expected });
                     if (row.printer_status) takeStatus(b, row.printer_status, ++seq);
                 }
-            } catch (e) {
-                model.rows = {}; model.devices = []; model.problem = e.message;
-            } finally {
-                model.loaded = true; model.scanning = false; scanning = null;
+            } else {
+                model.rows = {}; model.devices = []; model.problem = problem;
             }
+            model.loaded = true; model.scanning = false; scanning = null;
             emit(null, "scan", { fresh });
             return model;
         })();
-        return scanning;
+        scanning = { era: mine, answered };
+        return answered;
     }
     // The one way to look for boards again: a fresh port scan.
     async function rescan() {
         lookedAt = Date.now();
-        if (scanning) await scanning;
+        if (scanning && scanning.era === era) await scanning.answered;
         return scan({ fresh: true });
     }
     // A pin made or taken back: the row the server answered with. A printer whose
@@ -374,12 +395,49 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         if (row.device.printer && model.links.has(port)) return poll(port).catch(() => null);
         return null;
     }
+    // Another site in view: its pins are not known until its own scan answers, and a
+    // scan still in flight for the site before answers nothing.
     function forget() {
-        model.rows = {}; model.devices = []; model.problem = null; model.loaded = false;
+        era++;
+        scanning = null;
+        model.rows = {}; model.devices = []; model.problem = null; model.loaded = false; model.scanning = false;
     }
 
+    // --- the latch, wherever it was armed ------------------------------------------------------
+    let armedTimer = null, armedSecond = null, following = true;
+    async function followArmed() {
+        clearTimeout(armedTimer); armedTimer = null;
+        if (!following || document.hidden) return;
+        let armed = null;
+        const asked = ++seq;
+        try { armed = (await api("/firmware/printers/armed")).armed; } catch (e) { armed = null; }
+        if (!following) return;
+        if (armed) {
+            // Said for a board armed or let go, and each time for one still armed, its
+            // time left as the server has it now; `asked` is the answer's number, so a
+            // board's Machine knows one asked before its own arm or disarm.
+            const now = Date.now();
+            for (const b of all.values()) {
+                const was = !!b.armedUntil;
+                b.armedUntil = armed[b.port] ? now + armed[b.port] * 1000 : 0;
+                if (was || b.armedUntil) emit(b.port, "control", { asked });
+            }
+        }
+        if (!armedSecond && [...all.values()].some((b) => b.armedUntil)) armedSecond = setInterval(countSecond, 1000);
+        armedTimer = setTimeout(followArmed, ARMED_MS);
+    }
+    function countSecond() {
+        for (const b of all.values()) {
+            if (!b.armedUntil) continue;
+            if (b.armedUntil <= Date.now()) b.armedUntil = 0;
+            emit(b.port, "control");
+        }
+        if (![...all.values()].some((b) => b.armedUntil)) { clearInterval(armedSecond); armedSecond = null; }
+    }
+    followArmed();
+
     // --- the page itself ---------------------------------------------------------------------------
-    function onVisibility() { for (const b of all.values()) schedule(b); }
+    function onVisibility() { for (const b of all.values()) schedule(b); if (!armedTimer) followArmed(); }
     document.addEventListener("visibilitychange", onVisibility);
     function onUnload() { for (const b of all.values()) { b.gen++; clearTimeout(b.timer); closeStream(b); } }
     window.addEventListener("beforeunload", onUnload);
@@ -392,6 +450,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         isHeld: (port) => model.links.has(port),
         destroy() {
             onUnload();
+            following = false; clearTimeout(armedTimer); clearInterval(armedSecond);
             document.removeEventListener("visibilitychange", onVisibility);
             window.removeEventListener("beforeunload", onUnload);
             all.clear();

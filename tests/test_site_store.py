@@ -54,8 +54,9 @@ def test_reset_discards_mutations_and_rebuilds():
 def test_unknown_site_raises():
     registry, _ = _make_registry()
     store = SiteStore(registry)
-    with pytest.raises(UnknownSiteError):
+    with pytest.raises(UnknownSiteError, match="^Site 'nope' not found$") as unknown:
         store.get("nope")
+    assert unknown.value.name == "nope"
     with pytest.raises(UnknownSiteError):
         store.reset("nope")
     with pytest.raises(UnknownSiteError):

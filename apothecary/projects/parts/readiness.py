@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from apothecary.meshes import MeshError, bounds, read_mesh
-from apothecary.projects.parts.stl_renderer import _sources, get_renderer, read_params_sidecar
+from apothecary.projects.parts.stl_renderer import get_renderer, read_params_sidecar, sources_of
 
 PASS = "pass"
 BLOCKED = "blocked"
@@ -110,7 +110,7 @@ def _sources_newer_than(part, stl_path: Path) -> List[str]:
     includes, uses or imports, and the wrapper (a Python module, or the
     part's part.json) -- the same inputs build_stl rebuilds from."""
     rendered = stl_path.stat().st_mtime
-    inputs = _sources(part)
+    inputs = sources_of(part)
     return [f.name for f in inputs if f.exists() and f.stat().st_mtime > rendered]
 
 
@@ -207,23 +207,6 @@ def _measured_size(stl_path: Path, mtime_ns: int) -> Size:
     return (hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
 
 
-def _turned(size: Size, rotation: Sequence[float]) -> Optional[Size]:
-    """``size`` after OpenSCAD's ``rotate(rotation)`` (about x, then y, then z), or
-    None when an angle is not a quarter turn, as the render's extents are then not the box's."""
-    x, y, z = size
-    for axis, angle in zip("xyz", rotation, strict=True):
-        if angle % 90:
-            return None
-        if (angle // 90) % 2:
-            if axis == "x":
-                y, z = z, y
-            elif axis == "y":
-                x, z = z, x
-            else:
-                x, y = y, x
-    return (x, y, z)
-
-
 def _bounds_check(part, stl_path: Path, tolerance: float) -> Check:
     declared = part.get_bounds()
     if declared is None:
@@ -244,15 +227,7 @@ def _bounds_check(part, stl_path: Path, tolerance: float) -> Check:
             f"apothecary parts generate-stl {part.name}",
         )
 
-    size = (declared.size.x, declared.size.y, declared.size.z)
-    want = _turned(size, part.display_rotation.to_list())
-    if want is None:
-        return Check(
-            BOUNDS,
-            UNKNOWN,
-            "the STL is turned by display_rotation, by other than quarter turns",
-            f"apothecary parts verify {part.name}",
-        )
+    want = (declared.size.x, declared.size.y, declared.size.z)
 
     try:
         measured = _measured_size(stl_path, stl_path.stat().st_mtime_ns)

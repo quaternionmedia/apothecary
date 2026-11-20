@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from ring_helpers import every_action
 
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 from apothecary.menu import CARRIED_BY, Carries, Context, Device, Pointing, resolve
 
 client = TestClient(app)
@@ -20,7 +21,7 @@ SITE = "garage"
 @pytest.fixture(autouse=True)
 def reset_garage_site():
     """The site store keeps edits between requests, so start every test level."""
-    _site_store.reset(SITE)
+    sites.store.reset(SITE)
 
 
 PRINTER = {"port": "/dev/ttyUSB0", "printer": True, "armed": False, "bound": True}
@@ -145,6 +146,41 @@ def test_a_device_ring_needs_no_arrangement():
     assert [o["label"] for o in ring["options"]][:4] == ["Open", "Poll", "Flash", "Query"]
 
 
+def test_a_device_ring_is_titled_by_the_machine_its_board_is_pinned_to(monkeypatch):
+    """The server names the machine on the port as a reason does (firmware/can.py
+    ``who``): the ring on a pinned board's port says the machine, on a loose one the port."""
+    import apothecary.firmware.can as can
+
+    monkeypatch.setattr(can, "who", lambda port: "printer_1" if port == "/dev/ttyUSB0" else port)
+    for port, title in (("/dev/ttyUSB0", "printer_1"), ("/dev/ttyACM3", "ttyACM3")):
+        answer = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "device", "targets": [port]}, "device": {**PRINTER, "port": port}},
+        )
+        assert answer.status_code == 200, answer.text
+        assert answer.json()["title"] == title
+
+
+def test_a_device_told_what_the_server_would_refuse_comes_back_greyed_with_the_reason():
+    """The page passes its board's answer (``can``, firmware/can.py) beside the device;
+    each act it refuses comes back ``enabled: false`` with the server's words in ``why``,
+    for the ring to draw, and the stop comes back as it went."""
+    why = "/dev/ttyUSB0: a print holds the port (printing)"
+    refused = {"ok": False, "why": why, "kind": "held"}
+    judged = {**PRINTER, "can": {"jog": refused, "estop": refused, "home": {"ok": True}}}
+    answer = client.post(
+        "/menu/resolve",
+        json={"context": {"pointing": "device", "targets": ["/dev/ttyUSB0"]}, "device": judged},
+    )
+    assert answer.status_code == 200, answer.text
+    control = next(o for o in answer.json()["options"] if o["id"] == "control")
+    cells = {o["label"]: o for o in control["children"]}
+    jog = {c["label"]: c for c in cells["Jog"]["children"]}
+    assert (jog["Y+"]["enabled"], jog["Y+"]["why"]) == (False, why)
+    assert all(c["enabled"] and c["why"] is None for c in cells["Home"]["children"])
+    assert (cells["Stop"]["enabled"], cells["Stop"]["why"]) == (True, None)
+
+
 def test_an_unknown_pointing_is_refused():
     answer = client.post(
         "/menu/resolve",
@@ -241,8 +277,8 @@ def test_an_action_about_one_arrangement_says_when_it_was_not_told_which():
 
 def _every_ring():
     """One ring of each kind the resolver can build, over a real arrangement."""
-    site = _site_store.get(SITE)
-    names = sorted(_site_store.names())
+    site = sites.store.get(SITE)
+    names = sorted(sites.store.names())
     groups = sorted({child.category for child in site.children if child.category})
     printer = Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=True)
     armed = Device(port="/dev/ttyUSB0", printer=True, armed=True, bound=True)

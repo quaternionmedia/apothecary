@@ -22,7 +22,7 @@ Nothing new appears as an assembly grows; only the tree gets deeper.
 | 2. Fitted part | `datum_core` | one | The box becomes parameter overrides |
 | 3. Sub-assembly | `datum_core` + `datum_cap` | one | Interfaces *between* the pieces, the lip clearance, stay apothecary's |
 | 4. Site | `garage` | one per structure | Plus layout constraints; the validator is still apothecary's |
-| 5. Third-party interfaces | a DIN rail, a VESA pattern | named external interfaces | The standard is a third owner, cited not copied |
+| 5. Third-party interfaces | `hose_adapter` on a hose and a port; a DIN rail, a VESA pattern | named interfaces of each part | An interface's numbers are a stub's until measured, or the standard's, cited not copied ([connections.md](connections.md)) |
 
 ## The seam as built
 
@@ -49,6 +49,8 @@ each pair has a gate:
 | SCAD defaults ↔ assembly model | `tests/test_datum_core_site.py` |
 | SCAD variables ↔ `Params` | `tests/test_parameter_coverage.py` |
 | Declared bounds ↔ rendered geometry | `apothecary parts verify` |
+| Declared interfaces ↔ rendered geometry | `apothecary parts verify`, each round interface read across the render |
+| Interface ↔ the interface it meets | `apothecary parts fit`, and `connections.check` for an assembly's |
 | Black box ↔ part params | `datum_core.params_for`, driven by `datum_bench.py` |
 | Black box ↔ the schematic | a provider of its own, when a schematic exists |
 

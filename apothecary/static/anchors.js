@@ -20,6 +20,20 @@
  * when what it says changes), an open card's each frame: there are at most a
  * few.
  *
+ * A name badge (`apart`) stands clear of what the page asks it to keep off in the world
+ * (keepOff: the measurement's labels, which are drawn in the scene and are no element):
+ * where it would cover one it rises above it, so a size and the name of what it sizes are
+ * both read.
+ *
+ * A badge stands aside from its machine's tool mark (`clearOf`): the marks keyed as
+ * the badge is in the scene (machine_marks.js), whose child flagged `toolMark` is
+ * the nozzle or the tool -- a board's ⚡ inside a printer stands where the tool works
+ * near it, and would hide it. Where the badge would meet the mark's drawn box it steps
+ * to the side of it its own point is on, at its own height -- once the mark is drawn at
+ * least half as wide as the badge: looked at from further off, the machine one piece
+ * among others, the mark is a few pixels the badge could not stand clear of without
+ * leaving its own spot, and it stays there.
+ *
  * The page draws its world only when something in it changes (render on demand;
  * docs/viewer.md, "How the world is drawn"), and places the badges on each frame it
  * draws and a few after; wants() says when the layer has something to place
@@ -41,6 +55,7 @@ const EDGE_PX = 10;         // an open card keeps this far from the layer's edge
 const CARD_GAP_PX = 6;      // between two open cards, and between a card and its badge
 const CLUSTER_W = 34;       // a count's width (its CSS width)
 const LINGER_MS = 400;      // a card stays open this long after the pointer leaves, to be reached
+const CLEAR_PX = 4;         // between a badge and the tool mark it stands aside from
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -48,7 +63,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const boxOf = (x, y, w, h) => ({ l: x - w / 2, r: x + w / 2, t: y - h, b: y });
 const meets = (a, b, gap) => a.l < b.r + gap && b.l < a.r + gap && a.t < b.b + gap && b.t < a.b + gap;
 
-export function mountAnchors({ container, canvas, camera, scene, keepClear = () => [] }) {
+export function mountAnchors({ container, canvas, camera, scene, keepClear = () => [], keepOff = () => [] }) {
     const layer = document.createElement("div");
     layer.className = "anchor-layer";
     layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
@@ -60,6 +75,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
     const dir = new THREE.Vector3();
     let frame = 0;
     let dirty = true;  // something to place, whatever the scene does
+    let hideIf = null;  // answers whether a badge's element is held out of the world (hideWhen)
 
     // The transform gizmo's handles and its (unrendered) picking plane are
     // meshes too, and the plane spans the whole scene: a badge would be
@@ -82,6 +98,67 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         raycaster.far = distance - 1;
         const hits = raycaster.intersectObjects(scene.children, true);
         return hits.some((h) => h.object.isMesh && h.object.visible && inTheWay(h.object) && !(ignore && ignore(h.object)));
+    }
+
+    // The tool mark of the marks keyed `key` (userData.key, machine_marks.js), while it is
+    // drawn: found once and kept while it stays in the scene.
+    const marksFound = new Map();
+    const inScene = (o) => { for (let p = o; p; p = p.parent) if (p === scene) return true; return false; };
+    const shownNow = (o) => { for (let p = o; p && p !== scene; p = p.parent) if (!p.visible) return false; return true; };
+    function toolMarkOf(key) {
+        let mark = marksFound.get(key);
+        if (!mark || !inScene(mark)) {
+            mark = null;
+            for (const group of scene.children) {
+                if (group.userData.key !== key) continue;
+                group.traverse((o) => { if (!mark && o.userData.toolMark) mark = o; });
+                if (mark) break;
+            }
+            if (mark) marksFound.set(key, mark); else marksFound.delete(key);
+        }
+        return mark && shownNow(mark) ? mark : null;
+    }
+    // Where a tool mark is drawn, as a box in the layer's pixels: its box in the world,
+    // each corner projected. Null when it is not drawn or not in front of the camera.
+    const markBox3 = new THREE.Box3();
+    const corner = new THREE.Vector3();
+    function drawnBoxOf(mark, w, h) {
+        markBox3.setFromObject(mark);
+        if (markBox3.isEmpty()) return null;
+        let l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
+        for (let i = 0; i < 8; i++) {
+            corner.set(i & 1 ? markBox3.max.x : markBox3.min.x, i & 2 ? markBox3.max.y : markBox3.min.y, i & 4 ? markBox3.max.z : markBox3.min.z).project(camera);
+            if (corner.z >= 1) return null;
+            const x = (corner.x + 1) / 2 * w, y = (1 - corner.y) / 2 * h;
+            l = Math.min(l, x); r = Math.max(r, x); t = Math.min(t, y); b = Math.max(b, y);
+        }
+        return { l, r, t, b };
+    }
+    // A badge that would cover its machine's tool mark stands to the side of it, at its
+    // own height: the side its own point is on.
+    function clearOfMark(a, w, h) {
+        const mark = a.clearOf ? toolMarkOf(a.clearOf) : null;
+        const box = mark ? drawnBoxOf(mark, w, h) : null;
+        if (!box) return;
+        const { w: bw, h: bh } = sizeOf(a);
+        if (box.r - box.l < bw / 2) return;
+        if (!meets(boxOf(a.want.x, a.want.y, bw, bh), box, CLEAR_PX)) return;
+        const left = a.at.x < (box.l + box.r) / 2;
+        a.want = { x: left ? box.l - CLEAR_PX - bw / 2 : box.r + CLEAR_PX + bw / 2, y: a.want.y };
+    }
+
+    // A name badge over something it is asked to keep off (keepOff, boxes in the layer's
+    // pixels) rises until it covers none: its bottom just above the highest it meets.
+    function riseClear(a) {
+        const off = keepOff() || [];
+        if (!off.length) return;
+        const { w, h } = sizeOf(a);
+        for (let tries = 0; tries < off.length; tries++) {
+            const box = boxOf(a.want.x, a.want.y, w, h);
+            const met = off.filter((o) => meets(box, o, CLEAR_PX));
+            if (!met.length) return;
+            a.want = { x: a.want.x, y: Math.min(...met.map((o) => o.t)) - CLEAR_PX };
+        }
     }
 
     // A badge's size, read when it is first shown and after what it says changed;
@@ -241,7 +318,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         const testOcclusion = frame % OCCLUSION_EVERY === 0;
         const shown = [];
         for (const a of anchors.values()) {
-            const point = a.point();
+            const point = hideIf && hideIf(a.el) ? null : a.point();
             a.drawn = null;
             if (!point) { a.el.hidden = true; a.at = null; continue; }
             v.copy(point).project(camera);
@@ -251,7 +328,18 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             if (!visible) { a.at = null; continue; }
             a.at = { x, y };
             a.want = { x: x + a.offset.x, y: y + a.offset.y };
+            clearOfMark(a, w, h);
             if (testOcclusion && a.occlude) a.el.classList.toggle("behind", occluded(point, a.ignore));
+            if (a.apart) {
+                // Stands at its own point, in no badge's way and never merged: a name over a
+                // thing that already wears badges; risen above what it would cover of keepOff.
+                riseClear(a);
+                a.drawn = { x: a.want.x, y: a.want.y };
+                a.el.classList.remove("merged", "aside");
+                a.el.style.transform = `translate(${a.drawn.x.toFixed(1)}px, ${a.drawn.y.toFixed(1)}px) translate(-50%, -100%)`;
+                a.el.classList.toggle("selected", !!(a.selected && a.selected()));
+                continue;
+            }
             shown.push(a);
         }
         const groups = layout(shown);
@@ -315,8 +403,10 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
          * null to hide). `offset` is in pixels; the element's bottom centre
          * sits on the point. `selected()` says whether its thing is selected,
          * which opens its card; `ignore(mesh)` names a mesh that never dims it
-         * (the one its thing is inside). */
-        add(key, el, point, { offset = { x: 0, y: -6 }, occlude = true, selected = null, ignore = null } = {}) {
+         * (the one its thing is inside). `apart` keeps it out of the layout: it stands at
+         * its point, never stepped aside nor merged into a count, and says no card; `clearOf` keys the
+         * marks whose tool mark it stands aside from. */
+        add(key, el, point, { offset = { x: 0, y: -6 }, occlude = true, selected = null, ignore = null, apart = false, clearOf = null } = {}) {
             this.remove(key);
             el.style.position = "absolute";
             el.style.left = "0";
@@ -325,7 +415,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             el.hidden = true;
             el.dataset.anchor = key;
             layer.appendChild(el);
-            const a = { key, el, point, offset, occlude, selected, ignore, at: null, want: null, drawn: null, size: null, hover: false, hoverOff: 0 };
+            const a = { key, el, point, offset, occlude, selected, ignore, apart, clearOf, at: null, want: null, drawn: null, size: null, hover: false, hoverOff: 0 };
             markHover(a);
             anchors.set(key, a);
             dirty = true;
@@ -393,11 +483,20 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         },
         /* The open cards as last placed, in canvas pixels -- for tests. */
         cards() { return lastCards.map((c) => ({ ...c })); },
+        /* Where the tool mark a badge stands aside from is drawn, its box in canvas
+         * pixels; null while it is not drawn -- for tests. */
+        toolMark(key) {
+            const a = anchors.get(key), mark = a && a.clearOf ? toolMarkOf(a.clearOf) : null;
+            return mark ? drawnBoxOf(mark, canvas.clientWidth, canvas.clientHeight) : null;
+        },
         update,
         wants,
         /* Something about the badges changed that the layer cannot see (what a
          * badge's thing is, whether it is selected): placed at the next frame. */
         touch() { dirty = true; },
+        /* A badge the predicate holds out of the world (answering for its element) is
+         * not drawn, and is placed again when it stops: the page's layers say which. */
+        hideWhen(fn) { hideIf = fn; dirty = true; },
         clear() { for (const key of [...anchors.keys()]) this.remove(key); },
         destroy() { this.clear(); layer.remove(); },
     };

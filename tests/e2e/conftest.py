@@ -22,6 +22,7 @@ from playwright.sync_api import Error as PlaywrightError
 # tests/ itself, for helpers shared with the unit tests (firmware_helpers, views_helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import doc_capture  # noqa: E402
 import garage  # noqa: E402
 from browsers import launch, launched  # noqa: E402
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
@@ -65,6 +66,13 @@ def _keep_this_shard(config, items) -> None:
     spec = config.getoption("--shard")
     if not spec:
         return
+    if config.getoption("--record-durations"):
+        # A shard that ends writes the times the next one to start would be cut by: the
+        # two then disagree on which files are whose, and some run in neither.
+        raise pytest.UsageError(
+            "--record-durations with --shard: the shards are cut by the file this writes; "
+            "record in one run of the whole browser suite"
+        )
     k, n = (int(part) for part in spec.split("/"))
     if not 1 <= k <= n:
         raise pytest.UsageError(f"--shard {spec}: K must be between 1 and N")
@@ -85,10 +93,27 @@ def _keep_this_shard(config, items) -> None:
 # teardown. Under xdist the reports come back to the controller, which writes the file.
 _timed: dict = {}
 
+# What the session spends once for every test, in whichever test's setup first asks for
+# a server: every part's STL built (every_stl_built), minutes where SCAD changed or a
+# checkout has none yet. Not that test's own time: the shards are cut by these times, and
+# a minute and a half charged to one file's first test once put it in a shard of its own.
+ONCE = "once for the session"
+_once = {"seconds": 0.0}
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if call.when == "setup" and _once["seconds"]:
+        report.user_properties.append((ONCE, _once["seconds"]))
+        _once["seconds"] = 0.0
+
 
 def pytest_runtest_logreport(report):
     if report.nodeid.startswith("tests/e2e/"):
-        _timed[report.nodeid] = _timed.get(report.nodeid, 0.0) + report.duration
+        once = sum(seconds for name, seconds in report.user_properties if name == ONCE)
+        _timed[report.nodeid] = _timed.get(report.nodeid, 0.0) + report.duration - once
 
 
 def pytest_sessionfinish(session):
@@ -124,6 +149,7 @@ def pytest_collection_modifyitems(config, items):
     """Tests marked docs run only with --generate-docs, the step-through tests only
     with --steps or --step N; then this shard's files are kept, what skips weighing
     nothing; in CI, each recorded test has its own cap."""
+    doc_capture.GPU_RUN = config.getoption("--gpu")
     if not config.getoption("--generate-docs"):
         skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")
         for item in items:
@@ -186,7 +212,7 @@ def _the_shared_server_as_found(request):
     """A browser test file leaves the session's shared server as it found it, so which
     files share a server -- the shards decide, and --record-durations moves them --
     changes nothing a test sees. A file that leaves something changed fails here,
-    named, with what it changed. Not under --step, whose walk on the demo changes it
+    named, with what it changed. Not under --step, whose walk on the simulated server changes it
     on purpose; not for a file that never asks for the shared server."""
     if request.config.getoption("--step") is not None or not any(
         "base_url" in item.fixturenames
@@ -228,6 +254,7 @@ def every_stl_built(tmp_path_factory):
 
     def _built() -> dict:
         if not said:
+            began = time.monotonic()
             env = {**os.environ, "APOTHECARY_TOOLS_DIR": str(tmp_path_factory.mktemp("tools"))}
             done = subprocess.run(
                 [sys.executable, str(Path(__file__).with_name("parts_built.py"))],
@@ -240,6 +267,7 @@ def every_stl_built(tmp_path_factory):
                 pytest.exit(f"building every part's STL failed:\n{done.stderr[-3000:]}", 1)
             found = json.loads(done.stdout.strip().splitlines()[-1])
             said.append({**found, "said": described(found)})
+            _once["seconds"] += time.monotonic() - began
         return said[0]
 
     return _built
@@ -255,10 +283,24 @@ def start_server(tmp_path_factory, every_stl_built):
     is named. So no
     test opens a real serial port, reads ``~/.apothecary``, or sees a real board. All of
     them stop when the session ends.
+
+    A server takes about 3 s to start, most of it the app's imports. One asked for with
+    nothing named -- the commonest -- starts the next such server as it is handed out,
+    so that one is up by the time a later module asks: a spare, of its own temp folders,
+    which nothing has touched until it is handed out, and stopped unused at the end.
     """
     started: list[subprocess.Popen] = []
+    spare: list[tuple[subprocess.Popen, str]] = []
 
     def _start(env_overrides: dict | None = None, port: int | str | None = None) -> str:
+        plain = not env_overrides and port is None
+        proc, url = spare.pop() if plain and spare else _launch(env_overrides, port)
+        url = _answering(proc, url)
+        if plain:
+            spare.append(_launch(None, None))
+        return url
+
+    def _launch(env_overrides: dict | None, port: int | str | None):
         tmp = tmp_path_factory.mktemp("server")
         (tmp / "pictures").mkdir()
         # A variant saved from the page is a ref in git (projects/parts/saved.py):
@@ -325,6 +367,9 @@ def start_server(tmp_path_factory, every_stl_built):
             stderr=subprocess.DEVNULL,
         )
         started.append(proc)
+        return proc, url
+
+    def _answering(proc: subprocess.Popen, url: str) -> str:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if proc.poll() is not None:
@@ -416,6 +461,71 @@ def base_url(request, test_server):
 @pytest.fixture(scope="session")
 def docs_enabled(request) -> bool:
     return request.config.getoption("--generate-docs")
+
+
+# With --gpu: Chromium's GL through this machine's driver. Its headless shell draws in
+# software unless told otherwise, and every frame of the world is drawn there.
+GPU = ["--enable-gpu", "--use-angle=gl", "--ignore-gpu-blocklist"]
+
+# WebGL without multisampling: drawn in software, a frame of the world costs about half
+# what it does antialiased, and a page load about a fifth less. Only a picture's edges
+# differ, and no test but a recorded picture looks at them, so the browser a test's
+# page opens in draws so, unless the test records pictures (`walkthrough`,
+# `doc_recorder`): those are drawn as a person's browser draws them, antialiased, in a
+# browser of their own.
+NO_MSAA = ["--webgl-antialiasing-mode=none"]
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args, request):
+    args = [*browser_type_launch_args.get("args", []), *NO_MSAA]
+    if request.config.getoption("--gpu"):
+        args += GPU
+    return {**browser_type_launch_args, "args": args}
+
+
+@pytest.fixture(scope="session")
+def session_browser(launch_browser):
+    """The session's browser, drawing without multisampling: the one a test's ``page``
+    opens in, and a module's ``module_page``."""
+    browser = launch_browser()
+    yield browser
+    browser.close()
+
+
+@pytest.fixture(scope="module")
+def module_page(session_browser):
+    """A page the tests of one module share, in a context of its own with the viewport a
+    test's ``page`` has, closed after the module: for tests that only read what a page
+    shows once it has loaded, or change what none of the others reads, so it is loaded
+    once for them and not once each. Each test sharing it passes alone and in any order
+    (tests/e2e/README.md, "What each layer holds")."""
+    context = session_browser.new_context()
+    yield context.new_page()
+    context.close()
+
+
+@pytest.fixture(scope="session")
+def _antialiased_browser(launch_browser, browser_type_launch_args):
+    """The browser a test that records pictures opens its page in: the session's,
+    antialiased."""
+    args = [arg for arg in browser_type_launch_args["args"] if arg not in NO_MSAA]
+    browser = launch_browser(args=args)
+    yield browser
+    browser.close()
+
+
+def _records_pictures(request) -> bool:
+    return any(name in request.fixturenames for name in ("walkthrough", "doc_recorder"))
+
+
+@pytest.fixture
+def browser(session_browser, request):
+    """The browser the test's ``page`` opens in: the session's, drawing without
+    multisampling, or the antialiased one for a test that records pictures."""
+    if _records_pictures(request):
+        return request.getfixturevalue("_antialiased_browser")
+    return session_browser
 
 
 @pytest.fixture

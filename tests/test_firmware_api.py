@@ -1,6 +1,8 @@
 """``/firmware`` API and ``apothecary firmware`` CLI, driven against the fake arduino-cli."""
 
+import json
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -48,9 +50,21 @@ def test_the_viewer_links_to_no_page_of_its_own(fake_arduino_cli):
 def test_status_and_catalogue(fake_arduino_cli, fresh_task_runner):
     c = TestClient(app)
     status = c.get("/firmware/status").json()
-    assert status["ok"] and status["arduino_cli_version"] == "9.9.9"
+    # Where the tools live, each module's own status, and the task running now:
+    # nothing of one module's is beside them.
+    assert set(status) == {"tools_dir", "toolchains", "active_task"}
+    arduino = status["toolchains"][0]
+    assert arduino["id"] == "arduino" and arduino["ok"]
+    assert [(t["name"], t["version"], t["ok"]) for t in arduino["tools"]] == [
+        ("arduino-cli", "9.9.9", True),
+        ("esptool", None, False),
+    ]
+    assert arduino["config_file"] == f"{status['tools_dir']}/arduino-cli.yaml"
+    assert [(c["id"], c["installed"]) for c in arduino["cores"]] == [("arduino:avr", "1.8.8")]
     assert status["active_task"] is None
-    assert any(s["id"] == "esp32:esp32" for s in status["suggested_cores"])
+    assert {"id": "esp32:esp32", "label": "Espressif ESP32 (all variants)"} in (
+        arduino["suggested_cores"]
+    )
     assert [b["port"] for b in c.get("/firmware/boards").json()] == [
         "/dev/ttyFAKE0",
         "/dev/ttyFAKE1",
@@ -66,7 +80,10 @@ def test_status_and_catalogue(fake_arduino_cli, fresh_task_runner):
 def test_status_without_toolchain_is_honest(no_arduino_cli, fresh_task_runner):
     c = TestClient(app)
     status = c.get("/firmware/status").json()
-    assert not status["ok"]
+    arduino = status["toolchains"][0]
+    assert arduino["id"] == "arduino" and not arduino["ok"]
+    assert arduino["config_file"] is None and arduino["cores"] == []
+    assert "arduino-cli not found (run `apothecary firmware install`)" in arduino["problems"]
     assert c.get("/firmware/boards").status_code == 503
     assert (
         c.post("/firmware/sketches/footpedal/compile", json={"fqbn": "arduino:avr:uno"}).status_code
@@ -191,18 +208,53 @@ def test_install_task_runs_installer(fake_arduino_cli, fresh_task_runner, monkey
 # --- CLI -------------------------------------------------------------------------
 
 
+# What validate says of esptool when there is none.
+NO_ESPTOOL = (
+    "  • esptool: not found (optional: raw binary flashing needs it; "
+    "arduino-cli uploads to an ESP32 without it)"
+)
+
+
 def test_cli_validate_reports_and_exits(fake_arduino_cli):
     result = CliRunner().invoke(cli, ["firmware", "validate"])
     assert result.exit_code == 0, result.output
     assert "arduino-cli 9.9.9" in result.output and "arduino:avr@1.8.8" in result.output
+    # Arduino's lines, word for word and in order, up to the next module's heading:
+    # the tools dir, arduino-cli as found, its config and its cores, and esptool.
+    tools = fake_arduino_cli.parent / "tools"
+    assert result.output.splitlines()[:7] == [
+        "Firmware toolchain",
+        f"  tools dir: {tools}",
+        f"  ✓ arduino-cli 9.9.9: {fake_arduino_cli}",
+        f"    config: {tools / 'arduino-cli.yaml'}",
+        "    cores: arduino:avr@1.8.8",
+        NO_ESPTOOL,
+        "Rust for the ESP32 (rust for esp32)",
+    ]
 
 
-def test_cli_validate_missing_toolchain(no_arduino_cli):
+def test_cli_validate_missing_toolchain(no_arduino_cli, tmp_path):
     result = CliRunner().invoke(cli, ["firmware", "validate"])
     assert result.exit_code == 1
     assert "not installed" in result.output
+    # A tool its own line says is missing is not said again as a problem.
+    assert result.output.splitlines()[:5] == [
+        "Firmware toolchain",
+        f"  tools dir: {tmp_path / 'tools'}",
+        "  ✗ arduino-cli: not installed (apothecary firmware install)",
+        NO_ESPTOOL,
+        "Rust for the ESP32 (rust for esp32)",
+    ]
     as_json = CliRunner().invoke(cli, ["firmware", "validate", "--json-out"])
-    assert '"arduino_cli_ok": false' in as_json.output
+    assert as_json.exit_code == 1
+    said = json.loads(as_json.output)
+    assert set(said) == {"tools_dir", "toolchains"}
+    arduino = said["toolchains"][0]
+    assert arduino["id"] == "arduino" and not arduino["ok"]
+    assert [(t["name"], t["ok"]) for t in arduino["tools"]] == [
+        ("arduino-cli", False),
+        ("esptool", False),
+    ]
 
 
 def test_cli_lists(fake_arduino_cli):
@@ -294,3 +346,79 @@ def test_cli_flash_bin_argument_parsing(fake_arduino_cli, tmp_path, monkeypatch)
     assert r.exit_code != 0
     r = runner.invoke(cli, ["firmware", "flash-bin", "bad-port", f"0x0:{img}"])
     assert r.exit_code != 0 and "serial port" in r.output
+
+
+def test_a_flash_of_a_machines_controller_is_asked_for_by_name(
+    fake_arduino_cli, fresh_task_runner, monkeypatch
+):
+    """A port whose board answered as a router is not flashed by a sketch's upload, by
+    raw images or from the command line, unless replacing its firmware is asked for."""
+    from apothecary.firmware import devices, gcode, grbl, toolchains
+
+    port, sketch = "/dev/ttyFAKE1", "esp32_blink@arduino"
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0")
+    links = gcode.PrinterLinks(factory=grbl.SimulatedRouter)
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    devices.identify_printer(port)
+    links.stop_all()
+    c = TestClient(app)
+    asked = {"fqbn": "esp32:esp32:esp32", "port": port}
+    r = c.post(f"/firmware/sketches/{sketch}/upload", json=asked)
+    assert r.status_code == 422 and "holds a router's controller (Grbl 1.3a)" in r.json()["detail"]
+    monkeypatch.setattr(
+        toolchains, "_ESPTOOL", toolchains.Esptool(argv_prefix=[str(fake_arduino_cli), "compile"])
+    )
+    raw = {"port": port, "images": [{"offset": "0x0", "path": "README.md"}]}
+    assert c.post("/firmware/esptool/flash", json=raw).status_code == 422
+    assert fresh_task_runner.active is None
+    assert not [c for c in fake_cli_calls(fake_arduino_cli) if c[0] in ("upload", "compile")]
+    said = CliRunner().invoke(cli, ["firmware", "upload", sketch, "--port", port])
+    assert said.exit_code != 0 and "holds a router's controller" in said.output
+    said = CliRunner().invoke(cli, ["firmware", "flash-bin", port, "0x0:README.md"])
+    assert said.exit_code != 0 and "holds a router's controller" in said.output
+    r = c.post(
+        f"/firmware/sketches/{sketch}/upload", json={**asked, "replace_machine_firmware": True}
+    )
+    assert r.status_code == 202
+    assert _wait_for(c, r.json()["id"])["status"] == "succeeded"
+
+
+def test_the_server_says_what_a_restart_would_cut_into(
+    fake_arduino_cli, fresh_task_runner, monkeypatch
+):
+    """Idle is said, never assumed: a table map under way with its latch lapsed, a
+    running task and an armed port are each a reason not to restart."""
+    from apothecary.firmware import devices, gcode, grbl
+
+    port = "/dev/ttyFAKE1"
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0")
+    gate = threading.Event()
+
+    class SlowProbe(grbl.SimulatedRouter):
+        def write(self, data):
+            if b"G38.2" in data:
+                gate.wait(10)
+            super().write(data)
+
+    links = gcode.PrinterLinks(factory=SlowProbe)
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    c = TestClient(app)
+    assert c.get("/firmware/busy").json() == {"busy": []}
+    links.control.arm(port)
+    assert c.get("/firmware/busy").json() == {"busy": [f"{port}: control is armed"]}
+    job = devices.start_leveling(port, probe=True)
+    for _ in range(500):
+        if job.stage == "probing":
+            break
+        time.sleep(0.01)
+    links.control.disarm(port)  # as five minutes of probing lets the latch lapse
+    assert c.get("/firmware/busy").json() == {"busy": [f"{port}: a table map is probing"]}
+    assert c.get("/firmware/printers/armed").json() == {"armed": {}}
+    assert not [j for j in c.get("/jobs").json() if j.get("outcome") == "running"]
+    gate.set()
+    job.thread.join(10)
+    assert c.get("/firmware/busy").json() == {"busy": []}
+    task = fresh_task_runner.run("upload", "a flash", [["/bin/sleep", "2"]], port="/dev/ttyUSB0")
+    assert c.get("/firmware/busy").json() == {"busy": [f"task {task.id} (a flash) is running"]}
+    fresh_task_runner.cancel(task.id)
+    links.stop_all()

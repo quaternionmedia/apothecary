@@ -11,7 +11,7 @@ controls as they are. The loops through them are walkthrough pages
 | Address | Opens |
 |---|---|
 | `/viewer` (or `/`) | the garage |
-| `/viewer/sites/<name>` | a site: `garage`, `datum_core`, `theatre`, or `apothecary`, the universe ([below](#the-world)); `/viewer/sites/parts_library`, the name it had, goes there with its query |
+| `/viewer/sites/<name>` | a site: `garage`, `datum_core`, `theatre`, or `apothecary`, the universe ([below](#the-world)) |
 | `/viewer/parts/<name>` | the universe, stepped into that part |
 | `?focus=<path>` | stepped into that piece |
 | `?panel=bench` | with the Bench in front (`/firmware` redirects here) |
@@ -36,18 +36,53 @@ Left to right, one row:
     site's focus, Machine and variants stay with it. At the site's own level
     its name opens the same list.
   - **Each piece stepped into** follows. A crumb steps out to its level; Page
-    Up or Backspace steps out one. This part alone gives way on a narrow
+    Up or Backspace steps out one. The status line says what was stepped out
+    of, and a crumb says where to. This part alone gives way on a narrow
     page: its start is cut, and the level in view stays.
 
   The first two crumbs are links, so a new tab opens from either. The banner,
   Site in the canvas ring, a step into a site's piece in the universe or out
-  of a site's own level, a link and Back are the only ways the site on screen
-  changes: no other verb switches it as a side effect. A picture's view or a
+  of a site's own level, ⚒ Make naming a machine in another site, a link and
+  Back are the only ways the site on screen changes: no other verb switches it
+  as a side effect. The address names the site chosen at once, so Back works
+  while it loads; the site on screen -- the world, the banner, Site, its boards
+  and machines -- stays the one before until the next has loaded, then changes
+  all at once, and a Machine opened meanwhile closes with the site it was of.
+  Only the site asked for last lands: chosen again, or Back pressed, while one
+  loads, the one left answers nothing when it comes. The first crumb pressed
+  while a site loads steps out of that site, the one the address names. A picture's view or a
   take-back in another site names that site and leaves the screen where it is.
+- **The rail of a journey**, beside the banner while one is entered: its name,
+  its steps numbered, the one a person is on filled, **Next** with the step
+  after's number and name, and ✕ to leave it ([below](#journeys)). Up to 1400 px
+  wide a step's name shows on the step a person is on alone, the others' in their
+  tooltips; up to 1100 px the journey's name and every step's go.
+- **⚒ Make**, after the banner and a journey's rail, wherever the piece selected,
+  or else the part stepped into, is a part or a piece made from a picture -- not a
+  board, a machine, a camera, or a thing bought whole and drawn as it is, its part
+  tagged `bought` (the Stream Deck +, the webcam) -- (on a
+  narrow header it gives way before the rail does): it names the part and
+  the machine it makes it on -- the first of every site's machines that make it
+  (`GET /sites/{name}/makers`): for a part that says how it is cut, a router
+  first, whatever else is plugged in; then one whose board is connected where it
+  was pinned last, then this site's -- and that machine's site when it is
+  another. Pressed, it opens that
+  site, the machine's Machine with its Print or Cut window in front, chooses the
+  part under **makes** (in another site, by its name) and slices it or writes its
+  toolpath, as the variant drawn where one is applied; then it lays out the
+  Machine view round the machine, framed in the world, so the Machine's head
+  stands beside its Print or Cut and nothing a site opened on the way is left
+  taking the world's room (in a journey, the journey's step lays out its own
+  windows). Nothing is armed, started
+  or sent: ▶ is a person's. A printer makes any part but a board or a machine; a
+  router, a part that says how it is cut; a piece made from a picture is made on
+  its own site's printers. For another machine, open it: its **makes** offers
+  every part.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
-- **⊞ Windows**: the views, then every window by its group, ● open and ○
-  closed ([below](#the-windows)); a window chosen opens, or comes in front.
+- **⊞ Windows**: the views, the journeys, then every window by its group, ●
+  open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
+  front.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
   its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Docs opens the same.
@@ -56,13 +91,15 @@ Left to right, one row:
 - **The validity count**, "Layout valid" or the number of violations: a click
   brings Problems, beside Site, in front.
 
-Under `apothecary serve --demo`, one quiet line above the header says it is
-the demo -- a simulated printer, ESP32 and lighting console, scripted firmware tools, its own
-state folder -- and how to leave it: `apothecary serve` without `--demo`.
+Under `apothecary serve --simulated`, one quiet line above the header says its
+machines are simulated -- a printer, a router, an ESP32 and a lighting console, scripted
+firmware tools, a state folder of their own -- and how to reach the real ones:
+`apothecary serve` without `--simulated`.
 
 The status line is the bar along the bottom: every verb says there what it
 did and what comes next, with the address of the ring cell that does it,
-`(⌗98)`. It is announced to a screen reader as it changes. Over the world, the
+`(⌗98)`. A refusal names the cell first, then why: `Y+ (⌗7728): control is not
+armed`, whether the ring greyed the cell or the verb met the refusal. It is announced to a screen reader as it changes. Over the world, the
 depth ladder has a tick per level, and the hint bar names the essentials -- a
 click, stepping in and out, panning, the ring -- in one line, and fades once
 they have been used (`?` shows it again); it names the keys and the modifier
@@ -106,24 +143,77 @@ says which, and why. Stepping out lands on the piece left, selected. Inside a
 piece the world draws what it holds, not the piece: stepped into the workbench,
 its frame is drawn. A piece that holds nothing is drawn itself.
 
-**A machine is its part.** A piece drawn as a part it names, with pieces of
-its own inside it -- the router, a printer -- is drawn itself too: stepped
-into, its part stands alone and whole, with its working volume and its board's
-badge and nothing else of the site. What it holds is Site's rows there, each
-stepped into from its row (a double-click, or Selected's "⤵ Step into"), where
-the piece's own contents are drawn and the machine is not. A click on the part
+**A machine is its part, its pieces inside it.** A piece drawn as a part it
+names, with pieces of its own inside it -- the router, a printer -- is drawn
+itself too: stepped into, its part stands whole, with its working volume and
+its board's badge and nothing else of the site, and the view frames it. Its
+pieces are drawn inside it as any level draws its pieces -- outlined, under
+View's Detail, opened by Site's category chips -- and are Site's rows. A click,
+a double-click or a drop that meets the part and a piece of it on the same ray
+takes the piece, so a double-click on the printer's electronics box steps into
+its `frame_system`, where the piece's own contents are drawn and the machine
+is not; the part answers only where no piece is behind it. A click on the part
 selects the machine: its part, its Device line with the pin and what the board
 last said, and the pieces inside it by name. There it has no Detail and no
 "⤵ Step into", wears no move arrows, which are a piece's at the site's own
 level, and a double-click on it says it is already the level in view.
 `?focus=<machine>` arrives there with it selected.
 
-**Apothecary is the universe.** The site `apothecary` holds every registered
-part as a leaf on a catalog grid, and every other site as one piece, in a cell
-of its own in the row in front of them; a site added while the server runs
-gets its piece, and the universe does not hold itself. A site's piece is drawn
+**Apothecary is the universe.** The site `apothecary` is a sphere of nested
+shells, the orbitals of complexity. Every registered part is a leaf on the shell
+its composition depth gives it: a part built from no other registered part is on
+the innermost, and each shell outward holds the parts compounded from those inside
+it. Depth is read from a part's SCAD `include` and `use` of another registered
+part and from sites that hold one part in another, and a part's own `parts` list
+in `part.json` wins ([parts-authoring.md](parts-authoring.md#what-a-part-is-built-from)).
+The shells are dense, so none is empty, and each stands clear of the one inside it.
+A leaf carries its part's category, and on a shell the parts of one category sit
+together, a cluster in one piece of the shell; a part stands as nearly under the
+part built from it as its shell allows, and a part several are built from stands
+under the first of them by name, so its cluster gathers under theirs
+(`apothecary/orbitals.py`).
+A leaf faces outward, its up along the ray from the middle; the tree gives each
+node its `shell`, its `depth`, its `built_from` (the parts it is built from, by
+name) and its `turn` (`[rx, ry, rz]` degrees, OpenSCAD's rotate order, null for a
+node not turned). Every other site is one piece, upright
+on the shell outside the parts'; a site added while the server runs gets its piece
+there and moves no part unless it nests one part in another, which moves that part to
+the shell its new depth gives it, and taking the site away moves it back, with no restart
+(the depths are read again only when what the sites nest has changed); the universe does
+not hold itself. The layout is made
+again each time the universe is drawn, so a piece moved by hand returns. The page
+frames the whole sphere from outside, draws no floor grid there, and the camera may
+travel inside it. At the universe's own level it draws the orbitals
+(`apothecary/static/orbits.js`): each shell's three rings, faint, in the shell's
+colour, the same three planes for every shell so the shells' rings nest; round each
+category's cluster on a shell, an outline in the category's colour, as wide as its
+largest part needs, so on a crowded shell two outlines may cross where large parts' clusters
+meet; and from a part to
+each part it is built from, a faint line. None of them is a piece: a click passes
+through them, and they hide nothing. Each shell wears a label at its top, in its
+layer's colour and in the words of this section (`Shell 0 · built from nothing`, `Shell 1 ·
+built from those inside`, and `· sites` outermost), the words its row in Layers says too, and each cluster's outline a label with
+its category's name, and its shell's where the category has clusters on more than one
+(`camera · shell 1`); the labels are the size of the page's text at any distance, hung from
+the highest point of their loop on the canvas, laid clear of one another, of the pieces drawn
+and of the hint and the depth ladder as the measurement's are laid (`layLabels`,
+`apothecary/static/measure.js`), and a label with no clear place is left out rather than
+laid over another; they are drawn only for the side of the sphere the eye sees, and belong
+to the layer they name, so hiding it hides its label. They are no piece and no hit, and a
+part stepped into has none.
+A piece is named at any distance: the one nearest the pointer, within a few pixels, and
+the one selected each wear a small badge with the part's name (the page's badges,
+`apothecary/static/anchors.js`); the badges take no click, and the selected piece's name
+rises above any label of its measurement it would cover. Each shell's sphere is also drawn as
+its edge, the circle the eye sees it end at (`limbOf`), faint in its layer's colour, so the
+shells nest at a glance from outside; it is no filled surface, so nothing inside is tinted,
+and from inside a shell its edge is not drawn. Each is drawn while the layers it is drawn for
+are shown, a line while both its parts are; and a still click that meets no piece and
+lands on a ring or an outline opens that layer's ring ([Layers](#layers)) where it
+landed, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned
+as the sphere stands it, on a grid laid under it. A site's piece is drawn
 in miniature: its site's top-level pieces as boxes, coloured as the site
-colours them, a wall faded, scaled into the cell and never larger than they
+colours them, a wall faded, scaled to fit and never larger than they
 are, from the site as it stands. Nothing is rendered to draw one. It is not to
 scale beside the parts, so Selected says it is a site and how large the site
 really is, and offers "⤵ Step into"; it has no parameters and wears no move
@@ -131,7 +221,7 @@ arrows. A double-click on it, Page Down, or that button opens its site as the
 banner's site crumb would, so Back returns. Page Up or Backspace at a site's
 own level goes to the universe, as the banner's first crumb does, the site's
 piece selected there. The wheel steps within
-a site and never from one to another. A building is left off the grid while a
+a site and never from one to another. A building is left out of the shells while a
 site's piece stands for it: the theatre is the theatre site's.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
@@ -157,18 +247,25 @@ box being typed in keeps its own.
 **Walls are drawn faded**, whatever is in front of them: anything whose
 category is `wall` is see-through, and a click passes through it to what is
 behind or inside. A wall is solid while it is selected. To pick one, tick
-⚙ View › Select walls (the ring's View › Select walls), or click its row
-in Site's tree, which works either way.
+⚙ View › Select walls (the ring's View › Select walls), which is the wall
+layer's Selectable tick in [Layers](#layers), or click its row in Site's
+tree, which works either way.
 
 **Badges** stand over things in the world, their words shown on hover or
 while their thing is selected; three or more that overlap fold into one,
-"×N", whose card lists them.
+"×N", whose card lists them. A board's ⚡ stands beside its machine's tool mark
+(the nozzle's cone and cross, a router's tool) rather than over it, at its own
+height, once the mark is drawn half as wide as the badge or more: stepped into a
+printer, the head is not hidden under its board's badge; from further off the
+badge keeps its own spot. The cone stands at the tool's tip, inside the drawn head
+that carries it, and is drawn over the head and over what is seen through (a bed
+reading's mesh), so it is seen.
 
 | Badge | Over | A click |
 |---|---|---|
 | ▣ | a picture lying where it was pinned: its host or the floor, the file, its shapes | selects the host, or the floor |
 | 📷 | a camera: its device, its lens, where its next picture lands | selects the camera |
-| ⚡ or 🖨 | a pinned board: a devkit's state, or a printer's state and readings | selects the machine and opens its Machine |
+| ⚡ or 🖨 | a pinned board: a devkit's state, or a printer's state and readings; armed, red, with the time its arm has left, however it was armed | selects the machine and opens its Machine |
 
 A badge passes the right button to what it stands for: a still right-click on
 it re-centres the view there, and Ctrl+right-click opens that piece's ring (the
@@ -187,21 +284,190 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 |---|---|
 | Snap to grid | Snaps a dragged piece to a 50 mm grid (on at first) |
 | Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full, and so is a machine stepped into; Selected's Detail overrides it for one piece |
-| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the whole level, has none |
+| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
+| Layers (the ring's View › Layers) | A ring of the site's layers ([below](#layers)): Window opens the Layers window, beside the world (the menu has no item of its own for it, and ⊞ Windows lists it), then each layer's own acts |
+| Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click, and One less and One more, the Layers window's stepper, which goes to eight |
 
 None of the first four is remembered: a reload starts from the defaults.
-Settings are kept by this browser.
+Settings, and the depth and the layers, are kept by this browser.
+
+### Layers
+
+How deep a click reaches, and which layers are drawn and which a click can
+select, are one choice (`apothecary/static/pick_scope.js`), made in the **Layers**
+window, beside the world, which opens closed and leaves Site's rows in view, and
+read in two places: where a click asks what is under it, and where the world is
+drawn.
+
+**Depth** is how many levels below the level in view are drawn and reached. At 1,
+the first, a level is its own pieces, each a single piece however much it holds;
+at 2 each piece that holds pieces draws them inside it too, and a click on one
+selects it -- the piece around them gives way to a piece of it on the same ray, as
+the part of a machine stepped into does. The pieces of a category expanded from
+Site's chips are drawn at every depth, as before.
+
+A **layer** is a kind of thing the world draws, with a **Shown** tick and a
+**Selectable** tick, selectable always within shown: hiding a layer clears
+Selectable (and showing it restores what was chosen), ticking Selectable shows it.
+
+| Layer | Is | Ticks |
+|---|---|---|
+| Shell N | The parts laid on shell N of the universe's sphere, 0 the innermost and the sites outermost; a row for each shell the loaded site has, worded as the shell's label in the world (`Shell 0 · built from nothing`) | Shown, Selectable |
+| A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
+| Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
+| Machine buttons | The badges a machine wears in the world | Shown |
+| Measure | Dimension lines on the selection, and a click that drops a point to measure between and reads the diameter or the wall under it ([below](#measure)) | Shown (off at first) |
+
+**Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
+server sends with the site (`layer_colours`, beside `tree`), so the page writes none of
+its own: a category's pieces are drawn in it, the build volumes in the grid's (the floor grid's lines are the faint greys a floor is drawn in, and the row says so), the
+measurement in its own, and a machine's badges wear the Machine group's, which is the
+machine buttons' layer's. A category nobody wrote down, a picture's word, takes a
+colour from its name, the same every time. The Layers window's rows wear their layers'
+colours, a legend, and a tick, the stepper's - and + and Reset each name in their tip
+the address of the ring's cell that does the same.
+
+**Each layer has a ring of its own**, under the canvas ring's View › Layers: Window 8
+(the Layers window), World 6 (the grid's, the machine buttons' and the measurement's
+rings), Reset 2 (the window's Reset), then the site's own -- Shells 4 in the universe,
+and its Categories after them -- listed as the window lists them, more than eight
+grouped as any list is. A layer's ring wears its colour, and holds what its row does
+and two acts over its kind (the shells, the categories, or the grid and the machine
+buttons):
+
+| Cell | Does |
+|---|---|
+| Shown | Shows the layer, or hides it: the row's Shown tick |
+| Selectable | A click picks what it draws, or passes through it: the row's Selectable tick (a shell's and a category's) |
+| Only this | This layer shown and the others of its kind hidden, what was chosen selectable kept |
+| All | Every layer of its kind shown |
+
+The measurement's ring has Shown alone: it is a mode. The ring, the window's ticks and
+the world read and write the one choice, so whichever is used, the other two follow.
+
+A piece is on its shell's layer and its category's, and is drawn only if every layer
+it is on is shown and picked only if every one is selectable. A layer not shown is
+neither drawn nor hit; a layer not selectable is drawn, and a click passes through
+it to what is behind, which is how an inner shell is reached from outside the
+sphere. A row in Site's tree selects any piece whatever the layers say. Each change
+is said on the status line. Everything starts shown and selectable, walls aside, at
+depth 1; **Reset** returns to that. What differs is kept by this browser, except
+Select walls and Measure, which are the page's session's.
+
+#### Measure
+
+Ticking **Measure** (the Layers window's last row, or the ring's View › Layers › World ›
+Measure › Shown) lets a person read any dimension in the world. A
+measurement is a reading of the model and of the mesh drawn, not of the made part: a
+printed part differs by what the printer does. Every number says where it comes from.
+
+- **The selection reads its size.** The selected piece wears a dimension line along
+  each of its own axes, a few pixels thick in the measurement's colour whatever the
+  distance, and the length written past the line's far end, in millimetres, at the
+  size of the page's own text, each label kept clear of the others and of every
+  line's end. A turned piece is measured along its own axes, not the world's, and
+  its world box is said beside it; a part on the universe's sphere stands as the
+  layout turned it, so its turn there is not said as its own. The source is written on each label
+  and in the reading: the part's *declared footprint*, the *envelope of its pieces*
+  (a piece with no footprint of its own), *the drawn mesh, as loaded* (the STL's own
+  bounds, once it is in) or *a stand-in box* where nothing is declared. The two main
+  sources can differ, and where the mesh is what is drawn the reading gives the declared
+  footprint as well. A machine drawn as its pieces is measured whole, its moving pieces
+  with its still one, wherever its tool has them, and says so. A machine also reads its
+  working volume from its frame, saying whether its controller or the site gave it. A site's piece in the universe reads
+  the miniature drawn and says so, with how large the site itself is. A piece that is
+  not drawn here has nothing to measure.
+- **Any two points.** With Measure shown, a click in the world drops a point on the
+  surface, and a second click another; the world draws the line between them and writes
+  the straight distance and dx, dy and dz in the site's millimetres. On a piece of the
+  universe's sphere, where the site's frame is the layout's, a point is given in its
+  part's own frame, and two points on one piece their dx, dy and dz in it too. A point snaps to
+  the nearest vertex of the face under it within 12 pixels of the pointer, and the
+  reading says *vertex* where it did and *surface* where it did not, so a person
+  knows how exact it is. A third click starts again from that point, and Escape lets
+  the points go.
+- **Between two pieces.** Where the two points lie on different pieces the reading also
+  gives the clear distance between their declared bounds (the bounds of the box that
+  contains each, in the site's axes), which is *touching* when they meet and *overlap*
+  when they share volume. It answers whether one fits beside the other.
+- **What is under the click.** A click also reads the shape under it, from the mesh
+  drawn, which every part has (`apothecary/static/measure_features.js`), and says what it
+  fitted and how well. What it reads is decided by the face under the pointer: a curved
+  face reads a diameter, a flat face a wall, and the status line says in a line what was
+  read and how to read the others (two points: the distance), never more than one line,
+  the whole reading in the Layers window. There is no mode to choose.
+  - *A curved face reads a round.* The faces around the click that turn about one axis,
+    each beside the next across an edge that runs along it, are the round's facets. The
+    axis is the direction every facet's normal makes one angle with: a right angle for a
+    cylinder. The circle is fitted to the facets' vertices, seen along the axis. The
+    reading says *hole* where the faces face the axis and *boss* where they face away;
+    the diameter; how many vertices of how many facets it was fitted to, and whether they
+    are the whole round or an arc of it; the axis and a point on it in the part's own
+    frame; and the *residual*, how far the vertices stand from the circle, root mean
+    square, 0.00 mm for a mesh drawn from a true cylinder. A faceted round's vertices lie
+    on the circle and its flats inside it, so the diameter is *across its vertices*; where
+    the figure across its flats, the regular polygon's inscribed circle, differs at two
+    places, the reading gives that too, and a printed hole is nearer it. A round whose
+    faces lean to its axis is a taper: the reading gives its diameter at each end, and the
+    figure at its middle. It also reads the round's wall, from the click into what it is
+    made of to the face beyond. The world draws a circle round the axis at the click and
+    the line across it, labelled with its diameter.
+  - *A flat face reads its wall.* From the click along the face's inward normal to the
+    face that closes the piece behind it: the wall's thickness, and whether that face is
+    parallel or how many degrees it is off. By the face's edge that cast can run down a
+    wall that meets the face there (a hollow cube's top, by its corner, reads its side's
+    height): where a step in toward the face's middle reads thinner, that is read and
+    drawn beside it. Outward, across open space, to a face of the same piece that faces
+    it: the gap, a slot's width. Each is drawn as a line, labelled.
+  - *Two points read an edge and an angle.* Two points snapped to the two ends of one
+    edge of the mesh, a line of mesh edges whose faces on either side do not lie in one
+    plane, read as that edge, with the angle its faces meet at. Two flat faces clicked in
+    turn read the angle between them, as a wedge's, and their normals'.
+  - *Beside what the part declares.* A part that declares its interfaces
+    ([connections](connections.md)), a socket's bore, a bolt hole, a spigot's outside,
+    has the one on the same axis and the same way round read beside the mesh's: its name,
+    type, figure and source, and how far the mesh's diameter at that place stands from it.
+    The interfaces are declared in the part's own frame at its defaults: a mesh drawn from
+    a variant says so, and a part drawn as it rests finds none on the axis.
+  - *It cannot tell* where too few faces around the click turn about one axis (a steep
+    cone, a sphere drawn as triangles, a blend), where the face under the pointer is narrower than
+    two pixels at that distance, where a cast meets no face because the mesh is open, on a
+    stand-in box, and on a machine drawn as its pieces where which piece was hit cannot be
+    told. It says which, and gives no number.
+  - *What a mesh cannot tell* is a printed part's real size: a printer closes a hole and
+    swells a boss by what it does, and only the made part, measured, says by how much.
+- **A click measures while the layer is shown.** Measure is a mode: the layer being
+  shown is the whole of the choice, because a click that sometimes selected and sometimes
+  measured would be a surprise at the moment it matters, and a modifier would be a
+  key to learn. While it is shown a click and a double-click select nothing and step
+  into nothing; a piece is selected from Site's rows, which still work, so the
+  selection can read its size beside the points. A right-click, the camera's buttons
+  and the move arrows are as they were, and unticked, a click selects as before. The
+  point goes where a click would pick, through the one pick path, so a layer a click
+  passes through (a wall, a shell not selectable) is passed through by a measurement too.
+
+Every line of a measurement is drawn where the eye sees it, and faint where something
+drawn stands in front of it: a hole's circle seen through its part's outside, a wall's line
+through the wall, read as behind. Its labels are drawn over everything.
+
+The readings are text in the Layers window, under its rows, to read and copy, and each
+change is said on the status line.
 
 The world is the site's own frame, z up, turned onto the screen and never
 mirrored: a part reads as OpenSCAD draws it, its engraved text the right way
-round, and a picture lies on what it was taken of as it was taken. The axes are
+round, and a picture lies on what it was taken of as it was taken. A part is
+drawn as it rests, where it declares that: the footpedal stands on the bench
+on its base, buttons up, while its STL lies on its button face, the way up it
+prints ([How it rests](parts-authoring.md#how-it-rests)). The axes are
 the site's -- red x, green y, blue z -- at its origin while the origin is on the
 floor grid, else at the grid's middle; the grid lies on the floor under the
-level in view, its lines on whole cells, where snapping puts things. A level is
-framed from its front right, above, from as near as 30 mm for a small part, and
-View › Fit frames it so again; `f` frames a piece from the side the view is on.
+level in view, its lines on whole cells, where snapping puts things. A machine
+stepped into has its grid on its bed instead ([A machine's frame](#a-machines-frame)).
+A level is framed from its front right, above, from as near as 30 mm for a small
+part, and View › Fit frames it so again; `f` frames a piece from the side the view
+is on.
 
 The world is drawn only when something in it changes -- the view turned or
 easing to a stop, a piece or its colour, the handles, the window's size, a live
@@ -209,6 +475,68 @@ camera's video, a texture arriving, a printer's nozzle moving -- so a machine
 drawing in software, without a GPU, idles between them and answers typing at
 once. A view left alone stays exactly where it is: what the orbit's arithmetic
 rounds away is no move.
+
+Where a frame is slow to draw the page keeps up with the hand. A browser that draws
+the world in software takes a tenth of a second and more for each frame, and typing
+and clicks wait behind every one. The page measures what a frame costs it, and where
+that is slow, the frames drawn while the view turns are drawn coarser -- fewer
+pixels, stretched over the canvas -- and the frame the view comes to rest on is
+drawn whole; what moves by itself, a machine's tool while it prints, is drawn whole
+and about one part in three of the time; a view moved meanwhile is drawn at the
+next frame, not held back with it. Where frames are quick none of this
+happens. A browser draws in software when it has no use of the graphics card: its
+own page for that (`chrome://gpu`, `about:support`) says which.
+
+### A machine's frame
+
+Everything the world draws of a machine -- the wire box of its working volume, its
+bed's plane, its tool's mark, a reading's relief, a file's path, the grid of the
+machine stepped into -- is placed by one record, its **frame**, which
+`api.machine_frame` builds and two answers serve: each machine node of the site's
+tree (`frame`), and the printer `GET /firmware/printers/where` describes for a port
+(`printer.frame`). Its fields, in the site's millimetres:
+
+| Field | What it says |
+|---|---|
+| `position` | the machine node's own origin in the site |
+| `origin`, `origin_from` | where the volume's (0, 0, 0) stands in the machine's frame, a bed that carries Y standing where the work's Y under the tool is `bed_moves_y`: the node's `build_origin` (`node`), else the volume centred on its footprint on top of its base (`footprint`), else its own origin (`position`) |
+| `bed_origin`, `bed_z` | the same point in the site, and its height: the bed's surface |
+| `volume`, `volume_from`, `site_volume` | the working volume: the controller's travel (`$130`-`$132`) once a poll of its port has read it (`controller`), else the site's figure (`site`, always in `site_volume`) |
+| `homing` | the way each axis homes, `min` or `max`, from the controller's `$23`; null until read |
+| `bed_moves_y` | how far into the volume along Y the tool stands, on a machine whose bed carries Y; null where the tool moves over a bed that stays |
+| `kinematics` | the part's `rest` (the axes its pieces are drawn at) and `range` |
+
+The tree's frame has no controller's word: a port's poll is what carries it, and
+the where answer reads the port's last poll without asking the port anything. The
+world draws a pinned machine from its marks' frame, the where answer's, and any
+other from the tree's; a poll that says another travel than the marks were laid
+out by has the frame asked for again and the marks made again from it.
+
+A point of the volume -- the work's coordinates, counted up from its low corner --
+stands in the site at the machine's position plus `origin` plus the point, and on
+a machine whose bed carries Y the bed and what rides it stand `bed_moves_y` minus
+the work's Y under the tool further along Y (`apothecary/static/frames.js`). The
+wire box, the bed's plane, a reading, a file's path and the grid ride the bed so;
+with no position known, the bed stands where the part's `rest` puts it, as its
+pieces do. The machine stands where its node stands in the tree: moved in the
+layout, its marks and its box go with it at once.
+
+The tool's mark stands where a poll's `tool_position` puts it, which the server
+works out from the controller's own settings: a router's machine position is no
+place in its volume until they are read (the AnoleX's X homes to its minimum, its
+Y and Z to their maximum), so until then no tool is drawn. A machine stepped into
+has its grid on its bed: a line every 10 mm of its own volume from the volume's
+low corner, every fifth brighter, the axes at the volume's (0, 0, 0).
+
+The world follows each machine it draws by polls of its own, every two seconds
+(`apothecary/static/boards.js`), so its tool, its bed and its pieces move with no
+Machine open: only while the server holds the machine's link, so the world opens
+no port and a link released stays released, and never while a Machine is open on
+the port, whose own polls and auto-poll tick-box decide there.
+
+A projector aimed at a machine's bed draws in the same frame, on a page of its own for
+a second display: Camera › Projector on the machine's ring opens it ([The
+projector](projector.md)).
 
 ## The ring
 
@@ -229,8 +557,11 @@ Its cells are a numeric keypad, `7 8 9 / 4 5 6 / 1 2 3`. A ring holds up to
 eight options, seated in the order it lists them: 8, 6, 2 and 4 first, then
 9, 3, 1 and 7. **5** is the hub: it backs out one ring, and closes the first.
 A label ending `›` opens a ring of its own. The digits pressed through nested
-rings are the option's **address**, shown under the hub as you go and after
-every verb in the status line: `(⌗98)` is 9, then 8. The page writes the same
+rings are the option's **address**, shown in the hub as you go and after
+every verb in the status line: `(⌗98)` is 9, then 8. The ring is drawn on a
+ground of its own, so nothing it is opened over shows through a wedge, and a
+ring opened near the screen's edge stands far enough in that no label is cut.
+The page writes the same
 address into the tooltip of each of its own buttons that a cell also does
 (`· ⌗NN`), so a button teaches its digits.
 
@@ -244,6 +575,18 @@ chooses it, on the hub backs out, and far outside the ring closes it.
 address wherever it is opened; the cells that come and go with where it is
 opened are seated after them.
 
+**A cell that cannot be chosen now is greyed, and says why.** It is greyed whole --
+wedge, label and digit -- as a greyed button is, with the not-allowed cursor; its
+reason is its title, and written under the ring while the wedge is lit by
+the pointer, an arrow or a digit -- a title is not seen on a touch screen. Chosen
+anyway, by its digit, a click or a tap, it does nothing: the ring stays where it
+is, the reason under it, and the status line says it as a refused verb is said,
+`Y+ (⌗7728): <why>`. A machine's acts are greyed from the server's own answer for
+its port, the one its Machine's buttons are greyed from, and Panels › Machine's Loops
+and Knobs from what the Loops and Deck windows grey theirs for
+([firmware.md](firmware.md#what-a-command-would-be-refused-for)); the stop never is. A
+ring left open is greyed again as those answers change.
+
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
 the pieces made from pictures are one more cell, Made; at a leaf, the leaf
 itself), Site 6 (every site, Apothecary among them), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
@@ -251,15 +594,19 @@ site built again from its factory, as it was first built: chosen twice); then
 Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
-- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD and Workspace (the
-  Working space, [working-space.md](working-space.md)); Selected;
+- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD, Workspace and Layers (the
+  Workspace, [working-space.md](working-space.md)); Selected;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
-  word on the mark chosen in it, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
+  word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
+  Place, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
-  Machine, as the pad's ⧉ Pop out and ⇥ Put back) and Knobs (the Stream Deck +'s:
-  On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view and Family view; Bench › Bench (show it), Install (a cell per toolchain
+  Machine, as the pad's ⧉ Pop out and ⇥ Put back), Knobs (the Stream Deck +'s:
+  On / off, Machine, Step, Here, the Deck window and Screen -- Knobs, Progress,
+  Status, Back and Next, the screen its strip shows -- [stream-deck.md](stream-deck.md)) and
+  Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
+  Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and
   Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
@@ -281,12 +628,14 @@ pieces it holds: a digit selects one), then what the piece is:
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
 Defaults, Apply, Revert, Save, View › SCAD, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
-Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
+Duplicate, History, Compare and Delete, and Variants › Deleted; after them,
+where the ring has room, Presets › each preset and Adapter), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected. Last come the cells that
 depend on where the piece is: **Device** (when a board is pinned to it) and
-**Parent** (the piece it is inside, selected).
+**Parent** (the piece it is inside, selected); on the Stream Deck + piece, where the
+ring has room, **Deck** (the Deck window, as its Open Deck in Selected opens it).
 
 A printer's Pin, in its Device section, pins the board inside it -- printer_1's
 mainboard, where its Device, its Machine and Slice look -- and asks the board
@@ -345,7 +694,14 @@ Pictures'.
 The column beside the world is the one place a window opens by default, and it
 holds four stacks at most: a window opened there while it has fewer is a stack
 of its own, right under the window it follows; once it has four, a tab -- beside
-the window it follows, else at the column's foot. A window with nothing to show
+the window it follows, else at the column's foot. A window that opens beside the
+world (Layers, Loops, Models, Marks, the Deck, the armed pad) shares one stack
+there with the others: the first takes its room from the world's, never leaving
+the world too narrow to see a machine in, and the next are tabs of it; where the
+world has no room to give, it is a tab next to the world instead, never over
+the Machine. The Machine's window is never laid out lower than its head and its
+state, and its head -- the latch and ⏹ E-STOP -- stays at its top as it scrolls.
+A window with nothing to show
 gives its room away: its tab is dimmed, a window with something to show in its
 stack comes in front of it, and a stack of nothing but such windows is
 minimised to its tabs. It has its height back when one of them has something to
@@ -376,19 +732,85 @@ which the page, the ring and the tests all read.
 | Part | The world; Selected over Parameters, Variants, History and Readiness; the SCAD window over Site, Problems and SCAD |
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
-| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Working space, and Selected, in the column |
+| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
+| Print | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
 
-A view needs its main window. The Machine view opens the Machine of the machine
-selected, or else stepped into, when none is open; with none to open it is offered
-greyed, and asked for, from ⊞ Windows or the ring, it says why and leaves the layout
-as it was.
-Laid out, it lands on the file the machine would run: the path of the file its
+A view needs its main window. The Machine view, and the Print view, open the Machine
+of the machine selected, or else stepped into, when none is open; with none to open
+each is offered greyed, its tooltip saying why as every greyed control's does
+("Disabled: <why>. ..."), and asked for, from ⊞ Windows or the ring, it says why and
+leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
+the printer's Machine.
+Laid out, either lands on the file the machine would run: the path of the file its
 Print or Cut has chosen drawn in the world, all of it, and framed, the slider
 that goes through it beside it ([toolpath-preview.md](toolpath-preview.md#in-the-page));
 with no file of that machine's kept, the status line says how one comes to be.
 A section for another kind of board is left out of it. A window a view leaves
 out is closed, and comes back by a + or ⊞ Windows; the views and the windows in
 them are remembered like any layout.
+
+**A part that moves.** The Motion window, in the Part group and the column
+beside the world, closed until asked for, plays the selected part's motion
+when its wrapper declares one: Part › View › Motion on the part's ring, or ⊞
+Windows. It draws the part's pieces once and from then on moves them --
+Play, Back, Step, Reset, a slider -- each gap the server measured drawn where
+it is least and read with its unit, and what is bought drawn in a colour of
+its own while Bought is ticked ([airgap.md](airgap.md#the-motion-view)).
+
+### Journeys
+
+A journey is a path a person takes through the windows, a step at a time
+(`apothecary/journeys.py`; the plan is
+[journeys-2026-11-11.md](plans/journeys-2026-11-11.md)). ⊞ Windows › Journeys
+enters one: its view is laid out where it can be now, and its rail stands in the
+header at its first step.
+
+The journeys are in the order of the chain the page manages, each handing the next
+what it made:
+
+| Journey | Its steps | What it hands on |
+|---|---|---|
+| **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
+| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Start, 6 Measure | a job on the printer, and its correction |
+| **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut, 6 Measure | a job on the router, and its tool's allowance |
+| **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
+| **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
+| **Start a site** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
+| **Watch a site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
+| **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
+| **Join a hose** (`join`) | 1 Ends, 2 Adapter, 3 Ready | the adapter between two ends, for Print a part: it stands in the universe, where the port part and the adapter are ([above](#presets-and-the-adapter-between-two-ends)) |
+
+*Print a part* in full, as each is written in `apothecary/journeys.py`:
+
+| | Step | Brings forward | Owns |
+|---|---|---|---|
+| 1 | **Choose** | Site, then Selected | Site, Problems, Pinned, SCAD |
+| 2 | **Shape** | Parameters, then Selected | Selected, Parameters |
+| 3 | **Slice** | the Machine's Print window | the Print window |
+| 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
+| 5 | **Start** | the Machine, then Jobs | the Machine, Jobs |
+| 6 | **Measure** | the Print window, a file of the part chosen there to measure against | -- |
+
+A journey's view lays its windows out when it is entered. *Print a part*'s is also
+listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
+full; the others are entered from ⊞ Windows › Journeys and from the
+[tour](tour.md), which takes the page to each stage.
+
+- **A step on the rail enters it**, the step already on included: its windows
+  come in front of their stacks, the one it is about first, and a closed one
+  opens again. **Next** enters the step after; the last step has none.
+- **A window of a board's Machine** with none open opens the selected machine's;
+  with none to open, the step's other windows come forward and the status line
+  says how a Machine is opened -- a machine's badge or its row in Site, or Slice
+  on a part's ring.
+- **A window chosen moves the rail** to the step that owns it -- its tab, ⊞
+  Windows or a stack's + -- and moves nothing else. A window the page brings
+  forward by itself moves nothing.
+- **The address keeps the journey and its step** (`?journey=make&step=slice`),
+  so a reload or a link lands on that step, the windows as the browser
+  remembers them and the step's brought forward.
+- **✕ leaves the journey**: the rail goes, the address forgets it, and the
+  windows stay where they are.
 
 - **Site**: its category chips and the **Contents** tree (a click selects a
   row, a double-click steps in, ⚠ marks a piece in a problem). Site's own
@@ -397,7 +819,9 @@ them are remembered like any layout.
   its piece, at its level), what is **Pinned** in every site (each with its
   Remove or Unpin), the site's **Jobs** (its tab counts them and the running
   ones; a row opens its machine) and its **SCAD**, generated from the tree.
-- **Selected**: the selected piece -- its name, place and footprint, a
+- **Selected**: the selected piece -- its name, place (each field to two places
+  at the most; the place itself is kept whole, and a field changes it only when
+  typed in) and footprint, a
   compound piece's Detail, "⤵ Step into" for one with children (a site's
   piece in the universe: that it is a site, its real size, and the step into
   it) -- then its
@@ -409,14 +833,24 @@ them are remembered like any layout.
   plain printed part, a bin, a piece made from a picture has no Device line.
 - **The tabs** below them, one in front at a time: **Pictures**, the
   **Bench**, **Settings**, and the **Machine** of the board opened, one at a
-  time, which opens in front; its sections open in a stack under it. Only the tab in front wears its ✕. **Gather**, the gathering of
+  time, which opens in front; its sections open in a stack under it. A printer's
+  or a router's opens with its **Print** or **Cut** window, under it, so its head
+  and E-STOP stay in view; opened again, the window comes back where it was closed
+  (none is opened while a journey is entered, whose steps choose their windows).
+  Only the tab in front wears its ✕. **Gather**, the gathering of
   several pictures, is a tab beside Pictures when asked for (the canvas ring's
   Pictures › Gather, or Panels › Pictures › Gather); so is the **Airgap**, the
   airgap part as a field, torque and dynamics model (Panels › Airgap ›
   Airgap; [airgap.md](airgap.md)); and a site with a lighting rig adds
   **Lighting** ([lighting.md](lighting.md)).
+- **Loops**: a heater loop of the printer whose Machine is open -- the board's
+  gains beside the design, an experiment and its progress, the newest kept
+  experiment's plots and figures -- a window of the Machine's group beside the
+  world, closed until asked for (⊞ Windows › Loops, or Panels › Machine › Loops;
+  [control-loops.md](control-loops.md#the-loops-window)).
 - **The control pad**: an armed printer's pad opens as a window of its own
-  beside the world, its tab and frame red, its frame pulsing as it opens, and
+  beside the world, its tab (*🔓 Control pad*, as the ring names it, so it is
+  never a second tab named for the machine) and frame red, its frame pulsing as it opens, and
   the printer framed in the world that is left. Its ⇥ Put back, its tab's ✕,
   the ring's Panels › Machine › Control pad or disarming put it back in the
   Machine, and
@@ -425,14 +859,22 @@ them are remembered like any layout.
   world, the code filling it.
 
 A window the page makes for the moment -- a Machine and its sections, the pad --
-is left out of the layout this browser remembers.
+is left out of the layout this browser remembers. Every other window is kept in
+it: one opened from ⊞ Windows -- Models, Marks, the Workspace, the Deck, Loops -- is
+open again after a reload, where it was, and the world as wide as it was
+([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
+
+The **Tour** (Tour in the header, or Panels › Windows › Tour) is not a window: it is
+a box over the page that takes the journeys a stage at a time, takes the page to
+each stage, and keeps a person's word on it ([the tour](tour.md)).
 
 ## The part editor
 
 **Part › Edit** on a piece's ring opens its editor: Selected holds the piece
 and the staged changes' bar, and the part's **Parameters** window opens under
-it, the cursor in its first control. Its **SCAD**, **Variants** (its saved
-variants, and the compare), **History** and **Readiness** (to build) are
+it, the cursor in its first control. Its **SCAD**, **Variants** (every saved
+variant, what can be done to each, the trash, and the compare), **History**
+and **Readiness** (to build) are
 windows of their own, each closed until asked for, laid out together by
 Panels › Windows › Part view. Each
 parameter is a control starting from what is drawn, its description as its
@@ -517,14 +959,18 @@ one clicked is drawn again from the cache of variants, its numbers and its
 SCAD with it.
 
 **A variant is drawn where it stands**: placed by the bounds its render
-measured, at its piece, so a part grown is drawn where it grew, standing on
-what it stood on. Beside the envelope the part declares is what its drawn STL
-measures; when the two differ the line turns amber and says by how much, and a
-part reaching below the floor says how far. Selected's Footprint is what the
-variant drawn measures, the declared one beside it. The readiness checklist is
-of what is drawn -- the variant, its fit judged by what it measured -- against
-the build volume of the printer pinned in the site, and **Slice** slices the
-variant drawn, its record naming it.
+measured as it rests, at its piece, so a part grown is drawn where it grew,
+standing on what it stood on. Beside the envelope the part declares is what its
+drawn STL measures; when the two differ the line turns amber and says by how
+much. A part declares its envelope the way up it prints, so one drawn as it rests
+otherwise ([parts-authoring.md](parts-authoring.md#how-it-rests)) is measured as it
+rests, says so, and is never amber for the difference. A part reaching below the
+floor says how far (in the universe, which has
+no floor, below its own ground, its own z 0). Selected's Footprint is
+what the variant drawn measures, the declared one beside it. The readiness
+checklist is of the variant drawn, its fit judged by what it measures the way up
+it prints, against the build volume of the printer pinned in the site, and
+**Slice** slices it so, its record naming it.
 
 **Ghost**, the tick-box beside Undo and Part › View › Ghost, shows what was
 drawn before the newest Apply -- the saved part, or the variant before -- faint
@@ -546,6 +992,35 @@ while another part is selected.
 A piece made from a picture and a camera have the same editor, for their own
 numbers: Edit, Apply, Revert, Undo and Redo, and Fit. A made piece's Apply
 draws the piece again and nothing else.
+
+### Presets, and the adapter between two ends
+
+A part with [presets](parts-authoring.md#presets) -- the sizes people meet --
+whose numbers drive its model (a part built by Python; a part whose SCAD is
+the one draft offers none here yet) has a **Preset** drop-down above its
+controls in Parameters, and Part › Presets › each on its ring: one chosen stages its numbers over the part's
+defaults, a step of Undo, and Apply draws it. What calipers read is then typed
+over it; Defaults lets the preset go.
+
+A part with one round end, a spigot or a socket (`dust_port`), has **⇄ Adapter**
+in Selected, and Part › Adapter on its ring. The first press keeps this end at
+its numbers as staged; the line beside it names the end kept, and **✕ Let it go**
+lets it go. The kept end is this tab's, held through a reload (sessionStorage). The other end's
+numbers set -- another preset, or the caliper's reading over one -- the second
+press asks the server for the adapter between the two
+([connections.md](connections.md#the-adapter-between-two-ends)), which derives
+it or refuses, saying why, the end kept still kept. Derived, the adapter is
+chosen where it stands (the universe's `hose_adapter`), its numbers staged in its
+editor and applied, and its Selected lists each end's fit. Both ends are drawn
+beside it, each at its numbers and where the connections stand them (the two
+fainter meshes, apart in colour), and the three are framed; they are not chosen
+by a click. Each Apply of the
+adapter after that -- an end lengthened, a bore opened by what a print showed --
+asks the server again, and the list says which end no longer seats. ⚒ Make in
+the header then takes the adapter drawn, as the variant applied, to the first
+printer that makes it, and [Print a part](#journeys) goes on from there. The
+adapter made is this tab's: a reload forgets it and its two drawn ends, and the
+adapter stays drawn as its variant.
 
 ## The SCAD editor
 
@@ -583,7 +1058,8 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   first, when `APOTHECARY_VARIANTS_REPO` names another repository to keep them
   in), and that a merge brings its values with it -- or, for a variant whose
   values are in a `.variant.json` beside its SCAD and not in its text, that a
-  merge does not apply them until it is saved again.
+  merge does not apply them until it is saved again. The Variants window lists
+  it, and opens when it is closed.
   What would be a failed render is not saved. A part in a submodule
   (gridfinity) is saved as its **overlay**: the include of the upstream file
   and the values set after it, the submodule never touched; an edit of the
@@ -592,21 +1068,24 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   variant's, and is cleared once the text moves on from it, so Save keeps the
   edit under a name of its own. A name already saved is asked about first:
   Save again replaces it.
-- **Part › Variants** › a saved variant's name opens a ring of what can be done
-  to it, each a button of its row in the editor's list too (its **⋯** unfolds
-  them): **Draw** loads it -- its SCAD into the editor, its values in it and
-  the controls on them, checked and drawn; a part in a submodule's variant is
+- The part's **Variants** window lists every saved variant, newest first: when
+  it was saved, its numbers, whether HEAD holds it and, folded, what it changes
+  against the part's SCAD. **Part › Variants** › a saved variant's name opens a
+  ring of what can be done to it, each a button of its row in that list too (its
+  **⋯** unfolds them), and each cell brings the window in front: **Draw**
+  loads it -- its SCAD into the editor, its values in it and the controls on
+  them, checked and drawn; a part in a submodule's variant is
   its overlay, the upstream file never put in the editor as the part's; a
   variant whose values are in a `.variant.json` and not its text has them
   written in when it is read -- **Rename** and
   **Duplicate**, under the name typed in its row's box (the cell puts the
   cursor there; Enter does it), **History** (each save, newest first, an
   earlier one restored by its **Restore** as a new save, the history keeping
-  what came between), **Compare** and **Delete**. The editor's list says of
-  each what it changes, and whether it is in HEAD.
+  what came between), **Compare** and **Delete**. Choosing a variant's name in
+  the list draws it, as Draw does.
 - Delete moves a variant to the trash (`refs/apothecary/trash/`): **Part ›
-  Variants › Deleted**, and the Deleted fold under the editor's list, hold
-  it -- each deleted variant's **Restore** brings it back, its **Forget**
+  Variants › Deleted**, and the Deleted fold under the Variants window's list,
+  hold it -- each deleted variant's **Restore** brings it back, its **Forget**
   deletes it for good, and **Empty** deletes them all; Forget and Empty only
   when chosen again to confirm.
 - **Compare** draws the variant beside another -- what is drawn, the part's
@@ -637,6 +1116,8 @@ with no reload.
 | Ring: right-click with | Ctrl | The modifier held with a right-click to open the ring at the pointer: Ctrl, Alt, Shift or Meta |
 | Step in | Page Down | The key that steps into the selected piece, or what the middle of the view shows |
 | Step out | Page Up | The key that steps out to the level above |
+| Projector: mark the bed | `c` | On the projector page ([projector](projector.md)): lays the four markers over the bed, and takes them off again |
+| Projector: mark a plane above | `u` | On the projector page: marks the second plane, the top of a piece of known thickness laid on the bed |
 | Automatic zoom | on | Whether the wheel pushed on past the limit steps at all |
 | Stepping in | on | Whether it steps in |
 | Stepping out | on | Whether it steps out |
@@ -682,3 +1163,15 @@ drop-down or the SCAD editor, nor on a key the focus takes itself (a slider
 keeps the arrows, Page Up and Page Down; a button, Enter and Space); Ctrl,
 Alt, Shift or Meta held rules Backspace out. Ctrl+Z in a box, or in the SCAD
 editor, is that box's own undo.
+
+## How numbers are written
+
+One form each, from `apothecary/static/format.js`, so the Machine's cards, the Print window,
+Loops, the Deck, Selected's footprint and envelope, and every moment a window writes (Jobs,
+a task, a part's history, the Workspace, Marks, a word kept on the tour) read alike: a heater `23.1/200°` (actual over target) and a lone reading
+`23.1°`; a time of day `11:53:53` (24 hours) and a day with it `2026-11-18 11:53:53`; how long
+a time takes `4:52` (`1:02:09` past an hour); a size in millimetres with its unit, no
+trailing zeros and at most three places (`101.5 mm`, `46 × 46 × 101.5 mm`); a position
+`X0.0 Y0.0 Z0.00`. A line on the status bar starts a sentence, and the status line names a
+ring cell it was asked by as `Home all (⌗494)`, a refusal as `Home all (⌗494): why`. The world's badge keeps its own short
+reading (`210°/60°`), a place a person reads at a glance.

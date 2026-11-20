@@ -7,8 +7,8 @@ Each step first checks that the page is where the step before it leaves it, then
 a person does and holds what the page says. Under ``--steps`` every step runs in order on a
 server of the test's own: arduino-cli, cargo and espflash scripted in one folder, and the
 simulated devkit on ``/dev/ttyFAKE2`` that runs what was last flashed to it
-(tests/firmware_helpers.py), as the demo's are. Given ``--step N`` and ``--base-url``
-naming the demo, only step N runs, on the demo's walk tab, and the tab is left there
+(tests/firmware_helpers.py), as the simulated server's are. Given ``--step N`` and ``--base-url``
+naming the simulated server, only step N runs, on the simulated server's walk tab, and the tab is left there
 (tests/e2e/stepping.py); its picture is ``.cache/walk/firmware-step-N.png``::
 
     uv run pytest tests/e2e/test_steps_firmware.py --base-url http://127.0.0.1:6283 --step 1
@@ -38,11 +38,11 @@ RUST_ROW = "esp32_blink@rust-esp32 · esp32"
 
 @dataclass
 class Walk:
-    """The page a step acts on, the server it is on, and whether it is the demo's tab."""
+    """The page a step acts on, the server it is on, and whether it is the simulated server's tab."""
 
     page: Page
     base: str
-    on_the_demo: bool
+    on_simulated: bool
 
     @property
     def bench(self):
@@ -270,7 +270,7 @@ STEPS: List[Tuple[str, Callable[[Walk], None]]] = [
 
 @pytest.fixture
 def steps(request, base_url):
-    """One step on the demo's walk tab under --step; every step on a server of the
+    """One step on the simulated server's walk tab under --step; every step on a server of the
     test's own otherwise (stepping.chosen)."""
 
     def own():
@@ -296,7 +296,7 @@ def own_server(start_server, tmp_path_factory):
 
 @pytest.mark.e2e
 def test_firmware_a_step_at_a_time(steps):
-    page, url, on_the_demo, numbers = steps
-    walk = Walk(page, url, on_the_demo)
+    page, url, on_simulated, numbers = steps
+    walk = Walk(page, url, on_simulated)
     for n in numbers:
         STEPS[n - 1][1](walk)

@@ -65,10 +65,12 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..hierarchy import Assembly
+from .. import sites
+from ..hierarchy import Assembly, find_node_by_path
+from ..picture_root import PictureRefused, picture_root, picture_within_root
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
-from ..vision import cameras
+from ..vision import cameras, whiteboard
 from ..vision import views as viewing
 from ..vision.models import FoundShape, ScaleReference
 from ..vision.piece import SIDES, MadePart
@@ -170,6 +172,9 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
             else None
         ),
         "shapes": shapes,
+        "squared": view.squared.model_dump(mode="json") if view.squared is not None else None,
+        "in_front": view.in_front,
+        "shown_as": view.shown_as,
     }
 
 
@@ -202,30 +207,25 @@ def made_answer(record: Made, pinned: bool) -> Dict[str, object]:
     answer["shape"] = shape_answer(record.shape)
     answer["view_pinned"] = pinned
     answer["found"] = viewing.found_size(record)
+    answer["cuts"] = viewing.cuts_of(record)
     return answer
 
 
-def _site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
-    from ..api import _site_payload, _site_store
+def site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
+    from ..api import site_payload
 
-    return _site_payload(site, _site_store.validator(site_name)(site))
-
-
-def _site(site_name: str) -> Assembly:
-    from ..api import _get_site_or_404
-
-    return _get_site_or_404(site_name)
+    return site_payload(site, sites.store.validator(site_name)(site))
 
 
-def _view_or_404(site_name: str, view_id: str) -> View:
+def view_or_404(site_name: str, view_id: str) -> View:
     try:
         return viewing.store().get(site_name, view_id)
     except viewing.ViewNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
 
 
-def _answer(site_name: str, view: View) -> Dict[str, object]:
-    return view_answer(view, _site(site_name), viewing.store().made_at(site_name))
+def view_answer_in(site_name: str, view: View) -> Dict[str, object]:
+    return view_answer(view, sites.store.get(site_name), viewing.store().made_at(site_name))
 
 
 # --- pinning ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ def _answer(site_name: str, view: View) -> Dict[str, object]:
 
 def check_host(site_name: str, host: str) -> Assembly:
     """The site, once ``host`` is known to be able to hold a view or a camera; or refused."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     try:
         viewing.host_node(site, host, viewing.made_names(site_name), cameras.names(site_name))
     except viewing.HostNotFound as missing:
@@ -243,15 +243,13 @@ def check_host(site_name: str, host: str) -> Assembly:
     return site
 
 
-def _picture_at(picture: str) -> Path:
+def picture_at(picture: str) -> Path:
     """A picture under the root, by the path the listing gave; refused elsewhere."""
-    from ..api import _picture_root, _picture_within_root
-
     asked = Path(picture)
-    return _picture_within_root(asked if asked.is_absolute() else _picture_root() / asked)
+    return picture_within_root(asked if asked.is_absolute() else picture_root() / asked)
 
 
-def _picture_size(where: Path) -> Tuple[int, int]:
+def picture_size(where: Path) -> Tuple[int, int]:
     """A picture's width and height in pixels, upright as a finder reads it: read
     from its header and its orientation tag, without decoding its pixels."""
     from PIL import Image, UnidentifiedImageError
@@ -276,12 +274,13 @@ def pin_picture(
     (``viewing.laid_at``), and stays there.
 
     Find shapes (``find_in``) is the step that finds its shapes."""
-    from ..api import _picture_root
-
     site = check_host(site_name, host)
-    root = _picture_root()
-    where = _picture_at(picture)
-    width, height = _picture_size(where)
+    root = picture_root()
+    where = picture_at(picture)
+    node = next((c for c in site.children if c.name == host), None)
+    if node is not None and whiteboard.is_whiteboard(node):
+        return _pin_at_whiteboard(site_name, node, where, root)
+    width, height = picture_size(where)
     at = datetime.now(timezone.utc)
     offset, fit_width = (
         (None, None)
@@ -309,9 +308,50 @@ def pin_picture(
     return viewing.store().pin(view)
 
 
+def _square(source: Path, root: Path, corners, node) -> Tuple[str, Tuple[int, int]]:
+    """A photograph squared to a whiteboard and kept, or refused with the reason."""
+    wide, high = whiteboard.surface_of(node)
+    try:
+        return whiteboard.square_kept(source, root, corners, wide / high)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"{source.name} could not be squared: {exc}"
+        ) from None
+
+
+def _pin_at_whiteboard(site_name: str, node: Assembly, source: Path, root: Path) -> View:
+    """A photograph of a whiteboard pinned at it: its corners found, squared to it,
+    as wide as its surface, and laid flat on the floor in front of it. Finding
+    nothing in it: Find shapes is the step that does."""
+    try:
+        corners = whiteboard.find(source)
+    except whiteboard.NoWhiteboard as none:
+        raise HTTPException(status_code=400, detail=str(none)) from None
+    picture, (width, height) = _square(source, root, corners, node)
+    wide, _ = whiteboard.surface_of(node)
+    at = datetime.now(timezone.utc)
+    view = View(
+        id=viewing.new_view_id(at),
+        site=site_name,
+        host=node.name,
+        picture=picture,
+        taken_at=at.isoformat(),
+        mm_across=wide,
+        pixel_width=width,
+        pixel_height=height,
+        offset=(0.0, 0.0),
+        fit_width=wide,
+        squared=viewing.Squared(
+            source=source.relative_to(root).as_posix(), corners=list(corners.corners)
+        ),
+        in_front=True,
+    )
+    return viewing.store().pin(view)
+
+
 def camera_or_404(site_name: str, name: str) -> cameras.Camera:
     """A camera part of the site, or a 404 that says so."""
-    _site(site_name)
+    sites.store.get(site_name)
     try:
         return cameras.record(site_name, name)
     except cameras.CameraNotFound as missing:
@@ -323,17 +363,15 @@ def take_picture(site_name: str, camera: str, picture: str) -> View:
     stands now: a view lying where the camera's centre ray first meets a top or the
     floor -- or nowhere, at a wall or the sky -- keeping the camera's pose and lens,
     and finding nothing in it. What Take picture pins."""
-    from ..api import _picture_root
-
     taker = camera_or_404(site_name, camera)
-    site = _site(site_name)
-    where = _picture_at(picture)
-    width, height = _picture_size(where)
+    site = sites.store.get(site_name)
+    where = picture_at(picture)
+    width, height = picture_size(where)
     view = viewing.taken_by(
         site_name,
         site,
         taker,
-        picture=where.relative_to(_picture_root()).as_posix(),
+        picture=where.relative_to(picture_root()).as_posix(),
         pixel_width=width,
         pixel_height=height,
         at=datetime.now(timezone.utc),
@@ -349,8 +387,8 @@ def find_in(site_name: str, view_id: str, finder: str = "plain") -> View:
     from ..vision import get as get_finder
     from ..vision.cache import cache
 
-    view = _view_or_404(site_name, view_id)
-    where = _picture_at(view.picture)
+    view = view_or_404(site_name, view_id)
+    where = picture_at(view.picture)
     try:
         seer = get_finder(finder)
     except KeyError:
@@ -384,14 +422,13 @@ def finders_for(picture: str) -> List[str]:
     finder that says the picture is not its kind (``reads``).
     What the ring's Find shapes offers, so it is offered only where it can do
     something."""
-    from ..api import _picture_root, _picture_within_root
     from ..vision import get as get_finder
     from ..vision import names as finder_names
 
-    root = _picture_root()
+    root = picture_root()
     try:
-        where = _picture_within_root(root / picture)
-    except HTTPException:
+        where = picture_within_root(root / picture)
+    except PictureRefused:
         return []
     readable = []
     for name in finder_names():
@@ -447,7 +484,7 @@ def pin_view(site_name: str, body: PinView):
         view = pin_picture(
             site_name, body.host or viewing.FLOOR, body.picture, mm_across=body.mm_across
         )
-    return _answer(site_name, view)
+    return view_answer_in(site_name, view)
 
 
 class FindBody(BaseModel):
@@ -460,7 +497,84 @@ def find_shapes(site_name: str, view_id: str, body: Optional[FindBody] = None):
     or, when another finder had searched it, the new view that holds this
     finder's shapes, which is the newest at its host."""
     found = find_in(site_name, view_id, (body or FindBody()).finder)
-    return _answer(site_name, found)
+    return view_answer_in(site_name, found)
+
+
+class CornersBody(BaseModel):
+    """A whiteboard's four corners in its photograph, as fractions of it: top-left,
+    top-right, bottom-right, bottom-left."""
+
+    corners: List[Tuple[float, float]] = Field(min_length=4, max_length=4)
+
+    @field_validator("corners")
+    @classmethod
+    def _inside(cls, corners):
+        for x, y in corners:
+            if not (0 <= x <= 1 and 0 <= y <= 1):
+                raise ValueError(f"{x}, {y}: a corner is a fraction of the photograph, 0 to 1")
+        return corners
+
+
+def _squared_view(site_name: str, view_id: str) -> View:
+    view = view_or_404(site_name, view_id)
+    if view.squared is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{view_id} is not a photograph of a whiteboard: it has no corners",
+        )
+    return view
+
+
+@router.get("/sites/{site_name}/views/{view_id}/corners")
+def view_corners(site_name: str, view_id: str):
+    """A whiteboard's photograph and its corners in it, as fractions of it, with who
+    placed them and, moved by a person, where the finder had put them."""
+    view = _squared_view(site_name, view_id)
+    width, height = picture_size(picture_at(view.squared.source))
+    return {
+        **view.squared.model_dump(mode="json"),
+        "pixel_width": width,
+        "pixel_height": height,
+        "made": len(view.made),
+    }
+
+
+@router.put("/sites/{site_name}/views/{view_id}/corners")
+def move_corners(site_name: str, view_id: str, body: CornersBody):
+    """A person's word on a whiteboard's corners: its photograph squared again with
+    them. A view the outline finder had searched is searched again. Refused once a
+    piece is made from it."""
+    view = _squared_view(site_name, view_id)
+    site = sites.store.get(site_name)
+    node = next((c for c in site.children if c.name == view.host), None)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"{view.host} is no longer in {site_name}")
+    root = picture_root()
+    source = picture_at(view.squared.source)
+    corners = whiteboard.Corners(corners=list(body.corners), by="you")
+    picture, (width, height) = _square(source, root, corners, node)
+    squared = view.squared.model_copy(
+        update={
+            "corners": list(body.corners),
+            "by": "you",
+            "guess": view.squared.guess or view.squared.corners,
+        }
+    )
+    searched = view.finder
+    try:
+        moved = viewing.store().resquared(
+            site_name,
+            view_id,
+            picture=picture,
+            pixel_width=width,
+            pixel_height=height,
+            squared=squared,
+        )
+    except viewing.CannotMake as refused:
+        raise HTTPException(status_code=409, detail=str(refused)) from None
+    if searched == "outline":
+        moved = find_in(site_name, view_id, "outline")
+    return view_answer_in(site_name, moved)
 
 
 class ScaleBody(BaseModel):
@@ -498,8 +612,8 @@ async def size_view(site_name: str, view_id: str, body: ScaleBody):
     pieces rebuilt as this view's are. ``async def``: a rebuild changes the site."""
     from ..vision.models import Picture
 
-    view = _view_or_404(site_name, view_id)
-    site = _site(site_name)
+    view = view_or_404(site_name, view_id)
+    site = sites.store.get(site_name)
     if body.mm_across is None:
         if not view.found:
             raise HTTPException(
@@ -541,7 +655,7 @@ async def size_view(site_name: str, view_id: str, body: ScaleBody):
         **view_answer(view, site, viewing.store().made_at(site_name)),
         "rebuilt": rebuilt,
         "taught": None,
-        "site": _site_answer(site_name, site) if rebuilt else None,
+        "site": site_answer(site_name, site) if rebuilt else None,
     }
 
 
@@ -571,7 +685,7 @@ def _size_by_lens(site_name: str, site: Assembly, view: View, body: ScaleBody):
         **view_answer(sized, site, viewing.store().made_at(site_name)),
         "rebuilt": rebuilt,
         "taught": taught,
-        "site": _site_answer(site_name, site) if rebuilt else None,
+        "site": site_answer(site_name, site) if rebuilt else None,
     }
 
 
@@ -589,7 +703,7 @@ def unpin_view(site_name: str, view_id: str):
 def attached(site_name: str):
     """A site's camera parts (in the order they were added), views (oldest first) and
     made pieces, in one request."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     store = viewing.store()
     made = store.made_at(site_name)
     views = store.views_at(site_name)
@@ -613,14 +727,13 @@ def placed():
     ``site_known``), so it can still be taken back from the list that shows it: a
     camera whose site is gone (an arrangement built from a picture, forgotten) is
     removed by ``DELETE /sites/{s}/cameras/{name}`` all the same."""
-    from ..api import _find_node_by_path, _site_store
     from ..firmware import devices as firmware_devices
 
-    names = set(_site_store.names())
+    names = set(sites.store.names())
 
     def site_or_none(name: str) -> Optional[Assembly]:
         try:
-            return _site_store.get(name) if name in names else None
+            return sites.store.get(name) if name in names else None
         except KeyError:
             return None
 
@@ -632,7 +745,7 @@ def placed():
                 **binding.model_dump(mode="json"),
                 "site_known": site is not None,
                 "node_found": site is not None
-                and _find_node_by_path(site, binding.path) is not None,
+                and find_node_by_path(site, binding.path) is not None,
             }
         )
     camera_rows = []
@@ -675,10 +788,10 @@ class WordBody(BaseModel):
 @router.put("/sites/{site_name}/views/{view_id}/shapes/{index}")
 async def word_for_shape(site_name: str, view_id: str, index: int, body: WordBody):
     """A person's word for one shape; a made shape's piece is rebuilt in place."""
-    view = _view_or_404(site_name, view_id)
+    view = view_or_404(site_name, view_id)
     if not 0 <= index < len(view.shapes):
         raise HTTPException(status_code=404, detail=f"view {view_id!r} has no shape {index}")
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     view = viewing.store().set_word(site_name, view_id, index, body.word)
     rebuilt = view.made.get(index)
     if rebuilt is not None:
@@ -689,7 +802,7 @@ async def word_for_shape(site_name: str, view_id: str, index: int, body: WordBod
     return {
         "view": _view_if_pinned(site_name, view_id),
         "rebuilt": rebuilt,
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 
@@ -708,7 +821,7 @@ class MakeBody(BaseModel):
 async def make_pieces(site_name: str, view_id: str, body: MakeBody):
     """Pieces from a view's shapes: one, or every one not already made. ``beyond``
     counts the shapes left because they lie past a camera picture's horizon."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     try:
         making = viewing.make(site_name, site, view_id, body.shape)
     except viewing.ViewNotFound as missing:
@@ -720,14 +833,14 @@ async def make_pieces(site_name: str, view_id: str, body: MakeBody):
         "skipped": making.skipped,
         "beyond": making.beyond,
         "view": _view_if_pinned(site_name, view_id),
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 
 def _view_if_pinned(site_name: str, view_id: str) -> Optional[Dict[str, object]]:
     """The view as it is now, or None when it was unpinned meanwhile (its picture forgotten)."""
     try:
-        return _answer(site_name, viewing.store().get(site_name, view_id))
+        return view_answer_in(site_name, viewing.store().get(site_name, view_id))
     except viewing.ViewNotFound:
         return None
 
@@ -836,7 +949,7 @@ async def rebuild_made(site_name: str, piece: str, body: RebuildBody):
     or by a person's sides. Its name and position stay; the answer carries its
     provenance as it is now (``found`` beside ``parameters``), the box it
     occupies (``bounds``) and the site."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     change = _normalised(_made_part(site_name, piece), body)
     if change["word"] is None and change["parameters"] is None:
         record = _made_or_404(site_name, piece)  # nothing differs: nothing to rebuild
@@ -852,21 +965,21 @@ async def rebuild_made(site_name: str, piece: str, body: RebuildBody):
         "piece": piece,
         "provenance": made_answer(record, record.view in pinned),
         "bounds": MadePart.of(record).get_bounds().model_dump(),
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 
 @router.delete("/sites/{site_name}/made/{piece}")
 async def drop_made(site_name: str, piece: str):
     """Drop: the piece leaves the site, and its shape reads as found again."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     _made_or_404(site_name, piece)
     record = viewing.drop(site_name, site, piece)
     return {
         "dropped": piece,
         "view": record.view,
         "shape": record.shape_index,
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 

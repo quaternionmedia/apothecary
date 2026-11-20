@@ -685,7 +685,7 @@ def _build_controller() -> Assembly:
 
 
 def _build_gantry() -> Assembly:
-    """The gantry riding the Y rails, with the axes where the part's defaults put
+    """The gantry standing on the base over the table, with the axes where the part's defaults put
     them: a leg on each side beam, the cross beam between their tops, and on the
     beam's front the Z carriage holding the trim router in its 65 mm clamp. The
     same plates, beam and cylinder the router model draws, in the same places,

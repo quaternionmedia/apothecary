@@ -2,23 +2,47 @@
 
 One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
 
-- the top row's keys choose the machine (0 printer_1, 1 cnc_router) and cycle the jog
-  step through 0.1, 1 and 10 mm (2);
-- the bottom row holds the stops: 4 stops printer_1 and 5 cnc_router, each by its own
+- the top row's keys choose the machine (0 printer_1, 1 cnc_router), cycle the jog
+  step through 0.1, 1 and 10 mm (2), and disarm every machine's control (3), lit while
+  any is armed;
+- key 6 is UNLOCK while the chosen router is in alarm: it sends the router's ``$X``
+  through the latch, and a turn refused in alarm says to press it. Otherwise it stops
+  the move under way and no more: STOP JOG on the router (GRBL's jog cancel, which
+  keeps the position) and QUICKSTOP on the printer (``M410``); neither needs control
+  armed, and each is acted on at once, as a stop is;
+- the bottom row holds the stops: 4 stops the printer and 5 the router, each by its own
   dialect's stop, and 7, bright red and last, nearest a hand on the knobs, stops every
-  machine, each by its own; none needs control armed;
+  machine this server knows of, each by its own, all at once; none needs control armed,
+  and each disarms the machine it stops. A machine's stop key whose machine cannot be
+  told from another of its kind stops every board of that kind: a stop that reaches one
+  machine too many is the mistake to make;
 - the strip says which machine, whether its control is armed and for how long, the
-  chosen machine's last poll (X, Y, Z and the fourth quantity), the step, and what the
+  chosen machine's newest poll (X, Y, Z and the fourth quantity), the step, and what the
   last turn did or why it did nothing;
+- the strip has three screens, which a swipe along it walks (``firmware/deck_screens.py``):
+  the knobs' own, described above and the one it starts on; Progress, the file or part the
+  chosen machine's job runs, its stage, how far it is and how long it has run; and Status,
+  the machine's state, its temperatures or its spindle and feed, and the first thing it
+  asks of a person. A swipe stops at either end, a tap changes nothing, and none of it
+  sends a line to a machine or asks one for a reading. A job begun on the chosen machine
+  brings Progress forward once, and never again for that job, whatever a hand does after;
+  a job that has ended stays on Progress, how it ended, until a touch of that screen. While
+  a job holds the port the knobs' screen says so in the server's own words, and that the
+  jogs are refused;
 - knobs one to three jog X, Y and Z by so many steps; the fourth turns the spindle's
-  speed in steps of 1000 rpm (only while it turns) or extrudes 1 mm a step;
-- a machine's key held (``LONG_PRESS_S``) twice in a row, the second within
-  ``ARM_WINDOW_S`` of the first, arms that machine's control for the latch's own five
+  speed in steps of 1000 rpm (only while it turns, from a reading no older than
+  ``READING_MAX_AGE_S``, and never to nothing: off is the Machine's, or a stop) or
+  extrudes 1 mm a step. A turn is for the moment it was made in: one that has waited
+  ``TURN_MAX_AGE_S`` on a machine busy with something else is dropped, and said;
+- a machine's key held (``LONG_PRESS_S``) twice in a row, the second begun within
+  ``ARM_WINDOW_S`` of the first let go, arms that machine's control for the latch's own five
   minutes, as the Machine's Control does; one long press alone, a second after the
   window, or anything pressed between them arms nothing, and the strip says what the
   first did and what the second will.
 
-**Nothing here moves a machine by a way of its own.** Every line goes through
+**Nothing here moves a machine by a way of its own.** A jog goes through
+``devices.printer_jog``, the function behind ``POST /firmware/printers/jog`` and the
+page's pad, so a jog is one act whoever makes it; every other line goes through
 ``devices.printer_control``, the function behind ``POST /firmware/printers/command``:
 the port's ``ControlLatch`` must be armed (by the Machine window, or by the two long
 presses above, which arm the same latch), the line is normalised in the port's dialect
@@ -28,7 +52,23 @@ key sends ``devices.emergency_stop_for(port)``, the one line that always goes; t
 everything key sends each machine's own, one after another, whatever one of them
 answers. The machine's own red button is faster, and stays the stop to reach for.
 
-It starts for a deck only when ``APOTHECARY_DECK_CONTROL`` is set (the demo sets it) or
+**A machine is found by where it is pinned, and a stop by what is there.** The printer
+and the router are the boards pinned to the garage's two nodes; with nothing pinned
+there and plugged in, the one board of that kind this server knows, wherever it is
+pinned. Two of a kind and no pin is no machine for the knobs, and every one of them
+for a stop.
+
+**Nothing a hand does on the deck waits behind anything else.** The deck's reader only
+hands an event over (``hear``); a thread of the layout's own acts on them in order
+(``handle``), so a machine's answer or a redrawn strip never holds up the next report or
+the time it is stamped with. Turns of one knob that arrive while an earlier one is being
+sent go as one jog of their sum. A stop key is the exception to the order: it is sent
+from ``hear`` itself, ahead of everything waiting, and what was waiting is dropped; the
+disarm key is acted on the same way. No
+key or knob starts a scan for ports (two seconds): the newest scan is read however old,
+and the layout's tick looks for a board that is not found.
+
+It starts for a deck only when ``APOTHECARY_DECK_CONTROL`` is set (``serve --simulated`` sets it) or
 a person asks (``POST /firmware/decks/{id}/control``): opening a real deck takes the
 device from any other program that has it.
 """
@@ -37,11 +77,16 @@ from __future__ import annotations
 
 import os
 import threading
+import time
+from collections import deque
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Callable, Deque, Dict, List, Optional, Tuple
 
+from .. import jobs
+from . import can, devices, gcode, grbl
 from . import deck as decks
-from . import devices, gcode, grbl
+from . import deck_screens as screens
 from .toolchains import PortHeld, ToolchainError
 
 CONTROL_ENV = "APOTHECARY_DECK_CONTROL"
@@ -50,21 +95,37 @@ STEPS_MM = (0.1, 1.0, 10.0)
 AXES = ("X", "Y", "Z")
 KEY_MACHINE = (0, 1)
 KEY_STEP = 2
-# Two classes of stop, the owner's word: one key per machine, each sending that machine's
+# A screen chosen from the page by its step rather than its name: as a swipe left, or right.
+SCREEN_STEPS = {"next": screens.FORWARD, "previous": screens.BACK}
+# Two classes of stop: one key per machine, each sending that machine's
 # own stop, and one that stops every machine at once. The everything key is the bottom
 # row's last, nearest a hand resting on the knobs, bright red where the per-machine stops
 # are dark; none needs control armed, as the page's E-STOP does not.
 KEY_STOP_MACHINE = (4, 5)  # printer_1's and cnc_router's, in MACHINES' order
 KEY_STOP_ALL = 7
+STOP_KEYS = (*KEY_STOP_MACHINE, KEY_STOP_ALL)
+KEY_DISARM = 3  # every machine's control let go: what two long presses armed, one press undoes
+KEY_UNLOCK = 6  # the chosen router out of its alarm ($X): there only while it is in one
+AT_ONCE_KEYS = (*STOP_KEYS, KEY_DISARM)  # acted on ahead of whatever is waiting
+# What key 6 sends while its machine is not in alarm: the move under way stopped, and
+# no more. Neither needs the latch (``Dialect.always``); acted on at once, as a stop is.
+STOP_MOVE = {"router": ("STOP JOG", "JOG-CANCEL"), "printer": ("QUICKSTOP", "M410")}
 STOP_ALL_COLOUR, STOP_ONE_COLOUR = "red", "#7a2a22"
 KNOB_FOURTH = 3
 FEED = {"printer": 3000, "router": 1000}  # the page's jog feeds (machine_words.js)
 EXTRUDE_MM_PER_STEP = 1.0
 EXTRUDE_FEED = 200  # under gcode.EXTRUDE_FEED_MAX
 SPINDLE_RPM_PER_STEP = 1000
+TURN_MAX_AGE_S = 2.0  # a turn older than this when its machine is free is not sent
+READING_MAX_AGE_S = 5.0  # a spindle speed read longer ago is not turned from
+STOP_WAIT_S = 5.0  # the longest the stop keys wait to say what each machine answered
 TICK_S = 2.0
+LOOK_S = 10.0  # a board not found is looked for with a scan this often, by the tick alone
+SETTLE_S = 10.0  # the longest a simulated deck's event waits to have been acted on
+MEND_S = 0.5  # how often a deck is looked at, and a lost one looked for
+STOP_S = 15.0  # the longest stop waits for a tick's scan or an event's poll to end
 LONG_PRESS_S = 0.8  # a machine's key held this long is a long press
-ARM_WINDOW_S = 5.0  # the second long press of two must follow the first within this
+ARM_WINDOW_S = 5.0  # the second long press of two must begin within this of the first let go
 
 
 @dataclass(frozen=True)
@@ -85,19 +146,61 @@ def enabled() -> bool:
 
 
 def pinned_port(machine: Machine) -> Optional[str]:
-    """The port the board pinned to ``machine``'s node is on now, or None."""
+    """The port ``machine``'s board is on now, or None: the board pinned to its node in
+    the garage; with none pinned there and plugged in, the one board of its kind this
+    server knows, wherever it is pinned. Read from the newest scan however old, less
+    what the serial engine no longer lists: a key or a knob never waits two seconds on
+    a scan (``look`` is what starts one)."""
     from .bindings import device_for_identity
 
     state = devices.get_state()
-    pin = next((b for b in state.bindings(SITE) if b.path == machine.node), None)
-    if pin is None:
-        return None
     try:
-        found = devices.detected_devices(state=state)
+        found = devices.detected_devices(state=state, any_age=True)
     except ToolchainError:
         return None
-    device = device_for_identity(pin.identity, found, pin.kind)
-    return device.port if device is not None else None
+    pin = next((b for b in state.bindings(SITE) if b.path == machine.node), None)
+    if pin is not None:
+        device = device_for_identity(pin.identity, found, pin.kind)
+        if device is not None:
+            return device.port
+    ports = [
+        d.port for d in found if devices.machine_kind(state.cached_device(d.port)) == machine.kind
+    ]
+    return ports[0] if len(ports) == 1 else None
+
+
+def machine_ports(kind: Optional[str] = None) -> List[str]:
+    """Every port a stop is for: each board plugged in that this server knows as a
+    printer or a router (of ``kind`` alone, when given), and each port it holds a link
+    to. From the newest scan however old: a stop starts none."""
+    state = devices.get_state()
+    try:
+        found = [d.port for d in devices.detected_devices(state=state, any_age=True)]
+    except ToolchainError:
+        found = []
+    ports = []
+    for port in [*found, *gcode.get_printer_links().open_ports]:
+        known = devices.machine_kind(state.cached_device(port))
+        if port not in ports and known is not None and kind in (None, known):
+            ports.append(port)
+    return ports
+
+
+def host_job(port: str) -> Optional[jobs.Job]:
+    """The print or cut the host streams on ``port`` as it stands -- running, or as it
+    ended, until the next one begins -- from the machine's own thread: no line is sent
+    and no file is read."""
+    held = devices.print_job(port)
+    return held.now() if held is not None else None
+
+
+def look() -> None:
+    """A scan for ports, unless one was made within its own short life: how a board
+    plugged in since the last is found when no page is asking."""
+    try:
+        devices.scan_ports()
+    except ToolchainError:
+        pass
 
 
 def _mm(value: float) -> str:
@@ -106,7 +209,7 @@ def _mm(value: float) -> str:
 
 class DeckController:
     """The layout on one deck: its events in, its keys and strip out, a machine's
-    control lines between. The seams (``resolve``, ``send``, ``poll``, ``armed``) are
+    control lines between. The seams (``resolve``, ``send``, ``poll``, ``armed``, ``disarm``) are
     what the machines' own functions are, so a test can stand its own in their place."""
 
     def __init__(
@@ -116,14 +219,26 @@ class DeckController:
         send: Optional[Callable[[str, str], object]] = None,
         poll: Optional[Callable[[str], object]] = None,
         armed: Optional[Callable[[str], float]] = None,
+        disarm: Optional[Callable[[str], None]] = None,
+        jog: Optional[Callable[[str, str, float, int], object]] = None,
+        others: Callable[[Optional[str]], List[str]] = machine_ports,
+        job: Callable[[str], Optional[jobs.Job]] = host_job,
     ):
         self.deck = deck
+        self.job = job  # the host's job on a port, running or ended, or None
         self.resolve = resolve
+        self.others = others  # every port a stop is for, of a kind or of any
         self.send = send or (lambda port, line: devices.printer_control(port, line))
+        # One relative move as one act, as the page's pad makes it.
+        self.jog = jog or (lambda port, axis, mm, feed: devices.printer_jog(port, axis, mm, feed))
         self.poll = poll or (lambda port: devices.printer_status(port))
         # Seconds of control left on a port, 0 when it is not armed.
         self.armed = armed or (lambda port: gcode.get_printer_links().control.seconds_left(port))
+        self.disarm = disarm or (lambda port: gcode.get_printer_links().control.disarm(port))
         self.machine = MACHINES[0]
+        self.screens = screens.Screens(screens.screens_for(self.machine.kind))
+        self._forwarded: set = set()  # ids of the jobs Progress has been brought forward for
+        self._cleared: set = set()  # ids of ended jobs a touch has cleared from Progress
         self.step = 1  # an index into STEPS_MM
         self.said: Tuple[str, str] = ("ready", "grey")
         self.last: Optional[object] = None  # the chosen machine's last poll
@@ -134,6 +249,15 @@ class DeckController:
         self._lock = threading.RLock()
         self._stop_listening: Optional[Callable[[], None]] = None
         self._ticker: Optional[threading.Thread] = None
+        self._worker: Optional[threading.Thread] = None
+        self._waiting: Deque[decks.DeckEvent] = deque()  # heard, not yet acted on
+        self._acting = False
+        self._turn = threading.Condition()
+        self._redraw = False
+        self._stops = 0  # stop keys heard
+        self._epoch = 0  # how many had been when the event being acted on was taken up
+        self._looked = 0.0
+        self._turned = 0.0  # when the turn being acted on was made
         self._alive = threading.Event()
         self._stopped = threading.Event()
 
@@ -142,7 +266,10 @@ class DeckController:
     def start(self) -> "DeckController":
         self._alive.set()
         self._stopped.clear()
-        self._stop_listening = self.deck.listen(self.handle)
+        self._worker = threading.Thread(target=self._work, name="deck-events", daemon=True)
+        self._worker.start()
+        self._stop_listening = self.deck.listen(self.hear, self.settle)
+        jobs.LISTENERS.append(self._job_told)
         self.draw()
         self._ticker = threading.Thread(target=self._tick, name="deck-control", daemon=True)
         self._ticker.start()
@@ -151,9 +278,34 @@ class DeckController:
     def stop(self) -> None:
         self._alive.clear()
         self._stopped.set()
+        if self._job_told in jobs.LISTENERS:
+            jobs.LISTENERS.remove(self._job_told)
         if self._stop_listening:
             self._stop_listening()
             self._stop_listening = None
+        with self._turn:
+            self._waiting.clear()
+            self._turn.notify_all()
+        # Stopped is stopped: a tick part way through a scan or a poll, or an event being
+        # acted on, ends before this returns, and touches nothing after.
+        for thread in (self._ticker, self._worker):
+            if thread is not None and thread is not threading.current_thread():
+                thread.join(timeout=STOP_S)
+
+    def _job_told(self, job: jobs.Job) -> None:
+        """A job began or ended somewhere: the strip is drawn again on the layout's own
+        thread, so a print's start or end shows at once and not at the next tick."""
+        with self._turn:
+            self._redraw = True
+            self._turn.notify_all()
+
+    def _look(self) -> None:
+        """A machine whose board is not found is looked for, here and nowhere else."""
+        if self.resolve is not pinned_port or time.monotonic() - self._looked < LOOK_S:
+            return
+        if any(pinned_port(machine) is None for machine in MACHINES):
+            self._looked = time.monotonic()
+            look()
 
     def _refresh(self) -> None:
         """While the chosen machine's control is armed it is in use: its readouts follow it
@@ -166,6 +318,7 @@ class DeckController:
     def _tick(self) -> None:
         while not self._stopped.wait(TICK_S):
             try:
+                self._look()
                 self._refresh()
                 self.draw()
             except Exception:  # noqa: BLE001 -- a deck that went away: the next tick tries again
@@ -177,10 +330,100 @@ class DeckController:
 
     # -- events ---------------------------------------------------------------------
 
+    def hear(self, event: decks.DeckEvent) -> None:
+        """An event as the deck's reader reports it, on the reader's own thread: handed
+        over, and the reader is free for the next. A stop key is sent from here, before
+        anything waiting, and what was waiting is not sent after it; the disarm key the
+        same."""
+        if event.kind == decks.KEY and event.value and self._at_once(event.index):
+            with self._turn:
+                self._waiting.clear()
+                self._stops += 1
+            self._first_long = None
+            try:
+                self._key(event.index)
+            except Exception as exc:  # noqa: BLE001 -- said on the strip, as in handle
+                self.said = (f"{type(exc).__name__}: {exc}", "red")
+            event = None  # the strip is drawn in its turn, not on the reader's thread
+        with self._turn:
+            if event is None:
+                self._redraw = True
+            else:
+                last = self._waiting[-1] if self._waiting else None
+                if (
+                    event.kind == decks.KNOB_TURN
+                    and last is not None
+                    and last.kind == decks.KNOB_TURN
+                    and last.index == event.index
+                ):
+                    # Turns of one knob with nothing between them are one turn of their sum.
+                    # As old as its first: the sum is sent while the oldest is fresh.
+                    self._waiting[-1] = decks.DeckEvent(
+                        event.seq,
+                        event.kind,
+                        event.index,
+                        int(last.value) + int(event.value),
+                        at=last.at,
+                    )
+                else:
+                    self._waiting.append(event)
+            self._turn.notify_all()
+
+    def _work(self) -> None:
+        while True:
+            with self._turn:
+                while not self._waiting and not self._redraw and not self._stopped.is_set():
+                    self._turn.wait(MEND_S)
+                    if not self._waiting and not self._redraw and not self.deck.alive():
+                        break  # the deck is lost: mend it, below
+                if self._stopped.is_set():
+                    self._turn.notify_all()
+                    return
+                event = self._waiting.popleft() if self._waiting else None
+                self._redraw = False
+                self._acting = True
+            try:
+                if not self.deck.alive():
+                    self._mend()
+                if event is None:
+                    self.draw()
+                elif not (event.kind == decks.KNOB_TURN and int(event.value) == 0):
+                    self.handle(event)
+            except Exception:  # noqa: BLE001 -- a deck that went away: the next event tries again
+                pass
+            finally:
+                with self._turn:
+                    self._acting = False
+                    self._turn.notify_all()
+
+    def _mend(self) -> None:
+        """A deck lost from USB opened again as soon as it is back, drawn as it was. A key
+        held or a first long press when it went is forgotten: nothing is armed by half a
+        gesture."""
+        self._down.clear()
+        self._first_long = None
+        try:
+            if self.deck.mend():
+                self.said = ("the deck was lost on USB, and is back", "amber")
+        except decks.DeckUnavailable:
+            time.sleep(MEND_S)  # not back yet: looked for again on the next turn
+
+    def settle(self, timeout: float = SETTLE_S) -> bool:
+        """Returns when everything heard has been acted on; False if ``timeout`` came first."""
+        until = time.monotonic() + timeout
+        with self._turn:
+            while self._waiting or self._redraw or self._acting:
+                left = until - time.monotonic()
+                if left <= 0 or self._stopped.is_set() or not self._alive.is_set():
+                    return not (self._waiting or self._acting)
+                self._turn.wait(min(left, 0.5))
+        return True
+
     def handle(self, event: decks.DeckEvent) -> None:
         """What the deck reported, as the layout reads it. Never raises: what could not be
         done is said on the strip."""
         with self._lock:
+            self._epoch = self._stops
             try:
                 if event.kind == decks.KEY and event.index in KEY_MACHINE:
                     self._machine_key(event)
@@ -189,19 +432,96 @@ class DeckController:
                     self._key(event.index)
                 elif event.kind == decks.KNOB_TURN:
                     self._first_long = None
+                    self._turned = event.at
                     if event.index < len(AXES):
                         self._jog(AXES[event.index], int(event.value))
                     elif event.index == KNOB_FOURTH:
                         self._fourth(int(event.value))
+                elif event.kind == decks.TOUCH:
+                    self._first_long = None
+                    self._touch(event.value)
             except Exception as exc:  # noqa: BLE001 -- the strip says it, the loop goes on
                 self.said = (f"{type(exc).__name__}: {exc}", "red")
             self.draw()
 
     def _choose(self, index: int) -> None:
         self.machine = MACHINES[KEY_MACHINE.index(index)]
+        self.screens.reorder(screens.screens_for(self.machine.kind))
         self.last = None
 
+    # -- the strip's screens ---------------------------------------------------------------
+
+    def _touch(self, touch: object) -> None:
+        """The strip touched. A swipe walks the screens; a tap or a long press moves
+        nothing. Any touch of Progress clears a job that has ended from it: its result
+        was there to be read until then. Nothing here is sent to a machine."""
+        if self.screens.current == screens.PROGRESS:
+            ended = self._job_here()
+            if ended is not None and not ended.running:
+                self._cleared.add(ended.id)
+        direction = screens.swipe_of(touch)
+        if direction:
+            self.screens.swipe(direction)
+
+    def _job_of(self, machine: Machine) -> Optional[jobs.Job]:
+        try:
+            port = self.resolve(machine)
+            return self.job(port) if port else None
+        except Exception:  # noqa: BLE001 -- no board pinned, no job to show
+            return None
+
+    def _job_here(self) -> Optional[jobs.Job]:
+        """The chosen machine's job, unless it ended and a touch has cleared it."""
+        job = self._job_of(self.machine)
+        return None if job is not None and job.id in self._cleared else job
+
+    def _follow(self) -> None:
+        """Progress brought forward when a job begins on the chosen machine: once for
+        each job, never again, so a swipe away from it is not undone at the next tick. A
+        job begun on the other machine is noted and brings nothing forward, and a job
+        seen already ended never does."""
+        for machine in MACHINES:
+            job = self._job_of(machine)
+            if job is None or not job.running or job.id in self._forwarded:
+                continue
+            self._forwarded.add(job.id)
+            if machine is self.machine:
+                self.screens.show(screens.PROGRESS)
+
+    def _holding(self, port: Optional[str] = None) -> Optional[str]:
+        """What holds the chosen machine's port, in the words the server refuses a jog
+        with (``PortHeld``): the host's own print or cut, or a long exchange a poll saw
+        a moment ago (a bed reading). ``port`` is that port, when it was found already."""
+        port = port or self._port_quiet()
+        if not port:
+            return None
+        job = self.job(port)
+        if job is not None and job.running:
+            held = {"kind": job.kind, "port": port, "stage": job.detail.get("stage")}
+        else:
+            status = self._newest()
+            held = getattr(status, "job", None)
+            polled = getattr(status, "polled_at", None)
+            fresh = (
+                polled is not None
+                and (datetime.now(timezone.utc) - polled).total_seconds() <= screens.READING_FRESH_S
+            )
+            if not held or not fresh:
+                return None
+        return can.holding(port, devices.what_holds(held), held.get("stage"))
+
     # -- chosen from the page -----------------------------------------------------------
+
+    def machine_on(self, port: Optional[str]) -> Optional[Machine]:
+        """The deck's machine whose board is on ``port``, or None."""
+        return next((m for m in MACHINES if port and self.resolve(m) == port), None)
+
+    def not_here(self, port: Optional[str]) -> Optional[str]:
+        """Why the knobs cannot be pointed at ``port``: no machine of the deck's is there.
+        The route refuses with it, and the deck's answer (firmware/can.py) reads it."""
+        if self.machine_on(port) is None:
+            return f"{port}: no machine of the deck's has its board there"
+        return None
 
     def choose(self, machine: Optional[str] = None, port: Optional[str] = None) -> None:
         """The machine the knobs move, named or found by the port its board is on, as its
@@ -216,13 +536,14 @@ class DeckController:
                         f"no machine {machine!r} on the deck: its machines are {names}"
                     )
             else:
-                found = next((m for m in MACHINES if port and self.resolve(m) == port), None)
-                if found is None:
-                    raise ValueError(f"{port}: no machine of the deck's has its board there")
+                why = self.not_here(port)
+                if why:
+                    raise ValueError(why)
+                found = self.machine_on(port)
             self._first_long = None
             self._choose(KEY_MACHINE[MACHINES.index(found)])
             self.said = (f"{found.name} chosen", "grey")
-            self.draw()
+            self._draw_if_there()
 
     def set_step(self, mm: float) -> None:
         """The knobs' step, one of the deck's own, as its STEP key cycles it."""
@@ -232,7 +553,30 @@ class DeckController:
                 raise ValueError(f"a step of {_mm(mm)} mm: the deck's steps are {steps} mm")
             self.step = STEPS_MM.index(mm)
             self.said = (f"step {_mm(self.step_mm)} mm", "grey")
+            self._draw_if_there()
+
+    def show_screen(self, screen: str) -> None:
+        """The strip's screen chosen from the page: by its name, or ``next`` or
+        ``previous`` as a swipe left or right walks them, stopping at either end. As a
+        swipe, it draws the strip and nothing more: no line goes to a machine, no poll is
+        asked and no key changes; unlike a touch, it clears no ended job from Progress."""
+        with self._lock:
+            if screen in SCREEN_STEPS:
+                self.screens.swipe(SCREEN_STEPS[screen])
+            elif not self.screens.show(screen):
+                names = ", ".join(self.screens.order)
+                raise ValueError(
+                    f"no screen {screen!r}: the strip's are {names}, or next and previous"
+                )
+            self._draw_if_there()
+
+    def _draw_if_there(self) -> None:
+        """Drawn now where the deck answers. A deck lost on USB is drawn when it is back
+        (the layout's tick draws what was not sent), and what was chosen stands."""
+        try:
             self.draw()
+        except decks.DeckUnavailable:
+            pass
 
     def _machine_key(self, event: decks.DeckEvent) -> None:
         """A machine's key: pressed down, or let go. A short press chooses the machine; a
@@ -241,14 +585,17 @@ class DeckController:
         if event.value:
             self._down[index] = event.at
             return
-        held = event.at - self._down.pop(index, event.at)
+        down = self._down.pop(index, event.at)
+        held = event.at - down
         self._choose(index)
         if held < LONG_PRESS_S:
             self._first_long = None
             self.said = (f"{self.machine.name} chosen", "grey")
             return
         first = self._first_long
-        if first is not None and first[0] == index and event.at - first[1] <= ARM_WINDOW_S:
+        # The window runs from the first press let go to the second begun: however long
+        # the second is held, it was begun in time.
+        if first is not None and first[0] == index and down - first[1] <= ARM_WINDOW_S:
             self._first_long = None
             self._arm()
             return
@@ -266,6 +613,58 @@ class DeckController:
         gcode.get_printer_links().control.arm(port)
         self.said = (f"{self.machine.name} control armed", "green")
 
+    def _armed_machines(self) -> List[Tuple[Machine, str]]:
+        """Each machine whose control is armed now, with the port its board is on."""
+        found = []
+        for machine in MACHINES:
+            try:
+                port = self.resolve(machine)
+            except Exception:  # noqa: BLE001 -- nothing pinned has nothing armed
+                port = None
+            if port is not None and self.armed(port) > 0:
+                found.append((machine, port))
+        return found
+
+    def _disarm(self) -> None:
+        """Every machine's control disarmed, as the Machine's Disarm does for its own. It
+        stops nothing: a move under way finishes, and the stop keys are the stops."""
+        were = self._armed_machines()
+        for _, port in were:
+            self.disarm(port)
+        names = ", ".join(machine.name for machine, _ in were)
+        self.said = (f"{names} disarmed" if were else "nothing was armed", "grey")
+
+    def _newest(self) -> Optional[object]:
+        """The chosen machine's newest poll, this layout's or anyone's. The layout asks
+        nothing while the machine's control is let go, and a stop lets it go, so what it
+        last asked can be older than what the machine's Machine or a program has asked
+        since: a reset mid-move leaves a router in alarm."""
+        mine = self.last
+        theirs = devices.last_statuses().get(self._port_quiet() or "")
+        if mine is None or theirs is None:
+            return mine or theirs
+        at = (getattr(theirs, "polled_at", None), getattr(mine, "polled_at", None))
+        return theirs if None not in at and at[0] > at[1] else mine
+
+    def _alarmed(self) -> bool:
+        """Whether the chosen machine's newest poll had it in alarm."""
+        status = self._newest()
+        return getattr(status, "state", None) == "alarm"
+
+    def _unlock(self) -> None:
+        """The chosen router unlocked from its alarm (``$X``), as the Machine's Unlock does:
+        it moves nothing, keeps the position the controller believes, and needs control
+        armed as any line but a stop does."""
+        if self.machine.kind != "router":
+            self.said = (f"{self.machine.name} has no alarm to unlock", "grey")
+            return
+        port = self._port()
+        if port is None or not self._ready(port):
+            return
+        if self._lines(port, ["$X"]):
+            self.said = (f"{self.machine.name} unlocked", "grey")
+            self._after(port)
+
     def _key(self, index: int) -> None:
         if index == KEY_STEP:
             self.step = (self.step + 1) % len(STEPS_MM)
@@ -274,6 +673,49 @@ class DeckController:
             self._stop([MACHINES[KEY_STOP_MACHINE.index(index)]])
         elif index == KEY_STOP_ALL:
             self._stop(list(MACHINES))
+        elif index == KEY_DISARM:
+            self._disarm()
+        elif index == KEY_UNLOCK:
+            if self._stops_move():
+                self._stop_move()
+            else:
+                self._unlock()
+
+    def _stops_move(self) -> bool:
+        """Whether key 6 stops the move under way now: always, but for a router in alarm,
+        where it is UNLOCK."""
+        return not (self.machine.kind == "router" and self._alarmed())
+
+    def _at_once(self, index: int) -> bool:
+        return index in AT_ONCE_KEYS or (index == KEY_UNLOCK and self._stops_move())
+
+    def _stop_move(self) -> None:
+        """The chosen machine's move under way stopped, and no more: a router's jog
+        cancelled where it is, its position kept; a printer's planned moves dropped. No
+        latch is asked, and nothing is disarmed: the stops are the stops."""
+        name, line = STOP_MOVE[self.machine.kind]
+        port = self.resolve(self.machine)
+        if port is None:
+            self.said = (f"{self.machine.name}: no board pinned and plugged in", "red")
+            return
+        try:
+            self.send(port, line)
+            self.sent.append(line)
+            self.said = (f"{name} sent to {self.machine.name}", "amber")
+        except (ValueError, ToolchainError) as exc:
+            self.said = (f"{name} not sent: {exc}", "red")
+
+    def _stale(self) -> bool:
+        """Whether the turn being acted on was made too long ago to be meant now: it
+        waited on a machine busy homing or probing, and is dropped, not sent late."""
+        waited = time.time() - self._turned
+        if waited <= TURN_MAX_AGE_S:
+            return False
+        self.said = (
+            f"turn dropped: {self.machine.name} was busy for {waited:.0f} s after it",
+            "amber",
+        )
+        return True
 
     # -- what is sent -----------------------------------------------------------------
 
@@ -304,21 +746,16 @@ class DeckController:
         went = 0
         try:
             for line in lines:
+                if self._stops != self._epoch:
+                    return False  # a stop key since: what was turned before it is not sent
                 self.send(port, line)
                 self.sent.append(line)
                 went += 1
             return True
-        except gcode.ControlNotArmed:
-            self.said = (
-                "disarmed: arm it in the Machine, or long press the machine's key twice",
-                "red",
-            )
-        except PortHeld as exc:
-            self.said = (str(exc), "red")
         except (ValueError, ToolchainError) as exc:
-            self.said = (f"refused: {exc}", "red")
+            self._refused(exc)
         finally:
-            if went and last is not None:
+            if went and last is not None and self._stops == self._epoch:
                 try:
                     self.send(port, last)
                     self.sent.append(last)
@@ -326,26 +763,44 @@ class DeckController:
                     pass
         return False
 
+    def _refused(self, exc: Exception) -> None:
+        """Why a line or a jog did not go, on the strip."""
+        if isinstance(exc, gcode.ControlNotArmed):
+            self.said = (
+                "disarmed: arm it in the Machine, or long press the machine's key twice",
+                "red",
+            )
+        elif isinstance(exc, PortHeld):
+            self.said = (str(exc), "red")
+        elif isinstance(exc, (ValueError, ToolchainError)):
+            self.said = (f"refused: {exc}", "red")
+            if self._alarmed() or "error:8" in str(exc) or "error:9" in str(exc):
+                self.said = (f"{self.machine.name} is in alarm: UNLOCK it, then turn", "red")
+        else:
+            raise exc
+
     def _jog(self, axis: str, steps: int) -> None:
         port = self._port()
-        if port is None or not self._ready(port):
+        if port is None or not self._ready(port) or self._stale():
             return
-        distance = _mm(steps * self.step_mm)
-        feed = FEED[self.machine.kind]
-        if self.machine.kind == "router":
-            lines, last = [f"$J=G91 G21 {axis}{distance} F{feed}"], None
-        else:
-            lines, last = ["G91", f"G1 {axis}{distance} F{feed}"], "G90"
-        if self._lines(port, lines, last=last):
-            self.said = (
-                f"{axis} {'+' if steps > 0 else '-'}{_mm(abs(steps) * self.step_mm)} mm",
-                "grey",
-            )
-            self._after(port)
+        if self._stops != self._epoch:
+            return  # a stop key since: what was turned before it is not sent
+        mm = round(steps * self.step_mm, 2)
+        try:
+            went = self.jog(port, axis, mm, FEED[self.machine.kind])
+        except Exception as exc:  # noqa: BLE001 -- sorted by _refused, said on the strip
+            self._refused(exc)
+            return
+        self.sent.append(getattr(went, "command", None) or f"jog {axis}{_mm(mm)}")
+        self.said = (
+            f"{axis} {'+' if steps > 0 else '-'}{_mm(abs(steps) * self.step_mm)} mm",
+            "grey",
+        )
+        self._after(port)
 
     def _fourth(self, steps: int) -> None:
         port = self._port()
-        if port is None or not self._ready(port):
+        if port is None or not self._ready(port) or self._stale():
             return
         if self.machine.kind == "printer":
             lines = ["M83", f"G1 E{_mm(steps * EXTRUDE_MM_PER_STEP)} F{EXTRUDE_FEED}"]
@@ -357,27 +812,76 @@ class DeckController:
         if spindle is None or not spindle.on:
             self.said = ("spindle off: start it in the Machine first", "red")
             return
+        read = getattr(self.last, "polled_at", None)
+        if (
+            read is not None
+            and (datetime.now(timezone.utc) - read).total_seconds() > READING_MAX_AGE_S
+        ):
+            # A cut holding the port answers a poll with its last reading: a speed
+            # turned from an old one is not the speed the spindle turns at.
+            self.said = ("spindle speed not read just now: not changed", "red")
+            return
         now = spindle.target or spindle.rpm
-        rpm = int(min(max(now + steps * SPINDLE_RPM_PER_STEP, 0), grbl.SPINDLE_MAX_RPM))
+        # Never to nothing: a spindle stopped in the stock is a broken bit, and off is
+        # the Machine's M5 or a stop key, each asked for by name.
+        rpm = int(
+            min(max(now + steps * SPINDLE_RPM_PER_STEP, SPINDLE_RPM_PER_STEP), grbl.SPINDLE_MAX_RPM)
+        )
         if self._lines(port, [f"M3 S{rpm}"]):
             self.said = (f"spindle {rpm} rpm", "grey")
             self._after(port)
 
     def _stop(self, machines: List[Machine]) -> None:
-        """Each of ``machines`` sent its own dialect's stop, one after another, whatever one of
-        them answers: a stop never waits on the latch, a poll or another machine."""
-        stopped, failed = [], []
+        """Each of ``machines`` sent its own dialect's stop, all at once and whatever one of
+        them answers: a stop never waits on the latch, a poll or another machine. A
+        machine whose board cannot be told from another of its kind has every board of
+        that kind stopped; every machine means every port this server knows a machine
+        on, the garage's two or not."""
+        everything = len(machines) == len(MACHINES)
+        targets: List[Tuple[str, str]] = []  # (what the strip calls it, its port)
+        failed: List[str] = []
         for machine in machines:
             port = self.resolve(machine)
-            if port is None:
-                failed.append(f"{machine.name} (no board pinned)")
+            if port is not None:
+                targets.append((machine.name, port))
                 continue
+            rest = [p for p in self.others(machine.kind) if p not in [t[1] for t in targets]]
+            targets += [(f"{machine.kind} on {p}", p) for p in rest]
+            if not rest:
+                failed.append(f"{machine.name} (no board pinned)")
+        if everything:
+            targets += [
+                (f"the machine on {p}", p)
+                for p in self.others(None)
+                if p not in [t[1] for t in targets]
+            ]
+        answers: Dict[str, Optional[Exception]] = {}
+
+        def stop(name: str, port: str) -> None:
             try:
                 self.send(port, devices.emergency_stop_for(port))
-                self.sent.append(f"stop {machine.name}")
-                stopped.append(machine.name)
-            except (ValueError, ToolchainError) as exc:
-                failed.append(f"{machine.name} ({exc})")
+                answers[name] = None
+            except Exception as exc:  # noqa: BLE001 -- said on the strip, beside the others
+                answers[name] = exc
+
+        threads = [
+            threading.Thread(target=stop, args=target, name="deck-stop", daemon=True)
+            for target in targets
+        ]
+        for thread in threads:
+            thread.start()
+        until = time.monotonic() + STOP_WAIT_S
+        for thread in threads:
+            thread.join(max(0.0, until - time.monotonic()))
+        stopped = []
+        for name, _ in targets:
+            if name not in answers:
+                failed.append(f"{name} (not answered yet)")
+            elif answers[name] is None:
+                self.sent.append(f"stop {name}")
+                stopped.append(name)
+            else:
+                failed.append(f"{name} ({answers[name]})")
         said = f"STOP sent to {', '.join(stopped)}" if stopped else "STOP reached nothing"
         if failed:
             said += f"; not {', '.join(failed)}"
@@ -393,7 +897,7 @@ class DeckController:
     # -- drawing ------------------------------------------------------------------------
 
     def _readout(self, axis: str) -> str:
-        status = self.last or devices.last_statuses().get(self._port_quiet() or "")
+        status = self._newest()
         where = getattr(status, "work_position", None) or getattr(status, "position", None) or {}
         value = where.get(axis.lower())
         return "-" if value is None else f"{value:.1f}"
@@ -407,16 +911,18 @@ class DeckController:
     def _fourth_readout(self) -> Tuple[str, str]:
         if self.machine.kind == "printer":
             return "E", "1 mm a step"
-        status = self.last or devices.last_statuses().get(self._port_quiet() or "")
+        status = self._newest()
         spindle = getattr(status, "spindle", None)
         return "S", (f"{spindle.rpm:.0f} rpm" if spindle is not None and spindle.on else "off")
 
-    def _put(self, slot, text: str, colour: str, small: Optional[str]) -> None:
-        wanted = (text, colour, small)
+    def _put(
+        self, slot, text: str, colour: str, small: Optional[str], bar: Optional[float] = None
+    ) -> None:
+        wanted = (text, colour, small, bar)
         if self._drawn.get(slot) == wanted:
             return
         if slot == "strip":
-            self.deck.set_strip(text, colour, small)
+            self.deck.set_strip(text, colour, small, bar)
         else:
             self.deck.set_key(slot, text, colour, small)
         self._drawn[slot] = wanted
@@ -425,6 +931,7 @@ class DeckController:
         """Every key and the strip as the layout has them; what was drawn already is not sent
         again."""
         with self._lock:
+            self._follow()
             for index, machine in zip(KEY_MACHINE, MACHINES, strict=True):
                 chosen = machine is self.machine
                 self._put(index, machine.kind.upper(), "green" if chosen else "grey", machine.name)
@@ -432,26 +939,62 @@ class DeckController:
             for index, machine in zip(KEY_STOP_MACHINE, MACHINES, strict=True):
                 self._put(index, "STOP", STOP_ONE_COLOUR, machine.name)
             self._put(KEY_STOP_ALL, "STOP ALL", STOP_ALL_COLOUR, "every machine")
-            self._put(3, "", "black", None)
-            self._put(6, "", "black", None)
-            name, small = self._fourth_readout()
-            readout = (
-                "  ".join(f"{axis} {self._readout(axis)}" for axis in AXES) + f"  {name} {small}"
-            )
-            port = self._port_quiet()
-            left = self.armed(port) if port else 0.0
-            armed = f"armed {int(left) // 60}:{int(left) % 60:02d}" if left > 0 else "disarmed"
-            text, colour = self.said
+            any_armed = bool(self._armed_machines())
             self._put(
-                "strip",
-                f"{self.machine.name} · {armed}",
-                "green" if left > 0 else "grey",
-                f"{readout} · {_mm(self.step_mm)} mm · {text}" if colour != "red" else text,
+                KEY_DISARM,
+                "DISARM",
+                "red" if any_armed else "grey",
+                "every machine" if any_armed else "nothing armed",
             )
+            if self._stops_move():
+                self._put(KEY_UNLOCK, STOP_MOVE[self.machine.kind][0], "amber", self.machine.name)
+            else:
+                self._put(KEY_UNLOCK, "UNLOCK", "amber", self.machine.name)
+            strip = self._strip()
+            self._put("strip", strip.text, strip.colour, strip.small, strip.bar)
+
+    def _strip(self) -> screens.Strip:
+        """The strip as the screen showing has it."""
+        shown = self.screens.current
+        position = self.screens.position
+        if shown == screens.PROGRESS:
+            return screens.progress_strip(
+                self.machine.name,
+                self._job_here(),
+                self._newest(),
+                datetime.now(timezone.utc),
+                position,
+            )
+        if shown == screens.STATUS:
+            return screens.status_strip(
+                self.machine.name,
+                self.machine.kind,
+                self._newest(),
+                datetime.now(timezone.utc),
+                position,
+            )
+        held = self._holding()
+        if held:
+            return screens.held_strip(self.machine.name, self.machine.kind, held, position)
+        name, small = self._fourth_readout()
+        readout = "  ".join(f"{axis} {self._readout(axis)}" for axis in AXES) + f"  {name} {small}"
+        port = self._port_quiet()
+        left = self.armed(port) if port else 0.0
+        armed = f"armed {int(left) // 60}:{int(left) % 60:02d}" if left > 0 else "disarmed"
+        text, colour = self.said
+        return screens.Strip(
+            f"{self.machine.name} · {armed}",
+            f"{readout} · {_mm(self.step_mm)} mm · {text}" if colour != "red" else text,
+            "green" if left > 0 else "grey",
+        )
 
     def state(self) -> dict:
+        """What the knobs are, as the Deck window and each Control pad read them: ``held``
+        is what the knobs' screen says while a job holds the chosen machine's port (the
+        server's own refusal of a jog, ``screens.held_words``), whichever screen shows."""
         with self._lock:
             port = self._port_quiet()
+            held = self._holding(port)
             return {
                 "running": self._alive.is_set(),
                 "deck": self.deck.info.id,
@@ -460,9 +1003,14 @@ class DeckController:
                 "machine": self.machine.name,
                 "port": port,
                 "step_mm": self.step_mm,
+                "screen": self.screens.current,
+                "screens": list(self.screens.order),
                 "armed_s": self.armed(port) if port else 0.0,
                 "said": self.said[0],
+                "held": screens.held_words(self.machine.kind, held) if held else None,
                 "sent": list(self.sent[-20:]),
+                "deck_alive": self.deck.alive(),
+                "deck_mended": self.deck.mended,
             }
 
 

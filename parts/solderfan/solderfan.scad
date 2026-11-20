@@ -9,6 +9,10 @@ holeDiam=4.5;
 overhang=15;
 overhangSide=pow(2, .5)*overhang/2;
 
+/* [Hidden] */
+// true: flat on its base, the way up it prints; false: stood on its edge, as it rests.
+print = true;
+
 module plateHole() {
     cylinder(r=holeDiam/2, h=wall);
 }
@@ -16,6 +20,8 @@ module plateHole() {
 module lipCut() {
     rotate([0,0,45]) cube(overhang);
 }
+// Stood on its edge, turned up about x, unless printed.
+rotate(print ? [0, 0, 0] : [90, 0, 0])
 union() {
     difference() {
         //base

@@ -31,7 +31,7 @@ The coupon on the router's table chosen under makes. Toolpath is there, since th
 
 ## 3. Toolpath writes the coupon's cut: kept, chosen, said, and drawn on the table
 
-Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps it and chooses it: the file's row, its ✕, the preview and ▶ Cut are there now, and the card says each operation with its passes and what it bored to the tool. The Machine view, pressed again, lands on the file: all of its path drawn on the table from the router's work zero, and the world framed on it.
+Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps it and chooses it: the file's row, its ✕, the preview and ▶ Cut are there now, ▶ Cut greyed until control is armed, and the card says each operation with its passes and what it bored to the tool. The Machine view, pressed again, lands on the file: all of its path drawn on the table from the router's work zero, and the world framed on it.
 
 ![Toolpath writes the coupon's cut: kept, chosen, said, and drawn on the table](screenshots/24-03-toolpath-writes-the-coupon-s-cut-kept-chosen-said-.png)
 
@@ -40,7 +40,7 @@ Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps 
 The plan row says what is kept and when. cnc_router's Machine chooses the coupon and its toolpath whenever it opens, its board connected or not.
 
 ```
-kept <moment>: router_coupon, router_coupon-cnc_router.nc
+Kept <moment>: router_coupon, router_coupon-cnc_router.nc
 ```
 
 ## 5. ⚙ Control armed: the pad, Probe table offered, and the work zeroed

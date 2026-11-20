@@ -405,7 +405,7 @@ def test_the_slicer_s_bounds_are_the_core_s(tmp_path):
 )
 def test_the_route_previews_a_kept_file_for_a_machine(tmp_path, monkeypatch, machine, lines, word):
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
-    kept = devices.save_print_file(f"{machine}.gcode", "\n".join(lines).encode())
+    kept = devices.save_print_file(f"{machine}.gcode", "\n".join(lines).encode(), machine=machine)
     c = TestClient(app)
     answer = c.get(f"/firmware/printers/prints/{kept.id}/preview", params={"machine": machine})
     assert answer.status_code == 200, answer.text
@@ -419,7 +419,7 @@ def test_the_route_previews_a_kept_file_for_a_machine(tmp_path, monkeypatch, mac
 
 def test_the_route_refuses_what_it_cannot_preview(tmp_path, monkeypatch):
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
-    kept = devices.save_print_file("a.gcode", b"G1 X1 F100\n")
+    kept = devices.save_print_file("a.gcode", b"G1 X1 F100\n", machine="printer")
     c = TestClient(app)
     assert c.get("/firmware/printers/prints/nope/preview").status_code == 404
     refused = c.get(f"/firmware/printers/prints/{kept.id}/preview", params={"machine": "loom"})

@@ -33,14 +33,12 @@ the walk changed is in the commits after it.
   for the router: the page told the resolver nothing of the latch. The open
   Machine's latch is what the ring is told now.
 - The first cut on the reloading demo ended as "the server stopped while it
-  ran": `serve --reload` watched the whole checkout, and the demo loop had
-  just checked the branch out under `.claude/worktrees/`. The reloader
-  watches the package and the templates alone now.
+  ran": `serve --reload` watched the whole checkout, so a branch checked out
+  in a worktree inside it restarted the server mid-cut. The reloader was
+  narrowed to the package and the templates.
 - The progress line counts lines queued, not cut: the controller holds
   fifteen moves, so it reads ahead of the tool. A sender shows the same, and
   the job is done only when the controller is idle again. Left as it is.
-- The browser pane's world came up black twice, when the page loaded while
-  the pane was hidden; a reload cured it. The pane's, not the page's.
 
 ## Not covered
 

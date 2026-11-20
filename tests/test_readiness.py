@@ -222,17 +222,15 @@ class TestAPartThatCannotBeBuiltHere:
 
 
 class TestBoundsAreMeasuredFromTheMesh:
-    """Declared bounds are for the default parameters, upright; the STL on disk
-    may be neither, and a check that cannot compare says so."""
+    """Declared bounds are for the default parameters; the STL on disk may hold
+    others, and a check that cannot compare says so."""
 
     @staticmethod
-    def _part(tmp_path, rotation=(0, 0, 0)) -> BasePart:
-        x, y, z = rotation
+    def _part(tmp_path) -> BasePart:
         return BasePart(
             name="box",
             source_file=tmp_path / "box.scad",
             default_bounds=BoundingBox3D(max_point=Vector3D(x=10, y=20, z=30)),
-            display_rotation=Vector3D(x=x, y=y, z=z),
         )
 
     def _check(self, part) -> Check:
@@ -264,18 +262,6 @@ class TestBoundsAreMeasuredFromTheMesh:
         stl = _box_stl(part.get_stl_output_path(), 10, 20, 30)
         write_params_sidecar(stl, {})
         assert self._check(part).state == PASS
-
-    def test_a_quarter_turned_render_is_held_to_the_turned_box(self, tmp_path):
-        part = self._part(tmp_path, rotation=(90, 0, 0))
-        _box_stl(part.get_stl_output_path(), 10, 30, 20)
-        assert self._check(part).state == PASS
-
-    def test_any_other_turn_is_not_compared(self, tmp_path):
-        part = self._part(tmp_path, rotation=(45, 0, 0))
-        _box_stl(part.get_stl_output_path(), 10, 20, 30)
-        check = self._check(part)
-        assert check.state == UNKNOWN
-        assert check.fix == "apothecary parts verify box"
 
     def test_an_unreadable_stl_is_unknown_and_says_why(self, tmp_path):
         part = self._part(tmp_path)
@@ -314,9 +300,9 @@ class TestThePartDecidesWhereItsStlLives:
     """
 
     def test_readiness_reads_the_path_the_part_names(self):
-        from apothecary.cli.utils import _load_part
+        from apothecary.cli.utils import part_or_die
 
-        part = _load_part("gridfinity")
+        part = part_or_die("gridfinity")
         assert part.get_stl_output_path() != part.source_file.with_suffix(".stl")
 
         report = assess(part)

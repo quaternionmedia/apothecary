@@ -179,7 +179,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "param-text": (WIDGET, WHAT_YOU_SEE, "a box that stages a part's words"),
     "param-coord": (WIDGET, WHAT_YOU_SEE, "a box that stages one number of a vector, captioned"),
     "cand": (WIDGET, WHAT_YOU_SEE, "a button that stages a contested number's candidate"),
-    # A saved variant managed from its ⋯ in the SCAD editor's list (widgets/scad_editor.js):
+    # A saved variant managed from its ⋯ in the part's Variants window (widgets/scad_editor.js):
     # renamed or duplicated under the name typed beside it, its history and a save of it
     # restored, compared with what is drawn, deleted to the trash; the trash's Deleted
     # fold restores one, or deletes one or all for good, each asked twice.
@@ -222,7 +222,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "part-upstream": (WIDGET, NOTHING, "a link that opens a part's upstream SCAD, read only"),
     # The SCAD editor (widgets/scad_editor.js):
     # the name a save keeps a variant under, Save and Fullscreen; and a saved variant
-    # chosen from a list -- in the part's Variants window, or in the editor.
+    # chosen from the list in the part's Variants window.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
     "scad-fullscreen": (
@@ -231,6 +231,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a button that puts the SCAD editor over the whole page, or back",
     ),
     "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
+    "part-preset": (WIDGET, WHAT_YOU_SEE, "a drop-down that stages one of a part's presets"),
+    "join-btn": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps an end, then makes and draws the adapter between it and the end edited",
+    ),
     # How much of a subassembly to draw, and whether to outline its extent.
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
@@ -287,6 +293,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "ctl": (WIDGET, WHAT_YOU_SEE, "a tick-box that arms the control latch"),
     "estop": (WIDGET, WHAT_IS_THERE, "the emergency stop"),
+    "pad-estop": (WIDGET, WHAT_IS_THERE, "the emergency stop on the popped-out control pad"),
     # The board's one log, in its Machine: a report to ask a printer for, and
     # what to show of the traffic.
     "qform": (WIDGET, WHAT_YOU_SEE, "a form for asking the printer for a report"),
@@ -355,6 +362,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "cmd:G10 L20 P1 Z0": (WIDGET, WHAT_IS_THERE, "a button that makes this height the work Z zero"),
     "r-probe": (WIDGET, WHAT_YOU_SEE, "a box for how far down to probe"),
     "cmd:G38.2 Z-{r-probe} F100": (WIDGET, WHAT_IS_THERE, "a button that probes down to the plate"),
+    "r-plate": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a box for the touch plate's thickness, kept as it is changed",
+    ),
+    "cmd:PROBE-PLATE Z{r-plate} D{r-probe} F100": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that probes down to the plate and makes the touch its thickness in the work zero",
+    ),
+    "needs-unlock": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button in the Needs you card that unlocks the controller",
+    ),
     "cmd:RESUME": (WIDGET, WHAT_IS_THERE, "a button that resumes the held controller and the cut"),
     "cmd:HOLD": (WIDGET, WHAT_IS_THERE, "a button that holds the controller where it is"),
     "cmd:RESET": (WIDGET, WHAT_IS_THERE, "a button that abandons the cut with the soft reset"),
@@ -442,6 +464,63 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    # ---- Layers, apothecary/static/widgets/layers.js ----------------------
+    # Tick-boxes and a stepper that set the pick scope (static/pick_scope.js), each the
+    # act of a cell under View › Layers or View › Depth (RING_BACKED).
+    "layers-tick": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box of a layer, Shown or Selectable, one in each row of the Layers window",
+    ),
+    "layers-depth-less": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level less deep"),
+    "layers-depth-more": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level deeper"),
+    "layers-reset-all": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that puts depth and every layer back as they began",
+    ),
+    # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
+    # A heater loop of the printer whose Machine is open: its choices and its acts, each a
+    # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
+    # by are typed, and no cell types a value. Nothing here saves to the board's memory.
+    "loops-loop": (WIDGET, WHAT_YOU_SEE, "a drop-down of the loops: hotend 0 or the bed"),
+    "loops-rule": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the rules the server lists, each with the kinds of controller it gives",
+    ),
+    "loops-read": (WIDGET, WHAT_YOU_SEE, "a button that reads the gains the board holds (M503)"),
+    "loops-set": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that sets the designed gains on the board and reads them back, not saved",
+    ),
+    "loops-kind": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the experiments: a step, an autotune, a perturbation",
+    ),
+    "loops-param": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for one figure of the experiment chosen, one for each, as the server lists them",
+    ),
+    "loops-ceiling": (WIDGET, WHAT_YOU_SEE, "a box for the experiment's ceiling, typed every time"),
+    "loops-longest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for the experiment's longest time, typed every time",
+    ),
+    "loops-start": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that starts the experiment, heating the machine",
+    ),
+    "loops-cancel": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that ends the experiment, the heater turned off and read back",
+    ),
     # ---- Deck, apothecary/static/widgets/deck.js --------------------------
     # The Stream Deck + as drawn from here: a simulated deck is pressed, turned and
     # tapped from its window, each the event a real deck reports (a real deck's are off);
@@ -450,6 +529,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "a button on the Stream Deck + piece that opens the Deck window",
+    ),
+    # ---- Make: a part sent to a machine -----------------------------------
+    "make-here": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button in the header that makes the piece selected, or the part in view, on its"
+        " first machine: chosen there and sliced, or its toolpath written",
     ),
     "deck-key": (WIDGET, WHAT_IS_THERE, "a key of a simulated deck, pressed and released"),
     "deck-strip-tap": (WIDGET, WHAT_IS_THERE, "the touch strip of a simulated deck, tapped"),
@@ -465,6 +551,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "deck-machine": (WIDGET, WHAT_IS_THERE, "a machine's name, a button that the knobs move it"),
     "deck-step": (WIDGET, WHAT_YOU_SEE, "a button that makes a knob's step so many millimetres"),
+    # The strip's screen, which only a swipe on the deck changed: a real deck's from here.
+    "deck-screen-to": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a screen's name, a button that the deck's strip shows it, as a swipe along it does",
+    ),
     "deck-here": (
         WIDGET,
         WHAT_IS_THERE,
@@ -509,6 +601,30 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a drop-down per mark for a person's word on what it is, over the sorter's",
     ),
+    "marks-corner": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a handle per corner of a whiteboard on its photograph, dragged or nudged with the "
+        "arrow keys and set with Enter: a person's word on where the whiteboard is",
+    ),
+    "marks-when": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a slider over a whiteboard's history: the photograph of the moment it stands at "
+        "drawn, with the words given by then",
+    ),
+    "marks-take": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button per change since the photograph before that taking changes a piece or "
+        "carries a note's words",
+    ),
+    "marks-place": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that places the moment the slider stands at, with its words, at the "
+        "place selected in the world",
+    ),
     "marks-words": (
         WIDGET,
         WHAT_IS_THERE,
@@ -526,12 +642,39 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-part": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a drop-down of the parts a print from here makes, from the printer's site",
+        "a drop-down of the parts a print from here makes: its site's, then every part's",
     ),
     "print-slice": (
         WIDGET,
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
+    ),
+    "print-measure": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for what the piece a toolpath cut measures, each feature it names",
+    ),
+    "measure-read": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for what one feature of a printed piece reads, one in each row of its"
+        " plan under measured",
+    ),
+    "print-measure-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that checks what was read against what was made and keeps it: the"
+        " printer's next turn of its tuning, or the router's tool allowance",
+    ),
+    "print-tune-apply": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that takes the last turn of the printer's tuning into its next slices",
+    ),
+    "print-tune-undo": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that drops the last turn of the printer's tuning, and what it applied",
     ),
     "print-preview": (
         WIDGET,
@@ -644,7 +787,58 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a line naming two ranges and the metric to map over them",
     ),
     "airgap-run": (WIDGET, WHAT_YOU_SEE, "a button that maps the metric the sweep line names"),
-    # ---- the Working space, apothecary/static/widgets/working_space.js ---------
+    # ---- Motion, apothecary/static/widgets/motion.js ------------------------------
+    # A part's pieces moved through its motion, from the table the server samples. Each
+    # control is a cell of the part's ring, Part › View › Motion; the slider is Back and
+    # Step, a sample at a time, as the Marks history's slider is Earlier and Later.
+    "motion-at": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a slider over the motion's parameter, the pieces moved to it",
+    ),
+    "motion-play": (WIDGET, WHAT_YOU_SEE, "a button that plays the motion, and pauses it"),
+    "motion-back": (WIDGET, WHAT_YOU_SEE, "a button that moves the pieces to the sample before"),
+    "motion-step": (WIDGET, WHAT_YOU_SEE, "a button that moves the pieces to the sample after"),
+    "motion-reset": (WIDGET, WHAT_YOU_SEE, "a button that puts the motion back at its start"),
+    "motion-bought": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box that draws what is bought -- pins, inserts -- in a colour of its own",
+    ),
+    # ---- the Tour, apothecary/static/widgets/tour_popover.js -------------------
+    # The journeys a stage at a time, in a box over the page: a journey chosen, Back and
+    # Next, the page taken to a stage, and a person's word on the stage (Off with what
+    # its field says), under the name its other field holds. The header's Tour opens
+    # it. All but the journeys' drop-down and the field for what is off are cells of
+    # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too.
+    "tour-pop-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the tour's box, or closes it"),
+    "tour-pop-close": (WIDGET, WHAT_YOU_SEE, "a button that closes the tour's box"),
+    "tour-pop-journeys": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the journeys, each with its stages",
+    ),
+    "tour-pop-note": (WIDGET, WHAT_YOU_SEE, "a field for what is off at the stage shown"),
+    "tour-pop-by": (WIDGET, WHAT_YOU_SEE, "a field for the name a word is kept under"),
+    "tour-pop-back": (WIDGET, WHAT_YOU_SEE, "a button that goes to the stage before"),
+    "tour-pop-put": (WIDGET, WHAT_YOU_SEE, "a button that takes the page to the stage shown"),
+    "tour-pop-works": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that says the stage does what it says, kept on the server",
+    ),
+    "tour-pop-off": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that says the stage is off, with what the field says, kept on the server",
+    ),
+    "tour-pop-next": (WIDGET, WHAT_YOU_SEE, "a button that goes to the next stage"),
+    "tour-pop-page": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a link to the first walkthrough page the stage names",
+    ),
+    # ---- the Workspace, apothecary/static/widgets/working_space.js ---------
     # Its first line's buttons take the step it names; a printer's hour has a row
     # per camera, a camera's device chosen there, and its frames' budget set.
     "ws-back": (WIDGET, WHAT_YOU_SEE, "a button that goes back from a printer's hour to the site"),
@@ -675,6 +869,16 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 RING_BACKED: Dict[str, str] = {
     # the header's Docs is the canvas ring's Panels › Docs
     "docs-link": "panel:docs",
+    # The Tour's box and its buttons are the cells of Panels › Windows › Tour
+    "tour-pop-open": "tour:toggle",
+    "tour-pop-close": "tour:toggle",
+    "tour-pop-back": "tour:back",
+    "tour-pop-put": "tour:put",
+    "tour-pop-works": "tour:works",
+    "tour-pop-off": "tour:off",
+    "tour-pop-next": "tour:next",
+    "tour-pop-page": "tour:page",
+    "tour-pop-by": "tour:by",
     # Models' Ask and a person's word are the cells of Panels › Pictures › Models
     "models-ask": "models:ask",
     "models:click:closest": "models:ask",
@@ -682,6 +886,10 @@ RING_BACKED: Dict[str, str] = {
     # A mark's kind is a cell of Panels › Pictures › Marks, on the mark chosen there
     "marks-kind": "marks:say:diagram",
     "marks:change:closest": "marks:say:diagram",
+    # The history's slider is Earlier and Later, and Place is Place, under Marks
+    "marks-when": "marks:later",
+    "marks:input:closest": "marks:later",
+    "marks-place": "marks:place",
     "models:keydown:closest": "models:say:colour:red",
     # GO and Start over are the cells of Panels › Site › Procedure; a step's node opens
     # the window its ring's Device › Open does
@@ -704,6 +912,17 @@ RING_BACKED: Dict[str, str] = {
     "copyMetricsEl:click:act": "airgap:copy-metrics",
     "airgap-reset": "airgap:reset",
     "resetEl:click:act": "airgap:reset",
+    # Motion's controls are the cells of Part › View › Motion; its one listener of each
+    # kind serves them all
+    "motion-at": "part:motion:step",
+    "motion-play": "part:motion:play",
+    "motion-back": "part:motion:back",
+    "motion-step": "part:motion:step",
+    "motion-reset": "part:motion:reset",
+    "motion-bought": "part:motion:bought",
+    "motionEl:click:clicked": "part:motion:play",
+    "motionEl:input:scrubbed": "part:motion:step",
+    "motionEl:change:ticked": "part:motion:bought",
     # the viewer's Device section: Open is Device › Open, the board's Machine
     "dev-open": "device:open",
     "dev-query": "device:query",
@@ -727,6 +946,7 @@ RING_BACKED: Dict[str, str] = {
     "ctl-disarm": "control:disarm",
     "ctl-pop": "panel:pad",
     "estop": "control:estop",
+    "pad-estop": "control:estop",
     "cmd:M104 S{h-hot}": "control:hotend-on",
     "cmd:M104 S0": "control:hotend-off",
     "cmd:M140 S{h-bed}": "control:bed-on",
@@ -762,6 +982,8 @@ RING_BACKED: Dict[str, str] = {
     "cmd:G10 L20 P1 X0 Y0 Z0": "control:zero-xyz",
     "cmd:G10 L20 P1 Z0": "control:zero-z",
     "cmd:G38.2 Z-{r-probe} F100": "control:probe-z",
+    "cmd:PROBE-PLATE Z{r-plate} D{r-probe} F100": "control:probe-plate",
+    "needs-unlock": "control:unlock",
     "cmd:RESUME": "control:job-resume",
     "cmd:HOLD": "control:job-hold",
     "cmd:RESET": "control:job-abort",
@@ -808,9 +1030,21 @@ RING_BACKED: Dict[str, str] = {
     "print-preview": "print:preview",
     # Keep as plan keeps the machine's plan, its board connected or not.
     "print-plan": "print:plan",
+    # Print › Measure keeps what is typed under measured, as Keep does, and takes a
+    # person to the field when nothing is typed, as the tour's Who does its name; a
+    # router's Cut › Measure is the same verb on its ring.
+    "print-measure": "print:measure",
+    "measure-read": "print:measure",
+    "print-tune-apply": "print:tune-apply",
+    "print-tune-undo": "print:tune-undo",
+    "print-measure-keep": "print:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
+    # ⚒ Make does what a part's Slice or Toolpath cell does -- the machine's Machine
+    # opened, the part chosen under makes, sliced or its toolpath written -- on the
+    # first machine that makes it, which may stand in another site or have no board.
+    "make-here": "slice:piece:printer_1",
     "print-pause": "control:sd-pause",
     "print-resume": "control:sd-resume",
     "print-cancel": "control:sd-abort",
@@ -848,6 +1082,9 @@ RING_BACKED: Dict[str, str] = {
     "scad-save": "part:save",
     "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
+    # a part's presets, Part › Presets' cells; ⇄ Adapter, Part › Adapter
+    "part-preset": "part:preset",
+    "join-btn": "part:adapter",
     # and so is what can be done to a saved variant, each a cell of Part › Variants ›
     # its name, and the trash's, of Part › Variants › Deleted
     "variant-rename": "part:variant:rename",
@@ -870,17 +1107,42 @@ RING_BACKED: Dict[str, str] = {
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
     "window:keydown:onPictureKey": "camera:take-picture",
-    # the Working space: ‹ back is Panels › Site › Workspace, a printer's hour its
+    # the Workspace: ‹ back is Panels › Site › Workspace, a printer's hour its
     # Camera › Workspace, Add a camera its Camera › Add here, and a camera row's
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
     "deck-open": "panel:toggle:deck",
-    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines and
-    # steps are leaves deck:machine:<name> and deck:step:<mm>)
+    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines,
+    # steps and screens are leaves deck:machine:<name>, deck:step:<mm> and
+    # deck:screen:<name>)
     "deck-run": "deck:knobs",
     "deck-machine": "deck:machine",
     "deck-step": "deck:step",
+    "deck-screen-to": "deck:screen",
     "deck-here": "deck:here",
+    # The Layers window's controls are the cells of View › Layers and View › Depth: a
+    # layer's Shown or Selectable tick its ring's Shown or Selectable (each layer has
+    # its own; the grid's is in every site's), the stepper One less and One more, Reset
+    # Reset.
+    "layers-tick": "layer:shown:grid",
+    "root:change:onChange": "layer:shown:grid",
+    "layers-depth-less": "view:depth:less",
+    "layers-depth-more": "view:depth:more",
+    "layers-reset-all": "layer:reset",
+    "root:click:onClick": "view:depth:more",
+    # The Loops window's choices and acts are the cells of Panels › Machine › Loops: a loop
+    # its Loop's cell, a rule and a kind of controller its Rule's (each rule a ring of the
+    # kinds it gives), an experiment its Experiment's, and Read, Start, Cancel and Set on
+    # machine their own. Its typed figures are values no cell types.
+    "loops-loop": "loops:loop:hotend",
+    "loops-rule": "loops:rule:simc:pi",
+    "loops-kind": "loops:kind:step",
+    "loops-read": "loops:read",
+    "loops-start": "loops:start",
+    "loops-cancel": "loops:cancel",
+    "loops-set": "loops:set",
+    "root:click:onLoopsClick": "loops:start",
+    "root:change:onLoopsChange": "loops:loop:hotend",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -946,6 +1208,35 @@ BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
 # The third part is load-bearing: without it two buttons in the same row of a
 # list are one entry, and a new control can be added to that row unnoticed.
 LISTENING: Dict[str, Tuple[str, str, str]] = {
+    # A drag along a simulated deck's strip is the swipe a real deck reports: the layout
+    # changes the screen the strip shows (knobs, Progress, Status).
+    "strip:pointerdown:startSwipe": (
+        GESTURE,
+        NOTHING,
+        "pressing the Deck window's strip: where a swipe along it would begin",
+    ),
+    "strip:pointerup:endSwipe": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a drag along the Deck window's strip, a swipe: the deck's strip shows the next screen",
+    ),
+    # Make, the header's button
+    "makeHereEl:click:makeNow": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "⚒ Make makes the piece selected, or the part in view, on its first machine",
+    ),
+    # the Machine: what its state asks of a person, and the touch plate
+    "r-plate:change:keepPlate": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "changing the plate's thickness keeps it for the machine's board",
+    ),
+    "c-needs:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "the Needs you card's Unlock, sent as the pad's own",
+    ),
     # taking hold of the thing itself
     "transformControls:dragging-changed:noteDragStart": (
         DRAG,
@@ -1030,6 +1321,16 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         GESTURE,
         NOTHING,
         "how far a press has travelled, so one that wandered and came back is no click",
+    ),
+    "canvas:pointermove:onHoverName": (
+        AUTOMATIC,
+        NOTHING,
+        "the pointer's nearest piece named in a small badge at the universe's own level, selecting nothing",
+    ),
+    "canvas:pointerleave:invalidate": (
+        AUTOMATIC,
+        NOTHING,
+        "the pointer leaving the world, so the name it showed goes",
     ),
     "canvas:pointerup:onRelease": (
         GESTURE,
@@ -1122,6 +1423,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         LIST,
         WHAT_YOU_SEE,
         "picking the place a badge stands at: a structure, or the floor",
+    ),
+    # A note's badge, where its writing is on a whiteboard's picture (picture_marks.js).
+    "badge:click:onNote": (
+        LIST,
+        WHAT_YOU_SEE,
+        "opening the note a badge stands at in Marks, its box in front to type what it says",
     ),
     # ---- pictures in the world: a drop, a paste, Selected's width and rows --
     "canvas:dragover:(nothing)": (
@@ -1227,7 +1534,68 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a mark's kind chosen, a person's word on it; or another picture's marks listed",
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
-    "marks:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a note's box, saying what it says"),
+    "tourJourneys:change:chosen": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a journey chosen, the page taken to its first stage",
+    ),
+    # The Tour's box (widgets/tour_popover.js): the header's button, its buttons by one
+    # listener, its fold, its name, and its head, by which it is dragged and folded.
+    "tourOpen:click:toggle": (WIDGET, WHAT_YOU_SEE, "the header's Tour, its box opened or closed"),
+    "box:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button of the tour's box: a stage gone to, the page taken there, or a word kept",
+    ),
+    "more:toggle:keep": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "what the page did and what to try folded or unfolded, kept by this browser",
+    ),
+    "who:change:named": (WIDGET, WHAT_YOU_SEE, "the name typed, kept by this browser"),
+    "noteField:keydown:act": (WIDGET, WHAT_IS_THERE, "Enter in the field for what is off: Off"),
+    "head:pointerdown:closest": (WIDGET, WHAT_YOU_SEE, "the tour's box taken hold of by its head"),
+    "head:pointermove:move": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the tour's box dragged, kept where it is left",
+    ),
+    "head:pointerup:up": (WIDGET, NOTHING, "the tour's box let go"),
+    "head:dblclick:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a double-click on the tour's box's head: folded to it, or unfolded",
+    ),
+    "window:resize:isOpen": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the window resized: the tour's box kept whole on the page",
+    ),
+    "marks:input:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the history's slider moved: the whiteboard as it stood then",
+    ),
+    "marks:pointerdown:grabCorner": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a whiteboard's corner taken hold of on its photograph",
+    ),
+    "marks:pointermove:dragCorner": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a whiteboard's corner dragged on its photograph",
+    ),
+    "marks:pointerup:dropCorner": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a whiteboard's corner let go: its photograph squared again with it",
+    ),
+    "marks:keydown:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "Enter in a note's box, saying what it says; an arrow key or Enter on a whiteboard's corner",
+    ),
     "?:click:open": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -1268,6 +1636,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the trail's crumb for the site: up to its own level, and there the other sites",
     ),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
+    # the rail of the journey entered (apothecary/journeys.py)
+    "journeyRailEl:click:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the journey's rail: a step entered, Next, or the journey left",
+    ),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),
@@ -1362,6 +1736,58 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "one listener for the whole control overlay, told which button by what it carries",
     ),
+    # ---- Layers (widgets/layers.js): one listener of each kind on the window's root; ----
+    # its rows (depth, a shown and a selectable tick for each layer) are drawn by it and
+    # are the pick scope's (static/pick_scope.js) to change: tick-boxes and a stepper, as
+    # Settings' are, not a list of the scene's things.
+    "root:change:onChange": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a layer's Shown or Selectable tick, applied at once",
+    ),
+    "root:click:onClick": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the depth stepper's - and +, or Reset, in the Layers window",
+    ),
+    # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
+    # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the
+    # server tells an experiment's progress and a kept experiment's document.
+    "root:click:onLoopsClick": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "Read, Start, Cancel or Set on machine in the Loops window, told which by its class",
+    ),
+    "root:change:onLoopsChange": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a loop, a rule or an experiment chosen in the Loops window",
+    ),
+    "root:input:onLoopsInput": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a figure, the ceiling or the longest time typed: the server asked whether it would start",
+    ),
+    "tellings:change:heardLoop": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the server telling an experiment's progress, or a kept experiment's document",
+    ),
+    "tellings:surfaces:catchUp": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the surfaces' stream opened again: the experiment asked for afresh",
+    ),
+    "tellings:missed:catchUp": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "tellings missed on the surfaces' stream: the experiment asked for afresh",
+    ),
+    "tellings:error:streamFaltered": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the surfaces' stream dropped: a running experiment asked for once a second",
+    ),
     # ---- Settings (widgets/settings.js): one listener of each kind on the panel ----
     "settingsEl:click:settingClicked": (
         WIDGET,
@@ -1442,11 +1868,27 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "that cell's two values taken, into the text where it is edited",
     ),
-    # ---- the Working space ------------------------------------------------------
+    # ---- Motion (widgets/motion.js): one listener of each kind on the window ----
+    "motionEl:click:clicked": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "Play or Pause, Back, Step or Reset, each doing what its cell of Part › View › Motion does",
+    ),
+    "motionEl:input:scrubbed": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the motion's slider moved, the pieces with it",
+    ),
+    "motionEl:change:ticked": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "Bought ticked or not, what is bought shown or hidden",
+    ),
+    # ---- the Workspace ------------------------------------------------------
     "root:click:closest": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a Working space button doing what it names, or a frame, dot or row opening its evidence",
+        "a Workspace button doing what it names, or a frame, dot or row opening its evidence",
     ),
     "root:change:closest": (WIDGET, WHAT_IS_THERE, "a camera's device chosen in its row"),
 }

@@ -13,7 +13,7 @@ describes.
 ## The machine
 
 [`parts/anolex_4060_evo_ultra_2`](../parts/anolex_4060_evo_ultra_2/README.md)
-is the router as a part: a moving-gantry machine cutting 400 x 600 x 80 mm,
+is the router as a part: a moving-table machine cutting 400 x 600 x 80 mm,
 HGH15 linear rails and 1204 ball screws on each axis, NEMA 23 closed-loop
 steppers, an 800 W trim router (8,000 to 24,000 rpm, set by a dial on the
 router, started and stopped by the controller) in a 65 mm clamp on the Z
@@ -35,8 +35,8 @@ assumed); `cnc_router.gantry_system` is the gantry on the Y rails, its legs
 and cross beam, with `z_carriage_system` inside it, the X carriage plate, the
 Z plate, the clamp and the spindle in it, each placed from the part's own
 constants where the part draws them at its default axes. Stepped into, the
-router is its part, alone and whole, and the control box and the gantry are
-Site's rows there ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are
+router is its part, whole, with the control box and the gantry drawn inside
+it, each a double-click further in ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are
 the words the router's node takes: `idle`, `running`, `hold`, `alarm`,
 `offline` from its polls, and `maintenance` by hand.
 
@@ -67,11 +67,30 @@ and released exactly as a printer's is.
 | A streamed job | a print, from the slicer's G-code | a cut, from a CAM post's `.nc`, `.ngc`, `.gcode` or `.tap`, refused for a `$` line, a tool change (`M6`), a stop (`M0`, `M1`), a spindle over the cap, a code GRBL does not take (a printer's `M117`, `G29`), or a dwell over a minute (`G4 P` is seconds to GRBL, milliseconds to Marlin); kept for a router, and sent to nothing else; a pause holds the controller (`!`) so it stops where it is, a cancel holds and resets; a line is answered when queued, so the host counts the planner's room from the status report (`Bf:`) and never blocks the port on a full one, and the cut is done when the controller is idle again after its last line (`finishing`) |
 | Its job's word | `print`, the node `printing` | `cut`, the node `running` (`apothecary/jobs.py`) |
 
-Machine coordinates on a Grbl machine run negative from the home corner --
-the back right and the top of Z, where the switches are -- so after homing
-the tool is at (0, 0, 0) there and the working area is `mpos + travel`
-inside it. A poll carries both the machine position and the work position
-the person's zero gives.
+Machine coordinates on a Grbl machine count from the switches it homes to, axis by
+axis: an axis that homes toward its maximum counts down from that switch, and is at
+`mpos + travel` in the working volume; one that homes toward its minimum (its bit of
+`$23` set) counts up from that switch, and is where it says it is. The AnoleX's X is
+of the second kind -- homed, it reads X 0.9 -- and its Y and Z of the first. A poll
+carries the machine position, the work position the person's zero gives, and
+`tool_position`, the tool in the working volume each axis counted up from its low end,
+worked out from the controller's own `$23` and `$130` to `$132` (`grbl.in_volume`);
+`work_origin` is the work zero in the same volume, and `travel` the volume. The world
+and the Machine place the tool, and a file's zero, by those. The AnoleX's table carries
+Y (the part's `bed_moves_y`, as the Ender's bed does): the tool's mark stands still
+along Y and the working volume, the table map and a file's path ride under it. The world
+draws the router -- and the printer -- as its pieces, as the part's `kinematics` says:
+what stands still, and each of what moves (the AnoleX's table, X carriage and Z slide;
+the Ender's bed, X gantry and hotend carriage), each rendered once at the part's own
+axes (`POST /parts/{ref}/stl/generate` with its `piece`). As the tool's mark tweens
+toward each poll, each piece is moved with it by how far its axes stand from the
+part's, within the part's range, so the machine moves as the real one does, a poll
+behind it. The world polls the router it draws while no Machine is open on it and the
+server holds its link, and its Machine's polls while one is; until a poll carries
+`tool_position` no tool is drawn, and the working volume is the controller's `travel`
+once it has said it ([viewer.md](viewer.md#a-machines-frame)). The polls mean the table
+only once the machine has been homed: before that the controller counts from wherever
+it stood at power on.
 
 The same routes serve both: `POST /firmware/devices/identify`,
 `GET /firmware/printers/status`, `/printers/control`, `/printers/command`,
@@ -95,6 +114,88 @@ a stop goes. Its stop is then its own: a stop asked in either word goes as
 `RESET`, so a printer's `M112`, which a GRBL controller answers `error:20` and
 goes on cutting, is never what reaches it. The same holds the other way round:
 a printer on a port the router held is sent `M112` for a `RESET`.
+
+### A home is proved first
+
+A home drives an axis at the seek rate (`$25`) until its limit switch closes, for up to
+one and a half times its travel, and nothing else stops it: it goes toward the table if
+the axis is wired the other way round, and into its end stop if the switch says nothing.
+So `$H`, `$HX`, `$HY` and `$HZ` are sent only for axes the open port has shown two things
+of (`grbl.check_home`), whoever asks -- the pad, the ring, the deck, Probe table's own
+home:
+
+- **its switch**, reported on and then off again in the status report's pins: press it by
+  hand for two seconds while the Machine polls, and let go. With hard limits on (`$21=1`)
+  that puts the controller in alarm (`ALARM:1`), which Unlock or the home clears;
+- **which way it goes**: the axis jogged a millimetre the way the controller says it homes
+  (`$23`), with a person watching the tool. For Z that is the way it must rise.
+
+A home that is not proved is refused before the port, in words: which way the axis will
+seek, how fast and how far at most, from the controller's own settings, and which of the
+two is missing. What a port showed is kept while it is open and gone when it is opened
+again, a replug or the controller's power included. The simulated router has no switch
+for a hand to press, and its homes are held to none of this.
+
+### A cut needs the tool placed
+
+After its power is cycled a controller reports its machine position as zero wherever
+the tool stands, and the work zero it kept is an offset from that: a cut's coordinates
+are only as true as the last home, or the last work zero set here. So a cut is refused
+(`grbl.not_placed`) until each axis has, on the open port, been homed (`$H`, or its
+own `$HX`, `$HY`, `$HZ`) or given a work zero (`G10 L20 P1`, or the touch plate's Z).
+What a port showed is gone when it is opened again, and taken away by a banner nothing
+here asked for (the controller's power cycled, its button pressed) and by a reset in
+motion (`ALARM:3`, the controller's own word that its position may be lost). A reset
+this server sent to a controller standing still keeps it. While an axis is not placed
+the poll's `todo` says which and since when, and the Machine's Needs you card shows
+it. The simulated router is held to none of this.
+
+### What a cut leaves
+
+A cut is done when its controller is idle again after its last line. One whose
+controller ends in alarm, or is still running when a move's time has run out, failed,
+and is held and reset as a cancelled one is. A cut that is done sends `M5`: a file
+that never says it does not leave the spindle turning. A pause that lands while a
+line waits for room in the planner keeps that line: resumed, the cut sends it and
+then the rest; room that never comes within a move's time fails the cut, and no line
+is left out. A hold or a resume typed at a cut is the cut's own pause and resume.
+A controller that restarts under a cut is known by its banner, and the cut fails
+there. A table map can be stopped: the stop, or the server stopping, holds and
+resets the router under it, and no further point is probed.
+
+### What the state asks of a person
+
+What stops a person is in the machine's state, for the page, the deck and a program alike,
+and not only in a line of the log. A poll (`GET /firmware/printers/status`) carries
+`refused`, the last control line the port refused or its board objected to, with why and
+when, until a line goes; `todo`, what must be done before the machine moves again -- a
+controller in alarm takes no jog until Unlock (`$X`) or a home; and `homing`, for each
+axis which way a home will seek, how fast and how far, and whether its switch has been
+seen and the axis jogged that way. The Machine shows the first two in a **Needs you**
+card, there only while there is something, and the third beside the Home buttons, each
+axis with what to do first; a Home not yet proved is greyed, with the controller's own
+figures for it in its tip (`can`, docs/firmware.md), and so is a jog while it is in alarm. `refused` is a printer's
+too.
+
+### The plate's thickness
+
+The touch plate is a puck the bit comes down on, and the touch is called the plate's
+thickness, so that Z 0 is the stock's top under it. The thickness is a person's to
+measure: the maker's nominal figure is 19 mm and its manual's own example measures 19.08
+([manual.json](../parts/anolex_4060_evo_ultra_2/manual.json), the Z probe). It is kept
+for the machine's board (`GET` and `PUT /firmware/printers/plate`), the nominal until one
+is kept, and the pad's **plate** field holds it.
+
+**Probe Z to plate** is one control line, `PROBE-PLATE Z<thickness> D<depth> F<feed>`,
+bounded as a probe is and by a plate of 50 mm at most: the bit comes down the depth at
+most until it touches, the touch is written to the work zero as the plate's thickness
+(`G10 L20 P1 Z<thickness>`), and the bit lifts 5 mm. The manual's sender sets the touch
+with `G92`, which a soft reset forgets; a stop here is a soft reset, so the zero is
+written where **Z zero here** writes it and a stop does not take it. A probe that touches
+nothing sets nothing and says so, with the controller in alarm as after any probe that
+finds nothing. The pad's *How to zero Z with the touch plate* is the manual's procedure
+with one step added: the clip touched to the plate by hand first, to see **Pins on** show
+the probe before the bit is trusted to stop on it.
 
 ## Simulated
 
@@ -137,22 +238,26 @@ order: what it makes and its Toolpath ([docs/cam.md](cam.md)) where a printer ha
 Slice, the file, kept and checked, or a CAM post's, then ▶ Cut, Pause (a hold),
 Resume, Cancel (a hold and a reset), the cut's progress with the operation it is
 in, what the file holds, and the router's jobs, each control there once what it
-needs holds (Toolpath once a part is chosen, ▶ Cut once a file is, Pause and
-Cancel while a cut runs, Resume while it is held;
-[walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures each). A line the controller refuses
+needs holds (Toolpath once a part is chosen, ▶ Cut once a file is, Hold and
+Abort while a cut runs, Resume while it is held;
+[walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures each). Under a
+toolpath that names what to measure -- the 😮 of `parts/router_emoji`, cut to calibrate
+the router -- **measured** takes what the piece measures and Keep keeps the tool's
+allowance it makes for the router's next toolpaths
+([docs/cam.md](cam.md#measured-by-hand-fed-back)). A line the controller refuses
 (`error:15`) or an alarm it raises (`ALARM:3`) is said in GRBL's words beside
 the line in the log, in the refusal the status line carries, in the reason a
 job that stopped gives, and in the state card. A cut that would leave the travel
 stops where it would, as `ALARM:2`, so the tool is zeroed with the cut's depth
 under it. The ring's Control
 on a router is its own (`menu.router_control_options`): Home (All, X, Y, Z), Unlock, Jog
-(with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge
+(with Stop jog), Spindle, Zero (with Probe Z), Cut (with Measure), Stop, Arm. The router's badge
 in the world and its row on Site's tree say 🪚 and its state, its spindle while
-it turns and the cut's progress, its hour in the Working space charts the spindle,
+it turns and the cut's progress, its hour in the Workspace charts the spindle,
 and its marks stand on the table:
 the working area, the table and the tool, placed from the controller's
 machine coordinates and the working area (`mpos + travel`, a Grbl machine
-homed to its maximum switches). `apothecary serve --demo` pins the router's
+homed to its maximum switches). `apothecary serve --simulated` pins the router's
 controller to the simulated router on `/dev/ttyFAKE3`, beside the printer's
 pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
 

@@ -24,7 +24,7 @@ from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from windows import DECK
 
-DECK_ID = "DEMODECK"
+DECK_ID = "SIMDECK"
 LABELS = [
     ("X-", "blue"), ("Y+", "blue"), ("Y-", "blue"), ("X+", "blue"),
     ("Z-", "green"), ("Z+", "green"), ("1 mm", "amber"), ("STOP", "red"),
@@ -113,11 +113,15 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
         800,
         100,
     ]
+    # The strip's two lines, as text under its picture, to be read at any width.
+    expect(deck.locator(".deck-strip-said .deck-strip-text")).to_have_text("cnc_router")
+    expect(deck.locator(".deck-strip-said .deck-strip-small")).to_have_text("disarmed")
     story.shows(
         "A program draws its eight keys and its strip",
         "Each key and the strip were set by a PUT to the deck's routes: a label on a "
         "colour, drawn here and sent as the JPEG the device takes. The window shows what "
-        "was sent, since a deck cannot be asked what it shows.",
+        "was sent, since a deck cannot be asked what it shows, and writes the strip's "
+        "two lines under its picture, where they can be read and selected.",
     )
 
     # 3. The deck is pressed, turned and tapped, as a real one reports.
@@ -127,6 +131,7 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
     deck.locator(".deck-knob[data-knob='0'] .deck-turn[data-dir='-1']").click()
     deck.locator(".deck-knob[data-knob='2'] .deck-press").click()
     deck.locator(".deck-strip-tap").click()  # its middle
+    expect(deck.locator(".deck-touch")).to_be_visible(timeout=5000)  # where it was tapped
     events = deck.locator(".deck-events li")
     expect(events).to_have_count(8, timeout=10000)  # 2 + 2 + 1 + 2 + 1
     heard = _heard(url)
@@ -146,6 +151,7 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
     expect(deck.locator(".deck-events")).to_contain_text("key 3 pressed")
     expect(deck.locator(".deck-events")).to_contain_text("knob 1 turned +1")
     expect(deck.locator(".deck-events")).to_contain_text("knob 0 turned −1")
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # each lit a moment
     story.shows(
         "A key pressed, knobs turned and pressed, the strip tapped",
         "Key 3 pressed, knob 1 turned two steps clockwise, knob 0 one step the other way, "
@@ -154,23 +160,63 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
         "`GET /firmware/decks/{id}/events`. The strip's tap carries its position in the "
         "strip's own pixels, 800 across.",
     )
+
+    # 4. A key held is marked where it is, for as long as it is down.
+    events_url = f"{url}/firmware/decks/{DECK_ID}/events"
+    held = httpx.post(events_url, json={"kind": "key", "index": 5, "value": True})
+    assert held.status_code == 201, held.text
+    key = deck.locator(".deck-key[data-key='5']")
+    expect(key).to_have_class(re.compile(r"\bdeck-down\b"), timeout=5000)
+    expect(events.first).to_contain_text("key 5 pressed")
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)
+    expect(deck.locator(".deck-down")).to_have_count(1)
+    story.shows(
+        "A key held down is marked in the window",
+        "Key 5 is down and not yet let go: its picture is outlined for as long as it is "
+        "held, as a knob pressed is. A press, a turn's direction and a touch's place on "
+        "the strip are each lit for a moment as they are heard, so the window answers a "
+        "hand on the deck as well as listing it.",
+    )
+    let_go = httpx.post(events_url, json={"kind": "key", "index": 5, "value": False})
+    assert let_go.status_code == 201, let_go.text
+    expect(deck.locator(".deck-down")).to_have_count(0, timeout=5000)
     assert windows.state(page, "deck")["open"]
 
 
 @pytest.mark.e2e
 def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
     """A deck listed whose state is refused, as a real one's is while this account may not
-    write its USB device, says why in the window's note in place of what the deck is; the
-    note is the deck's again on the first beat the deck answers."""
+    write its USB device, says why in the window's note in place of what the deck is, and
+    every control its routes would refuse -- ▶ Knobs, a key, a knob, the strip -- is greyed
+    with the deck's answer's reason; the note is the deck's again, and the controls live,
+    on the first beat the deck answers."""
     said = (
         "the Stream Deck + is found but would not open (Could not open HID device.): this "
         "account may not write its USB device; docs/stream-deck.md gives the udev rule"
     )
+    refused = {"ok": False, "why": said, "kind": "offline"}
+    knobs = {
+        "running": False,
+        "can": {
+            **{v: refused for v in ("knobs.start", "knobs.stop", "inject")},
+            **{
+                v: {"ok": False, "why": "the knobs are not started", "kind": "idle"}
+                for v in ("knobs.machine", "knobs.step", "knobs.screen")
+            },
+        },
+    }
     state = re.compile(rf".*/firmware/decks/{DECK_ID}$")
+    answer = re.compile(rf".*/firmware/decks/{DECK_ID}/control$")
     page.route(
         state,
         lambda route: route.fulfill(
             status=503, content_type="application/json", body=json.dumps({"detail": said})
+        ),
+    )
+    page.route(
+        answer,
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(knobs)
         ),
     )
     open_garage(page, url)
@@ -179,8 +225,39 @@ def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
     deck = page.locator(DECK)
     expect(deck.locator(".deck-note")).to_have_text(said, timeout=10000)
     expect(deck.locator(".deck-events")).to_contain_text("nothing heard yet")
+    run = deck.locator(".deck-run")
+    expect(run).to_be_disabled(timeout=10000)
+    expect(run).to_have_attribute("title", re.compile(rf"^Disabled: {re.escape(said)}\. Start"))
+    for control in (".deck-key[data-key='0']", ".deck-turn >> nth=0", ".deck-strip-tap"):
+        expect(deck.locator(control)).to_be_disabled()
+        expect(deck.locator(control)).to_have_attribute("title", re.compile(r"^Disabled: "))
     page.unroute(state)
+    page.unroute(answer)
     expect(deck.locator(".deck-note")).to_contain_text("a simulated deck", timeout=10000)
+    expect(run).to_be_enabled(timeout=10000)
+    expect(deck.locator(".deck-key[data-key='0']")).to_be_enabled()
+
+
+@pytest.mark.e2e
+def test_the_decks_knobs_wear_the_rings_addresses_and_its_words(page: Page, url: str):
+    """The Deck window's knobs controls are the cells of Panels › Machine › Knobs: the ring
+    writes each one's address after its tip, as it does on a Machine's buttons, where the
+    window once spelled the path out; and the strip's screens are called as the ring calls
+    them."""
+    open_garage(page, url)
+    select(page, "stream_deck")
+    page.locator("#selected-body .deck-open").click()
+    deck = page.locator(DECK)
+    run = deck.locator(".deck-run")
+    expect(run).to_be_enabled(timeout=10000)
+    expect(run).to_have_attribute("title", re.compile(r" · ⌗\d+$"), timeout=10000)
+    assert "Panels" not in (run.get_attribute("title") or "")
+    run.click()
+    step = deck.locator(".deck-step").first
+    expect(step).to_have_attribute("title", re.compile(r"cycles it · ⌗\d+$"), timeout=10000)
+    assert "Panels" not in (step.get_attribute("title") or "")
+    expect(deck.locator(".deck-screen-to").first).to_have_text("Knobs")
+    expect(deck.locator(".deck-screen")).to_contain_text("Knobs (1/3)")
 
 
 @pytest.mark.e2e

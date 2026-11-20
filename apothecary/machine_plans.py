@@ -17,14 +17,13 @@ import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from pydantic import BaseModel
 
 from .firmware import devices
 from .projects.parts.skeleton import ROOT
 from .projects.registry import PartLoadError, part_named
-from .site_names import current
 from .state_folder import state_dir, write_whole
 
 NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$")
@@ -34,7 +33,7 @@ class MachinePlan(BaseModel):
     site: str
     path: str  # the machine's node
     kind: str  # "printer" or "router"
-    part: Optional[str] = None  # the piece of the site it will make, by its path there
+    part: Optional[str] = None  # what it makes: a piece of the site by path, or a part by name
     file_id: Optional[str] = None  # the kept file, kept for this kind of machine, that makes it
     planned_at: datetime
 
@@ -49,10 +48,28 @@ def kind_of_part(part_ref: str) -> Optional[str]:
         return None
 
 
+def kinds_that_make(part_ref: str) -> Tuple[str, ...]:
+    """The kinds of machine that make a registered part: a printer any part that is
+    neither a board (bought and pinned to, never printed), nor a thing bought whole and
+    drawn as it is (tagged ``bought``: the Stream Deck +), nor a machine; a router one
+    that says how it is cut (``BasePart.cuts``). None for a part that does not load;
+    ``KeyError`` for no such part."""
+    try:
+        part = part_named(part_ref, ROOT)
+    except PartLoadError:
+        return ()
+    kinds = []
+    if part.machine is None and not {"board", "bought"} & set(part.tags):
+        kinds.append("printer")
+    if part.has_cuts:
+        kinds.append("router")
+    return tuple(kinds)
+
+
 def _kept_at(site: str, path: str) -> Path:
     if not NAME.match(site) or not NAME.match(path):
         raise ValueError(f"no plan can be kept for {site!r}, {path!r}")
-    return state_dir() / "plans" / current(site) / f"{path}.json"
+    return state_dir() / "plans" / site / f"{path}.json"
 
 
 def load(site: str, path: str) -> Optional[MachinePlan]:
@@ -75,12 +92,12 @@ def save(
         if file is None:
             raise ValueError(f"no file {file_id!r} is kept")
         if file.machine != kind:
-            kept_for = f"a {file.machine}" if file.machine else "no kind of machine"
             raise ValueError(
-                f"{file.name} was kept for {kept_for}: a {kind}'s plan names a file kept for a {kind}"
+                f"{file.name} was kept for a {file.machine}: "
+                f"a {kind}'s plan names a file kept for a {kind}"
             )
     plan = MachinePlan(
-        site=current(site),
+        site=site,
         path=path,
         kind=kind,
         part=part or None,

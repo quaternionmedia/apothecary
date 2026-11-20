@@ -24,7 +24,7 @@ the same on every platform the server runs on. espflash still identifies a
 chip (``espflash board-info``, the Rust module's Probe): only a flasher speaks
 the ROM bootloader.
 
-With ``APOTHECARY_SERIAL_ENGINE=simulated`` (demos and the browser suites) no
+With ``APOTHECARY_SERIAL_ENGINE=simulated`` (``serve --simulated`` and the browser suites) no
 port is touched: the ports listed are the ones ``APOTHECARY_SIMULATED_DEVKIT``
 names, each a pretend ESP32 devkit on a CP2102 bridge, and listening to one
 hears the hello of the sketch Apothecary last flashed to it (its flash

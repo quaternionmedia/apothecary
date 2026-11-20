@@ -1,5 +1,6 @@
-"""The universe in a browser (apothecary/universe.py): the site ``apothecary``, every
-registered part a leaf of it and every other site one piece.
+"""The universe in a browser (apothecary/universe.py): the site ``apothecary``, a sphere
+of nested shells, every registered part a leaf of it on the shell its composition depth
+gives it, facing outward, and every other site one piece on the outermost.
 
 A site's piece is drawn in miniature from boxes the site's tree carries, with nothing
 rendered for it; Selected says it is a site and how large the site really is, and
@@ -78,13 +79,90 @@ def _tree(page: Page, base_url: str) -> dict:
     return page.request.get(f"{base_url}/sites/{UNIVERSE}").json()["tree"]
 
 
+@pytest.fixture(scope="module")
+def opened(module_page: Page, base_url: str):
+    """The universe as it opens, loaded once for the tests that read it so, and each
+    request the page has made since before it loaded. Of them only Selected's test
+    changes anything, the selection, which no other reads."""
+    asked: list[str] = []
+    module_page.on("request", lambda request: asked.append(request.url))
+    _at(module_page, base_url)
+    return module_page, asked
+
+
+# The sphere as the page holds it: how far each node's middle is from the site's origin,
+# where the camera stands, how near it may come, whether the whole of it is in view, and
+# whether the floor grid is drawn.
+SPHERE = """() => {
+    const v = window.fractalViewer;
+    const nodes = Object.values(v.renderNodeByKey).filter((n) => n.world_bounds);
+    const middle = (n) => n.world_bounds.min.map((m, i) => (m + n.world_bounds.max[i]) / 2);
+    const radius = (n) => Math.hypot(...middle(n));
+    const radii = nodes.map(radius);
+    const inView = nodes.every((n) => {
+        const p = v.sceneAt(...middle(n)).project(v.camera);
+        return Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && p.z <= 1;
+    });
+    return {
+        outermost: Math.max(...radii),
+        innermost: Math.min(...radii),
+        camera: v.camera.position.length(),
+        nearest: v.orbitControls.minDistance,
+        inView,
+        grid: v.gridHelper.visible,
+    };
+}"""
+
+# A turned leaf's mesh: whether its up (three.js's +y) points along the ray from the
+# middle of the universe, which is where sceneAt puts the site's origin.
+FACES_OUT = """(key) => {
+    const v = window.fractalViewer, mesh = v.meshByName[key];
+    const q = mesh.quaternion, dir = mesh.position.clone().normalize();
+    const up = mesh.position.clone().set(0, 1, 0).applyQuaternion(q);
+    return { dot: up.dot(dir), turned: !(q.x === 0 && q.y === 0 && q.z === 0 && q.w === 1) };
+}"""
+
+
 @pytest.mark.e2e
-def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(
-    page: Page, base_url: str
-):
-    asked = []
-    page.on("request", lambda request: asked.append(request.url))
-    _at(page, base_url)
+def test_the_universe_opens_as_a_whole_sphere_seen_from_outside_and_the_camera_may_enter(opened):
+    page, _ = opened
+    seen = page.evaluate(SPHERE)
+    assert seen["camera"] > seen["outermost"], f"the camera starts inside the sphere: {seen}"
+    assert seen["inView"], f"some of the sphere is out of the opening view: {seen}"
+    assert seen["nearest"] < seen["innermost"], f"the camera may not come inside: {seen}"
+    assert seen["grid"] is False, "the floor grid cuts through the sphere"
+
+
+@pytest.mark.e2e
+def test_a_part_faces_outward_and_a_site_stands_upright(opened, base_url: str):
+    page, _ = opened
+    tree = _tree(page, base_url)
+    leaves = [c for c in tree["children"] if c["part_ref"] and c["turn"][1] > 1]
+    assert leaves, "no leaf is turned"
+    for leaf in leaves[:6]:
+        facing = page.evaluate(FACES_OUT, leaf["name"])
+        assert facing["turned"] and facing["dot"] > 0.999, f"{leaf['name']} faces {facing}"
+    garage = next(c for c in tree["children"] if c["site_ref"] == "garage")
+    assert not page.evaluate(FACES_OUT, garage["name"])["turned"]
+
+
+@pytest.mark.e2e
+def test_the_webcam_part_is_drawn_from_its_stl(opened, base_url: str):
+    """The universe's webcam leaf is the part, not a camera of a site waiting to be
+    aimed: its STL is asked for and drawn, where it stood as its box for good."""
+    page, asked = opened
+    leaf = next(c for c in _tree(page, base_url)["children"] if c["part_ref"] == "webcam")
+    page.wait_for_function(
+        "(k) => { const m = window.fractalViewer.meshByName[k]; return !!m && !m.userData.isPlaceholder; }",
+        arg=leaf["name"],
+        timeout=30000,
+    )
+    assert any("/parts/webcam/stl" in u for u in asked)
+
+
+@pytest.mark.e2e
+def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(opened, base_url: str):
+    page, asked = opened
     tree = _tree(page, base_url)
     pieces = {child["site_ref"]: child for child in tree["children"] if child["site_ref"]}
     assert set(pieces) == set(SITES)
@@ -106,8 +184,8 @@ def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(
 
 
 @pytest.mark.e2e
-def test_selected_on_a_sites_piece_says_it_is_a_site_and_its_real_size(page: Page, base_url: str):
-    _at(page, base_url)
+def test_selected_on_a_sites_piece_says_it_is_a_site_and_its_real_size(opened, base_url: str):
+    page, _ = opened
     select(page, PIECE)
     piece = next(c for c in _tree(page, base_url)["children"] if c["site_ref"] == "garage")
     real = " × ".join(f"{side:.0f}" for side in piece["site_size"]) + " mm"
@@ -135,6 +213,11 @@ def _by_its_row(page: Page) -> None:
 
 
 def _by_the_world(page: Page) -> None:
+    # At the opening view the sphere's inner shells and the near side of its outer ones
+    # stand between the camera and most pieces: the piece is framed first, as f does.
+    select(page, PIECE)
+    page.evaluate("() => window.fractalViewer.fitSelected()")
+    settled(page)
     on_it = page.evaluate(ON_PIECE, PIECE)
     assert on_it, "the garage's piece is nowhere under the pointer"
     page.mouse.dblclick(on_it["x"], on_it["y"])
@@ -193,8 +276,8 @@ def test_a_step_out_of_a_sites_own_level_goes_to_the_universe(
 
 
 @pytest.mark.e2e
-def test_the_universe_has_nothing_above_it(page: Page, base_url: str):
-    _at(page, base_url)
+def test_the_universe_has_nothing_above_it(opened):
+    page, _ = opened
     page.locator("#viewer-canvas").focus()
     page.keyboard.press("PageUp")
     expect(status(page)).to_contain_text("Already at the top of apothecary")
@@ -244,7 +327,12 @@ def test_a_machine_in_a_site_reached_through_the_universe_is_drawn_as_its_part(
     said(page, "Stepped into cnc_router")
     inside = page.evaluate(LEVEL)
     assert inside["focus"] == "cnc_router"
-    assert inside["drawn"] == {"cnc_router": body}, "the part alone, and the whole of it"
+    assert inside["drawn"]["cnc_router"] == body, "the whole of the part"
+    assert sorted(inside["drawn"]) == [
+        "cnc_router",
+        "cnc_router.frame_system",
+        "cnc_router.gantry_system",
+    ], "its pieces inside it, and nothing else of the site"
     # Out again, twice: the garage's own level, then the universe.
     page.locator("#viewer-canvas").focus()
     page.keyboard.press("PageUp")

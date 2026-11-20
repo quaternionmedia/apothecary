@@ -48,7 +48,7 @@ def test_the_tracked_scad_is_the_code_at_its_defaults():
 
 
 def test_the_stl_goes_stale_when_the_code_that_builds_it_changes():
-    sources = stl_renderer._sources(DEFAULT)
+    sources = stl_renderer.sources_of(DEFAULT)
     code = {
         *(PACKAGE / f for f in ("__init__.py", "blade.py", "mount.py", "part.py")),
     }

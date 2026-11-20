@@ -25,7 +25,14 @@ SiteValidator = Callable[[Assembly], LayoutReport]
 
 
 class UnknownSiteError(KeyError):
-    """Raised when a site name isn't registered."""
+    """Raised when a site name isn't registered. What it says is for whoever asked."""
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.name = name
+
+    def __str__(self) -> str:
+        return f"Site '{self.name}' not found"
 
 
 class SiteStore:

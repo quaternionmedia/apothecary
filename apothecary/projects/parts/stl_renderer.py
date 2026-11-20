@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterator, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -59,6 +59,26 @@ def scad_literal(value: object) -> str:
             "booleans and lists, so pass its fields as parameters of their own"
         )
     raise TypeError(f"no OpenSCAD literal for {type(value).__name__}: {value!r}")
+
+
+# The two ways up a part is had (docs/parts-authoring.md#how-it-rests): as it
+# prints, its STL, its SCAD's own render, what is sliced and downloaded; and as it
+# rests, what the world draws: its SCAD with the part's ``rest`` definitions. A
+# part that declares no rest pose rests as it prints.
+PRINT, REST = "print", "rest"
+Pose = Literal["print", "rest"]
+
+
+def posed(part: BasePart, pose: str) -> str:
+    """The pose a request for ``pose`` is answered with: the rest pose only for a
+    part that declares one."""
+    return REST if pose == REST and part.rest else PRINT
+
+
+def posed_path(stl_path: Path, pose: str) -> Path:
+    """Where ``pose`` of the STL at ``stl_path`` is kept: the rest pose beside
+    it, ``<name>.rest.stl``."""
+    return stl_path.with_name(f"{stl_path.stem}.rest.stl") if pose == REST else stl_path
 
 
 def scad_definitions(params: Optional[dict] = None) -> List[str]:
@@ -630,7 +650,7 @@ def params_sidecar_path(stl_path: Path) -> Path:
     return stl_path.with_suffix(".params.json")
 
 
-def _recordable(value: object) -> object:
+def recordable(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, BaseModel):
@@ -650,7 +670,7 @@ def write_params_sidecar(stl_path: Path, params: dict) -> Path:
             {"params": params, "generated": datetime.now().isoformat(timespec="seconds")},
             indent=2,
             sort_keys=True,
-            default=_recordable,
+            default=recordable,
         )
         + chr(10),
         encoding="utf-8",
@@ -679,6 +699,13 @@ def get_renderer() -> OpenSCADRenderer:
     if _renderer is None:
         _renderer = OpenSCADRenderer()
     return _renderer
+
+
+def forget_renderer() -> None:
+    """Let the singleton go, so the next use finds OpenSCAD again: an install has
+    just put another one in place."""
+    global _renderer
+    _renderer = None
 
 
 SNAPSHOTS_URL = "https://openscad.org/downloads.html#snapshots"
@@ -968,11 +995,11 @@ def scad_dependencies(scad: Path, text: Optional[str] = None) -> Dict[str, Optio
     return found
 
 
-def _sources(part: BasePart) -> List[Path]:
+def sources_of(part: BasePart) -> List[Path]:
     """What a part's STL is built from: its SCAD and every file the SCAD
     includes, uses or imports, its part.json when it has one, and each loaded
-    wrapper module whose DEFAULT is this part; either sets its rotation and
-    output path. A part built by Python geometry is also built from its code:
+    wrapper module whose DEFAULT is this part; either sets its output path and
+    how it rests. A part built by Python geometry is also built from its code:
     the module that defines its class, and every module of a wrapper that is
     a package."""
     python = part.geometry({}) is not None
@@ -1002,17 +1029,17 @@ def _sources(part: BasePart) -> List[Path]:
     return list(dict.fromkeys(sources))
 
 
-def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
+def is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
     """The STL on disk was rendered with these parameters and is newer than
     everything it was built from."""
     if not stl_path.exists():
         return False
     record = read_params_sidecar(stl_path) or {}
-    asked = json.loads(json.dumps(params, default=_recordable))
+    asked = json.loads(json.dumps(params, default=recordable))
     if record.get("params", {}) != asked:
         return False
     built = stl_path.stat().st_mtime
-    return all(src.stat().st_mtime <= built for src in _sources(part) if src.exists())
+    return all(src.stat().st_mtime <= built for src in sources_of(part) if src.exists())
 
 
 def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
@@ -1043,59 +1070,16 @@ def _cancelling(
     return found
 
 
-def _render_rotated(
-    renderer: OpenSCADRenderer,
-    scad_path: Path,
-    stl_path: Path,
-    rotation: List[float],
-    timeout: float,
-    params: dict,
-    cancel: Optional[Cancellation] = None,
-    binary: bool = False,
-) -> RenderResult:
-    """Render upright into a scratch directory, then turn it with a one-line wrapper.
-
-    Nothing is written beside the source, and each render has a scratch
-    directory of its own, so two renders of one part cannot collide. What
-    OpenSCAD said is both runs' stderr; what it measured is the upright run's,
-    the frame a part's declared bounds are in (``apothecary parts verify``).
-    """
-    with _scratch_beside(stl_path) as tmp:
-        upright = Path(tmp) / "upright.stl"
-        first = renderer.render_stl(
-            scad_path,
-            upright,
-            timeout,
-            params=params or None,
-            **_cancelling(renderer, cancel, binary),
-        )
-        if not first.success:
-            return first
-        wrapper = Path(tmp) / "rotate.scad"
-        wrapper.write_text(
-            f'rotate({scad_literal(rotation)}) import("{upright.name}");\n', encoding="utf-8"
-        )
-        second = renderer.render_stl(
-            wrapper, stl_path, timeout, **_cancelling(renderer, cancel, binary)
-        )
-    second.render_time_seconds += first.render_time_seconds
-    second.queued_seconds += first.queued_seconds
-    second.dropped = first.dropped + second.dropped
-    second.stderr = (first.stderr or "") + (second.stderr or "")
-    second.measured = first.measured
-    return second
-
-
 def render_part(
     part: BasePart,
     stl_path: Path,
     params: Optional[dict] = None,
     timeout: float = 120.0,
     renderer: Optional[OpenSCADRenderer] = None,
-    rotation: Optional[List[float]] = None,
     cancel: Optional[Cancellation] = None,
     scad: Optional[Path] = None,
     binary: bool = False,
+    pose: str = PRINT,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
     nothing more: no freshness check, no sidecar. ``binary`` asks OpenSCAD for
@@ -1103,8 +1087,9 @@ def render_part(
     is rendered from that geometry's SCAD, written to a scratch file beside
     ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
     for it (a draft written beside it), the params reaching it through
-    ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
-    defaults to the OpenSCAD the part asks for; ``cancel`` can stop it."""
+    ``part.scad_overrides``. ``renderer`` defaults to the OpenSCAD the part
+    asks for; ``cancel`` can stop it.
+    ``pose`` ``rest`` adds the part's rest definitions to the ``-D`` it gets."""
     if renderer is None:
         renderer = part_renderer(part)
     params = params or {}
@@ -1115,10 +1100,8 @@ def render_part(
         else:
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")
-        if rotation and any(rotation):
-            return _render_rotated(
-                renderer, scad, stl_path, rotation, timeout, definitions, cancel, binary
-            )
+        if posed(part, pose) == REST:
+            definitions = {**definitions, **part.rest}
         return renderer.render_stl(
             scad,
             stl_path,
@@ -1140,31 +1123,34 @@ def build_stl(
     force: bool = False,
     timeout: float = 120.0,
     renderer: Optional[OpenSCADRenderer] = None,
+    pose: str = PRINT,
 ) -> RenderResult:
-    """Build a part's STL at the part's own output path.
+    """Build a part's STL at the part's own output path; with ``pose`` ``rest``,
+    for a part that declares a rest pose, the STL of it beside that
+    (``posed_path``), its own freshness and sidecar.
 
     Overrides are checked against the part's ``params_model`` (ValueError on a
     bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
     newer SCAD, file the SCAD reads, wrapper or geometry code, or different
     recorded parameters say otherwise. A part that cannot be built here is refused
-    (``skipped="refused"``). It is rendered as ``render_part`` renders it,
-    turned by ``display_rotation``; non-default parameters are
+    (``skipped="refused"``). It is rendered as ``render_part`` renders it;
+    non-default parameters are
     recorded in the params sidecar as validated, not as ``scad_overrides``
     translates them, and a default build removes it. ``renderer`` overrides
     the OpenSCAD the part would choose for itself, and is the one checked
     against the part's ``openscad_min_version``.
     """
     params = part.validate_overrides(params)
-    stl_path = part.get_stl_output_path()
-    if not force and _is_fresh(part, stl_path, params):
+    pose = posed(part, pose)
+    stl_path = posed_path(part.get_stl_output_path(), pose)
+    if not force and is_fresh(part, stl_path, params):
         return RenderResult(success=True, stl_path=stl_path, skipped="fresh")
 
     can_build, reason = part.can_generate_stl(renderer.openscad_path if renderer else None)
     if not can_build:
         return RenderResult(success=False, error_message=reason, skipped="refused")
 
-    rotation = part.display_rotation.to_list()
-    result = render_part(part, stl_path, params, timeout, renderer, rotation)
+    result = render_part(part, stl_path, params, timeout, renderer, pose=pose)
 
     if result.success:
         if params:

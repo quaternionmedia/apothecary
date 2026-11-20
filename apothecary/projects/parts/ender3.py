@@ -12,7 +12,7 @@ machine with its nozzle where the last poll said it was.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -39,6 +39,22 @@ ELECTRONICS_BOX = BoundingBox3D(
 )
 
 
+KINEMATICS = {
+    "param": "piece",
+    "fixed": "fixed",
+    "rest": {"x": 110.0, "y": 110.0, "z": 150.0},
+    "range": {"x": [0.0, BUILD.x], "y": [0.0, BUILD.y], "z": [0.0, BUILD.z]},
+    "pieces": [
+        # The bed carries the print along Y: the print's Y under the nozzle grows as it
+        # moves toward the front.
+        {"piece": "bed", "follows": {"y": -1.0}},
+        {"piece": "gantry", "follows": {"z": 1.0}},
+        {"piece": "hotend", "follows": {"x": 1.0, "z": 1.0}},
+    ],
+}
+"""What moves with which axis, as the SCAD's ``piece`` draws them (``BasePart.kinematics``)."""
+
+
 class Params(BaseModel):
     """Where the axes stand, and what hangs on the frame."""
 
@@ -47,6 +63,11 @@ class Params(BaseModel):
     y_axis: float = Field(110.0, ge=0, le=220, description="Bed Y, in bed coordinates (mm)")
     with_spool: bool = Field(True, description="A spool on the holder")
     with_lcd: bool = Field(True, description="The LCD and its bracket")
+    piece: Literal["all", "fixed", "bed", "gantry", "hotend"] = Field(
+        "all",
+        description="The whole printer, or one piece of it: what stands still, the bed "
+        "(Y), the X gantry (Z), the hotend carriage (X and Z)",
+    )
 
 
 class Ender3Part(BasePart):
@@ -69,6 +90,8 @@ def create(root: Path) -> BasePart:
         params_model=Params,
         category="machine",
         machine="printer",
+        bed_moves_y=0.0,  # the bed carries Y; the nozzle stands at the build area's front edge
+        kinematics=KINEMATICS,
         tags=["printer", "ender3", "creality", "fdm"],
         readme_path=root / "parts" / "ender3" / "README.md",
         preview_color=Color(r=0.75, g=0.75, b=0.78),

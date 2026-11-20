@@ -3,22 +3,34 @@
  * deck cannot be asked what it shows; its four knobs and the events heard are listed
  * under them. A simulated deck is pressed, turned and tapped from here, each a
  * POST of the event a real deck would report; a real deck is pressed by hand, and
- * its controls are off.
+ * its controls are off. What is heard is shown where it happened as well as listed: a
+ * key or a knob held is marked for as long as it is down, and a press, a turn's
+ * direction and a touch's place on the strip are lit for a moment after each.
  *
  * Its knobs, the layout that jogs the garage's machines, are the server's (deck_knobs.js):
- * the window starts and stops them and chooses the machine they move and their step,
- * as the deck's own keys do, and shows what the deck, a Control pad or the ring chose.
+ * the window starts and stops them and chooses the machine they move, their step and the
+ * screen the strip shows, as the deck's own keys and a swipe do, and shows what the deck,
+ * a Control pad or the ring chose. Each control is greyed with the reason its route would
+ * refuse it now (`can` on the knobs' state, firmware/can.py; can.js), and the strip's
+ * words are written under its picture, to be read at any width.
  *
  * mountDeck(root, { base, log }) renders into `root` and returns { shown(), close(),
  * load(), state(), destroy() }. shown() loads the first deck found and follows it
- * every 1.5 s while the window is in front; close() stops. Listing a deck opens
+ * every 1.5 s while the window is in front, asking for its events four times a second;
+ * close() stops. Listing a deck opens
  * nothing (GET /firmware/decks); following one opens it (GET /firmware/decks/{id}).
  */
 
 import { esc } from "/static/board_text.js";
+import { applyCan } from "/static/can.js";
 import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 
-const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500;
+const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
+const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
+// The controls the deck's answer greys (firmware/can.py deck_can), each by its route.
+// What the ring's Knobs › Screen calls each screen of the strip (apothecary/menu.py SCREEN_CELLS).
+const SCREEN_LABEL = { knobs: "Knobs", progress: "Progress", status: "Status", previous: "Back", next: "Next" };
+const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "inject"];
 
 const MARKUP = `
 <div class="deck-ui">
@@ -26,6 +38,7 @@ const MARKUP = `
     <div class="deck-control"></div>
     <div class="deck-keys"></div>
     <div class="deck-strip"></div>
+    <div class="deck-strip-said"></div>
     <div class="deck-knobs"></div>
     <div class="note deck-note"></div>
     <div class="k">Heard</div>
@@ -43,7 +56,7 @@ const heard = (e) => {
 export function mountDeck(root, { base = "", log = null } = {}) {
     root.innerHTML = MARKUP;
     const $ = (sel) => root.querySelector(sel);
-    let alive = true, timer = null, deck = null, last = 0, drawn = null, lines = [], problem = null, knobs = null;
+    let alive = true, timer = null, ear = null, deck = null, last = 0, drawn = null, lines = [], problem = null, knobs = null;
     const say = (text, kind = "") => { if (log) log(text, kind); };
 
     async function api(path, opts = {}) {
@@ -55,10 +68,46 @@ export function mountDeck(root, { base = "", log = null } = {}) {
     const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data) });
 
     $(".deck-keys").innerHTML = Array.from({ length: KEYS }, (_, i) =>
-        `<button type="button" class="deck-key" data-key="${i}" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
-    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed"><img alt="" hidden><span class="deck-none">–</span></button>`;
+        `<button type="button" class="deck-key" data-key="${i}" data-can="inject" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
+    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" data-can="inject" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden draggable="false"><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
     $(".deck-knobs").innerHTML = Array.from({ length: KNOBS }, (_, i) =>
-        `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" title="Knob ${i} pressed and released">●</button></div>`).join("");
+        `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" data-can="inject" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" data-can="inject" title="Knob ${i} pressed and released">●</button></div>`).join("");
+
+    // What was heard, shown where it happened. An event older than a few seconds (the
+    // history a window opened late is given) marks what is still held and lights nothing.
+    function lit(el) {
+        el.classList.add("deck-heard");
+        clearTimeout(el.litTimer);
+        el.litTimer = setTimeout(() => { el.classList.remove("deck-heard"); if (el.classList.contains("deck-touch")) el.hidden = true; }, LIT_MS);
+    }
+    function show(e) {
+        const fresh = Date.now() / 1000 - e.at < 3, v = e.value;
+        if (e.kind === "touch") {
+            if (!fresh) return;
+            const dot = $(".deck-touch"), to = v.x_out != null ? v.x_out : v.x;
+            dot.style.left = `${Math.min(v.x, to) / STRIP[0] * 100}%`;
+            dot.style.top = `${v.y / STRIP[1] * 100}%`;
+            dot.style.width = v.x_out != null ? `${Math.abs(to - v.x) / STRIP[0] * 100}%` : "";
+            dot.hidden = false;
+            lit(dot);
+            return;
+        }
+        const el = e.kind === "key"
+            ? root.querySelector(`.deck-key[data-key="${e.index}"]`)
+            : root.querySelector(`.deck-knob[data-knob="${e.index}"] ${e.kind === "knob-press" ? ".deck-press" : `.deck-turn[data-dir="${v > 0 ? 1 : -1}"]`}`);
+        if (!el) return;
+        if (e.kind !== "knob-turn") el.classList.toggle("deck-down", !!v);
+        if (fresh) lit(el);
+    }
+    function take(news) {
+        let any = false;
+        for (const e of news.events) if (e.seq > last) { lines = [heard(e), ...lines].slice(0, KEPT); show(e); any = true; }
+        last = Math.max(last, news.last);
+        return any;
+    }
+    function renderHeard() {
+        $(".deck-events").innerHTML = lines.length ? lines.map((t) => `<li>${esc(t)}</li>`).join("") : '<li class="empty">nothing heard yet</li>';
+    }
 
     function picture(button, url, drawnNow) {
         const img = button.querySelector("img");
@@ -67,25 +116,57 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (drawnNow) img.src = url;
     }
 
-    // The knobs: off, or the machine they move, their step and its control.
+    // The knobs: off, or the machine they move, their step, its control and the strip's
+    // screen. While a job holds the machine's port their line says so as their strip does,
+    // in the server's own refusal of a jog (`held`), not the last thing they did.
     function renderKnobs() {
         const box = $(".deck-control");
-        if (!deck || !knobs) { box.innerHTML = ""; return; }
+        // Drawn again only when what it says changes: the ring's addresses written on the
+        // buttons stay on them, and are written anew (`apothecary:deck-drawn`) when they are not.
+        const draw = (html) => {
+            if (box.dataset.drawn === html) return;
+            box.dataset.drawn = html;
+            box.innerHTML = html;
+            window.dispatchEvent(new CustomEvent("apothecary:deck-drawn"));
+        };
+        if (!deck || !knobs) { draw(""); return; }
         const on = !!knobs.running;
-        const run = `<button type="button" class="deck-run" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}. ⌗ Panels › Machine › Knobs › On / off">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
-        if (!on) { box.innerHTML = `<div class="row">${run}<span class="meta">knobs off</span></div>`; return; }
-        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
-        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
-        box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
-            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`;
+        const run = `<button type="button" class="deck-run" data-can="knobs.start" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
+        if (!on) { draw(`<div class="row">${run}<span class="meta">knobs off</span></div>`); return; }
+        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" data-can="knobs.machine" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it">${esc(m)}</button>`).join("");
+        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it">${mm}</button>`).join("");
+        const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck's strip shows its ${esc(s)} screen, as a swipe along it does; nothing is sent to a machine">${esc(SCREEN_LABEL[s] || s)}</button>`).join("");
+        draw(`<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
+            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.held ? `held · ${knobs.held}` : knobs.said)}</div>`
+            + `<div class="row"><span class="meta">strip</span>${screens}</div>`
+            + `<div class="meta deck-screen">strip screen: ${esc(SCREEN_LABEL[knobs.screen] || knobs.screen)} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a swipe along the strip walks ${knobs.screens.map((n) => esc(SCREEN_LABEL[n] || n)).join(", ")}</div>`);
+        // Running, the one button stops them, and is answered as a stop.
+        box.querySelector(".deck-run").dataset.can = "knobs.stop";
+    }
+
+    // The deck's answer (`can` on its knobs' state): what each control's route would refuse
+    // now. With no deck to ask, or no answer, every control is refused for that.
+    function deckCan() {
+        if (deck && knobs && knobs.can) return knobs.can;
+        const why = problem || (deck ? "the deck has not answered yet" : $(".deck-name").textContent);
+        return Object.fromEntries(VERBS.map((verb) => [verb, { ok: false, kind: "offline", why }]));
+    }
+
+    // The strip's two lines as the server drew them, as text under its picture.
+    function renderStripWords() {
+        const sd = deck && drawn ? drawn.strip_drawn : null;
+        $(".deck-strip-said").innerHTML = sd
+            ? `<div class="deck-strip-text">${esc(sd.text)}</div>${sd.small ? `<div class="deck-strip-small">${esc(sd.small)}</div>` : ""}`
+            : "";
     }
 
     function render() {
         renderKnobs();
+        applyCan(root, deckCan());
+        renderStripWords();
         const inputs = !!(deck && deck.simulated);
-        for (const b of root.querySelectorAll(".deck-key, .deck-strip-tap, .deck-turn, .deck-press")) b.disabled = !inputs;
         if (!deck) return;
-        $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}`;
+        $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}${drawn && drawn.mended ? ` · lost and found ${drawn.mended}×` : ""}`;
         const keys = (drawn && drawn.keys_drawn) || {};
         // An image is fetched again when what was drawn on it changes, whoever drew it.
         const stamp = (d) => (d ? encodeURIComponent([d.text, d.small, d.colour].join("|")) : "");
@@ -94,10 +175,12 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         picture($(".deck-strip-tap"), `${at}/strip/image?v=${stamp(drawn && drawn.strip_drawn)}`, !!(drawn && drawn.strip_drawn));
         $(".deck-note").textContent = problem
             ? problem
+            : drawn && drawn.alive === false
+            ? "the deck is not answering on USB: it is looked for, and drawn again as it was when it is back"
             : inputs
             ? "a simulated deck: press a key, turn or press a knob, tap the strip; each is the event a real deck reports"
             : "a real deck is pressed by hand; what it shows is what was last sent to it from here";
-        $(".deck-events").innerHTML = lines.length ? lines.map((t) => `<li>${esc(t)}</li>`).join("") : '<li class="empty">nothing heard yet</li>';
+        renderHeard();
     }
 
     // One refresh at a time: a second asked for while one is under way runs once more when
@@ -117,6 +200,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (!alive) return null;
         if (!found.decks.length) {
             deck = null;
+            knobs = null;
             $(".deck-name").textContent = found.problem ? `no Stream Deck +: ${found.problem}` : "no Stream Deck + found";
             render();
             return null;
@@ -125,26 +209,45 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         try {
             drawn = await api(`/firmware/decks/${encodeURIComponent(deck.id)}`);
             deck = { ...deck, serial: drawn.serial };
-            const news = await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`);
-            for (const e of news.events) if (e.seq > last) lines = [heard(e), ...lines].slice(0, 12);
-            last = Math.max(last, news.last);
-            knobs = await knobsOf(base, deck.id);
+            take(await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`));
             problem = null;
         } catch (e) {
             // Said once, and shown in the window for as long as it lasts.
             if (e.message !== problem) say(`Deck: ${e.message}`, "bad");
             problem = e.message;
         }
+        // The knobs and the deck's answer, whatever the deck said: asking opens nothing.
+        try { knobs = await knobsOf(base, deck.id); } catch (e) { knobs = null; }
         render();
         return deck;
     }
 
     const schedule = () => { clearTimeout(timer); if (alive) timer = setTimeout(async () => { try { await load(); } catch (e) { /* the next beat tries again */ } schedule(); }, EVERY_MS); };
 
-    async function give(kind, index, value) {
-        try { await post(`/firmware/decks/${encodeURIComponent(deck.id)}/events`, { kind, index, value }); }
-        catch (e) { say(`Deck: ${e.message}`, "bad"); return; }
-        await load();
+    // Between refreshes the events alone are asked for, so a press shows as it is made.
+    const hear = () => {
+        clearTimeout(ear);
+        if (alive) ear = setTimeout(async () => {
+            if (deck && !problem && !busy) {
+                try { if (take(await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`))) renderHeard(); }
+                catch (e) { /* the next refresh says what is wrong */ }
+            }
+            hear();
+        }, HEAR_MS);
+    };
+
+    // What a simulated deck is given goes in the order it was clicked, one click's events
+    // together: a press and its release are never parted by the next click's.
+    let giving = Promise.resolve();
+    function give(...events) {
+        giving = giving.then(async () => {
+            for (const [kind, index, value] of events) {
+                try { await post(`/firmware/decks/${encodeURIComponent(deck.id)}/events`, { kind, index, value }); }
+                catch (e) { say(`Deck: ${e.message}`, "bad"); return; }
+            }
+            await load();
+        });
+        return giving;
     }
     // A choice of the knobs, made on the server; the deck, the Control pads and this window
     // all follow it.
@@ -152,6 +255,25 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         try { knobs = await change(); } catch (e) { say(`Knobs: ${e.message}`, "bad"); }
         await load();
     }
+    // A drag along the strip is a swipe: the event a real deck reports for a finger drawn
+    // across it, from where it went down to where it came up. Its click is not a tap.
+    let down = null, swiped = false;
+    const strip = $(".deck-strip-tap");
+    const place = (ev) => {
+        const box = strip.getBoundingClientRect();
+        return { x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) };
+    };
+    function startSwipe(ev) { swiped = false; down = deck && deck.simulated ? place(ev) : null; }
+    async function endSwipe(ev) {
+        const from = down; down = null;
+        if (!from || !deck || !deck.simulated) return;
+        const to = place(ev);
+        if (Math.abs(to.x - from.x) < SWIPE_PX) return;
+        swiped = true;
+        await give(["touch", 0, { kind: "drag", x: from.x, y: from.y, x_out: Math.max(0, Math.min(STRIP[0], to.x)), y_out: Math.max(0, Math.min(STRIP[1], to.y)) }]);
+    }
+    strip.addEventListener("pointerdown", startSwipe);
+    strip.addEventListener("pointerup", endSwipe);
     root.addEventListener("click", async (ev) => {
         const b = ev.target.closest("button");
         if (b && deck && b.classList.contains("deck-run")) {
@@ -160,20 +282,32 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         }
         if (b && deck && b.classList.contains("deck-machine")) { await steer(() => choose(base, deck.id, { machine: b.dataset.machine })); return; }
         if (b && deck && b.classList.contains("deck-step")) { await steer(() => choose(base, deck.id, { step_mm: Number(b.dataset.mm) })); return; }
+        if (b && deck && b.classList.contains("deck-screen-to")) { await steer(() => choose(base, deck.id, { screen: b.dataset.screen })); return; }
         if (!b || !deck || !deck.simulated) return;
-        if (b.classList.contains("deck-key")) { const i = +b.dataset.key; await give("key", i, true); await give("key", i, false); }
-        else if (b.classList.contains("deck-turn")) await give("knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir);
-        else if (b.classList.contains("deck-press")) { const i = +b.closest(".deck-knob").dataset.knob; await give("knob-press", i, true); await give("knob-press", i, false); }
+        if (b.classList.contains("deck-key")) { const i = +b.dataset.key; await give(["key", i, true], ["key", i, false]); }
+        else if (b.classList.contains("deck-turn")) await give(["knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir]);
+        else if (b.classList.contains("deck-press")) { const i = +b.closest(".deck-knob").dataset.knob; await give(["knob-press", i, true], ["knob-press", i, false]); }
         else if (b.classList.contains("deck-strip-tap")) {
+            if (swiped) { swiped = false; return; }
             const box = b.getBoundingClientRect();
-            await give("touch", 0, { kind: "short", x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) });
+            await give(["touch", 0, { kind: "short", x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) }]);
         }
     });
 
     return {
         load, state: () => ({ deck, drawn, last }),
-        shown() { alive = true; load().catch((e) => { $(".deck-name").textContent = e.message; }); schedule(); },
-        close() { clearTimeout(timer); },
-        destroy() { alive = false; clearTimeout(timer); root.innerHTML = ""; },
+        // The controls that are cells of Panels › Machine › Knobs, each by its verb, for the
+        // ring to write its address on (the page asks, as it does of a Machine's pairs).
+        pairs() {
+            const out = [];
+            for (const b of root.querySelectorAll(".deck-run")) out.push([b, "deck:knobs"]);
+            for (const b of root.querySelectorAll(".deck-machine")) out.push([b, `deck:machine:${b.dataset.machine}`]);
+            for (const b of root.querySelectorAll(".deck-step")) out.push([b, `deck:step:${b.dataset.mm}`]);
+            for (const b of root.querySelectorAll(".deck-screen-to")) out.push([b, `deck:screen:${b.dataset.screen}`]);
+            return out;
+        },
+        shown() { alive = true; load().catch((e) => { $(".deck-name").textContent = e.message; }); schedule(); hear(); },
+        close() { clearTimeout(timer); clearTimeout(ear); },
+        destroy() { alive = false; clearTimeout(timer); clearTimeout(ear); root.innerHTML = ""; },
     };
 }

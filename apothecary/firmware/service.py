@@ -13,36 +13,21 @@ from typing import Callable, List, Optional
 from ..projects.parts.skeleton import ROOT
 from .devices import get_state, make_flash_record
 from .installer import InstallSpec
-from .models import FlashRecord, SketchInfo, ToolchainStatus
+from .models import ArduinoStatus, FlashRecord, SketchInfo, ToolchainStatus
 from .modules import Plan, get_module, module_for, modules, reset_modules
 from .modules.arduino import ArduinoModule
-from .toolchains import (
-    ArduinoCli,
-    Esptool,
-    ToolchainError,
-    get_arduino_cli,
-)
+from .toolchains import ToolchainError, get_arduino_cli, tools_dir
 
 Log = Callable[[str], None]
 
 
-def toolchain_status(
-    cli: Optional[ArduinoCli] = None, esptool: Optional[Esptool] = None
-) -> ToolchainStatus:
-    """Everything ``validate`` reports; never raises -- problems are listed.
-
-    The top-level fields are the Arduino module's; ``toolchains`` holds every
-    module's status, Arduino's first.
-    """
-    arduino = ArduinoModule()
-    status = arduino.legacy_status(cli, esptool)
-    status.toolchains = [
-        arduino.from_legacy(status) if m.id == arduino.id else m.status() for m in modules()
-    ]
-    return status
+def toolchain_status() -> ToolchainStatus:
+    """Everything ``validate`` reports: where the tools live and every module's
+    status, Arduino's first; never raises -- each module lists its problems."""
+    return ToolchainStatus(tools_dir=str(tools_dir()), toolchains=[m.status() for m in modules()])
 
 
-def install(spec: InstallSpec, log: Log) -> ToolchainStatus:
+def install(spec: InstallSpec, log: Log) -> ArduinoStatus:
     """Install/refresh arduino-cli, then any requested cores and libraries."""
     status = ArduinoModule().install_spec(spec, log)
     reset_modules()

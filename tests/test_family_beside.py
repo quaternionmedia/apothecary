@@ -188,3 +188,23 @@ def test_a_step_holds_the_sites_wiring_as_it_is_when_it_fires(fake_arduino_cli, 
     path, held = heard[-1]
     assert path == "/family/cue"
     assert set(held["action"]["hold"]) == {"patch", "devices", "states"}
+
+
+def test_a_step_holding_the_wiring_of_a_site_that_is_not_there_says_which_site():
+    """The site is what is missing, and the 404 names it: not the procedure, not the step."""
+    body = {
+        "steps": [
+            {
+                "number": "1",
+                "name": "Hold the bench",
+                "discipline": "network",
+                "family": {"carlos": {"hold": {"wiring": "nowhere"}}},
+            }
+        ]
+    }
+    client = TestClient(app, client=("127.0.0.1", 50000), base_url="http://127.0.0.1")
+    route = "/sites/garage/procedures/hold"
+    assert client.put(route, json=body).status_code == 200
+    answer = client.post(f"{route}/steps/1/go")
+    assert answer.status_code == 404, answer.text
+    assert answer.json() == {"detail": "Site 'nowhere' not found"}

@@ -14,8 +14,10 @@ editing this code and having that edit reviewed:
    personal data: the application module (``apothecary/api.py``, which the
    server and the docs generator's server load), the command line
    (``apothecary/cli/__init__.py``), the ``__init__`` of the vision,
-   gathering, firmware, routes, rig, evidence and family packages, and the tests' root
-   ``conftest.py``. So every apothecary process is under it before any of
+   gathering, firmware, routes, rig, evidence and family packages, the modules
+   that resolve the state folder and the picture root
+   (``apothecary/state_folder.py``, ``apothecary/picture_root.py``), and the
+   tests' root ``conftest.py``. So every apothecary process is under it before any of
    that code runs, and the geometry library -- ``import apothecary``, the
    shapes, the scene, the parts under ``apothecary.projects`` -- installs
    nothing: a program that uses it for its shapes keeps its network. The one

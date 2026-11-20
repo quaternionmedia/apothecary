@@ -11,7 +11,7 @@ model's often do.
 ``APOTHECARY_QMCP=simulated`` is the answering qmcp; ``simulated:slow`` answers
 after every deadline, ``simulated:empty`` has no model, ``simulated:broken``
 answers malformed, and ``simulated:down`` does not answer. ``apothecary serve
---demo`` runs with ``simulated`` unless another is set.
+--simulated`` runs with ``simulated`` unless another is set.
 """
 
 from __future__ import annotations

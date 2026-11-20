@@ -1,12 +1,15 @@
 # AnoleX 4060-Evo Ultra 2
 
 An AnoleX 4060-Evo Ultra 2, a desktop CNC router, as a workshop model, built
-in OpenSCAD from published dimensions: a moving-gantry machine cutting
-400 x 600 x 80 mm, HGH15 linear rails and 1204 ball screws on each axis,
+in OpenSCAD from published dimensions: a moving-table machine cutting
+400 x 600 x 80 mm -- the table carries the work along Y under a gantry that
+stands on the base, as the maker's manual has it -- HGH15 linear rails and 1204 ball screws on each axis,
 NEMA 23 closed-loop steppers, an 800 W trim router in a 65 mm clamp on the
 Z plate, the control box at the back of the base. The axes (`x_axis`,
 `y_axis`, `z_axis`) are parameters, so the garage draws its router,
-cnc_router, with its tool where the last poll said.
+cnc_router, with its table and tool where its axes are; `piece` draws what
+stands still, the table, the X carriage or the Z slide alone, so a scene moves each
+with its axes (`KINEMATICS` in the part's wrapper).
 
 `anolex_4060_evo_ultra_2.scad` says which numbers are the maker's
 specifications and which are taken from its listed footprint or chosen to
@@ -24,3 +27,13 @@ the trim router in its clamp, modelled from the Python wrapper's constants
 (`apothecary/projects/parts/anolex_4060_evo_ultra_2.py`) where
 `anolex_4060_evo_ultra_2.scad` draws them with its axes at their defaults.
 [docs/cnc.md](../../docs/cnc.md) says what Apothecary does with it.
+
+## The maker's manual
+
+[`manual.json`](manual.json) is what the maker's user manual says, as a profile: its
+figures, every command and setting it prints, and each procedure in this repository's
+words with the page it is on -- the first cut, the Z probe and its plate's thickness, the
+emergency stop, a limit switch touched, the Macro button, the WebUI. The manual is the
+maker's and is not kept here: the profile names it by its title, version and SHA-256. It
+is the 4030's manual, read for the 4060, and its last section sets what it says beside
+what this machine's controller says for itself.

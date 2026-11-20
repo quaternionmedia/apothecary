@@ -26,17 +26,19 @@ Two things distinguish this from ``devices.SerialStreams``:
 The byte transport is an engine slot (``Transport``), chosen by
 ``serial_engine()``: **pyserial** (any baud, every platform) unless
 ``APOTHECARY_SERIAL_ENGINE=simulated`` selects an in-process pretend Marlin
-for demos and browser tests with no hardware. Everything above the slot is
+for ``serve --simulated`` and browser tests, with no hardware. Everything above the slot is
 engine-agnostic.
 """
 
 from __future__ import annotations
 
 import errno
+import math
 import os
 import re
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
@@ -295,6 +297,218 @@ class PySerialTransport:
             pass
 
 
+class SimulatedHeater:
+    """One heater of the simulated board, when its heaters are modelled: a first-order
+    plus dead time plant from the heater's power (0 to ``max_power``) to its rise over
+    ``ambient``, and the board's PID round it, stepped every ``dt`` simulated seconds.
+
+    The PID is ``control_loops.PIDRunner``'s, its derivative on the reading smoothed by
+    ``smoothing`` a step; outside ``functional_range`` degrees of the target the heater is
+    full on or off and the PID starts afresh, as Marlin's is documented to do (assumed,
+    with Marlin's constants unconfirmed: the range and the smoothing here are the
+    simulator's). A reading has Gaussian noise of ``noise`` degrees. Every number is the
+    simulator's own and no machine's."""
+
+    def __init__(
+        self,
+        plant,
+        ambient: float,
+        gains: Tuple[float, float, float],
+        dt: float = 0.1,
+        max_power: float = 255.0,
+        smoothing: float = 0.95,
+        functional_range: float = 10.0,
+        noise: float = 0.15,
+        seed: str = "",
+    ):
+        import random
+
+        from .. import control_loops as cl
+
+        self.cl = cl
+        self.plant, self.ambient, self.dt = plant, ambient, dt
+        self.max_power, self.smoothing, self.functional_range = (
+            max_power,
+            smoothing,
+            functional_range,
+        )
+        self.noise = noise
+        self._rng = random.Random(seed)
+        self.runner = cl.PlantRunner(plant, dt)
+        self.gains = tuple(float(g) for g in gains)
+        self.target = 0.0
+        self.power = 0.0
+        self.autotune: Optional["SimulatedAutotune"] = None
+        self._ctrl = None
+
+    @property
+    def temperature(self) -> float:
+        return self.ambient + self.runner.output
+
+    def reading(self) -> float:
+        return self.temperature + (self._rng.gauss(0.0, self.noise) if self.noise else 0.0)
+
+    def set_gains(self, kp: float, ki: float, kd: float) -> None:
+        self.gains = (kp, ki, kd)
+        self._ctrl = None
+
+    def settle_at(self, target: float) -> None:
+        """At rest at ``target``, its PID holding the power that keeps it there."""
+        self.target = target
+        u = min(self.max_power, max(0.0, (target - self.ambient) / self.plant.gain))
+        self.runner = self.cl.PlantRunner(self.plant, self.dt, start=u)
+        self._controller(integral=u)
+        self.power = u
+
+    def _controller(self, integral: float = 0.0):
+        kp, ki, kd = self.gains
+        pid = self.cl.PID(kp, ki, kd, dt=self.dt, filter=self.cl.filter_of(self.smoothing, self.dt))
+        self._ctrl = self.cl.PIDRunner(pid, 0.0, self.max_power, integral=integral)
+        return self._ctrl
+
+    def step(self) -> None:
+        measured = self.reading()
+        if self.autotune is not None:
+            self.power = self.autotune.power(measured)
+        elif self.target <= 0:
+            self.power, self._ctrl = 0.0, None
+        else:
+            error = self.target - measured
+            if abs(error) > self.functional_range:
+                self.power, self._ctrl = (self.max_power if error > 0 else 0.0), None
+            else:
+                ctrl = self._ctrl or self._controller()
+                self.power = ctrl.update(self.target, measured)
+        self.runner.step(self.power)
+
+
+class SimulatedAutotune:
+    """A relay autotune on a simulated heater, in the manner Marlin's ``M303`` is
+    documented to work (assumed, not read from its source): the heater full on and off
+    about the target by ``bias +/- d``, the bias moved each cycle to even the times up and
+    down, the oscillation's swing and period read each cycle, and from the third the
+    ultimate gain by the relay's describing function, ``Ku = 4 d / (pi a)``, and the
+    classic Ziegler-Nichols gains, ``Kp = 0.6 Ku``, ``Ki = 2 Kp / Tu``, ``Kd = Kp Tu / 8``.
+    Its words are the forms ``parse_autotune`` reads. Every choice of when to switch,
+    how far to move the bias, and when to give up is the simulator's."""
+
+    REPORT_EVERY_S = 2.0
+    HOLD_S = 5.0  # the least time between two switches
+    OVERSHOOT_C = 30.0  # past the target by this much, it gives up
+    GIVE_UP_S = 20 * 60.0
+
+    def __init__(self, heater: SimulatedHeater, target: float, cycles: int, label: str):
+        self.heater, self.target, self.cycles, self.label = heater, target, cycles, label
+        top = heater.max_power
+        self.bias = self.d = top / 2
+        self.heating = True
+        self.t = 0.0
+        self.switched = 0.0
+        self.t_high = self.t_low = 0.0
+        self.high, self.low = -1e9, 1e9
+        self.cycle = 0
+        self.next_report = 0.0
+        self.said: List[str] = []
+        self.result: Optional[Tuple[float, float, float]] = None
+        self.done = False
+
+    def power(self, measured: float) -> float:
+        h = self.heater
+        dt = h.dt
+        self.t += dt
+        self.high, self.low = max(self.high, measured), min(self.low, measured)
+        if self.t >= self.next_report:
+            self.next_report += self.REPORT_EVERY_S
+            power = "B@" if self.label == "B" else "@"
+            self.said.append(
+                f" {self.label}:{measured:.2f} /{self.target:.2f} {power}:{int(self._out())}"
+            )
+        if measured > self.target + self.OVERSHOOT_C:
+            return self._end("PID Autotune failed! Temperature too high")
+        if self.t > self.GIVE_UP_S:
+            return self._end("PID Autotune failed! timeout")
+        since = self.t - self.switched
+        if self.heating and measured > self.target and since > self.HOLD_S:
+            self.heating = False
+            self.t_high = since
+            self.switched = self.t
+        elif not self.heating and measured < self.target and since > self.HOLD_S:
+            self.heating = True
+            self.t_low = since
+            self.switched = self.t
+            self.cycle += 1
+            if self.cycle > 1:
+                top = h.max_power
+                self.bias += self.d * (self.t_high - self.t_low) / (self.t_low + self.t_high)
+                self.bias = min(top - 20, max(20.0, self.bias))
+                self.d = top - 1 - self.bias if self.bias > top / 2 else self.bias
+                self.said.append(
+                    f" bias: {int(self.bias)} d: {int(self.d)} min: {self.low:.2f} max: {self.high:.2f}"
+                )
+                if self.cycle > 2:
+                    ku = 4 * self.d / (math.pi * (self.high - self.low) / 2)
+                    tu = self.t_low + self.t_high
+                    kp = 0.6 * ku
+                    ki = 2 * kp / tu
+                    kd = kp * tu / 8
+                    self.result = (kp, ki, kd)
+                    self.said += [
+                        f" Ku: {ku:.2f} Tu: {tu:.2f}",
+                        " Classic PID ",
+                        f" Kp: {kp:.2f} Ki: {ki:.2f} Kd: {kd:.2f}",
+                    ]
+            self.high, self.low = -1e9, 1e9
+            if self.cycle > self.cycles:
+                kp, ki, kd = self.result or (0.0, 0.0, 0.0)
+                return self._end(
+                    "PID Autotune finished! Put the last Kp, Ki and Kd constants from below into Configuration.h",
+                    [
+                        f"#define DEFAULT_Kp {kp:.2f}",
+                        f"#define DEFAULT_Ki {ki:.2f}",
+                        f"#define DEFAULT_Kd {kd:.2f}",
+                    ],
+                )
+        return self._out()
+
+    def _out(self) -> float:
+        return self.bias + self.d if self.heating else self.bias - self.d
+
+    def _end(self, words: str, more: Tuple[str, ...] = ()) -> float:
+        self.said += [words, *more]
+        self.done = True
+        return 0.0
+
+    def stop(self, words: str) -> None:
+        if not self.done:
+            self.said.append(words)
+            self.done = True
+
+
+def simulated_heaters(port: str) -> Dict[str, SimulatedHeater]:
+    """The simulated board's modelled heaters: a hotend and a bed, each a plant of the
+    simulator's own and gains designed for it by IMC-PID with its closed-loop time its dead
+    time. No machine's numbers."""
+    from .. import control_loops as cl
+
+    hotend = cl.FOPDT(1.0, 90.0, 3.0)
+    bed = cl.FOPDT(0.45, 240.0, 8.0)
+
+    def gains(plant):
+        pid = cl.design("imc", plant=plant, dt=0.1).pid
+        return (round(pid.kp, 2), round(pid.ki, 4), round(pid.kd, 2))
+
+    return {
+        "T": SimulatedHeater(hotend, 23.0, gains(hotend), seed=f"{port}:T"),
+        "B": SimulatedHeater(bed, 24.0, gains(bed), seed=f"{port}:B"),
+    }
+
+
+def heaters_modelled() -> bool:
+    """``APOTHECARY_SIMULATED_HEATERS=model``: the simulated board's heaters follow a
+    thermal model; otherwise a heater sits at its target, as it always has."""
+    return os.environ.get("APOTHECARY_SIMULATED_HEATERS", "").strip().lower() == "model"
+
+
 class SimulatedPrinter:
     """A pretend Marlin behind the transport slot: no port, no hardware.
 
@@ -310,7 +524,13 @@ class SimulatedPrinter:
 
     FIRMWARE = "Marlin Apothecary Simulator 1.0 (simulated)"
 
-    def __init__(self, port: str, baud: int):
+    def __init__(
+        self,
+        port: str,
+        baud: int,
+        heaters: Optional[Dict[str, SimulatedHeater]] = None,
+        clock: Optional[Callable[[], float]] = None,
+    ):
         import random
 
         self.port, self.baud = port, baud
@@ -329,6 +549,83 @@ class SimulatedPrinter:
         self.dwell_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
         held = os.environ.get("APOTHECARY_SIMULATED_PROGRESS", "").strip()
         self.held_at = min(max(float(held), 0.0), 1.0) if held else None
+        # The heaters' model, when asked for (``heaters_modelled``, or handed in by a test):
+        # its own clock, simulated seconds, which ``APOTHECARY_SIMULATED_HEATER_SPEED``
+        # runs faster than real time. Without it a heater sits at its target.
+        self._lock = threading.Lock()
+        self.heaters = (
+            heaters
+            if heaters is not None
+            else (simulated_heaters(port) if heaters_modelled() else None)
+        )
+        speed = float(os.environ.get("APOTHECARY_SIMULATED_HEATER_SPEED", "1") or 1)
+        self._clock = clock or (lambda: time.monotonic() * speed)
+        self._sim_at = self._clock()
+        self._waiting: List[str] = []  # lines written while an autotune holds the board
+        self._autotune: Optional[str] = None  # the heater's key whose autotune runs
+        self.saves = 0  # M500s heard
+        # The gains the board answers with when its heaters are not modelled.
+        self.gains = {"T": (20.0, 1.0, 100.0), "B": (50.0, 2.0, 500.0)}
+        if self.heaters is not None:
+            self.gains = {k: h.gains for k, h in self.heaters.items()}
+            if self.printing:
+                self.heaters["T"].settle_at(self.hot_target)
+                self.heaters["B"].settle_at(self.bed_target)
+
+    # -- the modelled heaters ------------------------------------------------------
+    CATCH_UP_S = 2 * 3600.0  # the most simulated time one advance steps through
+
+    def _advance(self) -> None:
+        """Step the modelled heaters to the clock's now; what an autotune says as it runs
+        goes out as it is said, and its end lets the lines written meanwhile be answered."""
+        if self.heaters is None:
+            return
+        now = self._clock()
+        span = min(now - self._sim_at, self.CATCH_UP_S)
+        self._sim_at = now
+        steps = int(span / self.heaters["T"].dt)
+        for _ in range(max(0, steps)):
+            for heater in self.heaters.values():
+                heater.step()
+            if self._autotune is not None:
+                tune = self.heaters[self._autotune].autotune
+                if tune.said:
+                    self._emit(tune.said)
+                    tune.said = []
+                if tune.done:
+                    self._end_autotune()
+
+    def _emit(self, lines: List[str]) -> None:
+        self._pending += "".join(ln + "\n" for ln in lines).encode()
+
+    def _end_autotune(self) -> None:
+        heater = self.heaters[self._autotune]
+        tune = heater.autotune
+        if tune.said:
+            self._emit(tune.said)
+        heater.autotune = None
+        heater.target = 0.0  # the heater off at the end, as the simulator chooses
+        self._autotune = None
+        self._emit(["ok"])
+        waiting, self._waiting = self._waiting, []
+        for cmd in waiting:
+            self._emit(self._reply(cmd))
+
+    def _start_autotune(self, cmd: str) -> List[str]:
+        if self.heaters is None:
+            return [
+                "echo:the simulated heaters are not modelled (APOTHECARY_SIMULATED_HEATERS=model): "
+                "no autotune",
+                "ok",
+            ]
+        m = AUTOTUNE_RE.match(cmd)
+        if not m:
+            return [f'echo:Unknown command: "{cmd}"', "ok"]
+        key = "B" if m.group(1) == "-1" else "T"
+        heater = self.heaters[key]
+        heater.autotune = SimulatedAutotune(heater, float(m.group(2)), int(m.group(3)), key)
+        self._autotune = key
+        return []
 
     def _progress(self) -> float:
         # A print that goes round: a browser suite that runs longer than one
@@ -348,8 +645,34 @@ class SimulatedPrinter:
         args = {p[0]: p[1:] for p in parts[1:] if p}
         if code == "M104":
             self.hot_target = float(args.get("S", 0))
+            if self.heaters is not None:
+                self.heaters["T"].target = self.hot_target
         elif code == "M140":
             self.bed_target = float(args.get("S", 0))
+            if self.heaters is not None:
+                self.heaters["B"].target = self.bed_target
+        elif code in ("M301", "M304") and {"P", "I", "D"} <= set(args):
+            key = "B" if code == "M304" else "T"
+            gains = (float(args["P"]), float(args["I"]), float(args["D"]))
+            self.gains[key] = gains
+            if self.heaters is not None:
+                self.heaters[key].set_gains(*gains)
+        elif code in ("M301", "M304"):
+            kp, ki, kd = self.gains["B" if code == "M304" else "T"]
+            return [f"echo: p:{kp:.2f} i:{ki:.2f} d:{kd:.2f}", "ok"]
+        elif code == "M503":
+            (tp, ti, td), (bp, bi, bd) = self.gains["T"], self.gains["B"]
+            return [
+                "echo:; PID settings:",
+                f"echo:  M301 P{tp:.2f} I{ti:.2f} D{td:.2f}",
+                f"echo:  M304 P{bp:.2f} I{bi:.2f} D{bd:.2f}",
+                "ok",
+            ]
+        elif code == "M500":
+            self.saves += 1
+            return ["echo:Settings Stored (the simulator keeps nothing)", "ok"]
+        elif code == "M303":
+            return self._start_autotune(" ".join(parts))
         elif code == "G28":
             for axis in "XYZ" if len(parts) == 1 else [a for a in "XYZ" if a in args]:
                 self.pos[axis] = 0.0
@@ -370,6 +693,11 @@ class SimulatedPrinter:
             self.printing, self.paused_at = False, 0.0
         elif code == "M112":
             self.halted = True
+            self.hot_target = self.bed_target = 0.0
+            if self.heaters is not None:
+                for heater in self.heaters.values():
+                    heater.target, heater.autotune = 0.0, None
+                self._autotune, self._waiting = None, []
             return ["Error:Printer halted. kill() called!"]
         elif code in ("M109", "M190"):
             # Heat and wait: a real board says busy until it is there; here it is there.
@@ -378,6 +706,8 @@ class SimulatedPrinter:
                 self.hot_target = target
             else:
                 self.bed_target = target
+            if self.heaters is not None:
+                self.heaters["T" if code == "M109" else "B"].target = target
             return ["echo:busy: processing", "ok"]
         elif code == "G92":
             for axis in "XYZ":
@@ -444,6 +774,12 @@ class SimulatedPrinter:
                 "Cap:AUTOREPORT_TEMP:1",
                 "ok",
             ]
+        if code == "M105" and self.heaters is not None:
+            hot, bed = self.heaters["T"], self.heaters["B"]
+            return [
+                f"ok T:{hot.reading():.2f} /{hot.target:.2f} B:{bed.reading():.2f} /{bed.target:.2f} "
+                f"@:{int(round(hot.power))} B@:{int(round(bed.power))}"
+            ]
         if code == "M105":
             # A heater sits within a degree of its target when one is set (a
             # simulator, not a thermal model), at room temperature otherwise.
@@ -485,21 +821,44 @@ class SimulatedPrinter:
         return ["ok"]
 
     def write(self, data: bytes) -> None:
-        for cmd in data.decode("utf-8", "replace").split("\n"):
-            if cmd.strip():
-                self._pending += "".join(ln + "\n" for ln in self._reply(cmd.strip())).encode()
+        with self._lock:
+            self._advance()
+            for cmd in data.decode("utf-8", "replace").split("\n"):
+                cmd = cmd.strip()
+                if not cmd:
+                    continue
+                if self._autotune is not None:
+                    code = cmd.split()[0].upper()
+                    if code == "M108":
+                        # A break of the wait ends the autotune, as Marlin's is documented
+                        # to end on M108 (assumed); the words are the simulator's.
+                        self.heaters[self._autotune].autotune.stop("echo:autotune broken by M108")
+                        self._end_autotune()
+                        self._emit(["ok"])
+                        continue
+                    if code not in ("M112", "M410"):
+                        self._waiting.append(cmd)  # the board's queue waits behind it
+                        continue
+                self._emit(self._reply(cmd))
 
     def read(self, timeout: float) -> bytes:
-        if not self._pending:
-            time.sleep(min(timeout, 0.02))
-            return b""
-        out, self._pending = self._pending, b""
-        return out
+        with self._lock:
+            self._advance()
+            if self._pending:
+                out, self._pending = self._pending, b""
+                return out
+        time.sleep(min(timeout, 0.02))
+        return b""
 
     def pulse_reset(self) -> None:
-        self._t0 = time.monotonic()
-        self.halted = False  # a reset is how a halted board comes back
-        self._pending += b"start\n External Reset\n" + self.FIRMWARE.encode() + b"\n"
+        with self._lock:
+            self._t0 = time.monotonic()
+            self.halted = False  # a reset is how a halted board comes back
+            if self.heaters is not None:
+                for heater in self.heaters.values():
+                    heater.target, heater.autotune = 0.0, None
+                self._autotune, self._waiting = None, []
+            self._pending += b"start\n External Reset\n" + self.FIRMWARE.encode() + b"\n"
 
     def close(self) -> None:
         pass
@@ -584,7 +943,13 @@ class CommsLog:
 
 # --- link: one open port, request/response with a lock ------------------------------
 
+SOFT_RESET = b"\x18"  # GRBL's realtime reset, which its banner answers
 OK_RE = re.compile(r"^ok\b")
+# A board's first line as it boots: Marlin's `start`, Grbl's banner.
+BOOT_RE = re.compile(r"^(start$|Grbl \S+ \[)")
+RESET_ANSWER_S = 10.0  # a banner this soon after a reset written here answers it
+UNSOLICITED_KEPT = 200  # lines said outside any exchange that a link keeps
+OWED_WAIT_S = 0.5  # how long an exchange waits for a reply owed to an earlier line
 # Marlin objects with `Error:` or `!!`. Every dialect's objection is in OBJECTIONS, each
 # dialect adding its own when it is imported (grbl.py: `error:N` and, out of turn,
 # `ALARM:N`): the link closes an exchange on any of them, since a board is asked in
@@ -618,6 +983,7 @@ class GcodeLink:
         # take the lock back the instant it let go. ``waiters`` counts the bounded ones.
         self._turn = threading.Lock()
         self.waiters = 0
+        self._holder: Optional[int] = None  # the thread holding the link ``together``
         self._buf = b""
         self.unsolicited: List[str] = []
         # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
@@ -626,6 +992,17 @@ class GcodeLink:
         # Every byte read from the board since the link opened: unchanged across an
         # exchange, the board said nothing at all to it.
         self.heard = 0
+        # Boot banners heard since the link opened: a board that restarts under a
+        # job says so here (Marlin's `start`, Grbl's `Grbl 1.1h [`), and nowhere else.
+        self.restarts = 0
+        # Those of them nothing here asked for: a banner that does not follow a reset
+        # this link wrote is a board whose power was cycled, or its button pressed.
+        self.unasked_restarts = 0
+        self._asked_reset = float("-inf")
+        # Replies still to come for lines whose exchange is over: one written ahead
+        # of an exchange in flight (``ahead``), one whose `ok` did not come in time.
+        # The next exchange reads them off first, so its own reply is its own.
+        self._owed = 0
         self.opened_at = datetime.now(timezone.utc)
         self.log = log or CommsLog(port)
         self.engine = type(transport).__name__
@@ -646,7 +1023,12 @@ class GcodeLink:
 
     def _acquire(self, wait: Optional[float]) -> bool:
         """The link's lock, waiting ``wait`` seconds at most (forever for None), through
-        the turnstile: exchanges take the lock in the order they asked for it."""
+        the turnstile: exchanges take the lock in the order they asked for it. The
+        thread that holds the link ``together`` goes straight in: the turnstile may
+        be held by one that is waiting for it to let go."""
+        if self._holder == threading.get_ident():
+            self._lock.acquire()
+            return True
         if wait is None:
             with self._turn:
                 self._lock.acquire()
@@ -678,7 +1060,37 @@ class GcodeLink:
         text = line.decode("utf-8", "replace").rstrip("\r")
         if text.startswith("ALARM:"):
             self.alarm = text
+        if BOOT_RE.match(text):
+            self.restarts += 1
+            if time.monotonic() - self._asked_reset > RESET_ANSWER_S:
+                self.unasked_restarts += 1
+            self._owed = 0  # a board that restarted owes nothing it was asked before
         return text
+
+    def sweep(self) -> List[str]:
+        """What the board has said outside any exchange, read without waiting and
+        kept in ``unsolicited``: how a job between two lines learns its board has
+        restarted (``restarts``) before it sends the next. Nothing, when an exchange
+        is in flight: that exchange is reading."""
+        if not self._lock.acquire(blocking=False):
+            return []
+        try:
+            chunk = self._t.read(0.0)
+            if chunk:
+                self.heard += len(chunk)
+                self._buf += chunk
+            lines: List[str] = []
+            while b"\n" in self._buf:
+                line = self._read_line(0.0)
+                lines.append(line)
+                if OK_RE.match(line) and self._owed > 0:
+                    self._owed -= 1  # the late reply of a line whose exchange is over
+                self.log.add("rx", line, "unasked", note=self._note(line))
+            # A board that reports by itself all through a long job: the newest are kept.
+            self.unsolicited = (self.unsolicited + lines)[-UNSOLICITED_KEPT:]
+            return lines
+        finally:
+            self._lock.release()
 
     def drain(self, quiet: float = 0.3, limit: float = 5.0) -> List[str]:
         """Read until the board has been silent for ``quiet`` seconds (or ``limit``)."""
@@ -712,6 +1124,9 @@ class GcodeLink:
         self.unsolicited.extend(lines)
         return lines
 
+    def _reset_asked(self) -> None:
+        self._asked_reset = time.monotonic()
+
     def reset(self, limit: float = 6.0) -> List[str]:
         """Reboot the board on purpose and return its boot banner. Refused while a
         job (a print, a bed reading) holds the link: rebooting under it leaves the
@@ -721,6 +1136,7 @@ class GcodeLink:
         with self._lock:
             self._buf = b""
             self.log.add("sys", "reset: DTR pulse")
+            self._reset_asked()
             self._t.pulse_reset()
             return self.settle(first=3.0, quiet=0.6, limit=limit)
 
@@ -749,40 +1165,197 @@ class GcodeLink:
                 f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
             )
         try:
-            if not quiet:
-                self.log.add("tx", cmd, origin)
+            return self._exchange(cmd, timeout, origin, quiet)
+        finally:
+            self._lock.release()
+
+    def watch(
+        self,
+        cmd: str,
+        each: Callable[[str], None],
+        silence: float,
+        limit: float,
+        origin: str = "control",
+    ) -> List[str]:
+        """Send one line whose answer is long (an autotune) and read it line by line up to
+        its ``ok``, handing each line to ``each`` as it comes: a watcher that raises ends
+        the reading there, and so does a board that says nothing for ``silence`` seconds or
+        has not finished within ``limit`` (``ToolchainError``). Ended early, the line's
+        ``ok`` is owed: the next exchange reads it off first, if it comes."""
+        cmd = cmd.strip()
+        if not cmd or "\n" in cmd:
+            raise ValueError("one G-code command per call")
+        self._acquire(None)
+        try:
+            if self.stopped is not None:
+                raise ToolchainError(f"{self.port}: {self.stopped}: {cmd} is not sent")
+            self._read_owed()
+            self.log.add("tx", cmd, origin)
             with self._write_lock:
                 self._t.write((cmd + "\n").encode())
             lines: List[str] = []
-            end = time.monotonic() + timeout * self.time_scale
+            end = time.monotonic() + limit * self.time_scale
             while True:
                 left = end - time.monotonic()
                 if left <= 0:
-                    self.log.add("sys", f"timeout: no `ok` for {cmd} within {timeout:.0f}s")
-                    raise ToolchainError(
-                        f"{self.port}: no `ok` for {cmd} within {timeout:.0f}s "
-                        f"({len(lines)} lines received)"
-                    )
-                line = self._read_line(left)
+                    self._owed += 1
+                    raise ToolchainError(f"{self.port}: {cmd} did not finish within {limit:.0f}s")
+                line = self._read_line(min(left, silence * self.time_scale))
                 if line is None:
-                    continue
+                    self._owed += 1
+                    if time.monotonic() >= end:
+                        raise ToolchainError(
+                            f"{self.port}: {cmd} did not finish within {limit:.0f}s"
+                        )
+                    raise ToolchainError(
+                        f"{self.port}: nothing said for {silence:.0f}s during {cmd}"
+                    )
                 lines.append(line)
-                objected = any(p.match(line) for p in OBJECTIONS) or RESEND_RE.match(line)
-                if not quiet or objected:
-                    if quiet:
-                        self.log.add("tx", cmd, origin)  # the line it objected to, for the record
-                    self.log.add("rx", line, origin, note=self._note(line))
-                if BUSY_RE.match(line):
-                    end = time.monotonic() + timeout * self.time_scale  # heating/homing
-                elif OK_RE.match(line):
+                self.log.add("rx", line, origin, note=self._note(line))
+                if BOOT_RE.match(line):
+                    raise ToolchainError(
+                        f"{self.port}: the board restarted before it answered {cmd} ({line})"
+                    )
+                # An `ok` that carries a temperature report is a report, not the end.
+                if OK_RE.match(line) and not is_temperature_line(line):
                     return lines
-                elif objected:
-                    # A refusal says the dialect's words for it, where it has them, so
-                    # a typed control and a job that stops both read as more than a code.
-                    note = self._note(line)
-                    words = f" ({note})" if note else ""
-                    raise ToolchainError(f"{self.port}: {cmd} -> {line}{words}")
+                if any(p.match(line) for p in OBJECTIONS):
+                    raise ToolchainError(f"{self.port}: {cmd} -> {line}")
+                try:
+                    each(line)
+                except BaseException:
+                    self._owed += 1
+                    raise
         finally:
+            self._lock.release()
+
+    def _read_owed(self, wait: float = OWED_WAIT_S) -> List[str]:
+        """Read off the replies owed to earlier lines, each up to its ``ok``, so the
+        exchange about to begin reads its own; what was read. One that does not come
+        within ``wait`` seconds is given up on: the board dropped the line, or is gone."""
+        read: List[str] = []
+        while self._owed > 0:
+            end = time.monotonic() + wait * self.time_scale
+            while True:
+                left = end - time.monotonic()
+                line = self._read_line(left) if left > 0 else None
+                if line is None:
+                    self._owed = 0
+                    return read
+                read.append(line)
+                self.log.add("rx", line, "late", note=self._note(line))
+                if OK_RE.match(line) or any(p.match(line) for p in OBJECTIONS):
+                    break
+            self._owed = max(0, self._owed - 1)
+        return read
+
+    def interrupt(self, cmd: str, wait: float, origin: str = "control") -> List[str]:
+        """A line written at once, whatever is in flight (``M108``, the break of a wait),
+        and then, once the link is free, the replies owed to it and to the lines before
+        it read off, waiting up to ``wait`` seconds for each: what ends a long line that
+        was left early (an autotune), so the next exchange's reply is its own. What was
+        read; nothing more is waited for once a reply does not come."""
+        cmd = cmd.strip()
+        if not cmd or "\n" in cmd:
+            raise ValueError("one G-code command per call")
+        self.log.add("tx", cmd, origin)
+        with self._write_lock:
+            self._t.write((cmd + "\n").encode())
+            self._owed += 1
+        self._acquire(None)
+        try:
+            return self._read_owed(wait)
+        finally:
+            self._lock.release()
+
+    def _exchange(self, cmd: str, timeout: float, origin: str, quiet: bool) -> List[str]:
+        """``command``'s exchange, by a caller that holds the link."""
+        if self.stopped is not None:
+            raise ToolchainError(f"{self.port}: {self.stopped}: {cmd} is not sent")
+        self._read_owed()
+        if not quiet:
+            self.log.add("tx", cmd, origin)
+        with self._write_lock:
+            self._t.write((cmd + "\n").encode())
+        lines: List[str] = []
+        end = time.monotonic() + timeout * self.time_scale
+        while True:
+            left = end - time.monotonic()
+            if left <= 0:
+                self.log.add("sys", f"timeout: no `ok` for {cmd} within {timeout:.0f}s")
+                self._owed += 1  # if it comes late, it is not the next line's
+                raise ToolchainError(
+                    f"{self.port}: no `ok` for {cmd} within {timeout:.0f}s "
+                    f"({len(lines)} lines received)"
+                )
+            line = self._read_line(left)
+            if line is None:
+                continue
+            lines.append(line)
+            objected = any(p.match(line) for p in OBJECTIONS) or RESEND_RE.match(line)
+            booted = BOOT_RE.match(line)
+            if not quiet or objected or booted:
+                if quiet:
+                    self.log.add("tx", cmd, origin)  # the line it objected to, for the record
+                self.log.add("rx", line, origin, note=self._note(line))
+            asked = time.monotonic() - self._asked_reset <= RESET_ANSWER_S
+            if booted and (self.job is not None or asked):
+                # A board that boots under a job, or at a reset written here, forgets
+                # what it was asked: this line's `ok` is not coming, and waiting its
+                # time out only holds the link. A board that boots as its port is
+                # first opened is left to answer: its banner is how it is known.
+                raise ToolchainError(
+                    f"{self.port}: the board restarted before it answered {cmd} ({line})"
+                )
+            if BUSY_RE.match(line):
+                end = time.monotonic() + timeout * self.time_scale  # heating/homing
+            elif OK_RE.match(line):
+                return lines
+            elif objected:
+                # A refusal says the dialect's words for it, where it has them, so
+                # a typed control and a job that stops both read as more than a code.
+                note = self._note(line)
+                words = f" ({note})" if note else ""
+                raise ToolchainError(f"{self.port}: {cmd} -> {line}{words}")
+
+    def ahead(self, cmd: str, timeout: float = 5.0, origin: str = "control") -> List[str]:
+        """A line written at once, ahead of an exchange in flight: Marlin's break of
+        a heat-and-wait (``M108``) and its quickstop (``M410``), which are for a
+        board that is busy answering something else. With nothing in flight it is
+        an exchange like any other. With one in flight the line is written under
+        it and nothing is waited for: its ``ok`` comes after that exchange's own,
+        and the next exchange reads it off first."""
+        cmd = cmd.strip()
+        if not cmd or "\n" in cmd:
+            raise ValueError("one G-code command per call")
+        if self._lock.acquire(blocking=False):
+            try:
+                return self._exchange(cmd, timeout, origin, quiet=False)
+            finally:
+                self._lock.release()
+        self.log.add("tx", cmd, origin)
+        with self._write_lock:
+            self._t.write((cmd + "\n").encode())
+            self._owed += 1
+        return []
+
+    @contextmanager
+    def together(self, wait: Optional[float] = None):
+        """The link held across several exchanges, so no other caller's line goes
+        between them: a jog's ``G91``, its move and its ``G90``. The stop and a line
+        written ``ahead`` still go at once. ``LinkBusy`` when ``wait`` runs out."""
+        if not self._acquire(wait):
+            raise LinkBusy(
+                f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
+            )
+        mine = self._holder != threading.get_ident()
+        if mine:
+            self._holder = threading.get_ident()
+        try:
+            yield self
+        finally:
+            if mine:
+                self._holder = None
             self._lock.release()
 
     def realtime(
@@ -803,6 +1376,8 @@ class GcodeLink:
         is for a machine in motion -- and then reads only if nothing else is;
         otherwise the write waits its turn, ``wait`` bounding the queueing."""
         name = label or data.decode("ascii", "backslashreplace")
+        if data == SOFT_RESET:
+            self._asked_reset = time.monotonic()
         if now:
             self.log.add("tx", name, origin)
             with self._write_lock:
@@ -873,6 +1448,11 @@ class GcodeLink:
     # as long as the firmware is blocked.
     job: Optional[dict] = None
 
+    # Why no line is sent just now, when a job that sends its lines through calls of
+    # its own (a bed reading) has been stopped under them: each is refused, said
+    # here, until the job has let go. The realtime characters and the stop still go.
+    stopped: Optional[str] = None
+
     def info(self) -> dict:
         return {
             "port": self.port,
@@ -895,10 +1475,21 @@ def _read_port_list() -> None:
         PORT_LIST_READ()
 
 
+def job_holds_link(port: str, job: Optional[dict]) -> Optional[str]:
+    """Why a link may not be dropped: a job holds it, and only the job lets go."""
+    if job is None:
+        return None
+    from . import can
+
+    return can.holding(port, f"a {job.get('kind')}", job.get("stage"))
+
+
 class PrinterLinks:
     """Open links, one per port, released as a group before a task takes a port."""
 
     def __init__(self, factory: Optional[TransportFactory] = None):
+        # The last control line each port refused, until one goes (devices.printer_control).
+        self.refused: Dict[str, dict] = {}
         self._links: Dict[str, GcodeLink] = {}
         self._logs: Dict[str, CommsLog] = {}
         self._lock = threading.RLock()  # open() reaches log_for() while holding it
@@ -920,11 +1511,12 @@ class PrinterLinks:
         with self._lock:
             return self._links.get(port)
 
-    def open(self, port: str, baud: int) -> GcodeLink:
+    def open(self, port: str, baud: int, settle: bool = True) -> GcodeLink:
         """The existing link for ``port`` at that baud, else a fresh one (resets the board).
 
         A link a job holds is never replaced: reopening at another baud would
-        drop the print under its own thread."""
+        drop the print under its own thread. ``settle`` waits out what the board
+        says as it is opened; a stop does not wait for it."""
         _read_port_list()
         with self._lock:
             link = self._links.get(port)
@@ -938,7 +1530,8 @@ class PrinterLinks:
                 link.close()
             link = GcodeLink(port, baud, self.factory(port, baud), log=self._log_for(port))
             self._links[port] = link
-        link.settle()
+        if settle:
+            link.settle()
         return link
 
     def close(self, port: str) -> bool:
@@ -946,10 +1539,9 @@ class PrinterLinks:
         job lets go of its link, after its own safe-off."""
         with self._lock:
             link = self._links.get(port)
-            if link is not None and link.job is not None:
-                raise PortHeld(
-                    f"{port}: a {link.job.get('kind')} holds the port -- cancel it first"
-                )
+            held = job_holds_link(port, link.job if link is not None else None)
+            if held:
+                raise PortHeld(held)
             self.control.disarm(port)  # a dropped link never stays armed
             self._links.pop(port, None)
         if link is None:
@@ -1077,8 +1669,21 @@ CONTROL_CODES: List[tuple] = [
     ),
     (re.compile(r"^M108$"), "break out of a heat-and-wait"),
     (re.compile(r"^M410$"), "quickstop: abort planned moves"),
+    (re.compile(r"^M301(?: E0)? P([\d.]+) I([\d.]+) D([\d.]+)$"), "hotend PID gains, not saved"),
+    (re.compile(r"^M304 P([\d.]+) I([\d.]+) D([\d.]+)$"), "bed PID gains, not saved"),
 ]
+# A gain line's bounds: a typo's guard, the seam's own, nothing Marlin says. Each figure
+# is a plain decimal of at most four places; none is negative.
+GAIN_MAX = {"P": 1000.0, "I": 1000.0, "D": 10000.0}
+GAIN_FIGURE = re.compile(r"^\d{1,5}(?:\.\d{1,4})?$")
 EMERGENCY_STOP = "M112"  # always accepted, latch or not; halts the board until reset
+# Written ahead of an exchange in flight (``GcodeLink.ahead``): the lines Marlin acts
+# on as it reads them, where its firmware parses them early (EMERGENCY_PARSER).
+AHEAD = ("M108", "M410")
+# What only turns something off or stops it, and so goes with the latch down: a
+# heater's target to zero, the fan off, a wait broken, the planned moves dropped, the
+# card paused. A latch that lapsed never stands between a person and the off switch.
+ALWAYS = re.compile(r"^(M104 S0|M140 S0|M107|M108|M410|M25)$")
 
 
 # This dialect, as a board's ``PrinterInfo`` names it, and the kind of machine it
@@ -1109,6 +1714,15 @@ def normalise_control(command: str) -> str:
             raise OutOfBounds(f"bed target above {BED_MAX_C} degC: {command!r}")
         if cmd.startswith("M106") and m.group(1) and int(m.group(1)) > 255:
             raise OutOfBounds(f"fan speed above 255: {command!r}")
+        if cmd.startswith(("M301", "M304")):
+            for name, figure in zip("PID", m.groups(), strict=True):
+                if not GAIN_FIGURE.match(figure):
+                    raise ValueError(
+                        f"{name} is a plain decimal of four places at most: {command!r}"
+                    )
+                if float(figure) > GAIN_MAX[name]:
+                    raise OutOfBounds(f"{name} above {GAIN_MAX[name]:g}: {command!r}")
+            return cmd
         if cmd.startswith("G1 E"):
             if abs(float(re.search(r" E(-?\d+(?:\.\d+)?)", cmd).group(1))) > EXTRUDE_MAX_MM:
                 raise OutOfBounds(f"extrusion beyond {EXTRUDE_MAX_MM} mm: {command!r}")
@@ -1130,6 +1744,110 @@ def normalise_control(command: str) -> str:
 # and the break-wait (a hotend a few degrees off is fixed mid-print); motion and the
 # SD card are the print's.
 JOB_ALLOWS = re.compile(r"^(M104|M140|M106|M107|M108)\b")
+
+
+# --- heater loops: the gains a board holds, its autotune, and saving -----------------------
+#
+# What is established in this tree: M503 is report-only and answers with the board's
+# settings as G-code lines, M301 and M304 among them (docs/bench-checklist.md keeps them
+# from it), as it prints a mesh as `G29 W` lines; M500 saves settings to the board's
+# memory (PRINT_REFUSED). What is ASSUMED, from Marlin's documentation as recalled and not
+# from its source or a board, and to be confirmed at the bench by keeping the lines a real
+# board says: that M301/M304 take P, I and D with I per second and D in seconds; that
+# M303 is `M303 E<n> S<target> C<cycles>` with E-1 for the bed; the words of its result
+# (`Kp:`, `Ki:`, `Kd:`, `Ku:`, `Tu:`, `#define DEFAULT_Kp`, `PID Autotune finished`,
+# `PID Autotune failed`); that it reports temperatures as it runs; and that M108 ends it.
+# The parsers below read any of the forms named and nothing more.
+
+AUTOTUNE_CYCLES = (3, 15)  # the fewest and most cycles the seam asks for
+AUTOTUNE_RE = re.compile(r"^M303 E(-1|[0-7]) S(\d{1,3}) C(\d{1,2})$")
+SAVE_SETTINGS = "M500"  # the board's memory written: never a control line, asked for by name
+
+
+def normalise_autotune(command: str) -> str:
+    """An autotune line, bounded: ValueError when it is not one, ``OutOfBounds`` for a
+    target over the heater's cap or a cycle count outside ``AUTOTUNE_CYCLES``. It is not a
+    control line: only the tuning job sends it, and it is watched while it runs."""
+    cmd = " ".join(command.strip().upper().split())
+    m = AUTOTUNE_RE.match(cmd)
+    if not m:
+        raise ValueError(f"not an autotune line (M303 E<n> S<target> C<cycles>): {command!r}")
+    cap = BED_MAX_C if m.group(1) == "-1" else HOTEND_MAX_C
+    if int(m.group(2)) > cap:
+        raise OutOfBounds(f"autotune target above {cap} degC: {command!r}")
+    lo, hi = AUTOTUNE_CYCLES
+    if not lo <= int(m.group(3)) <= hi:
+        raise OutOfBounds(f"autotune cycles outside {lo} to {hi}: {command!r}")
+    return cmd
+
+
+# `M301 P22.20 I1.08 D114.00` as M503 prints it (`M301 E0 P..` with several hotends), and
+# `p:22.20 i:1.08 d:114.00` as M301 asked with no arguments may answer: both assumed.
+GAINS_LINE_RE = re.compile(
+    r"\b(M301|M304)(?:\s+E(\d))?\s+P(-?\d+(?:\.\d+)?)\s+I(-?\d+(?:\.\d+)?)\s+D(-?\d+(?:\.\d+)?)"
+)
+GAINS_REPORT_RE = re.compile(
+    r"\bp:\s*(-?\d+(?:\.\d+)?)\s+i:\s*(-?\d+(?:\.\d+)?)\s+d:\s*(-?\d+(?:\.\d+)?)"
+)
+AUTOTUNE_VALUE_RE = re.compile(
+    r"(?:#define\s+DEFAULT_(?:bed)?|\b)(Kp|Ki|Kd|Ku|Tu)\b:?\s*(-?\d+(?:\.\d+)?)"
+)
+AUTOTUNE_FAILED_RE = re.compile(r"PID Autotune failed!?\s*(.*)$", re.I)
+AUTOTUNE_DONE_RE = re.compile(r"PID Autotune finished", re.I)
+
+
+def parse_gains(lines: List[str]) -> Dict[str, dict]:
+    """The PID gains in a board's answer, by loop: ``{"hotend 0": {"kp", "ki", "kd",
+    "line"}, "bed": {...}}``. A line that names neither is left alone."""
+    found: Dict[str, dict] = {}
+    for line in lines:
+        m = GAINS_LINE_RE.search(line)
+        if not m:
+            continue
+        name = "bed" if m.group(1) == "M304" else f"hotend {int(m.group(2) or 0)}"
+        found[name] = {
+            "kp": float(m.group(3)),
+            "ki": float(m.group(4)),
+            "kd": float(m.group(5)),
+            "line": line.strip(),
+        }
+    return found
+
+
+def parse_gains_report(lines: List[str]) -> Optional[dict]:
+    """The ``p: i: d:`` form one loop's report may take; None when there is none."""
+    for line in lines:
+        m = GAINS_REPORT_RE.search(line)
+        if m:
+            return {
+                "kp": float(m.group(1)),
+                "ki": float(m.group(2)),
+                "kd": float(m.group(3)),
+                "line": line.strip(),
+            }
+    return None
+
+
+def parse_autotune(lines: List[str]) -> dict:
+    """What an autotune said: its last ``Kp``, ``Ki``, ``Kd`` (and ``Ku``, ``Tu`` where it
+    said them), whether it said it finished, why it failed when it said so, and the
+    temperature lines among its words, as ``parse_m105`` reads them."""
+    values: Dict[str, float] = {}
+    failed: Optional[str] = None
+    finished = False
+    temperatures: List[dict] = []
+    for line in lines:
+        f = AUTOTUNE_FAILED_RE.search(line)
+        if f:
+            failed = f.group(1).strip() or "the firmware said it failed"
+            continue
+        if AUTOTUNE_DONE_RE.search(line):
+            finished = True
+        for name, value in AUTOTUNE_VALUE_RE.findall(line):
+            values[name.lower()] = float(value)
+        if is_temperature_line(line):
+            temperatures.append(parse_m105(line))
+    return {"values": values, "finished": finished, "failed": failed, "temperatures": temperatures}
 
 
 # --- bed leveling: reading Marlin's mesh -------------------------------------------------
@@ -1290,6 +2008,7 @@ def read_bed(
 # `$` line and a GRBL file no M500, and refusing each in both costs nothing.
 PRINT_REFUSED: Dict[str, str] = {
     "M500": "saves settings to EEPROM",
+    "M303": "runs the firmware's autotune: a heater loop's experiment, watched as one (firmware/loops.py)",
     "M502": "resets settings to the firmware's defaults",
     "M997": "starts a firmware update",
     "M999": "restarts the board after a stop",
@@ -1370,7 +2089,8 @@ class ControlLatch:
     """Per-port arm state: control commands go through only while armed.
 
     Arming is an explicit act with a lifetime; every accepted command
-    renews it, silence lets it lapse. It exists so the control overlay of a
+    renews it, silence lets it lapse, and a stop disarms it
+    (``devices.printer_control``). It exists so the control overlay of a
     printer's Machine cannot heat or move a machine from a stray click.
     Its lifetime runs on the monotonic clock, so a step of the wall clock (NTP,
     a suspend) neither ends an armed window nor lengthens one.
@@ -1413,6 +2133,15 @@ class ControlLatch:
         if self.armed(port):
             self.arm(port, ttl)
 
+    def armed_ports(self) -> Dict[str, float]:
+        """Every port armed now, and its seconds left; the lapsed ones are let go."""
+        _read_port_list()
+        with self._lock:
+            now = time.monotonic()
+            for port in [p for p, until in self._until.items() if until <= now]:
+                del self._until[port]
+            return {port: round(until - now, 1) for port, until in self._until.items()}
+
 
 class LinkBusy(PortHeld):
     """The link is held by a long exchange and the caller would not wait."""
@@ -1445,13 +2174,20 @@ def identify_printer(link: GcodeLink, reset: bool = False) -> PrinterInfo:
 
 
 def poll_printer(
-    link: GcodeLink, endstops: bool = True, wait: Optional[float] = None
+    link: GcodeLink,
+    endstops: bool = True,
+    wait: Optional[float] = None,
+    streaming: bool = False,
 ) -> PrinterStatus:
     """Temperatures, position, SD progress and (optionally) endstops in one exchange each.
 
     ``wait`` bounds each exchange's queueing behind a print's stream (see
     ``GcodeLink.command``); a poll between two streamed lines is how a host
-    keeps its temperatures fresh mid-print.
+    keeps its temperatures fresh mid-print. While a job streams (``streaming``) the
+    poll does not ask for the card's progress: the host holds the port, so the card
+    cannot be printing, and each exchange taken from the stream slows the print. The
+    endstops are still asked for, because the runout sensor answers with them and a
+    print is when filament runs out.
     """
     raw: List[str] = []
     temps = link.command("M105", wait=wait)
@@ -1460,9 +2196,11 @@ def poll_printer(
     parsed = parse_m105(temp_line)
     pos_lines = link.command("M114", wait=wait)
     raw += pos_lines
-    sd_lines = link.command("M27", wait=wait)
-    raw += sd_lines
-    sd = parse_m27(sd_lines)
+    sd = {"sd_printing": False, "sd_progress": None}
+    if not streaming:
+        sd_lines = link.command("M27", wait=wait)
+        raw += sd_lines
+        sd = parse_m27(sd_lines)
     stops: dict = {}
     if endstops:
         stop_lines = link.command("M119", wait=wait)
@@ -1492,10 +2230,14 @@ def poll_printer(
 
 def control_printer(link: GcodeLink, command: str, timeout: float = 30.0) -> List[str]:
     """Send one allowlisted control line (homing can take a while; ``busy`` extends the
-    wait). The emergency stop is written at once, ahead of the link's queue."""
+    wait). The emergency stop is written at once, ahead of the link's queue, and so
+    are the break of a heat-and-wait and the quickstop (``AHEAD``): each is for a
+    board that is busy with the line before it."""
     cmd = normalise_control(command)
     if cmd == EMERGENCY_STOP:
         return link.emergency_stop()
+    if cmd in AHEAD:
+        return link.ahead(cmd, timeout=timeout)
     return link.command(cmd, timeout=timeout, origin="control")
 
 

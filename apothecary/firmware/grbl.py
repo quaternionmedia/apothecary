@@ -17,7 +17,7 @@ a printer's is. What differs is here -- how a board is identified (``$I``,
 there being no ``M115``), how it is polled (the realtime ``?`` and ``$G``),
 which lines may be typed at it while control is armed and what bounds them,
 what the emergency stop is (a soft reset), what a streamed job may not carry,
-and a pretend controller behind the transport slot for demos and tests. The
+and a pretend controller behind the transport slot for ``serve --simulated`` and tests. The
 site's words for its state are ``example_hierarchy.ROUTER_STATUSES``.
 """
 
@@ -60,7 +60,8 @@ gcode.OBJECTIONS.append(OBJECTION_RE)
 # Grbl 1.3a ['$' for help]
 BANNER_RE = re.compile(r"^Grbl (\S+) \[")
 # [PRB:-12.000,-20.000,-41.250:1]
-PRB_RE = re.compile(r"^\[PRB:(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*):([01])\]$")
+# X, Y and Z, and whatever axes a build reports after them: Grbl_ESP32 says a fourth.
+PRB_RE = re.compile(r"^\[PRB:(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*)(?:,-?\d+\.?\d*)*:([01])\]$")
 
 # The controller's state word, folded to the site's vocabulary
 # (example_hierarchy.ROUTER_STATUSES). Hold and Door are a machine stopped with
@@ -373,6 +374,12 @@ FEED_MAX = 4000
 SPINDLE_MAX_RPM = 24000  # the trim router's: what M3 may ask, typed or in a file
 PROBE_MAX_MM = 80
 PROBE_FEED_MAX = 500
+# The touch plate: a puck the bit comes down on, whose thickness is what the touch is
+# called. The maker's nominal figure, which its manual has a person measure and replace
+# (parts/anolex_4060_evo_ultra_2/manual.json, the Z probe, page 27).
+PLATE_NOMINAL_MM = 19.0
+PLATE_MAX_MM = 50.0
+PLATE_RETRACT_MM = 5.0
 _AXES = r"(?: [XYZ]-?\d{1,3}(?:\.\d{1,3})?)"
 CONTROL_CODES: List[tuple] = [
     (re.compile(r"^\$H(?:[XYZ])?$"), "home all, or one axis"),
@@ -390,6 +397,10 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M5$"), "spindle off"),
     (re.compile(r"^G10 L20 P1(?: [XYZ]0){1,3}$"), "work zero here, for the named axes"),
     (re.compile(r"^G38\.2 Z-\d{1,3}(?:\.\d{1,2})? F\d{1,4}$"), "probe down to the plate"),
+    (
+        re.compile(r"^PROBE-PLATE Z\d{1,2}(?:\.\d{1,2})? D\d{1,2} F\d{1,3}$"),
+        "probe down to the plate and call the touch the plate's thickness",
+    ),
 ]
 
 
@@ -423,6 +434,9 @@ def normalise_control(command: str) -> str:
     raise ValueError(f"not an allowed GRBL control: {command!r}")
 
 
+# What only turns something off or stops it, and so goes with the latch down: the
+# spindle off, a hold, a jog cancelled.
+ALWAYS = re.compile(r"^(M5|HOLD|JOG-CANCEL)$")
 # What a person may still send while a cut holds the port: the hold, the resume and
 # the spindle; motion is the cut's.
 JOB_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
@@ -550,20 +564,31 @@ class PlannerRoom:
         return True
 
 
-def await_idle(link: GcodeLink, abandoned: Callable[[], bool]) -> None:
+def await_idle(link: GcodeLink, abandoned: Callable[[], bool]) -> str:
     """Poll the controller until it is idle, in alarm or offline, or ``abandoned()``
     says the job was cancelled, or a move's time runs out; a held controller is
-    waited for. A cut's last line is answered when it is queued, not when it is done."""
+    waited for. A cut's last line is answered when it is queued, not when it is done.
+    Answers how the wait ended, in words a refusal can carry: ``idle``, and anything
+    else is a cut that did not finish -- ``in alarm`` with the alarm the board said,
+    ``still running`` when the time ran out, ``cancelled``."""
     end = time.monotonic() + JOB_MOVE_TIMEOUT_S
-    while time.monotonic() < end and not abandoned():
+    while time.monotonic() < end:
+        if abandoned():
+            return "cancelled"
         try:
             status, _lines = report(link, wait=1.0)
         except LinkBusy:
             time.sleep(0.2)
             continue
         if not busy(status):
-            return
+            word = STATE_WORDS.get(status["machine_state"])
+            if word == "idle":
+                return "idle"
+            if word == "alarm":
+                return "in alarm" + (f" ({link.alarm})" if link.alarm else "")
+            return f"{status['machine_state']}, not idle"
         time.sleep(0.3)
+    return "still running" if not abandoned() else "cancelled"
 
 
 # --- the simulated controller ---------------------------------------------------------
@@ -613,6 +638,7 @@ class SimulatedRouter:
         starts = os.environ.get("APOTHECARY_SIMULATED_ROUTER_STATE", "idle").strip().lower()
         self.state = "Alarm" if starts == "alarm" else "Idle"
         self.alarm: Optional[int] = None
+        self.pins = ""  # the input pins a report says are on (``Pn:``): a switch held, say
         self.homed = starts != "alarm"
         # Powered up: the banner, and in alarm the hint a real one prints with it.
         if starts == "alarm":
@@ -642,7 +668,7 @@ class SimulatedRouter:
         self.probe: Optional[dict] = None
         self.settings = {
             0: 10, 1: 255, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 10: 1, 11: 0.010, 12: 0.002,
-            13: 0, 20: 1, 21: 0, 22: 1, 23: 3, 24: 200.000, 25: 2000.000, 26: 250,
+            13: 0, 20: 1, 21: 0, 22: 1, 23: 0, 24: 200.000, 25: 2000.000, 26: 250,
             27: 3.000, 30: 24000, 31: 0, 32: 0, 100: 800.000, 101: 800.000, 102: 800.000,
             110: 4000.000, 111: 4000.000, 112: 2000.000, 120: 200.000, 121: 200.000,
             122: 100.000, 130: 400.000, 131: 600.000, 132: 80.000,
@@ -772,6 +798,8 @@ class SimulatedRouter:
         fields = [state, f"MPos:{mpos}", f"FS:{feed:.0f},{rpm:.0f}"]
         if self._current is not None or self._queue:
             fields.append(f"Bf:{self.PLANNER - len(self._queue)},127")
+        if self.pins:
+            fields.append(f"Pn:{self.pins}")
         fields.append("WCO:" + ",".join(f"{self.wco[k]:.3f}" for k in "xyz"))
         fields.append(f"Ov:{self.feed_override},100,100")
         if self.spindle_on:
@@ -898,7 +926,9 @@ class SimulatedRouter:
         elif code == "G38.2":
             # The plate is PLATE mm below where the tool stands, or the move ends short.
             here = self._end_of_queue()
-            depth = float(args.get("Z", 0))
+            # A probe's Z is a distance in G91 and a place in the work zero in G90, as
+            # any move's is: in G90 a probe "down 25" from below work Z -25 goes up.
+            depth = self._target(args, self.relative)["z"] - here["z"]
             plate = here["z"] - self.PLATE
             touched = here["z"] + depth <= plate
             z = plate if touched else here["z"] + depth
@@ -1014,18 +1044,53 @@ def report(
     status = next((parse_status(ln) for ln in reversed(lines) if is_status_line(ln)), None)
     if status is None:
         raise ToolchainError(f"{link.port}: no status report for `?` within {timeout:.0f}s")
-    return status, lines
+    return with_offset(link, status), lines
 
 
-def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
-    """The status report and the parser state in one exchange each."""
+def with_offset(link: GcodeLink, status: dict) -> dict:
+    """``status`` with the work offset the port last reported, when this report has none.
+    A controller says ``WCO`` once in every ten or thirty reports, and at once when it
+    changes, so between them the position it does not report -- the work position, with
+    ``$10=1`` -- is worked out from the last offset it gave; None until it has given one."""
+    if status["wco"]:
+        link.work_offset = status["wco"]
+        return status
+    last = getattr(link, "work_offset", None)
+    if not last:
+        return status
+    status["wco"] = last
+    if status["mpos"] and not status["wpos"]:
+        status["wpos"] = {k: round(status["mpos"][k] - last[k], 3) for k in "xyz"}
+    elif status["wpos"] and not status["mpos"]:
+        status["mpos"] = {k: round(status["wpos"][k] + last[k], 3) for k in "xyz"}
+    return status
+
+
+def poll_router(
+    link: GcodeLink, wait: Optional[float] = None, streaming: bool = False
+) -> PrinterStatus:
+    """The status report and the parser state in one exchange each.
+
+    While a cut streams (``streaming``) the poll is the report alone: it is realtime,
+    takes no place in the stream's queue, and carries the state, positions, pins, feed,
+    overrides and the spindle's speed. ``$G`` is a line the controller answers in its
+    place, and what it adds -- the programmed spindle speed -- is not worth an
+    exchange taken from the stream; the parser state is the last one read.
+    """
     raw: List[str] = []
     status, lines = report(link, wait=wait)
     raw += lines
-    gc_lines = link.command("$G", wait=wait, timeout=5.0)
-    raw += gc_lines
-    parser = parse_parser_state(gc_lines)
+    if streaming:
+        parser = getattr(link, "parser_state", None) or parse_parser_state([])
+        parser = {**parser, "spindle_on": False}
+    else:
+        gc_lines = link.command("$G", wait=wait, timeout=5.0)
+        raw += gc_lines
+        parser = parse_parser_state(gc_lines)
+        link.parser_state = parser
     mstate = status["machine_state"]
+    proof_of(link).pins(status["pins"])
+    proof_of(link).heard(link)
     # The report says the controller is in alarm, not which: the link keeps the last
     # ALARM line it read. Out of alarm, that line is spent.
     if mstate == "Alarm":
@@ -1053,20 +1118,342 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
         alarm_text=alarm_text(alarm),
         overrides=status["overrides"],
         raw=raw,
+        todo=todo_of(mstate, alarm)
+        + ([f"No cut yet: {said}."] if (said := not_placed(link)) else []),
+        homing=homing_now(link, mstate),
+        tool_position=in_volume(status["mpos"], proof_of(link).settings),
+        work_origin=in_volume(status["wco"], proof_of(link).settings),
+        travel=travel_of(proof_of(link).settings or {}),
     )
+
+
+# --- homing: proved before it is asked -------------------------------------------------------
+
+# A home drives an axis at the seek rate until its switch closes, with nothing else to stop
+# it: toward the table if the axis is wired the other way round, into its end stop if the
+# switch says nothing. So an axis is homed only once this port has shown both: its switch
+# reported on and off again (pressed by hand), and the axis jogged the way homing will seek
+# (a person watched which way that is). What was shown is kept with the open port, and is
+# gone when it is opened again.
+HOME_JOG_MM = 1.0  # jogged this far the way homing seeks, an axis has shown which way it is
+HOME_SEARCH = 1.5  # Grbl seeks this many times an axis's travel before ALARM:9
+HOMING_DIR, HOMING_SEEK, HARD_LIMITS = 23, 25, 21  # the settings a home is read from
+TRAVEL_OF_AXIS = {"X": 130, "Y": 131, "Z": 132}
+# Set, a simulated router's homes are held to the proof as a real one's are: how the
+# page's part of it is shown without a machine.
+UNPROVED_ENV = "APOTHECARY_SIMULATED_ROUTER_UNPROVED"
+JOG_RE = re.compile(r"^\$J=(?=[^XYZ]*G91)[^XYZ]*?((?: [XYZ]-?\d+(?:\.\d+)?)+)")
+
+
+class NotProved(ValueError):
+    """A home asked of an axis that has not shown its switch, or which way it goes."""
+
+
+class HomingProof:
+    """What an open port has shown of each axis: its limit switch on and off again, and
+    how far it has been jogged each way. ``assumed`` is a simulated router's, which has
+    no switch for a hand to press: its homes are not held to any of it."""
+
+    def __init__(self, assumed: bool = False):
+        self.assumed = assumed
+        self.forget()
+
+    def forget(self) -> None:
+        self.settings: Optional[Dict[int, float]] = None  # ``$$`` as last read on this port
+        self.on: set = set()  # axes whose switch the last report had on
+        self.seen: set = set()  # axes whose switch has been on and off again
+        self.jogged: Dict[str, Dict[str, float]] = {a: {"+": 0.0, "-": 0.0} for a in "XYZ"}
+        # Axes whose place this port has been given since it was opened and since its
+        # controller last lost it: homed, or its work zero set here.
+        self.placed: set = set()
+        self.lost = "this port was opened"  # why the others have no place
+        self._boots = 0
+
+    def place(self, cmd: str) -> None:
+        """A line the controller took that gives axes their place: a home (all, or the
+        one it names), a work zero set here, the touch plate's Z."""
+        if cmd.startswith("$H"):
+            self.placed |= set(cmd[2:] or "XYZ")
+        elif cmd.startswith("G10 L20 P1"):
+            self.placed |= set(re.findall(r" ([XYZ])0", cmd))
+        elif cmd.startswith("PROBE-PLATE"):
+            self.placed.add("Z")
+
+    def heard(self, link: GcodeLink) -> None:
+        """What the link has heard since the last look: a banner nothing here asked
+        for (its power cycled, its button pressed) or a reset in motion (``ALARM:3``)
+        is a controller that no longer knows where its tool is."""
+        if link.unasked_restarts != self._boots:
+            self._boots = link.unasked_restarts
+            self.placed, self.lost = set(), "its controller restarted"
+        if (link.alarm or "").strip() == "ALARM:3":
+            self.placed, self.lost = set(), "it was reset while moving (ALARM:3)"
+
+    def unplaced(self) -> List[str]:
+        return [] if self.assumed else [axis for axis in "XYZ" if axis not in self.placed]
+
+    def pins(self, pins: List[str]) -> None:
+        """A status report's pins: a switch seen on, then off, has been seen."""
+        for axis in "XYZ":
+            if axis in pins:
+                self.on.add(axis)
+            elif axis in self.on:
+                self.on.discard(axis)
+                self.seen.add(axis)
+
+    def jog(self, cmd: str, answer: List[str]) -> None:
+        """A relative jog the controller took, added to what each axis has gone each way."""
+        m = JOG_RE.match(cmd)
+        if not m or any(line.startswith("error") for line in answer):
+            return
+        for axis, value in re.findall(r" ([XYZ])(-?\d+(?:\.\d+)?)", m.group(1)):
+            distance = float(value)
+            if distance:
+                self.jogged[axis]["+" if distance > 0 else "-"] += abs(distance)
+
+
+def proof_of(link: GcodeLink) -> HomingProof:
+    """What ``link``'s port has shown since it was opened."""
+    proof = getattr(link, "homing_proof", None)
+    if proof is None:
+        simulated = isinstance(getattr(link, "_t", None), SimulatedRouter)
+        proof = HomingProof(assumed=simulated and not os.environ.get(UNPROVED_ENV))
+        link.homing_proof = proof
+    return proof
+
+
+def homing_of(link: GcodeLink, axes: str = "XYZ") -> List[dict]:
+    """For each of ``axes``: which way a home will seek (``$23``), how fast (``$25``), how
+    far at most (``HOME_SEARCH`` times its travel), and whether this port has shown its
+    switch and jogged it that way. Read from the controller's own settings, now."""
+    proof = proof_of(link)
+    proof.settings = parse_settings(link.command("$$", timeout=15.0, origin="control"))
+    if HOMING_DIR not in proof.settings:
+        raise NotProved(
+            f"home refused: {link.port} does not say which way it homes ($23), so no axis "
+            "can be shown to go that way first"
+        )
+    return homing_from(proof.settings, proof, axes)
+
+
+def homing_from(settings: Dict[int, float], proof: HomingProof, axes: str = "XYZ") -> List[dict]:
+    """``homing_of`` from settings already read."""
+    mask = int(settings[HOMING_DIR])
+    out = []
+    for axis in axes:
+        way = "-" if mask & (1 << "XYZ".index(axis)) else "+"
+        travel = settings.get(TRAVEL_OF_AXIS[axis])
+        out.append(
+            {
+                "axis": axis,
+                "way": way,
+                "seek": settings.get(HOMING_SEEK),
+                "search": None if travel is None else HOME_SEARCH * travel,
+                "hard_limits": bool(settings.get(HARD_LIMITS)),
+                "switch_seen": proof.assumed or axis in proof.seen,
+                "jogged": proof.assumed or proof.jogged[axis][way] >= HOME_JOG_MM,
+            }
+        )
+    for one in out:
+        one["ready"] = one["switch_seen"] and one["jogged"]
+    return out
+
+
+def homing_now(link: GcodeLink, mstate: str) -> Optional[List[dict]]:
+    """Each axis's homing for a poll, from the settings this port last gave. They are
+    asked for once, while the controller is idle or in alarm and no job holds the port
+    (``$$`` is refused in motion); None until they have been read."""
+    proof = proof_of(link)
+    if proof.settings is None and mstate in ("Idle", "Alarm") and link.job is None:
+        try:
+            proof.settings = parse_settings(link.command("$$", timeout=5.0))
+        except ToolchainError:
+            return None
+    if not proof.settings or HOMING_DIR not in proof.settings:
+        return None
+    return homing_from(proof.settings, proof)
+
+
+def in_volume(where: Optional[dict], settings: Optional[Dict[int, float]]) -> Optional[dict]:
+    """A machine position as a place in the working volume, each axis counted up from its
+    low end. An axis that homes toward its maximum counts down from that switch, so it
+    is at its position plus its travel; one that homes toward its minimum (its bit of
+    ``$23`` set) counts up from that switch, and is where it says it is. The AnoleX's X
+    is of the second kind and its Y and Z of the first. None without the settings."""
+    if not where or not settings or HOMING_DIR not in settings:
+        return None
+    mask, out = int(settings[HOMING_DIR]), {}
+    for bit, axis in enumerate("xyz"):
+        travel = settings.get(TRAVEL_OF_AXIS[axis.upper()])
+        if travel is None or where.get(axis) is None:
+            return None
+        out[axis] = round(where[axis] + (0.0 if mask & (1 << bit) else travel), 3)
+    return out
+
+
+def not_placed(link: GcodeLink) -> Optional[str]:
+    """Why a cut may not start on ``link``'s router, or None: an axis that has been
+    neither homed nor given a work zero here since the port was opened, or since its
+    controller restarted or was reset in motion. The machine position a controller
+    reports after its power was cycled is zero wherever the tool stands, and the work
+    zero it kept is an offset from that: a cut's coordinates are only as true as the
+    last home or the last zero set here."""
+    proof = proof_of(link)
+    proof.heard(link)
+    axes = proof.unplaced()
+    if not axes:
+        return None
+    return (
+        f"{', '.join(axes)} {'has' if len(axes) == 1 else 'have'} been neither homed nor "
+        f"given a work zero since {proof.lost}: home, or set work zero here, before a cut"
+    )
+
+
+def todo_of(mstate: str, alarm: Optional[int]) -> List[str]:
+    """What the controller's state asks of a person before the machine moves again."""
+    if mstate != "Alarm":
+        return []
+    why = f" {alarm} ({alarm_text(alarm)})" if alarm is not None else ""
+    return [
+        f"In alarm{why}: nothing moves, a jog included, until Unlock ($X) or a home. "
+        "Unlock keeps the position the controller believes; a home finds it again."
+    ]
+
+
+def home_problem(link: GcodeLink, cmd: str, read: bool = True) -> Optional[str]:
+    """What stops the home ``cmd`` -- an axis that has not shown its switch, or been
+    jogged the way it will seek -- saying what to do, or None. ``read`` asks the
+    controller for its settings now (``$$``); without it the settings last read
+    answer, and a port that has not read them is not held to a proof it cannot yet
+    show."""
+    proof = proof_of(link)
+    if proof.assumed:
+        return None
+    if read:
+        homes = homing_of(link, cmd[2:] or "XYZ")
+    elif proof.settings is None or HOMING_DIR not in proof.settings:
+        return None
+    else:
+        homes = homing_from(proof.settings, proof, cmd[2:] or "XYZ")
+    said = []
+    for one in homes:
+        axis, way = one["axis"], one["way"]
+        todo = []
+        if not one["jogged"]:
+            todo.append(
+                f"it has not been jogged {HOME_JOG_MM:g} mm toward {way}{axis}: jog it that "
+                "way and watch which way the tool goes, since the home goes the same way."
+            )
+        if not one["switch_seen"]:
+            alarm = (
+                " With hard limits on ($21=1) that puts the controller in alarm (ALARM:1), "
+                "which Unlock or the home clears; a jog needs the Unlock."
+                if one["hard_limits"]
+                else ""
+            )
+            todo.append(
+                f"its limit switch has not been seen: press it by hand for two seconds while "
+                f"the Machine polls, and let go (its pins show {axis}).{alarm}"
+            )
+        if todo:
+            seek = "" if one["seek"] is None else f" at {one['seek']:g} mm/min ($25)"
+            far = "" if one["search"] is None else f" for up to {one['search']:g} mm"
+            said.append(
+                f"{axis} will seek {way}{axis}{seek}{far} until its switch closes, and "
+                + " And ".join(todo)
+            )
+    return "home refused: " + " ".join(said) if said else None
+
+
+def check_home(link: GcodeLink, cmd: str) -> None:
+    """``NotProved``, saying what to do, unless every axis ``cmd`` homes has shown its
+    switch and been jogged the way it will seek."""
+    said = home_problem(link, cmd)
+    if said:
+        raise NotProved(said)
 
 
 def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List[str]:
     """Send one allowlisted control line, or a realtime character. The reset is
     written at once, ahead of the link's queue; a hold and a resume too, since
-    each is for a machine in motion."""
+    each is for a machine in motion. A home is sent only for axes this port has
+    shown (``check_home``)."""
     cmd = normalise_control(command)
     if cmd in REALTIME:
         settle = 1.0 if cmd == EMERGENCY_STOP else 0.3
         return link.realtime(
             REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True, origin="control"
         )
-    return link.command(cmd, timeout=timeout, origin="control")
+    if cmd.startswith("$H"):
+        check_home(link, cmd)
+    if cmd.startswith("PROBE-PLATE"):
+        thickness, depth, feed = (float(word[1:]) for word in cmd.split()[1:])
+        answer = probe_plate(link, thickness, depth, int(feed))
+        proof_of(link).place(cmd)
+        return answer
+    if cmd.startswith("G38.2 Z-"):
+        depth, feed = (float(word[1:]) for word in cmd.split()[1:])
+        return probe_down(link, -depth, int(feed))
+    answer = link.command(cmd, timeout=timeout, origin="control")
+    proof_of(link).jog(cmd, answer)
+    if cmd.startswith("$H"):
+        link.alarm = None  # a home is what an alarm asked for: it is spent
+    proof_of(link).place(cmd)
+    return answer
+
+
+def probe_down(link: GcodeLink, depth: float, feed: int) -> List[str]:
+    """One probe down ``depth`` mm from where the tool stands, at ``feed``, and what the
+    controller said. The Z of a probe is a place in the work zero while the parser is in
+    absolute moves, so "down 25" sent as it stands goes to work Z -25 from wherever the
+    tool is -- up, from below it. It is sent as a distance (``G91``), and the parser is
+    put back in absolute moves whatever comes of it. The probe's own lines are returned."""
+    link.command("G91", timeout=10.0, origin="control")
+    try:
+        return link.command(
+            f"G38.2 Z-{depth:.2f} F{feed}",
+            timeout=depth / feed * 60.0 * 2 + 30.0,
+            origin="control",
+        )
+    finally:
+        try:
+            link.command("G90", timeout=10.0, origin="control")
+        except (ToolchainError, LinkBusy):
+            pass  # in alarm the controller keeps its parser; the alarm is what is said
+
+
+def probe_plate(link: GcodeLink, thickness: float, depth: float, feed: int) -> List[str]:
+    """The work Z zero set from the touch plate, as the maker's manual has a sender do it
+    (page 27): the bit comes down ``depth`` mm at most at ``feed`` until it touches the
+    plate standing on the stock, the touch is called Z = ``thickness`` -- so Z 0 is the
+    stock's top under the plate -- and the bit lifts ``PLATE_RETRACT_MM`` off it.
+
+    The zero is written to the work offset (``G10 L20 P1``), where Z zero here writes
+    it, and not as the manual's ``G92``, which a soft reset forgets: a stop would take
+    the zero with it. A probe that does not touch sets nothing and says so; the
+    controller is then in alarm, as it is after any probe that finds nothing."""
+    if not 0 < thickness <= PLATE_MAX_MM:
+        raise OutOfBounds(f"a plate of {thickness:g} mm: 0 to {PLATE_MAX_MM:g} mm")
+    if not 0 < depth <= PROBE_MAX_MM:
+        raise OutOfBounds(f"probe deeper than {PROBE_MAX_MM} mm: {depth:g}")
+    if not 0 < feed <= PROBE_FEED_MAX:
+        raise OutOfBounds(f"probe feed above {PROBE_FEED_MAX}: {feed}")
+    nothing = (
+        f"{link.port}: the probe touched nothing within {depth:g} mm, and no zero was "
+        "set: is the lead clipped to the bit, and the plate under it?"
+    )
+    try:
+        lines = probe_down(link, depth, feed)
+    except ToolchainError as exc:  # the controller's own ALARM:4 or ALARM:5
+        raise ToolchainError(f"{nothing} ({exc})") from exc
+    touch = parse_probe(lines)
+    if touch is None or not touch["touched"]:
+        raise ToolchainError(nothing)
+    lines += link.command(f"G10 L20 P1 Z{thickness:.2f}", timeout=10.0, origin="control")
+    lines += link.command(
+        f"$J=G91 G21 Z{PLATE_RETRACT_MM:g} F{max(feed, 300)}", timeout=30.0, origin="control"
+    )
+    return lines
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:
@@ -1174,7 +1561,8 @@ def probe_table(
                 lines += control_router(
                     link, f"G53 G0 X{point['x']:.3f} Y{point['y']:.3f}", timeout=120.0
                 )
-                said = control_router(link, probe_line, timeout=probe_timeout)
+                # Sent as it stands: the map holds the parser in G91 for all its probes.
+                said = link.command(probe_line, timeout=probe_timeout, origin="control")
                 lines += said
                 touch = parse_probe(said)
                 if touch is None or not touch["touched"]:

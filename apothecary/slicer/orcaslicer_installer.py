@@ -50,8 +50,8 @@ result must run and report the pinned version before it is moved into place
 real slice in a scratch tools dir and says in its body what they did (the hosts
 the install reached, the slice's G-code).
 
-Every fetch goes through the OpenSCAD installer's tool fetch (``_fetch``,
-``_fetch_to``: ``stays_local.tool_fetch``, no proxy), to api.github.com,
+Every fetch goes through the OpenSCAD installer's tool fetch (``fetch_url``,
+``fetch_url_to``: ``stays_local.tool_fetch``, no proxy), to api.github.com,
 github.com and the host GitHub redirects a release asset to -- all in
 ``stays_local.TOOL_SOURCES`` -- and nowhere else. Stdlib only.
 """
@@ -73,17 +73,17 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from ..firmware.toolchains import tools_dir
 from ..openscad_installer import (
-    _fetch,
-    _fetch_to,
-    _machine_name,
-    _parts,
-    _platform_label,
-    _remove_empty,
-    _rename,
-    _run,
     binary_archs,
+    fetch_url,
+    fetch_url_to,
     host,
+    machine_name,
+    member_parts,
     needs_fuse,
+    platform_label,
+    remove_empty,
+    rename,
+    run_program,
     runs_here,
 )
 
@@ -174,10 +174,10 @@ def asset_for(system: Optional[str] = None, machine: Optional[str] = None) -> As
     if system is None or machine is None:
         here = host()
         system, machine = system or here[0], machine or here[1]
-    found = ASSETS.get((system, _machine_name(machine)))
+    found = ASSETS.get((system, machine_name(machine)))
     if found is None:
         raise InstallError(
-            f"no OrcaSlicer for {_platform_label(system, _machine_name(machine))}: {SERVED}. "
+            f"no OrcaSlicer for {platform_label(system, machine_name(machine))}: {SERVED}. "
             "Install it another way and set APOTHECARY_ORCASLICER to it"
         )
     return found
@@ -186,7 +186,7 @@ def asset_for(system: Optional[str] = None, machine: Optional[str] = None) -> As
 def what_install_does() -> str:
     """This machine, and what ``apothecary slicer install`` does on it."""
     system, machine = host()
-    label = _platform_label(system, machine)
+    label = platform_label(system, machine)
     try:
         return f"{label}: an install is {WHAT_INSTALL_DOES[asset_for(system, machine).method]}"
     except InstallError as exc:
@@ -395,7 +395,12 @@ def read_manifest(version: str) -> dict:
 
 
 def _in_install(version: str, key: str) -> Optional[Path]:
-    rel = _plain(read_manifest(version).get(key))
+    """Where an install of ``version`` keeps ``key``, by its ``install.json``. A folder
+    whose manifest names none of the ways an install is made (``HOW``) is not one."""
+    record = read_manifest(version)
+    if record.get("method") not in HOW:
+        return None
+    rel = _plain(record.get(key))
     return home() / version / rel if rel else None
 
 
@@ -412,7 +417,7 @@ def resources_for(version: str) -> Optional[Path]:
 def resources_of_install(program: Path) -> Optional[Path]:
     """The ``resources`` folder of the install ``program`` is the executable of,
     wherever that install is, by the ``install.json`` beside it: how an install in
-    another tools folder is read in place (``apothecary serve --demo`` names the
+    another tools folder is read in place (``apothecary serve --simulated`` names the
     person's own). None when no install of this kind holds it."""
     try:
         data = json.loads((program.parent / MANIFEST).read_text("utf-8"))
@@ -480,7 +485,7 @@ def unpack_zip(archive: Path, dest: Path) -> int:
     with zipfile.ZipFile(archive) as zf:
         members = []
         for info in zf.infolist():
-            parts = _parts(info.filename)
+            parts = member_parts(info.filename)
             if parts is None:
                 raise InstallError(f"the zip names a path outside its folder: {info.filename!r}")
             if parts:
@@ -513,7 +518,7 @@ def _help(program: Path) -> Tuple[int, str]:
     """``program --help``, run in a folder of its own: OrcaSlicer writes a
     ``result.json`` wherever it is run, even to say how it is used."""
     with tempfile.TemporaryDirectory(prefix="apothecary-orcaslicer-") as aside:
-        return _run(program, "--help", timeout=180, cwd=aside)
+        return run_program(program, "--help", timeout=180, cwd=aside)
 
 
 def _executable(path: Path) -> None:
@@ -553,10 +558,10 @@ class OrcaSlicerInstaller:
         self.system, self.machine = system, machine
 
     def fetch(self, url: str) -> bytes:
-        return self._fetch(url) if self._fetch else _fetch(url, agent=AGENT)
+        return self._fetch(url) if self._fetch else fetch_url(url, agent=AGENT)
 
     def fetch_to(self, url: str, path: Path) -> str:
-        return self._fetch_to(url, path) if self._fetch_to else _fetch_to(url, path, agent=AGENT)
+        return self._fetch_to(url, path) if self._fetch_to else fetch_url_to(url, path, agent=AGENT)
 
     def install(self) -> Path:
         version = check_version(ORCASLICER_VERSION)
@@ -619,7 +624,7 @@ class OrcaSlicerInstaller:
                 version=version,
                 asset=asset.name,
                 sha256=asset.sha256,
-                platform=_platform_label(*host()),
+                platform=platform_label(*host()),
             )
             if record["archs"]:
                 self.log(f"On this machine: {runs_here(record['archs'])}")
@@ -627,11 +632,11 @@ class OrcaSlicerInstaller:
             final = folder / version
             if final.exists():
                 aside = Path(tempfile.mkdtemp(prefix=f".{version}.old.", suffix=".tmp", dir=folder))
-                _rename(final, aside / version)
-                _rename(staging, final)
+                rename(final, aside / version)
+                rename(staging, final)
                 shutil.rmtree(aside, ignore_errors=True)
             else:
-                _rename(staging, final)
+                rename(staging, final)
         finally:
             if staging.exists():
                 shutil.rmtree(staging, ignore_errors=True)
@@ -650,7 +655,7 @@ class OrcaSlicerInstaller:
             _executable(image)
             archs = binary_archs(image)
             self.log("Extracting its printer profiles (they are read at every slice)")
-            code, said = _run(
+            code, said = run_program(
                 image, "--appimage-extract", PROFILES_PATTERN, timeout=900, cwd=staging
             )
             extracted = staging / "squashfs-root"
@@ -669,7 +674,7 @@ class OrcaSlicerInstaller:
                 }
             self.log("The AppImage cannot mount itself here (no FUSE); extracting it whole instead")
             shutil.rmtree(extracted)
-            code, said = _run(image, "--appimage-extract", timeout=900, cwd=staging)
+            code, said = run_program(image, "--appimage-extract", timeout=900, cwd=staging)
             if code != 0 or not (extracted / "AppRun").exists():
                 raise InstallError(f"{asset.name} could not be extracted: {said.strip()[-500:]}")
             extracted.chmod(0o755)
@@ -711,7 +716,7 @@ class OrcaSlicerInstaller:
         if hdiutil is None:
             raise InstallError("hdiutil is not on PATH; it comes with macOS")
         mount = Path(tempfile.mkdtemp(prefix="apothecary-orcaslicer-"))
-        code, said = _run(
+        code, said = run_program(
             Path(hdiutil),
             "attach",
             "-nobrowse",
@@ -722,7 +727,7 @@ class OrcaSlicerInstaller:
             str(image),
         )
         if code != 0:
-            _remove_empty(mount)
+            remove_empty(mount)
             raise InstallError(f"hdiutil could not attach {name}: {said.strip()}")
         try:
             apps = [p for p in mount.iterdir() if p.suffix == ".app" and p.is_dir()]
@@ -734,19 +739,19 @@ class OrcaSlicerInstaller:
             self.log(f"Copying {app.name} out of {name}")
             ditto = shutil.which("ditto")
             if ditto:
-                code, said = _run(Path(ditto), str(app), str(dest), timeout=900)
+                code, said = run_program(Path(ditto), str(app), str(dest), timeout=900)
                 if code != 0:
                     raise InstallError(f"ditto could not copy {app.name}: {said.strip()}")
             else:
                 shutil.copytree(app, dest, symlinks=True)
         finally:
             for extra in ((), ("-force",)):
-                code, said = _run(Path(hdiutil), "detach", str(mount), *extra)
+                code, said = run_program(Path(hdiutil), "detach", str(mount), *extra)
                 if code == 0:
                     break
             else:
                 self.log(f"hdiutil could not detach {mount}: {said.strip()}")
-            _remove_empty(mount)
+            remove_empty(mount)
 
     # Windows --------------------------------------------------------------------------
 
@@ -808,12 +813,11 @@ def describe(version: str) -> Installed:
     if not isinstance(archs, list) or not all(isinstance(a, str) for a in archs):
         archs = binary_archs(exe)
     label = record.get("platform") if isinstance(record.get("platform"), str) else "?"
-    method = record.get("method") if record.get("method") in HOW else None
     return Installed(
         version=version,
         executable=exe,
         resources=resources_for(version),
         platform=label,
-        how=HOW.get(method, "installed by an older apothecary"),
+        how=HOW[record["method"]],
         runs=runs_here(archs) if archs else "architecture not known",
     )

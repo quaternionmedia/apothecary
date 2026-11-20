@@ -809,11 +809,6 @@ them on before it retires:
 **History line (when the sweep's last area merges):**
 `- 2026-10-12 — [The documentation, swept](../timeless-docs-2026-10-12.md): every durable text brought under the record on durable text; each passage sent inline, to a reference page, to a retrospective, or deleted.`
 
-Stray file: during this read `docs/plans/` briefly held
-`timeless-docs-2026-10-12.md.tmp.6097.1ae7d59a0bc8`. An editor was writing
-in the worktree. It is untracked and gone now, but worth a `git status` before
-the area's commit.
-
 ## Validation records
 
 ### 2026-09-20-ender-bench.md

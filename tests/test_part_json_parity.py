@@ -1,6 +1,7 @@
 """The parts that were Python modules holding only literals are `part.json`
 files; what they say, and what `apothecary problems` says of them, is what the
-modules said."""
+modules said, but for how solderfan stands: its turn is how it rests, which its
+SCAD draws."""
 
 from __future__ import annotations
 
@@ -11,9 +12,16 @@ from apothecary.cli.main import cli
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.registry import part_named
 
-# name: (description, category, tags, preview colour hex, bounds min/max, display rotation)
+# name: (description, category, tags, preview colour hex, bounds min/max, rest pose)
 RECORDED = {
-    "contranot": ("Contra-notation accessory", "misc", ["contra", "notation"], None, None, None),
+    "contranot": (
+        "Contra-notation accessory",
+        "misc",
+        ["contra", "notation"],
+        None,
+        None,
+        None,
+    ),
     "couch_block": (
         "Couch block spacer",
         "furniture",
@@ -52,7 +60,7 @@ RECORDED = {
         ["fan", "mount", "soldering"],
         None,
         None,
-        (90, 0, 0),
+        {"print": False},
     ),
     "star_cookiecutter": (
         "Star cookie cutter",
@@ -67,7 +75,7 @@ RECORDED = {
 
 @pytest.mark.parametrize("name", sorted(RECORDED))
 def test_a_part_json_says_what_its_module_said(name):
-    description, category, tags, color, bounds, rotation = RECORDED[name]
+    description, category, tags, color, bounds, rest = RECORDED[name]
     part = part_named(name, ROOT)
     assert (part.description, part.category, part.tags) == (description, category, tags)
     assert part.readme_path == ROOT / "parts" / "README.md"
@@ -78,13 +86,7 @@ def test_a_part_json_says_what_its_module_said(name):
     else:
         lo, hi = part.default_bounds.min_point, part.default_bounds.max_point
         assert ((lo.x, lo.y, lo.z), (hi.x, hi.y, hi.z)) == bounds
-    if rotation is None:
-        assert not any(
-            (part.display_rotation.x, part.display_rotation.y, part.display_rotation.z)
-        )
-    else:
-        r = part.display_rotation
-        assert (r.x, r.y, r.z) == rotation
+    assert part.rest == rest
 
 
 def test_problems_reads_these_parts_as_it_did_when_they_were_modules():

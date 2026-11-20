@@ -35,7 +35,12 @@ family or language -- the ESP32-C3 on stable Rust, AVR, the RP2040 -- is a modul
 of its own beside them, and the
 Bench, the Machine, the routes and the CLI draw it without a change of their
 own. `GET /firmware/toolchains` lists them; `GET /firmware/status` carries
-them as `toolchains`, and its other fields are the Arduino module's.
+them as `toolchains`, beside `tools_dir` (where an install puts a tool) and
+`active_task` (the task running now). Each entry is its module's own: its
+`ok`, its `tools` as found, its `problems`. What only Arduino has is in
+Arduino's entry: its `config_file`, its `cores` and the `suggested_cores` the
+Bench offers. `apothecary firmware validate --json-out` prints the same
+`tools_dir` and `toolchains`.
 
 ## Setup
 
@@ -289,6 +294,12 @@ listening does not reset the devkit), and asks the chip what it is with
 the first one's -- Arduino's, when arduino-cli is there -- and is listened to
 by it; a board's Machine says which module found it.
 
+A flash is refused for a port whose board answered as a printer or a router: it would
+replace the firmware that runs the machine, and a router's controller is the very
+chip a devkit's sketch is built for. Replacing it is asked for by name,
+`"replace_machine_firmware": true` in the request or `--replace-machine-firmware` at
+the command line; a procedure's flash step never asks.
+
 ## Knowing what a board is running
 
 `apothecary firmware devices` (and each board's Machine in the viewer) describe
@@ -401,6 +412,19 @@ whose `state` is one of the garage site's `PRINTER_STATUSES` (`idle`,
 are written to Marlin's documented replies; RepRapFirmware, Klipper and
 Prusa speak the same line protocol.
 
+A poll made while a job streams to the machine (a print or a cut holds the
+port) asks for less, because each exchange it makes is taken from the stream. A
+printer's is `M105`, `M114` and `M119`: the card cannot be printing under a host's
+job, so `M27` and `M31` say nothing and are not asked; the endstops are still read,
+because the runout sensor answers with them and a print is when filament runs out. A
+router's is the status report (`?`) alone, which is realtime and carries the
+state, positions, pins, feed, overrides and spindle speed; the parser state (`$G`)
+adds only the programmed spindle speed. What the poll did not ask for is the last
+full poll's value, and `PrinterStatus.held` names each such field with when it was
+read. The first poll after the job
+ends is a full one and holds nothing. `can.card_printing` reads `sd_printing` from
+the last poll, so a card that was seen printing still refuses a start.
+
 **Reset is deliberate, never incidental.** Creality boards wire DTR to reset
 and the kernel asserts DTR on every open, so Apothecary opens a printer's
 port once, exclusively, and holds it (`firmware.gcode.PrinterLinks`); leaves
@@ -458,6 +482,14 @@ the board has no key of its own. A board probed after it was pinned or flashed b
 its make, its MAC read, is the same board. No sketch is expected of a board that
 answers as a printer or a router: nothing here flashes it.
 
+A board pinned to one node and then to another is where it was pinned last. A pin
+replaces only an earlier pin of its own node, so the board's pin elsewhere is kept,
+listed in Panels › Site › Pinned and taken back from there; its port answers for the
+newest pin: where the board stands (`GET /firmware/printers/where`, with the
+machine's frame, its controller's travel and homing from the port's last poll:
+[viewer.md](viewer.md#a-machines-frame)), the site `/firmware/monitor` opens on,
+the place of a job it starts, and the printer a slice by its port is for.
+
 ### In the viewer: one Machine per board
 
 A pinned board has one surface in the viewer, its **Machine**
@@ -511,8 +543,10 @@ Machine too.
 Every drawer of a board -- its badge in the world, its badge in Site's tree,
 Selected's line and its Machine -- reads one model of it
 (`apothecary/static/boards.js`), which polls a printer at the interval its
-Machine says, and only while its Machine is open with auto-poll on: one
-poller per board, whatever draws it. The model scans for boards when a site
+Machine says while its Machine is open with auto-poll on, and every two seconds
+for the world while no Machine is open on it and the server holds its link, so a
+machine drawn in the world follows its board ([viewer.md](viewer.md#a-machines-frame)):
+one poller per board, whatever draws it. The model scans for boards when a site
 loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
 so a replugged board is found without a reload; it never scans on a timer.
 
@@ -539,7 +573,9 @@ cell holds its place and cannot be chosen -- and a devkit's Link ends with
 Listen and Probe. A board's verbs from the ring -- Poll, Query, Flash, the
 link's, Control's, the bed's, the print's -- go to its Machine, opened for it
 when it is not. Inside a Machine the ring is its device ring, on its port,
-and the Machine's buttons wear that ring's addresses. `POST /menu/resolve`
+titled by the machine the board is pinned to as a refusal names it (`printer_1`),
+or by the port where it is pinned to none (`ttyACM0`), and the Machine's buttons
+wear that ring's addresses. `POST /menu/resolve`
 seats the options
 (`apothecary/menu.py`); `POST /menu/intent` receives the choice. A control
 verb from the ring goes through the same latch, allowlist and confirms as the
@@ -569,7 +605,13 @@ printer's plan is made in its own Machine.
 ### Control, behind a latch
 
 Disarmed, the default, nothing can heat or move the machine: the API refuses
-control lines with `409`. A printer's Machine's **⚙ Control** arms a per-port latch
+control lines with `409`. What only turns something off or stops it goes all the
+same, as the stop does: a heater's target to zero (`M104 S0`, `M140 S0`), the fan off,
+a heat-and-wait broken (`M108`), the quickstop (`M410`), the card's pause, and a
+router's spindle off (`M5`), hold and jog cancel. A latch that lapsed is never between
+a person and the off switch, and none of these arms anything. The latch gates what is
+asked next and stops nothing by lapsing: a print five hours long outlives it.
+A printer's Machine's **⚙ Control** arms a per-port latch
 held on the server; it lapses after five minutes without a command (each
 accepted command renews it) and is dropped by a **Release** or a lost link.
 **E-STOP** (`M112`; a router's `RESET`) is always accepted, latch or not, and
@@ -579,7 +621,9 @@ ahead of any exchange in flight (a homing, a bed probe), waiting for no `ok`:
 a printer's "Printer halted" or a router's banner is its answer. A router's
 reset is a realtime byte it acts on at once; a printer halts until it is
 reset -- as soon as it reads the line when its firmware parses M112 early
-(Marlin's `EMERGENCY_PARSER`), else after the moves it has queued.
+(Marlin's `EMERGENCY_PARSER`), else after the moves it has queued. It disarms the
+port's control as it goes, whether or not the line arrives, and the log says so:
+what moves the machine next is armed again by a person.
 
 Armed, the Machine's control pad -- heaters, motion, the SD print, leveling --
 pops out into a loud window of its own beside the world: its tab and frame red,
@@ -588,7 +632,24 @@ tab is in front: a real machine is armed. Every arming pops it out, from the
 Machine, the ring or another browser. Its **⇥ Put back**, or its window's ✕,
 puts it back in the Machine's window; its **⧉ Pop out** pops
 it out again, and the ring's Panels › Machine › Control pad does either. Disarmed, it
-goes.
+goes. The pad goes with its Machine -- closed by its ✕, another board's Machine opened
+in its place, another site loaded, or the board unpinned or gone from the site -- so
+the board is disarmed then, and the status bar says so.
+
+Popped out, the pad has an **⏹ E-STOP** of its own in its head, the Machine's being in
+another window. What interrupts -- Quickstop, Break wait, Stop jog, Hold and Resume --
+is sent at once and is never held by a line in flight, while every other line waits its
+turn behind the one in flight. An arm or a disarm that failed is drawn as the server says
+the latch is, asked again, and never as what was asked for; with no answer the label is
+marked *not confirmed*. An open Machine follows its port's latch whoever armed it or
+let it go, with auto-poll off too. Once the status its cards are drawn from is more
+than a few seconds old, the State card says how old and the values dim. A Machine is
+its board's: its pinned board found on another port, it is opened again there.
+
+However it was armed -- its Machine, the deck's two long presses, another browser -- and
+whether or not its Machine is open, an armed machine says so on its badge in the world
+and its row in Site, red, with the time its arm has left: the page asks for every port
+armed every two seconds while it is in front (`GET /firmware/printers/armed`).
 
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 (heaters and fan, homing, moves, extrude and retract, motors off, SD start,
@@ -597,8 +658,13 @@ travel, feed and extrusion caps beside it. Homing is one axis at a time as well 
 of X, Y and Z (`G28 X`), a router's `$H` is all three and `$HX`, `$HY` and `$HZ` one;
 the pad's Home X, Home Y and Home Z each send their kind's line, and the ring's Home has
 the same, the printer's with XY beside them. Out-of-bounds values are refused before they reach the port;
-there is no EEPROM write and no firmware configuration. A jog is three lines
-(`G91`, `G1 …`, `G90`), so the board is left in absolute mode. The travel cap
+there is no EEPROM write and no firmware configuration. A jog is one act on the port
+(`POST /firmware/printers/jog`, `devices.printer_jog`), whoever makes it, the page's
+pad or the deck's knobs. A router's is GRBL's jog line, which changes no modal state. A
+printer's is three lines (`G91`, `G1 …`, `G90`) with the link held from the first to
+the last, so no other caller's line goes between them, and `G90` is sent whatever
+became of the move, latch or no latch: the board is always left in absolute mode. A
+move out of bounds sends none of the three. The travel cap
 bounds each move, not where the head ends up: jogs one after another add up,
 and the firmware's soft endstops (after a homing) are what keeps the head on
 the machine.
@@ -615,8 +681,91 @@ hotend's temperature before sending the line.
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
 GET  /firmware/printers/control?port=…                               → armed, and the seconds left
+GET  /firmware/printers/armed                                        → every port armed, and its seconds left
 POST /firmware/printers/command  {"port": …, "command": "M140 S60"}   → 409 unless armed
+POST /firmware/printers/jog      {"port": …, "axis": "X", "mm": -5, "feed": 3000}  → one relative move
+GET  /firmware/printers/can-start?port=…&file_id=…                  → would that file be started now, and if not why
+GET  /firmware/busy                                                  → what a restart would cut into
 ```
+
+#### What a command would be refused for
+
+`GET /firmware/printers/status` and `/info` carry `can`: for each command, whether the
+server would take it from that port right now, as `{"ok", "why", "kind"}`. The commands
+are `jog`, `home` (and `home.X`, `home.Y`, `home.Z` of a router), `off`, `heat`,
+`spindle`, `unlock`, `control` (any line a running job does not allow), `print.start`,
+`print.pause`, `print.resume`, `print.cancel`, `level.probe`, `level.read`, `reconnect`,
+`reset`, `release`, `identify`, `listen`, `probe`, `query` and `flash`; `estop` is always
+ok. `kind` says what stands in the way: `armed` (the latch is down), `held` (a job or a
+task holds the port), `homed` (the port has not shown that axis's switch), `placed` (a
+cut whose tool place is unknown), `busy` (another task runs), `idle` (no print to act
+on), `offline` (no link, and the last poll said so), `alarm` (the controller is in
+alarm; its own refusal, not the server's), `kind` (the other kind of machine, or a
+machine's controller a flash would replace) and `file` (the file does not fit).
+
+Every refusal the seam raises is a predicate in `firmware/can.py` that returns the
+reason, and the routes raise from the same predicates `can_now` reads, so the answer
+and the refusal are one check. A reason begins with the machine's name, the node its board is pinned to
+(`printer_1`), and with the port only for a board nothing is pinned to; a job's hold is
+worded one way wherever it is refused (`can.holding`). `tests/test_can_now.py` puts a simulated printer and
+router in each condition and requires `ok: false` exactly where the route answers 4xx
+or 5xx. A router's `home` is judged from the settings last read from its controller
+(it does not ask for them again for a poll); a line the board objects to after it is
+sent (a bound the dialect checks on the value) is not in the answer.
+
+The Machine greys a button the answer refuses (`static/can.js`). A button names its
+command in `data-can`; `applyCan(root, can)` sets `disabled` and `aria-disabled` and
+puts `Disabled: <why>. <its own tip>` in its title, keeping its own tip and giving it
+back when the command is ok again. The pad's buttons are tagged from the line they
+send. What only the page knows -- a file kept for the other kind of machine, a send
+from here under way -- is said in the same shape over the server's answer, and the
+latch is counted down on the page, since it lapses with no event. A button a send in
+flight holds (`data-busy`) stays held until both let go. The emergency stop is never
+greyed: E-STOP and the pad's E-STOP. The pad's lines are named by the command the
+server answers for a line a job treats the same way (`can.js` verbOfLine, held to the
+dialects line by line by `tests/test_can_js.py`): Break wait and Hold go while a job
+streams; Quickstop, Stop jog and the card's Pause do not -- the stream would go on --
+and are greyed with the job's words; Resume moves the machine again and wants the latch.
+One rule in `static/tokens.css` greys a disabled button everywhere, with the
+not-allowed cursor whatever a widget's own rule for its buttons says.
+
+The ring greys the same acts from the same answer. A ring opened on a board -- its
+Machine's, or a piece's Device -- is told the answer beside the board (`can` on the
+resolver's `Device`): the open Machine's, with what that page knows over it, else the
+board's last poll with a lapsed latch counted down. `menu.CAN_VERBS` names, for each
+act on a machine's ring, the command the server answers for it: the verb its button
+names in `data-can`, or the one `verbOfLine` names its pad line by
+(`tests/test_can_js.py` holds the two to each other act by act, and a new act with no
+entry fails it). A print's or a cut's Pause, Resume and Abort are the job's while a job
+from here runs and the line's otherwise, as the Machine carries them. Print › Tune ›
+Apply and Undo turn are the printer's tuning document's, not its port's: the page tells
+them beside the port's answer (`menu.PAGE_ANSWERS`), as the Print window's two buttons
+show them, and with no file a slice made for the printer chosen both are refused. The
+canvas ring's Panels › Machine is told the same kind of answer beside its context
+(`can` on the resolve): the heater loops' Read, Start, Cancel and Set gains as the
+Loops window greys them (the open Machine's port's answer when that window is not
+there, and refused with no printer's Machine open), and the knobs' as the deck answers
+for them (`can.deck_can`, the first deck found; with none, each refused for that). An
+act the answer refuses is greyed with the server's reason (`Option.why`); E-STOP never
+is. A ring left open is greyed again from each answer the page applies after it opened
+-- a latch let go, a print paused -- and stays where it is. A greyed
+cell chosen anyway does nothing and says why on the status line, in the Machine's log
+too when it is a verb of the Machine open ([the viewer](viewer.md#the-ring)).
+
+Send reads `GET /firmware/printers/can-start` for the chosen file, so the page holds no
+rule of its own for which file goes to which machine. The Bench's Compile & upload and
+raw Flash read `can.flash` of the chosen port (the info of that port, asked once when it
+is chosen and again after a task ends, never on a timer), and grey with its reason for
+a machine's controller; the Bench's own reasons (no sketch, a task running) go through
+the same helper (`setReason`), so there is one way a button says why.
+
+`M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
+for a board busy with the line before it. The reply such a line is owed, and the reply
+of a line whose `ok` did not come in time, is read off before the next exchange's own,
+so one late `ok` does not make every reply after it the answer to the line before.
+
+A stop sent to a port this server knows and holds no link to opens it and writes the
+stop first: nothing is waited for and nothing asked before it.
 
 Anything else a person may send by hand is *report-only*
 (`firmware.gcode.QUERY_CODES`: `M503`, `M119`, `M20`, `M420 V`, `M122` …),
@@ -680,10 +829,11 @@ readings are the readings of the board on it now (`firmware.occupants`), of its
 kind: a printer's bed readings, a router's table maps. They follow the board
 from port to port, and a router on a port a printer's readings were taken on is
 listed none of them, nor wears one over its table; a printer's reading kept
-under a bridge's shared key is never a router's. A reading kept before readings
-named their board is the printer's on the port it was taken on that answers
-with the firmware it names. A bed reading is refused on a board nothing has
-identified as a printer or a router, before any of the reading is sent, and a stored mesh
+under a bridge's shared key is never a router's. A file in the readings' folder
+that names no board, or no kind of machine, is not a reading: it is listed for
+nobody, as a file that does not parse is. A bed reading is refused on a board nothing has
+identified as a printer or a router, before any of the reading is sent, on a
+board with no key (no MAC, no serial number and no USB ids), and a stored mesh
 on anything but a printer; and while two boards on the machine answer to one
 key (two bridges of one make, neither with a serial number), it is refused on
 both, since a reading kept then could not be told whose.
@@ -693,14 +843,18 @@ both, since a reading kept then could not be told whose.
 **Print from here** keeps a sliced G-code file on the host
 (`~/.apothecary/prints/`) and checks it before anything is sent: a file that
 saves settings (`M500`), factory-resets (`M502`), updates firmware (`M997`),
+runs the firmware's autotune (`M303`, a heater loop's experiment, watched as one),
 kills or restarts the board, or exceeds the heater caps is refused with the
 reason. A kept file says the kind of machine it was kept for, and is sent to
 that kind alone: Choose File keeps it for its Machine's kind, a slice for a
-printer, a toolpath for a router, and a file a slice or a toolpath made before
-files said is known by its record. A stream refuses a file of another kind, a file
-kept for none (Choose File keeps it again for this machine), and any file for a
-board that has not said what kind of machine it drives; the card lists such a
-file with what it was kept for, and its ▶ stays refused. A file kept for a
+printer, a toolpath for a router. A description in the folder that says no kind
+is no kept file's, as one that does not parse is none: it is not listed, and a
+slice's record beside it says nothing of its kind. The same bytes kept again under the same name
+for the same kind are the file already kept, now the newest: a toolpath or slice
+written twice, or a file chosen twice, is one file in the card, with the newer
+record (`devices.save_print_file`). A stream refuses a file of another kind, and any file for a
+board that has not said what kind of machine it drives; the card lists another
+kind's file with what it was kept for, and its ▶ stays refused. A file kept for a
 router is checked in GRBL's terms too ([docs/cnc.md](cnc.md)). **Slice**, beside **makes**, slices the part or piece chosen there for
 the printer and chooses the G-code it keeps, so Print follows Slice; a file a
 slice made says what it was sliced from and for which printer ([the
@@ -708,14 +862,30 @@ slicer](slicer.md#in-the-page)). The card shows each control once what it
 needs holds, in the loop's order: makes and Choose File are the two ways in;
 Slice is there once a part is chosen under makes, the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
-preview and ▶ Print once a file is chosen, Pause and Cancel while a print runs,
+preview and ▶ Print once a file is chosen, Pause and Abort while a print runs,
 and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and
 release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
-ends the job with nothing more sent. It is not a queue or a webcam, and the
+ends the job with nothing more sent. A cancel breaks a heat-and-wait first (`M108`),
+so the safe-off is the next thing the printer reads and not minutes behind a bed
+still heating; behind a home or a probe it waits for that one line to end. Two
+starts at once on one port are one job and one refusal. A board that restarts under
+a print -- its power cycled while the print is paused, say -- is known by its boot
+banner: the print fails there and no more of the file is sent to a board that is cold
+and has no position.
+
+**A server that stops ends its jobs first.** Shutting down, it cancels each print,
+cut, bed reading and table map, waits for the safe-off, and sends the stop to a job
+still behind a line its board has not answered after twenty seconds
+(`devices.stop_jobs`). A server that dies with no chance to (power, a kill) leaves its
+job kept as running: when that machine's port is next opened the job is ended as
+failed and the safe-off sent then, unless the machine is plainly doing something
+else, a printer printing from its card or a router that is not idle, which is left
+alone and said. `GET /firmware/busy` lists what a restart would cut into, for whatever
+restarts the server for a reason of its own. It is not a queue or a webcam, and the
 slicing is OrcaSlicer's, behind the slicer's own seam; the *G-code printer
 seam* record draws that line: a host for one print at a time, and no more
 than that.
@@ -727,7 +897,8 @@ operation a machine performs on a part. The job records its kind (`print`),
 the printer (its port, the board's own identity, the node it is pinned to),
 the site, the part or piece it makes when one is chosen on the card (the
 **makes** drop-down lists the parts and pieces of the site the printer is
-pinned in; a piece made from a picture is chosen there by **Print** on its own
+pinned in, then every part of the apothecary that stands nowhere in it, by its
+name, so any part can be made wherever the machine is; a piece made from a picture is chosen there by **Print** on its own
 ring, and its job keeps the picture and the camera it came from, in its record
 and not its row), the file it ran (name, size, SHA-256), when it started and
 finished, and how it ended -- done, cancelled or failed, with the reason; the
@@ -741,15 +912,60 @@ The card's history is the printer's jobs (`GET /jobs?machine=PORT&kind=print`),
 each with its JSON (`GET /jobs/{id}`, with the tail of what the firmware
 said), and the viewer's **Site** lists the jobs of the site's machines, a row
 opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
-would record and which parts it can name. A print record under
-`~/.apothecary/prints/records/` that is not yet a job is written as one
-whenever jobs are read, and the record is left where it is.
+would record and which parts it can name.
 
 A kind of job belongs to a kind of machine: a printer offers `print`
-(`jobs.PRINT`), and a mill or a laser would register its own operation with
-`jobs.register` and start its jobs from its own card in the same way.
+(`jobs.PRINT`) and `tune` (a heater loop's experiment, below), and a mill or a
+laser would register its own operation with `jobs.register` and start its jobs
+from its own card in the same way.
+
+### Heater loops
+
+A printer's heaters are loops: a hotend's and the bed's PID, as the board
+holds them. `apothecary/firmware/loops.py` reads, sets and experiments on them
+through the seam's rules and adds none of its own; [Control loops](control-loops.md)
+is the reference, the maths and the document of a loop with it.
+
+- **Read** is `M503`, report-only, parsed for its `M301` and `M304` lines
+  (`gcode.parse_gains`).
+- **Set** is `M301 P.. I.. D..` (hotend 0) or `M304 P.. I.. D..` (the bed), a
+  control line: the latch armed, each figure a plain decimal under the
+  seam's own bound (`gcode.GAIN_MAX`, a typo's guard), no job on the port.
+  The gains are read back by `M503` and compared. Set, not saved.
+- **Save** is `M500`, the board's memory written. It is no control line and
+  no query, a streamed file may not carry it, and the loop's save refuses it
+  unless the request says `write_board_memory: true` in so many words; then
+  as a gain line is.
+- **An experiment** is a `tune` job that holds the port: a step of the target,
+  the firmware's own autotune (`M303 E<n> S<target> C<cycles>`, sent by the job
+  alone, never a control line, watched line by line with
+  `GcodeLink.watch`), or a square wave of the target about an operating
+  temperature. Each states a ceiling and a longest time, and ends -- done,
+  over its ceiling, past its longest time, a cancel, the stop, the server
+  stopping, a board that restarts or falls silent or goes, an objection --
+  with the safe-off a cancelled print sends, the target read back; a target
+  that does not read back off gets the stop. While one runs, polls answer from
+  its readings, and queries and control lines get `409`, as under a bed reading.
+
+`can_now` answers `tune.start`, `tune.cancel`, `tune.read`, `tune.set` and
+`tune.save` from the predicates the routes raise from:
+`/firmware/printers/loops/read`, `start`, `job`, `cancel`, `set`, `save`,
+`experiments`, `document`, and `/firmware/loops/schema` and `validate`.
+
+The simulated printer's heaters follow a thermal model when
+`APOTHECARY_SIMULATED_HEATERS=model` (`gcode.SimulatedHeater`): a first-order
+plus dead time plant from the heater's power to its rise over ambient, a PID
+round it, and a relay autotune answering `M303`, on a clock
+`APOTHECARY_SIMULATED_HEATER_SPEED` runs faster than real time. Otherwise a
+heater sits at its target, as it always has. Its numbers are the simulator's
+and no machine's.
 
 ## Serial engines
+
+`apothecary serve` refuses `APOTHECARY_SERIAL_ENGINE=simulated` on a person's own state
+folder: the simulated engine named by hand has neither `--simulated`'s folder nor its
+banner. `apothecary serve --simulated` is the way to simulated machines, or a state folder
+of its own named in `APOTHECARY_STATE_DIR`.
 
 The byte transport under the G-code seam -- and under the Rust module's own
 port list and monitor -- is an engine slot:
@@ -757,12 +973,12 @@ port list and monitor -- is an engine slot:
 | Engine | What it is |
 |---|---|
 | `pyserial` | the default: any baud, every platform |
-| `simulated` | an in-process pretend Marlin for demos and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
+| `simulated` | an in-process pretend Marlin for `serve --simulated` and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
 
-`apothecary serve --demo` is the way to try all of this with no board: an
+`apothecary serve --simulated` is the way to try all of this with no board: an
 idle simulated Ender pinned to printer_1's mainboard, a simulated ESP32
 devkit and the scripted firmware tools, on a state folder of its own
-(`.cache/demo` in the checkout, kept between runs), with every port the
+(`.cache/simulated` in the checkout, kept between runs), with every port the
 simulated engine's ([walkthrough 00](../walkthrough/00-getting-started.md)). By hand,
 `APOTHECARY_SIMULATED_PRINTER=printing` starts the simulator mid-way through
 an SD print; the default is a cold, idle machine. A port must still be
@@ -772,7 +988,7 @@ supplies two:
 ```bash
 ARDUINO_CLI=$(uv run python -c "from pathlib import Path; from apothecary.firmware.scripted import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
 APOTHECARY_SERIAL_ENGINE=simulated APOTHECARY_SIMULATED_PRINTER=printing \
-APOTHECARY_STATE_DIR=/tmp/apothecary-demo uv run apothecary serve
+APOTHECARY_STATE_DIR=/tmp/apothecary-simulated uv run apothecary serve
 ```
 
 ## A stable device name
@@ -807,7 +1023,7 @@ serial ports on the host, which is why the server listens on this machine only.
 
 The seam's tests run against a scripted fake `arduino-cli`, and the Rust
 module's against a scripted `cargo` and `espflash`
-(`apothecary/firmware/scripted.py`, which `serve --demo` runs too), so CI
+(`apothecary/firmware/scripted.py`, which `serve --simulated` runs too), so CI
 needs no toolchain, network or serial port. The fakes in one folder are
 one simulated bench: with `FAKE_DEVKIT` set, an ESP32 devkit on
 `/dev/ttyFAKE2` runs whatever was last uploaded or flashed to it and says that

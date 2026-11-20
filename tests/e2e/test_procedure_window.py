@@ -168,8 +168,9 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     expect(second.locator(".procedure-go")).to_have_count(0)
     story.shows(
         "The Procedure, beside the world: the steps",
-        "The garage has a procedure, so the Procedure stands beside the world without being "
-        "asked for. Each step has its number, its discipline and its node, a door to the "
+        "The garage has a procedure, so the Procedure stands in the column beside the world "
+        "without being asked for, at its foot under Pictures, the world keeping its room. "
+        "Each step has its number, its discipline and its node, a door to the "
         "window its work is in; the first stands by with its GO, the rest wait.",
         blank=CHANGING,
     )
@@ -304,7 +305,9 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     story.says(
         "A member's name is a door: board's opens the devkit's Machine",
         "A member hosted here leads to the window of the node its next step names, the last "
-        "it worked on when none is left: board's name opens esp32_blink's Machine.",
+        "it worked on when none is left: board's name opens esp32_blink's Machine. The "
+        "printer's Machine goes, and with it the pad of the printer armed since step 7, so "
+        "the printer is disarmed, said first.",
         shown=page.locator("#status").inner_text(),
     )
 
@@ -339,18 +342,25 @@ def _beside_the_world(page: Page) -> bool:
 
 @pytest.mark.e2e
 def test_the_procedure_stands_beside_the_world_while_the_site_has_one(page: Page, url: str):
-    """The Procedure opens beside the world on a site with a procedure, gives its room
-    back on a site with none and returns with the procedure; a person's ✕ keeps it
-    closed, and a window a person opened is not closed by the page."""
+    """The Procedure opens on a site with a procedure in the column beside the world,
+    a stack of its own at its foot, and takes none of the world's room; it closes on a
+    site with none and returns with the procedure; a person's ✕ keeps it closed, and a
+    window a person opened is not closed by the page."""
     open_garage(page, url)
     expect(page.locator(PROCEDURE)).to_be_visible(timeout=WITHIN)
     assert _beside_the_world(page)
+    assert windows.state(page, "procedure")["stack"] == ["procedure"]
+    assert windows.panel(page, "procedure").bounding_box()["y"] > (
+        windows.panel(page, "pictures").bounding_box()["y"]
+    )
+    width = windows.world_width(page)
 
-    # A site with no procedure: the room goes back to the world.
+    # A site with no procedure: closed, and the world as wide as it was.
     from garage import to_site
 
     to_site(page, "apothecary")
     expect(page.locator(PROCEDURE)).to_have_count(0, timeout=WITHIN)
+    assert abs(windows.world_width(page) - width) <= 2, (windows.world_width(page), width)
     to_site(page, "garage")
     expect(page.locator(PROCEDURE)).to_be_visible(timeout=WITHIN)
 

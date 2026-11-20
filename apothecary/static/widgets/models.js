@@ -3,9 +3,9 @@
  * Three parts, top to bottom. qmcp: whether it is configured and answering, in
  * one sentence (GET /vision, asked again each time the window is shown and after
  * each Ask). Origins: the plain reader and each of qmcp's models, each with its
- * switch (PUT /vision/origins/{origin}); a model is "not checked" until
- * `apothecary vision check` has passed for it, and a guess from one is shown and
- * used for nothing. Ask: the shape chosen on a picture's mat (POST
+ * switch (PUT /vision/origins/{origin}); a model is "not checked" -- checking one
+ * is not built (docs/plans/image-models-through-qmcp-2026-10-30.md) -- and a guess
+ * from one is shown and used for nothing. Ask: the shape chosen on a picture's mat (POST
  * .../shapes/{i}/ask) -- the plain reader's colour read off its pixels, and each
  * model's colour, material and label beside it, with whether they agree -- and a
  * person's word on each property, typed or picked from its words and said with
@@ -56,12 +56,12 @@ export function mountModels(root, { base = "", world = null, log = null } = {}) 
 
     // What each state of qmcp means for a person: what still works, and the way on.
     const NOTES = {
-        "not configured": "Apothecary reads without it: the plain reader still reads a colour. APOTHECARY_QMCP names a qmcp on this machine; apothecary serve --demo has a simulated one.",
+        "not configured": "Apothecary reads without it: the plain reader still reads a colour. APOTHECARY_QMCP names a qmcp on this machine; apothecary serve --simulated has a simulated one.",
         "refused": "Nothing is sent there. A qmcp is asked only on this machine.",
         "not reachable": "Nothing is asked of it; apothecary reads without it.",
         "not answering": "Nothing is asked of it; apothecary reads without it. It is asked again each time this window is shown, and after each Ask.",
         "no model": "qmcp is up and has no vision model: every guess comes back unread.",
-        "answering": "Its models answer only when asked here, and every guess is a guess: none is trusted until apothecary vision check has passed for it.",
+        "answering": "Its models answer only when asked here, and every guess is a guess: checking a model is not built, so none is trusted.",
     };
 
     function renderStatus() {
@@ -129,9 +129,9 @@ export function mountModels(root, { base = "", world = null, log = null } = {}) 
             const hidden = row.hidden ? `<div class="meta">${row.hidden === 1 ? "1 guess" : `${row.hidden} guesses`} not shown: switched off</div>` : "";
             return `<tr data-property="${row.property}">
                 <th>${esc(row.property)}</th>
-                <td>${cell(row.reading)}</td>
-                <td>${guesses}${hidden}</td>
-                <td>${row.person ? `<div>${cell(row.person)}</div>` : ""}<div>${sayer(row)}</div></td>
+                <td data-label="Read">${cell(row.reading)}</td>
+                <td data-label="Guessed">${guesses}${hidden}</td>
+                <td data-label="A person">${row.person ? `<div>${cell(row.person)}</div>` : ""}<div>${sayer(row)}</div></td>
             </tr>`;
         }).join("");
         $(".models-rows").innerHTML = `<table class="models-table"><thead><tr><th></th><th title="Read off the shape's own pixels, on this machine">Read</th><th title="Each model's guess, with how sure it says it is; its model is in its tooltip">Guessed</th><th title="A person's word comes first, over every guess">A person</th></tr></thead><tbody>${body}</tbody></table>`;

@@ -37,12 +37,28 @@ this.panels.register('gather', {
   column beside the world -- right under the window named by `after`, sharing
   a stack with the others that follow it; a stack of its own while the column
   has fewer than `columnStacks` (four), else a tab beside the window it
-  follows, or at the column's foot; `"tabs"`, the stack of the other tabbed
-  windows; `"beside"`, next to the world, its room taken from the world's; or
-  another window's id, a tab beside that one.
+  follows, or at the column's foot -- but never a tab over a window with a
+  least height, which it would hide: under that one it is a stack of its own
+  all the same (a printer's Print under its Machine, so the Machine's head
+  stays in view); `"tabs"`, the stack of the other tabbed
+  windows; `"beside"`, next to the world; or another window's id, a tab beside
+  that one. Beside the world there is one stack: a window whose home is
+  `"beside"` is a tab of the stack in the world's row that holds one already;
+  with none there it is a stack of its own, its room taken from the world's,
+  never so much that the world is narrower than `WORLD_LEAST` pixels
+  (`apothecary/static/panels.js`); where the world cannot spare `BESIDE_LEAST`
+  pixels, it is a tab of the tallest stack next to the world that holds no
+  window with a least height. `this.panels.open(id, { at })` opens a window at
+  another home for once: the page opens the Procedure in the column, a person's
+  ⊞ Windows beside the world.
 - `open` says whether it opens as it is registered; `loud` that its tab and
-  frame say it must be seen (an armed printer's pad). `onOpen` is told when its
-  filled body is in front again, `onClose` when it is closed.
+  frame say it must be seen (an armed printer's pad), and it is the front tab
+  of its stack wherever it is placed: opened, registered, or kept open as a
+  view is laid out; `least` the least height
+  of its stack, in pixels, where it stands in a column -- given it as it opens
+  and as a view lays it out, from the stacks beside it (the Machine's, so its
+  head and ⏹ E-STOP are never cut). `onOpen` is told when its filled body is in
+  front again, `onClose` when it is closed.
 - A window a browser may remember is named in `mountPanels`'s `known`; one
   made for the moment, never remembered, in `transient` (both in the page's
   call to `mountPanels`).

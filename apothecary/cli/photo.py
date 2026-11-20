@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
-from .server import _loopback_or_die, _port_free_or_die, port_option, run_server
+from .server import loopback_or_die, port_free_or_die, port_option, run_server
 
 
 @click.group()
@@ -568,7 +568,7 @@ def fit_marks(examples: tuple, out: Optional[Path], count: int):
     from APOTHECARY_MARKS_TABLE, so a fit is used only where a person points to it.
     """
     from ..vision import marks
-    from ..vision.bench import run_sorting
+    from ..vision.bench import run_sortings
 
     gathered = []
     for path in examples:
@@ -580,8 +580,8 @@ def fit_marks(examples: tuple, out: Optional[Path], count: int):
         raise click.ClickException("no examples in those files: `photo marks --say` keeps them")
 
     fitted, before, after = marks.fit(gathered)
-    drawn_before = run_sorting(count=count).right_rate
-    drawn_after = run_sorting(count=count, thresholds=fitted).right_rate
+    in_use, refitted = run_sortings([None, fitted], count=count)
+    drawn_before, drawn_after = in_use.right_rate, refitted.right_rate
     click.echo(
         f"{len(gathered)} example(s): {before:.0%} sorted as their person did, {after:.0%} fitted"
     )
@@ -724,18 +724,19 @@ def view(
 
     Listens on this machine only.
     """
-    from ..api import _site_store, app
+    from .. import sites
+    from ..api import app
     from ..vision.shelf import shelf
 
-    host = _loopback_or_die(host)
-    _port_free_or_die(host, port)  # before the work and the addresses, not after them
+    host = loopback_or_die(host)
+    port_free_or_die(host, port)  # before the work and the addresses, not after them
     picture = _look_or_explain(finder, image)
     scale = _scale_or_explain(millimetres_across=width_mm) if width_mm is not None else None
     made = build_arrangement(picture, name=name, scale=scale, picture_path=image)
 
     stock = shelf()
     stock.put(made)
-    _site_store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
+    sites.store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
 
     album = made.album
     click.echo(f"{made.site.name}: {len(made.site.children)} piece(s) from {album.picture_name}")
@@ -861,8 +862,8 @@ def gather_pictures(
     from ..gathering.questions import as_sheet, theirs, worth_asking
 
     if open_viewer:
-        host = _loopback_or_die(host)  # before the work, not after it
-        _port_free_or_die(host, port)
+        host = loopback_or_die(host)  # before the work, not after it
+        port_free_or_die(host, port)
     paths = _pictures_in(where, pattern)
     if not paths:
         wanted = f"files matching {pattern!r}" if pattern else "pictures"
@@ -949,7 +950,8 @@ def gather_pictures(
     if not open_viewer:
         return
 
-    from ..api import _site_store, app
+    from .. import sites
+    from ..api import app
     from ..gathering import whole_gathering
     from ..vision.shelf import shelf
 
@@ -973,7 +975,7 @@ def gather_pictures(
 
     stock = shelf()
     stock.put(together)
-    _site_store.add(
+    sites.store.add(
         together.site.name,
         stock.factory(together.site.name),
         stock.checker(together.site.name),

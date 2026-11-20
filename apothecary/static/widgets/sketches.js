@@ -30,6 +30,7 @@
  */
 
 import { esc } from "/static/board_text.js";
+import { setReason, askFlash, forgetFlash, flashVerdict } from "/static/can.js";
 
 const FQBN = /^[\w.\-]+:[\w.\-]+:[\w.\-]+(:[\w=,.\-]+)?$/;
 let mounted = 0;  // a datalist needs an id, one per form on the page
@@ -66,12 +67,13 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
 
     const idOf = (x) => x.id || `${x.name}@${x.toolchain || "arduino"}`;
     const sketchOf = (id) => sketches.find((x) => idOf(x) === id) || null;
-    // The module that builds a sketch, from the status; Arduino's when the status
-    // names none.
+    // The module that builds a sketch, from the status. One the status does not name
+    // (a status that could not be asked) is not installed, and takes a board if it
+    // is Arduino's.
     function moduleOf(s) {
         const id = (s && s.toolchain) || "arduino";
         const m = ((status && status.toolchains) || []).find((t) => t.id === id);
-        return m || { id, label: id === "arduino" ? "Arduino" : id, ok: id === "arduino" && !!(status && status.arduino_cli_ok), needs_board: id === "arduino" };
+        return m || { id, label: id === "arduino" ? "Arduino" : id, ok: false, needs_board: id === "arduino" };
     }
     const needsBoard = (s) => moduleOf(s).needs_board;
     // A sketch's row: the sketch with its toolchain, and its board or its chip.
@@ -115,25 +117,26 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     // What each button does, said as its tooltip; disabled, why first, and what to do.
     const COMPILE_TIP = "Build the sketch for the board; nothing is sent to a board";
     const UPLOAD_TIP = "Build it, then write it to the board on the port (asks first)";
-    // A tooltip, keeping the ring's address the page wrote after it (` · ⌗932`).
-    function tip(el, text) {
-        el.title = el.dataset.address ? `${text} · ⌗${el.dataset.address}` : text;
-    }
+    // Why a button is greyed is said by can.js, the page's reasons and the server's alike.
     function enable() {
         const s = sketchOf(chosen());
         const ok = !!s && !!moduleOf(s).ok;
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
         const ready = ok && (!needsBoard(s) || FQBN.test(fqbn()));
-        const why = !s ? "Disabled: choose a sketch first"
-            : !ok ? `Disabled: ${moduleOf(s).id === "arduino" ? "arduino-cli" : moduleOf(s).label} is not installed -- its Install, above, puts it in`
-            : !ready ? "Disabled: give the board to build for, its FQBN (arduino:avr:uno), first"
-            : busy ? "Disabled: a task is running -- wait for it, or Cancel it"
+        const why = !s ? "choose a sketch first"
+            : !ok ? `${moduleOf(s).id === "arduino" ? "arduino-cli" : moduleOf(s).label} is not installed -- its Install, above, puts it in`
+            : !ready ? "give the board to build for, its FQBN (arduino:avr:uno), first"
+            : busy ? "a task is running -- wait for it, or Cancel it"
             : null;
-        const noPort = !why && !portOf() ? "Disabled: choose the port to upload to first" : null;
-        $(".compile-btn").disabled = !!why;
-        tip($(".compile-btn"), why ? `${why}. ${COMPILE_TIP}` : COMPILE_TIP);
-        $(".upload-btn").disabled = !!(why || noPort);
-        tip($(".upload-btn"), why || noPort ? `${why || noPort}. ${UPLOAD_TIP}` : UPLOAD_TIP);
+        const to = portOf();
+        const noPort = !why && !to ? "choose the port to upload to first" : null;
+        // What the server would refuse of a flash to this port (`can.flash`): a machine's
+        // controller, a job holding the port; asked once per port, not on a timer.
+        const flash = to ? flashVerdict(to) : null;
+        const refused = !why && !noPort && flash && !flash.ok ? flash.why : null;
+        if (to && flashVerdict(to) === null) askFlash(api, to).then((got) => { if (got && alive) enable(); });
+        setReason($(".compile-btn"), why, COMPILE_TIP);
+        setReason($(".upload-btn"), why || noPort || refused, UPLOAD_TIP);
     }
 
     async function load(given = null) {
@@ -145,8 +148,9 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         // knows need arduino-cli, and the ports need a module that finds them -- a tool
         // that is not there would answer each with a 503 in the console.
         const findsPorts = ((s && s.toolchains) || []).some((t) => t.ok && (t.can || []).includes("find ports"));
+        const arduino = ((s && s.toolchains) || []).some((t) => t.id === "arduino" && t.ok);
         const [all, found] = await Promise.all([
-            s && s.arduino_cli_ok ? api("/firmware/boards/all").catch(() => []) : Promise.resolve([]),
+            arduino ? api("/firmware/boards/all").catch(() => []) : Promise.resolve([]),
             port ? Promise.resolve(null)
                 : findsPorts || !s ? api("/firmware/devices").catch(() => ({ devices: [] })) : Promise.resolve({ devices: [] }),
         ]);
@@ -175,6 +179,7 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         const ending = tasks.start(request);
         enable();
         const task = await ending;
+        if (doing.port) forgetFlash(doing.port);  // the board on it may be another now
         enable();
         if (task && onEnd) onEnd(task, doing);
         return task;
@@ -237,6 +242,7 @@ export function mountRawFlash(root, { base = "", tasks = null, say = null, port 
 </div>`;
     const $ = (sel) => root.querySelector(sel);
     let status = null;
+    const RAW_TIP = "Write the images to the chip on the Bench's port (asks first)";
 
     function images() {
         return $(".esp-images").value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
@@ -244,10 +250,19 @@ export function mountRawFlash(root, { base = "", tasks = null, say = null, port 
             return { offset, path: rest.join(" ") };
         });
     }
+    // esptool is one of the Arduino module's tools.
+    const esptool = () => ((status && status.toolchains) || []).some((m) => m.id === "arduino" && (m.tools || []).some((t) => t.name === "esptool" && t.ok));
     function enable() {
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
-        $(".esp-flash-btn").disabled = !(status && status.esptool_ok) || !port() || busy;
-        $(".esp-note").textContent = status && !status.esptool_ok ? "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)." : "";
+        const to = port(), flash = to ? flashVerdict(to) : null;
+        if (to && flash === null) askFlash((path) => call(base, path), to).then((got) => { if (got) enable(); });
+        const why = !esptool() ? "esptool is not installed -- see the note below"
+            : !to ? "choose a port on the Bench first"
+            : busy ? "a task is running -- wait for it, or Cancel it"
+            : flash && !flash.ok ? flash.why
+            : null;
+        setReason($(".esp-flash-btn"), why, RAW_TIP);
+        $(".esp-note").textContent = status && !esptool() ? "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)." : "";
     }
     async function flash() {
         const to = port(), list = images();
@@ -262,6 +277,7 @@ export function mountRawFlash(root, { base = "", tasks = null, say = null, port 
         }));
         enable();
         const task = await ending;
+        forgetFlash(to);
         enable();
         return task;
     }

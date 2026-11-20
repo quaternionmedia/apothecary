@@ -43,7 +43,10 @@ from typing import Callable, Dict, List, Optional, Protocol
 
 from .. import preview
 from ..firmware import devices
+from ..meshes import MeshError, read_stl
+from ..models.measures import MeasurePlan
 from ..state_folder import private_folder, state_dir, write_whole
+from . import tuning
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -102,6 +105,7 @@ class Target:
     made: Made
     declared: Declared
     stl: Callable[[Log], bytes]  # its STL's bytes, built if need be
+    plan: Optional[MeasurePlan] = None  # what a person reads of it printed, where it says
 
 
 @dataclass
@@ -148,6 +152,7 @@ def part_target(
         made=Made(kind="part", name=name, site=site, path=path),
         declared=Declared.of(getattr(part, "print_settings", None), f"part {name}"),
         stl=stl,
+        plan=part.measures(),
     )
 
 
@@ -183,6 +188,7 @@ def _variant_target(part, name: str, site, path, key: str) -> Target:
         ),
         declared=Declared.of(getattr(part, "print_settings", None), f"part {name}"),
         stl=stl,
+        plan=part.measures(dict(record.get("params") or {})),
     )
 
 
@@ -262,6 +268,19 @@ def _work_dir() -> Path:
     return Path(tempfile.mkdtemp(prefix=f"{uuid.uuid4().hex[:8]}.", dir=folder))
 
 
+def model_size(stl: bytes) -> Optional[List[float]]:
+    """The size of the model in ``stl``, x, y, z in mm, rounded to a thousandth; None
+    where it holds no mesh."""
+    try:
+        triangles = read_stl(stl)
+    except MeshError:
+        return None
+    points = [point for triangle in triangles for point in triangle]
+    if not points:
+        return None
+    return [round(max(p[i] for p in points) - min(p[i] for p in points), 3) for i in range(3)]
+
+
 def slice_into(
     target: Target, printer: Printer, runner: Runner, slicer: Optional[str] = None
 ) -> SliceRecord:
@@ -277,7 +296,9 @@ def slice_into(
         f"Slicing {target.made.kind} {target.made.name} for {printer.at.name} "
         f"({printer.profile.file}) with {module.label} {status.tool.version}"
     )
-    resolved = module.settings(printer.profile, target.declared, port=printer.at.port)
+    # The settings the printer's tuning holds, fed back from pieces it made, over its profile.
+    profile = tuning.applied(printer.profile, printer.at.site, printer.at.path, module.id)
+    resolved = module.settings(profile, target.declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(
             0,
@@ -292,6 +313,7 @@ def slice_into(
     for setting in resolved.settings:
         runner.log(f"  {setting.name} = {setting.value!r}  [{setting.origin}: {setting.source}]")
     stl = target.stl(runner.log)
+    size = model_size(stl)
     work = _work_dir()
     try:
         model = work / "model.stl"
@@ -314,6 +336,11 @@ def slice_into(
                 messages,
                 resolved.settings,
             )
+        for setting in resolved.settings:
+            # A value the profiles leave out is the slicer's own: as its G-code says it.
+            if setting.value is None and setting.name in output.config:
+                setting.value = output.config[setting.name]
+                setting.source = f"{module.label} {status.tool.version}'s own, as its G-code's configuration says"
         data = output.gcode.read_bytes()
         kept = devices.save_print_file(f"{target.made.name}.gcode", data, machine="printer")
         runner.log(f"Kept {kept.name} ({kept.lines} lines) for the Print card: {kept.id}")
@@ -328,6 +355,8 @@ def slice_into(
             slicer_version=status.tool.version,
             made=target.made,
             printer=printer.at,
+            size=size,
+            plan=target.plan,
             settings=resolved.settings,
             estimate=Estimate(**output.estimate) if output.estimate else None,
             messages=messages,
@@ -359,7 +388,10 @@ def get_record(file_id: str) -> Optional[SliceRecord]:
         return None
     path = slices_dir() / f"{file_id}.json"
     if devices.print_file(file_id) is None:
-        path.unlink(missing_ok=True)  # the Print card forgot the file: the slice goes with it
+        # The Print card forgot the file: the slice goes with it. G-code still in the
+        # folder that is no kept file's keeps its slice's record.
+        if not devices.holds_print_file(file_id):
+            path.unlink(missing_ok=True)
         return None
     try:
         return SliceRecord(**json.loads(path.read_text(encoding="utf-8")))
@@ -380,7 +412,6 @@ def records() -> List[SliceRecord]:
 
 
 # --- where the moves reach ------------------------------------------------------------
-
 
 
 def gcode_bounds(path: Path) -> Optional[Bounds]:

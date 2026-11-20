@@ -15,8 +15,10 @@ with its lighting rig.
     >>> client.get("/sites").json()
     ['apothecary', 'datum_core', 'garage', 'theatre']
 
-The universe holds every registered part as a leaf, and every other site as
-one piece, drawn in miniature from boxes its tree carries. A building is the
+The universe is a sphere of nested shells. It holds every registered part as a
+leaf, on the shell its composition depth gives it (a part built from no other
+part innermost, facing outward), and every other site as one piece on the
+outermost, drawn in miniature from boxes its tree carries. A building is the
 site's that holds it, and no leaf:
 
     >>> tree = client.get("/sites/apothecary").json()["tree"]
@@ -62,13 +64,6 @@ A part's address opens the universe, focused on the part, its Parameters
 open:
 
     >>> r = client.get("/viewer/parts/datum_core", follow_redirects=False)
-    >>> r.status_code, r.headers["location"]
-    (307, '/viewer/sites/apothecary?focus=datum_core')
-
-The universe was the site `parts_library`, and that address goes to it still,
-its query kept:
-
-    >>> r = client.get("/viewer/sites/parts_library?focus=datum_core", follow_redirects=False)
     >>> r.status_code, r.headers["location"]
     (307, '/viewer/sites/apothecary?focus=datum_core')
 

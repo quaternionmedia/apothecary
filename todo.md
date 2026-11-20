@@ -12,10 +12,12 @@ here: run `apothecary problems`.
 - Pictures in the world, what is open: Phase 7, the old photo routes closed,
   after gathering leaves core (*Next round*):
   [docs/plans/pictures-the-rest-2026-10-13.md](docs/plans/pictures-the-rest-2026-10-13.md).
-- A whiteboard to a model, and round again, the fifth loop: a drawing's strokes are read as shapes (the `outline` finder, [walkthrough 28](walkthrough/28-a-whiteboard-to-a-model.md)); next, marks sorted into a diagram's and writing with a person's word taken and kept at each step, then the whiteboard as a part, cuts, notes with a way out to qmcp and looksatwords, round again and the loop's page: [docs/plans/whiteboard-loop-2026-11-09.md](docs/plans/whiteboard-loop-2026-11-09.md).
+- A whiteboard to a model, what is left: the sorter leaning on a marker's colour, a camera aimed at a whiteboard, a note's words read freely through qmcp, and a whiteboard's history kept across a restart: [docs/plans/whiteboard-loop-2026-11-09.md](docs/plans/whiteboard-loop-2026-11-09.md#what-it-leaves).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
 - Image models as an optional source of measurements, through qmcp over MCP and only when a person asks: quantity, size, shape, material, colour, a label, a cover and a match in another camera's picture, as observations in the family's format beside the plain readers' and never over a person's word, with qmcp's own slice (MCP on its server, the vision tools, the weights fetched from a pinned list) in its repository: [docs/plans/image-models-through-qmcp-2026-10-30.md](docs/plans/image-models-through-qmcp-2026-10-30.md). A prototype of the journeys against a simulated qmcp is built (the Models window); [docs/models-checklist.md](docs/models-checklist.md) is what a person validates by hand.
-- The Models window, what its walk left ([docs/models-checklist.md](docs/models-checklist.md)): opened again after a reload, it takes room from the world each time, until windows beside the world share one stack; a person's word is kept by Models in memory, where the Working space should keep it and Models offer it; and the status bar keeps "choose a shape … first" in red after a shape is chosen, until the next action.
+- A stack's tabs drawn out of its layout's order: the vendored GoldenLayout 2.6.0 puts a tab back from a stack's ▾ list at the end of its row (`ts/controls/tabs-container.js`, `tryUpdateTabSizes`), not at its place, so a stack can show a tab where its layout does not hold it, and a reload draws the layout's order ([walkthrough 33](walkthrough/33-windows-kept-over-a-reload.md), step 2). The vendored copy carries no local change; patching it, or putting the tabs back in order from `panels.js`, is the owner's choice.
+- The tour, what it leaves ([docs/tour.md](docs/tour.md)): a state only a fault brings (a quiet board, a router in alarm) is at its stage as a step to read, and the page is not taken to it; a camera's picture needs the browser's camera, so pages 01 to 03 go through it and no stage does; an assembly stepped into is a page and not yet a stage; seven of the eight journeys have no cell on the ring, whose Panels › Windows is full, and are entered from ⊞ Windows › Journeys; the box stands over the world, so what a stage frames can lie under it until it is dragged; Pin, and each journey's Choose, name no step to try; the command line is in no stage of its own (a part that does not load, a found tool with no version, a sketch built); a name typed into the box is not checked, so one person can give a word under another's; and a board found by its sketch and not connected is said to be "pinned to a board".
+- The Models window, what its walk left ([docs/models-checklist.md](docs/models-checklist.md)): a person's word is kept by Models in memory, where the Workspace should keep it and Models offer it; and the status bar keeps "choose a shape … first" in red after a shape is chosen, until the next action.
 - A synth rig photographed through a concert, held in carlos: the first real photographs, the Ender's mainboard's power and USB through the camera aimed at the Ender, waiting for that camera (slice 4, rehearsed on an Uno's drawn pictures: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the DFAM and Subharmonicon, then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
 - The viewer across the efforts in flight, one observation module first, then the words and seats: [docs/plans/ui-coordination-2026-10-31.md](docs/plans/ui-coordination-2026-10-31.md).
 - An irl hub of ShowRunner's class: apothecary as hearth's second exemplar, a
@@ -43,12 +45,6 @@ here: run `apothecary problems`.
   still found by its port's name; a family home step on a port another board's record names is refused
   once, with nothing sent, and works on the next try; two identical converters swapped in
   one socket read as one board. None of it has met the real router or the real state file.
-- A machine stepped into is its part alone: its pieces are reached from Site and not drawn
-  at its level, a double-click on the control box does not step into `frame_system`, and
-  the category chips at that level do nothing.
-- The Models window says none is trusted until `apothecary vision check` has passed
-  (`apothecary/static/widgets/models.js`, quoted in `docs/models-checklist.md`);
-  `apothecary vision` has `ask`, `off`, `on` and `status`.
 - `tests/e2e/durations.json` has no times for the browser tests the view banner added or
   renamed, so `--shard` balances without them until `apothecary test all --record-durations`.
 - hearth's `web.router` declares GET and HEAD on one route, so FastAPI warns of duplicate
@@ -56,8 +52,8 @@ here: run `apothecary problems`.
 - The reader as a hosted member of the irl hub, and a page reading the camera's actions
   ([docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md#order)).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
-- A working space seen from every kind of evidence at once: its cameras, one thing from several angles among them, a printer's polls and a board's port, its sensors, a person's goals, directives and actions, and the image models' guesses, each line of the view opening its evidence. First the Ender's three cameras, on the bed for its timelapse, on the head and across the room, tied to its polls (frames kept with polls, then its lead, its motion and its bed seen two ways), then the rig through a concert, the airgap's test rig and a server room. Its first two steps are built and walked from each door in [walkthrough 18](walkthrough/18-the-working-space.md); the next is the Ender's cameras at the bench: [docs/plans/working-space-view-2026-10-30.md](docs/plans/working-space-view-2026-10-30.md).
-- Pictures lists every frame the Working space keeps with a poll as one of its camera's pictures, so a print fills it: those frames belong to the Working space, and Pictures would count them rather than tile them.
+- A workspace seen from every kind of evidence at once: its cameras, one thing from several angles among them, a printer's polls and a board's port, its sensors, a person's goals, directives and actions, and the image models' guesses, each line of the view opening its evidence. First the Ender's three cameras, on the bed for its timelapse, on the head and across the room, tied to its polls (frames kept with polls, then its lead, its motion and its bed seen two ways), then the rig through a concert, the airgap's test rig and a server room. Its first two steps are built and walked from each door in [walkthrough 18](walkthrough/18-the-working-space.md); the next is the Ender's cameras at the bench: [docs/plans/working-space-view-2026-10-30.md](docs/plans/working-space-view-2026-10-30.md).
+- Pictures lists every frame the Workspace keeps with a poll as one of its camera's pictures, so a print fills it: those frames belong to the Workspace, and Pictures would count them rather than tile them.
 - Pictures without Pillow, a research effort: whether a library under an approved licence decodes JPEG and PNG, resizes and reads pixels as well and as fast as Pillow does here, and what moving would cost. Until it reports, Pillow stays, a conflict row in the adoption scope: [the governance plan's stub](docs/plans/governance-2026-10-13.md#stubbed-pictures-without-pillow).
 - The installers' hardening. A download is checked against its listed size
   and published SHA-256; not checked are the GPG `.asc` signatures beside
@@ -66,10 +62,11 @@ here: run `apothecary problems`.
   tarballs (codeload publishes no checksum). A source build takes no nested
   submodules and no `.1` second build of a night. Windows on ARM is refused:
   no ARM64 snapshot is published.
-- `parts/footpedal/footpedal.ino` would not build on a real board: `pushbutton` is
-  never declared, and `ledpin` is pin 6, which `b5` reads too. It prints no
+- The footpedal on its board: section K of
+  [docs/bench-checklist.md](docs/bench-checklist.md) has not been walked, so its
+  build is known and its buttons' notes and the strip are not. It prints no
   `apothecary footpedal: hello`, since its serial line carries Hairless MIDI, so
-  the made thing's Query hears its hello only from the demo's scripted monitor.
+  the made thing's Query hears its hello only from the scripted monitor of `serve --simulated`.
 - The router at the bench. The AnoleX 4060-Evo Ultra 2 is drawn, its
   controller's dialect spoken and its Machine built against the simulated
   controller; the real controller has identified itself and nothing past that.
@@ -104,7 +101,7 @@ here: run `apothecary problems`.
   the machine homes (section I of [docs/bench-checklist.md](docs/bench-checklist.md)).
 - What the round of unification left: the Machine's main window at full size (a
   person's call: doors are new controls, and opening as its view is against a
-  tested decision), a cut's operation beside each poll in the Working space, and
+  tested decision), a cut's operation beside each poll in the Workspace, and
   the as-cut measure in the Cut card:
   [docs/plans/ui-refresh-2026-11-04.md](docs/plans/ui-refresh-2026-11-04.md).
 - A host-side bound on where the print head ends. Each jog's move is capped
@@ -146,6 +143,67 @@ here: run `apothecary problems`.
   pushes with no test named. The browser suite runs in CI at a version tag
   alone, and none has run since; there, each phase's bound names a test that
   hangs.
+- The walkthrough's lists, what their checks leave: a link's anchor is not checked,
+  and the docs site's resolve test passes over a link into `generated/`.
+- What a change reaches is read from import statements, so a helper named in
+  `pytest_plugins`, loaded by importlib, `__import__` or its path, or read as text
+  reaches no test; nor does a test or helper in a folder of tests/ other than
+  e2e/, or a `.md` doctest under tests/. A changed test file does not run the
+  checks that read every test file (`tests/test_e2e_helpers.py`, test_groups'
+  one group per file), and `tests/e2e/durations.json`, which sets every test's
+  bound, is no shared ground. None of these occurs in the suite today.
+- The borders, what is open ([docs/boundaries.md](docs/boundaries.md)):
+  - `apothecary.firmware` holds the firmware toolchains, the machine seam (ports,
+    Marlin, GRBL, a port's task) and the tool finder every installer uses; `slicer`,
+    `cam`, `evidence` and `openscad_installer` depend on it for the last two.
+  - What is cut can differ from what is drawn: `part_cuts` reads a variant's
+    `params`, so an edit of its SCAD's body is drawn and not cut, and the router
+    coupon's cuts restate its SCAD's 20 mm offsets as constants. No test compares
+    a toolpath with the SCAD.
+  - A router's travel has two sources: the page draws the tool at its position plus
+    the node's build volume (the Machine card's volume is the Ender's until `where`
+    answers), and the controller's own `$130`-`$132` are read by the table probe
+    alone.
+  - A variant is drawn on its `measured` box, off its envelope for a SCAD whose
+    origin is not its corner. The fake OrcaSlicer ignores the model, so only the
+    slicer's argv is tested.
+  - A part's own STL: a slice of the part rebuilds it at its defaults and drops a
+    CLI variant's sidecar, and `GET /parts/{name}/stl` does not say which
+    parameters the file it serves holds.
+  - The status listeners in `apothecary/api.py` act on loaded sites alone, where
+    `where` reads every pin: a poll before the site is opened is not kept against
+    its node.
+  - A job's kind is chosen outside `apothecary/jobs.py`: `start_print` picks a cut
+    by the machine's dialect, the upload route names `printer` and `router`, and
+    the module's docstring says a mill registers `mill` where the code registers
+    `cut` on a router.
+  - Provenance ends at the kept file: a job names its slice or cut by a file id
+    while the file is kept, a slice's record goes with its file, and a record names
+    a cache key, not a saved variant's ref.
+  - The simulated stand-ins say yes where the real tools say no: the scripted
+    arduino-cli's devkit says hello by the uploaded folder's name, and the
+    simulated Marlin answers `ok` to a line it does not script.
+  - Four ways of finding a tool: `Tool.find` passes over a variable naming a
+    missing file where OpenSCAD's variable is final; the tool status shape is
+    defined twice; the Stream Deck's `ok` is "found", where `ModuleStatus.ok` says
+    "can build and flash"; `finders/qmcp.py` names a qmcp extra `pyproject.toml`
+    does not declare.
+  - A cut asked for by port alone keeps its file under the port's name;
+    `apothecary/cam/api.py` tells a `SlicerError` by its class's name; a node's path
+    and a variant's key are matched by patterns written in three places.
+- A part.json and a wrapper drop a key they do not know, unread, so a misspelt
+  `display_rotation` (`displayRotation`) is ignored where the spelled one is
+  refused; `extra="forbid"` on `Description`, `Provenance` and `BasePart` would
+  refuse it, and no part.json in parts/ has a key they do not know. pydantic's
+  calls that skip validators (`model_construct`, `model_copy`) and a subclass
+  that declares the field get past it too.
+- What `tests/test_cli_guidance.py` does not read: a wrong first word in prose
+  ("until apothecary verify has passed"), the package's Python strings, a code
+  span led by `python -m`, `.venv/bin/` or `$ `, AGENTS.md, `templates/*.md`, the
+  tests' READMEs and the changelog, words after a command that takes none, a
+  command joined from JS strings, and a word run on into `_` or `:`.
+- `tests/e2e/test_working_space.py::test_the_working_space_from_each_of_its_doors` fails now and then: opened from printer_1's ring, it waits for the status line to say the Workspace's hour, and the next poll's own line (`printer_1 printing: a frame … kept with the poll at …`) can be written over it first. Waiting on the Workspace's own content, or the page keeping the Workspace's line, would settle it.
+- Walkthrough page 03's pictures of the Pictures window (03-03, 03-04, 03-05, 03-10) caption each thumbnail with the capture's time, so each run of `tests/e2e/test_docs_photo_walkthrough.py::test_photographs_into_pieces` redraws them though nothing on the page changed; `tests/e2e/moves_by_itself.json` does not list them. Blanking the caption, as the other captures blank what changes, would hold them still.
 
 ## Next round
 
@@ -205,8 +263,9 @@ Decided, not started. Each waits on what its line names.
   firmware, G-code and slicer seams, one screen, rad host integration,
   personal data staying on the device, the adoption-scope amendment -- and
   move the `governance/qm` pin to `project/apothecary`'s tip, the pin alone
-  in its commit. Until then the pin is `baec440`, #211's head, which no other
-  ref carries, so #211's branch stays.
+  in its commit. Until then the pin is `fb90ad4`, the head of #211's branch
+  (`adr/apothecary-airgap-metrics`), which no other branch carries, so #211's
+  branch stays.
 - Propagate qm#226 (the seed's `AGENTS.md`, ADR index and editor settings
   read true in a project's copy) into `project/apothecary`: it is on qm's
   `main` and in no pin. Then copy the seed's `AGENTS.md` and `.vscode/`

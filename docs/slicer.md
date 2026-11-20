@@ -124,7 +124,15 @@ Every slice's answer lists each value with its `origin` (`declared` or
 uv run apothecary slicer slice calibration_cube            # a part, for the one printer that keeps a profile
 uv run apothecary slicer slice datum_core --json-out       # the slice record, as JSON
 uv run apothecary slicer slice garage/disc_1               # a made piece, through the running server
+uv run apothecary slicer slice hose_adapter -p step=false -p b_d=31.6   # a part at its parameters
 ```
+
+A part is sliced at its defaults, from its own STL; with `-p`, at those
+parameters, rendered into the cache of variants as the page's Apply renders
+them, and that variant is sliced, its record naming it. A render with
+`apothecary parts generate-stl -p` is no way to it: the slice builds the part's
+own STL at its defaults again. `apothecary parts adapter` gives the `-p` pairs of
+the adapter it derives.
 
 A piece made from a picture lives in the running server's memory, so
 `apothecary slicer slice SITE/PATH` asks that server, as the page does: it
@@ -143,6 +151,7 @@ used. The routes:
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |
+| `POST /slicer/slices/{file_id}/measured`, `GET /slicer/tuning`, ... | The piece a slice made, read, and the printer's tuning ([Print tuning](print-tuning.md#through-the-slicer-and-the-page)) |
 
 **Every slice is kept**, each a file of its own in the Print card's file box
 (the state folder's `prints/`) until a person forgets it there; slicing the
@@ -157,8 +166,10 @@ flash never wait for each other.
 OrcaSlicer slices one plate: the part arranged on the bed as it is turned (a
 part is authored the way up it prints) and lifted onto the bed if it reaches
 below it. The G-code kept is named for what was sliced, `<part>.gcode`. A
-part's variant, as the page draws it, is what its Slice slices -- the route's
-`variant`, a key of the variant cache -- and the slice's record names it.
+part's variant, the one the page draws, is what its Slice slices -- the route's
+`variant`, a key of the variant cache -- and the slice's record names it. What
+is sliced is its STL, the way up it prints, where the page draws a part as it
+rests ([How it rests](parts-authoring.md#how-it-rests)).
 
 ## In the page
 
@@ -171,21 +182,47 @@ Slice is a step of the loop from a picture to a print
   Machine forward with the piece chosen under **makes** and slices it there. A
   host, a camera, the printer and what is inside it have no Slice; with no
   printer pinned there is nothing to slice for, and no Slice.
-- **In Print from here.** **Slice**, beside **makes** once a part is chosen
+- **⚒ Make, in the header.** The piece selected, or the part stepped into, made
+  on its first machine -- of any site, a printer whose board is connected first:
+  its Machine opened, the part chosen under **makes** and sliced there, as the
+  cells do ([the viewer](viewer.md#the-header)).
+- **In Print from here.** **makes** lists the site's pieces, then every part of
+  the apothecary by its name. **Slice**, beside it once a part is chosen
   there, slices it for this printer -- the cell does the same. While it runs the card
   shows the slicer's log with **Cancel**; when it ends, the G-code it kept is
-  chosen in the card's files, so ▶ Print follows, and the card says what the
+  chosen in the card's files, so ▶ Print follows -- the row of ▶ Print, Pause,
+  Resume and Abort stands at the window's foot when the card is taller than the
+  window, so a small screen reaches it unscrolled -- and the card says what the
   slice used: each value, with `declared` (the part's own, in bold) or
   `printer` beside it and its source on hover, the slicer's estimate, and its
   errors and warnings by line. A kept file a slice made says, in the card's
   files, what it was sliced from and for which printer; choosing it says that
   slice again under **makes**.
+- **Measured, fed back.** Under the chosen file, **measured** has a row for each
+  feature the piece's plan names (or the box of what was sliced), and **Keep** -- or
+  the control ring's Print › Measure -- keeps what they read as the next turn of the
+  printer's tuning and says what it implies; **Take turn** and **Undo turn** (Print ›
+  Tune) take it into the next slices or drop it ([below](#a-printer-tuned-from-its-prints)).
+  It is *Print a part*'s last step.
 - **Installing it.** The Bench's toolchain card draws the slicer after the
   toolchain modules: what it slices, where it is, the release pinned, and its
   own **Install** (or Update), whose log is the Bench's task log. It is
   Panels › Bench › Install's last cell, **OrcaSlicer**, beside Arduino and Rust
   ESP32 -- the ring of modules for installs -- since installing a tool is the
   Bench's, and the Machine's Slice says where to install it when none is found.
+
+## A printer tuned from its prints
+
+A piece a printer made is read with calipers and fed back into that printer's slices,
+a turn at a time: [Print tuning](print-tuning.md) is the reference -- the error model
+and what calipers cannot tell, the OrcaSlicer settings each term moves and where they
+were read, the `print/tuning/1` document, and when the loop says stop. Every slice
+records what a turn needs of it: the plan of what it sliced (`plan`, a part's
+measurement plan) and the size of its model (`size`, for a part with none), and each
+tuned setting it used, from its profiles or, where they leave one out, from the
+configuration its G-code carries. The settings a printer's tuning holds for the
+filament and process its profile names are taken by every later slice for it, each
+with the origin `measured` and the turn it came from.
 
 ## Another slicer
 

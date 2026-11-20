@@ -29,11 +29,14 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .hierarchy import Assembly
+from .hierarchy import Assembly, find_node_by_path
+from .journeys import JOURNEYS
+from .journeys import by_id as journey_by_id
+from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, layers_in
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import SYSTEMS, by_id
 
@@ -99,11 +102,19 @@ class Context(BaseModel):
     targets: List[str] = Field(default_factory=list)
 
 
+class Verdict(BaseModel):
+    """What the server would say to one command on a port now (firmware/can.py)."""
+
+    ok: bool
+    why: Optional[str] = None
+    kind: Optional[str] = None
+
+
 class Device(BaseModel):
     """What the resolver is told about a board, so it can offer the right verbs.
 
     Told rather than looked up: the resolver stays a plain function over data,
-    and the page already knows all four of these about the port it is standing
+    and the page already knows each of these about the port it is standing
     on. ``bound`` says the port is pinned to the node the ring was opened on;
     ``printer`` says it speaks G-code, so control is on offer; ``armed`` is the
     control latch, which decides whether the ring says Arm or Disarm.
@@ -117,6 +128,15 @@ class Device(BaseModel):
     # or ``router`` (apothecary/jobs.py's machine kinds). A router's Control ring is
     # its own: no heaters or bed, but the spindle, work zero and a probe.
     machine: Optional[str] = None
+    # What the server would refuse of the port now, per command: ``can`` on its status
+    # (firmware/can.py), with what the page knows over it (static/can.js), the answer
+    # its Machine's buttons are greyed from. Each act on the ring the answer refuses is
+    # greyed with the server's reason (``CAN_VERBS``); told nothing, nothing is.
+    can: Optional[Dict[str, Verdict]] = None
+    # What the board's machine is called: the machine it is pinned to, as a reason names
+    # it (firmware/can.py ``who``), which the server fills in; a ring standing on the
+    # port is titled by it, and by the port where nothing is pinned.
+    name: Optional[str] = None
 
 
 class CameraSeen(BaseModel):
@@ -174,6 +194,18 @@ class PartSeen(BaseModel):
     # Whether it says how it is cut (its wrapper's `cuts`): a router's Toolpath is
     # offered on such a part, as Slice is on a printed one.
     cuts: bool = False
+    # Its presets by name (``BasePart.presets``), on a part whose numbers drive its model:
+    # Part › Presets stages one, as the Preset drop-down in its Parameters does.
+    presets: List[str] = Field(default_factory=list)
+    # Whether it has one round interface, a spigot or a socket, so it is an end an
+    # adapter is made between: Part › Adapter does what ⇄ Adapter in Selected does.
+    end: bool = False
+    # Whether its pieces move as one of its parameters goes (its wrapper's `motion`):
+    # Part › View › Motion is offered on such a part.
+    motion: bool = False
+    # Whether it is a Stream Deck + (tagged ``streamdeck``): its ring's Deck opens the Deck
+    # window, as Open Deck in its Selected does.
+    deck: bool = False
 
 
 class PictureContext(BaseModel):
@@ -218,6 +250,10 @@ class Option(BaseModel):
     label: str
     action: Optional[str] = None
     enabled: bool = True
+    # Why it cannot be chosen, while it cannot (``enabled`` false): for a machine's act,
+    # the server's own refusal. The wedge shows it, and says it when chosen anyway
+    # (static/ring.js).
+    why: Optional[str] = None
     destructive: bool = False
     # Not undoable in the page (a site rebuilt, a camera removed, a picture forgotten,
     # a board rebooted): chosen once, the wedge says "again to ..." and waits; chosen
@@ -230,10 +266,20 @@ class Option(BaseModel):
     # the way into one: the wedge wears that group's colour, as its windows do
     # (static/tokens.css).
     group: Optional[str] = None
+    # The layer of the world whose acts it is (View › Layers): the wedge wears that
+    # layer's colour, the colour the world draws the layer in (apothecary/layer_colours.py).
+    colour: Optional[str] = None
     children: Optional[List["Option"]] = None
     cell: Optional[int] = None
 
     model_config = ConfigDict(validate_assignment=True)
+
+    @field_validator("colour")
+    @classmethod
+    def _a_colour_is_written_as_the_table_writes_one(cls, colour):
+        if colour is not None and not re.fullmatch(r"#[0-9a-f]{6}", colour):
+            raise ValueError(f"{colour!r} is no colour: #rrggbb, as layer_colours.py writes one")
+        return colour
 
     @field_validator("label")
     @classmethod
@@ -488,21 +534,6 @@ def distinct(names: Sequence[str]) -> List[str]:
     return out
 
 
-def _find(node: Assembly, path: str) -> Optional[Assembly]:
-    """Walk a dotted path down from a node, as the rest of the tool does."""
-    here = node
-    for step in path.split("."):
-        nxt = None
-        for child in [*here.children, *here.additions, *here.subtractions]:
-            if child.name == step:
-                nxt = child
-                break
-        if nxt is None:
-            return None
-        here = nxt
-    return here
-
-
 def resolve(
     context: Context,
     site: Optional[Assembly] = None,
@@ -512,6 +543,7 @@ def resolve(
     device: Optional[Device] = None,
     picture: Optional[PictureContext] = None,
     sketch: Optional[str] = None,
+    can: Optional[Dict[str, Verdict]] = None,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
 
@@ -520,11 +552,18 @@ def resolve(
     board itself. ``picture`` is what it knows about pictures and cameras
     (``PictureContext``); without one, a host still offers Camera and Picture,
     with nothing pinned, drawn or listed. ``sketch`` is the sketch of a part of its
-    own that no board connected runs, for a node ring: Flash its sketch.
+    own that no board connected runs, for a node ring: Flash its sketch. ``can``, on
+    the canvas ring, is what the page knows would be refused now of Panels › Machine's
+    acts -- the open Machine's port's answer for its heater loops (``tune.*``), the
+    deck's for the knobs (``knobs.*``, ``here``) -- and greys each act it refuses, as
+    ``device.can`` greys a board's; told nothing, nothing is.
     """
     picture = picture or PictureContext()
     if context.pointing is Pointing.CANVAS:
-        return _canvas_ring(context, site, site_names, groups, picture)
+        ring = _canvas_ring(context, site, site_names, groups, picture)
+        if can is not None:
+            judged(ring.options, {verb: Verdict.model_validate(v) for verb, v in can.items()})
+        return ring
     if context.pointing is Pointing.NODE:
         return _node_ring(context, site, device, picture, sketch)
     if context.pointing is Pointing.DEVICE:
@@ -691,10 +730,13 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pinned", "Pinned"),
     ("jobs", "Jobs"),
     ("scad", "SCAD"),
-    # Working space: the site as every kind of evidence has it (apothecary/evidence/),
+    # Layers: how deep a click reaches and which layers are drawn and selectable
+    # (widgets/layers.js), a window beside the world registered by the page's script
+    # and closed until asked for. View › Layers opens it too.
+    ("layers", "Layers"),
+    # Workspace: the site as every kind of evidence has it (apothecary/evidence/),
     # a tab of Site's ring registered by the page's script, closed until asked for;
-    # a printer's ring opens it on that printer. A ring's label holds twelve
-    # characters, so its cells say Workspace.
+    # a printer's ring opens it on that printer.
     ("working", "Workspace"),
     # Procedure: the steps that bring a site into working order, each fired through the
     # family's hub on GO, a tab of Site's ring registered by the page's script.
@@ -710,7 +752,7 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("models", "Models"),
     ("gather", "Gather"),
     # Marks: a whiteboard's marks sorted, and a person's word on any (widgets/marks.js),
-    # a tab beside Models registered at start and closed until asked for. Its verbs
+    # a stack beside the world registered at start and closed until asked for. Its verbs
     # are a ring of their own under its cell (_marks), seated last under Pictures.
     ("marks", "Marks"),
     ("machine", "Machine"),
@@ -732,6 +774,15 @@ PANELS: Sequence[Tuple[str, str]] = (
     # (widgets/deck.js), a stack beside the world registered at start and closed until
     # asked for; the Stream Deck + piece's Open Deck opens it too.
     ("deck", "Deck"),
+    # Loops: the heater loops of the printer whose Machine is open (widgets/loops.js), a
+    # window of the Machine's group registered at start and closed until asked for. Its
+    # acts are a ring of their own under Panels › Machine (_loops).
+    ("loops", "Loops"),
+    # Motion: the selected part's pieces moved through its motion (widgets/motion.js), a
+    # window in the column registered at start and closed until asked for. Its cell is
+    # the part's own, Part › View › Motion, on a part whose pieces move, not one of
+    # Panels'.
+    ("motion", "Motion"),
 )
 # The group each panel's window is registered under, as the page registers it (its
 # markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
@@ -742,6 +793,7 @@ PANEL_GROUPS = {
     "pinned": "Site",
     "jobs": "Site",
     "scad": "Site",
+    "layers": "Site",
     "working": "Site",
     "procedure": "Family",
     "selected": "Selected",
@@ -754,21 +806,26 @@ PANEL_GROUPS = {
     "settings": "Tools",
     "deck": "Tools",
     "airgap": "Airgap",
+    "loops": "Machine",
+    "motion": "Part",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
-# The views: each focused system's windows laid out together (systems.py), a cell
-# of Panels › Windows after the layout's own two and an entry of the header's
-# ⊞ Windows. The page defines each from the same entry; a view's windows the page
-# has not got are left out of it.
-VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
+# The views: each focused system's windows laid out together (systems.py), then each
+# journey's that has a cell (journeys.py: the ring is full, so the first's alone), a cell
+# of Panels › Windows after the layout's own two and an entry of the header's ⊞ Windows. The page defines each from the same entry; a view's
+# windows the page has not got are left out of it.
+VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
+    (journey.id, journey.cell) for journey in JOURNEYS if journey.cell
+)
+JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
 # registered after them is seated after it. Site's cell is a ring of Site and its
 # own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
 # Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure", "layers"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
     # Marks last, so Models and Gather keep their addresses.
@@ -791,7 +848,8 @@ def _panels() -> Option:
         if pid == "machine":
             # A board's Machine, and an armed printer's control pad in a loud window
             # of its own or put back in its Machine, as the pad's ⧉ Pop out and
-            # ⇥ Put back do (widgets/machine.js).
+            # ⇥ Put back do (widgets/machine.js); then the knobs, and the heater loops
+            # of the printer whose Machine is open, each after the cells before it.
             return Option(
                 id="panels:machine",
                 label=label,
@@ -800,6 +858,7 @@ def _panels() -> Option:
                     toggle(pid, label),
                     Option(id="panel:pad", label="Control pad", action="panel:pad"),
                     _knobs(),
+                    _loops(toggle("loops", labels["loops"])),
                 ],
             )
         if pid not in _RINGS:
@@ -841,11 +900,14 @@ def _panels() -> Option:
                     Option(
                         id=f"panel:view:{vid}",
                         label=label,
-                        group=by_id(vid).group,
+                        group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
                         action=f"panel:view:{vid}",
                     )
                     for vid, label in VIEWS
-                ],
+                ]
+                # The Tour, after the views, so no cell before it moves: its box over
+                # the page and its verbs.
+                + [_tour()],
             )
         ]
         + [_bench(toggle("bench", "Bench"))]
@@ -858,7 +920,7 @@ def _panels() -> Option:
     )
 
 
-def _view() -> Option:
+def _view(site: Optional[Assembly] = None) -> Option:
     """View, cell 2 of the canvas ring: how the world is drawn.
 
     Its cells are the header's ⚙ View menu's items. Fit, first, frames the pieces
@@ -868,9 +930,13 @@ def _view() -> Option:
     lets a click in the world pick a wall, which it otherwise passes through, for
     the page's session. Snap, Outlines and Select walls each turn what they name the
     other way, as their tick-boxes do, and the status line says which way it went;
-    the ring is not told how they stand. Settings, last, opens the Settings panel --
+    the ring is not told how they stand. Settings opens the Settings panel --
     the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
-    before it moves.
+    before it moves. Layers and Depth come after it, in the two cells left: Layers is
+    a ring of ``site``'s layers, each a ring of its own acts (``_layers``), and Depth
+    is how many levels below this one a click reaches and the world draws, one to four
+    by name and one more or less, as the Layers window's stepper (to eight). Select
+    walls is the wall layer's Selectable tick.
     """
     return Option(
         id="view",
@@ -890,8 +956,114 @@ def _view() -> Option:
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
+            # After Settings, which keeps its cell: the two cells still free.
+            _layers(site),
+            Option(
+                id="view:depth",
+                label="Depth",
+                children=[
+                    Option(
+                        id=f"view:depth:{n}",
+                        label=f"{n} level{'' if n == 1 else 's'}",
+                        action=f"view:depth:{n}",
+                    )
+                    for n in range(1, 5)
+                ]
+                # The Layers window's stepper: a level more or less, up to eight.
+                + [
+                    Option(id="view:depth:less", label="One less", action="view:depth:less"),
+                    Option(id="view:depth:more", label="One more", action="view:depth:more"),
+                ],
+            ),
         ],
     )
+
+
+# The world's own layers, and the words their cells say. The grid and the machines'
+# buttons are a kind of their own, among which Only this and All act; the measurement
+# is a mode, so it is only ever shown or not.
+WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
+    (GRID, "Grid"),
+    (MACHINE_BUTTONS, "Buttons"),
+    (MEASURE, "Measure"),
+)
+
+
+def _layer_ring(layer: str, label: str) -> Option:
+    """One layer's ring, in its colour: Shown, then Selectable where a click can pick
+    what it draws (a shell's, a category's), then Only this and All -- this layer shown
+    and the others of its kind hidden, and every one of its kind shown -- where it has
+    a kind (not the measurement). Each does what its row of the Layers window does, or
+    the same over its kind (``layer:<verb>:<layer>``, the page's)."""
+    colour = colour_of(layer)
+
+    def act(verb: str, said: str) -> Option:
+        return Option(
+            id=f"layer:{verb}:{layer}", label=said, action=f"layer:{verb}:{layer}", colour=colour
+        )
+
+    acts = [act("shown", "Shown")]
+    if layer.startswith((SHELL, CATEGORY)):
+        acts.append(act("selectable", "Selectable"))
+    if layer != MEASURE:
+        acts += [act("only", "Only this"), act("all", "All")]
+    return Option(id=f"layer:{layer}", label=label, colour=colour, children=acts)
+
+
+def _in_order(prefix: str, label: str, rings: Sequence[Option]) -> Option:
+    """A ring of rings, in the order given; more than eight are split into groups of at
+    most eight, each named for its first, as any long list is (``_bucket``), in order."""
+    if len(rings) <= MOST_OPTIONS:
+        return Option(id=prefix, label=label, children=list(rings))
+    per = -(-len(rings) // MOST_OPTIONS)
+    chunks = [list(rings[start : start + per]) for start in range(0, len(rings), per)]
+    heads = distinct([chunk[0].label for chunk in chunks])
+    return Option(
+        id=prefix,
+        label=label,
+        children=[
+            Option(id=f"{prefix}:group{i}", label=head, children=chunk)
+            for i, (head, chunk) in enumerate(zip(heads, chunks, strict=True))
+        ],
+    )
+
+
+def _layers(site: Optional[Assembly]) -> Option:
+    """View › Layers: the Layers window, the world's own layers, Reset (depth 1, every
+    layer shown and selectable but walls, as the window's Reset), then the layers that
+    come and go with the site -- its shells, then its categories, as the window lists
+    them (``layer_colours.layers_in``) -- each a ring of its acts (``_layer_ring``). A
+    layer's drawn ring in the world opens the ring of its acts here."""
+    shells, categories = layers_in(site) if site is not None else ([], [])
+    children = [
+        Option(id="view:layers:window", label="Window", action="view:layers"),
+        Option(
+            id="layers:world",
+            label="World",
+            children=[_layer_ring(layer, said) for layer, said in WORLD_LAYERS],
+        ),
+        Option(id="layer:reset", label="Reset", action="layer:reset"),
+    ]
+    if shells:
+        children.append(
+            _in_order(
+                "layers:shells",
+                "Shells",
+                [_layer_ring(f"{SHELL}{n}", f"Shell {n}") for n in shells],
+            )
+        )
+    if categories:
+        children.append(
+            _in_order(
+                "layers:categories",
+                "Categories",
+                [
+                    _layer_ring(f"{CATEGORY}{name}", said)
+                    for name, said in zip(categories, distinct(categories), strict=True)
+                ],
+            )
+        )
+    return Option(id="view:layers", label="Layers", children=children)
 
 
 # The colours a lead, a plug or a part most often is, each a cell of Models › Colour;
@@ -933,7 +1105,8 @@ def _knobs() -> Option:
     """Panels › Machine › Knobs: the Stream Deck +'s knobs, the server's layout on the deck
     (firmware/deck_control.py), which the page hands each verb to -- on or off, the machine
     they move, their step, and the machine of the Machine that is open -- then the Deck
-    window, which shows them. Seated after the Machine's own two cells, so neither moves."""
+    window, which shows them, and the screen the deck's strip shows. Seated after the
+    Machine's own two cells, so neither moves."""
     from .firmware.deck_control import MACHINES, STEPS_MM
 
     return Option(
@@ -963,6 +1136,91 @@ def _knobs() -> Option:
             ),
             Option(id="deck:here", label="Here", action="deck:here"),
             Option(id="panel:deck", label="Deck", action="panel:toggle:deck"),
+            # The strip's screen, by its name or a step either way as a swipe along the
+            # strip takes it (firmware/deck_screens.py). After the Deck window, so no
+            # cell before it moves.
+            Option(
+                id="deck:screen",
+                label="Screen",
+                children=[
+                    Option(id=f"deck:screen:{name}", label=label, action=f"deck:screen:{name}")
+                    for name, label in SCREEN_CELLS
+                ],
+            ),
+        ],
+    )
+
+
+# The cells of Knobs › Screen: each screen of the strip in its order, then a step back and on.
+SCREEN_CELLS = (
+    ("knobs", "Knobs"),
+    ("progress", "Progress"),
+    ("status", "Status"),
+    ("previous", "Back"),
+    ("next", "Next"),
+)
+
+# What a rule's cell says, where its title is longer than a cell holds; a rule this does
+# not name is called by its title, shortened.
+RULE_LABELS = {
+    "zn_ultimate": "ZN ultimate",
+    "zn_reaction": "ZN reaction",
+    "tyreus_luyben": "Tyreus",
+    "cohen_coon": "Cohen-Coon",
+    "simc": "SIMC",
+    "imc": "IMC",
+    "amigo": "AMIGO",
+}
+
+
+def _loops(toggle: Option) -> Option:
+    """Panels › Machine › Loops: the window, then the acts of the loop it shows, which the
+    page hands to it (widgets/loops.js), on the printer whose Machine is open -- the board's
+    gains read, an experiment started and cancelled, the designed gains set on the board
+    (never saved to its memory: no cell asks for that) -- and the choices it makes: which
+    loop, which experiment (``firmware.loops.KINDS``), and the rule and the kind of
+    controller a design is made by (``control_loops.RULES``, each rule a ring of the kinds it
+    gives). Seated after Knobs, so no cell of the Machine's moves."""
+    from .control_loops import RULES
+    from .firmware.loops import KINDS
+
+    def act(verb: str, label: str) -> Option:
+        return Option(id=f"loops:{verb}", label=label, action=f"loops:{verb}")
+
+    return Option(
+        id="panels:loops",
+        label="Loops",
+        group=PANEL_GROUPS["loops"],
+        children=[
+            toggle,
+            act("read", "Read"),
+            act("start", "Start"),
+            act("cancel", "Cancel"),
+            act("set", "Set gains"),
+            Option(
+                id="loops:loop",
+                label="Loop",
+                children=[act("loop:hotend", "Hotend 0"), act("loop:bed", "Bed")],
+            ),
+            Option(
+                id="loops:kind",
+                label="Experiment",
+                children=[act(f"kind:{k.name}", k.name.capitalize()) for k in KINDS],
+            ),
+            Option(
+                id="loops:rule",
+                label="Rule",
+                children=[
+                    Option(
+                        id=f"loops:rule:{rule.name}",
+                        label=RULE_LABELS.get(rule.name) or shorten(rule.title),
+                        children=[
+                            act(f"rule:{rule.name}:{kind}", kind.upper()) for kind in rule.kinds
+                        ],
+                    )
+                    for rule in RULES.values()
+                ],
+            ),
         ],
     )
 
@@ -996,10 +1254,36 @@ def _models(toggle: Option) -> Option:
     )
 
 
+def _tour() -> Option:
+    """Panels › Windows › Tour: the tour's box over the page, then its buttons, which
+    the page hands to it (widgets/tour_popover.js): Back and Next through the journeys'
+    stages, Works and Off saying how the stage is (Off with what the box's field says
+    is off), Take me here, which takes the page to the stage, Its page, the first
+    walkthrough page the stage names, in a tab of its own, and Who, the field for the
+    name a word is kept under."""
+    return Option(
+        id="panels:tour",
+        label="Tour",
+        group="Tools",
+        children=[
+            Option(id="tour:toggle", label="Tour", action="tour:toggle"),
+            Option(id="tour:back", label="Back", action="tour:back"),
+            Option(id="tour:works", label="Works", action="tour:works"),
+            Option(id="tour:off", label="Off", action="tour:off"),
+            Option(id="tour:next", label="Next", action="tour:next"),
+            Option(id="tour:page", label="Its page", action="tour:page"),
+            Option(id="tour:put", label="Take me here", action="tour:put"),
+            Option(id="tour:by", label="Who", action="tour:by"),
+        ],
+    )
+
+
 def _marks(toggle: Option) -> Option:
     """Panels › Pictures › Marks: the window, then a person's word on the mark chosen
     in it, which the page hands to it (widgets/marks.js): a diagram's, writing, unsure,
-    or nothing. Seated after the window's own cell."""
+    or nothing; then a whiteboard's history, Earlier and Later stepping its slider to
+    the event before or after, and Place placing the moment at the selected place.
+    Seated after the window's own cell, the history's after the kinds."""
     return Option(
         id="panels:marks",
         label="Marks",
@@ -1010,6 +1294,9 @@ def _marks(toggle: Option) -> Option:
                 Option(id=f"marks:say:{kind}", label=kind.capitalize(), action=f"marks:say:{kind}")
                 for kind in MARK_KINDS
             ),
+            Option(id="marks:earlier", label="Earlier", action="marks:earlier"),
+            Option(id="marks:later", label="Later", action="marks:later"),
+            Option(id="marks:place", label="Place", action="marks:place"),
         ],
     )
 
@@ -1040,6 +1327,26 @@ def _airgap(show: Option) -> Option:
             Option(id="airgap:copy-scad", label="Copy SCAD", action="airgap:copy-scad"),
             Option(id="airgap:copy-metrics", label="Copy metrics", action="airgap:copy-metrics"),
             Option(id="airgap:reset", label="Reset", action="airgap:reset"),
+        ],
+    )
+
+
+def _motion() -> Option:
+    """Part › View › Motion: the Motion window opened on the part, then its controls,
+    which the page hands to it (widgets/motion.js): Play plays the motion and pauses
+    it, Back and Step move it a sample of its table at a time, Reset puts it back at
+    the start of its range, Bought shows or hides what is bought (pins, inserts) in its
+    own colour."""
+    return Option(
+        id="part:motion",
+        label="Motion",
+        children=[
+            Option(id="part:motion:open", label="Motion", action="part:motion:open"),
+            Option(id="part:motion:play", label="Play", action="part:motion:play"),
+            Option(id="part:motion:back", label="Back", action="part:motion:back"),
+            Option(id="part:motion:step", label="Step", action="part:motion:step"),
+            Option(id="part:motion:reset", label="Reset", action="part:motion:reset"),
+            Option(id="part:motion:bought", label="Bought", action="part:motion:bought"),
         ],
     )
 
@@ -1187,17 +1494,22 @@ def _is_host(site: Optional[Assembly], path: str, not_hosts: Sequence[str]) -> b
     return node is not None and node.world_bounds() is not None
 
 
-def _camera_group(floor: bool, printer: bool = False) -> Option:
+def _camera_group(floor: bool, printer: bool = False, machine: bool = False) -> Option:
     """Camera at a host or the floor: Add here, a camera part standing above the
     middle of this place, looking straight down. The server adds it. On a printer a
-    board drives, Workspace too: the Working space opened on it, where the frames its
-    cameras keep with its polls are (widgets/working_space.js)."""
+    board drives, Workspace too: the Workspace opened on it, where the frames its
+    cameras keep with its polls are (widgets/working_space.js). On a machine -- a printer
+    a board drives, or a router, planned or driven -- Projector last: the light that goes
+    the other way from a camera's, the projector's page for this machine opened in a
+    window of its own for a second display (routes/projector.py)."""
     tail = f":{FLOOR_MARK}" if floor else ""
     children = [
         Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
     ]
     if printer:
         children.append(Option(id="working", label="Workspace", action="working:open"))
+    if machine:
+        children.append(Option(id="projector", label="Projector", action="projector:open"))
     return Option(id=f"camera{tail}", label="Camera", group="Pictures", children=children)
 
 
@@ -1244,14 +1556,15 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     Add), Folder › the seven newest pictures and, when there are more, Pin and
     the short name of the one chosen in Pictures when it is older than those,
     else More (the Pictures panel, where every picture is) -- the chosen one,
-    among the seven, is marked in its own cell; and with
-    a view drawn here, Views › the newest views, Make › Make all and each found
-    shape (once its shapes are found and it has a width), Size, Unpin, Forget for
-    a picture the browser kept, and Find shapes last: the step after a pin, with
+    among the seven, is marked in its own cell; and with a view drawn here, Size,
+    Unpin, Forget for a picture the browser kept, Views › the newest views (once
+    several are pinned here), Make › Make all and each found shape (once its shapes
+    are found and it has a width), and Find shapes last: the step after a pin, with
     the finder that can read the picture (or Find shapes › each, when several
-    can), and on a view already searched, Find shapes › the other finders. Last,
-    so Unpin and Forget keep their cells whether it is there or not. Eight at
-    the most."""
+    can), and on a view already searched, Find shapes › the other finders. The
+    cells a picture has from its pin on come first, so none moves as it is
+    searched and sized, and Make takes the cell Find shapes had. Eight at the
+    most."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     # The floor's Add is the canvas ring's Pictures › Add, one ring up: an action
@@ -1285,6 +1598,23 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             Option(id=f"picture{tail}", label="Picture", group="Pictures", children=options)
             if options
             else None
+        )
+
+    # The cells it always has first, so none moves as a picture goes from pinned to
+    # found to sized: Size and Unpin, then Forget, which a kept picture has from its
+    # pin on. Then Views, from a second view pinned here on, and Make, which comes
+    # once its shapes are found and it has a width, in the cell Find shapes had.
+    options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
+    options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
+    if drawn.kept:
+        options.append(
+            Option(
+                id=f"picture:forget{tail}",
+                label="Forget",
+                action=f"picture:forget{tail}",
+                destructive=True,
+                twice=True,
+            )
         )
 
     if len(here.views) > 1:
@@ -1324,18 +1654,6 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
                     [(f"picture:make:{drawn.id}:{s.index}", f"{s.word} {s.index}") for s in found],
                     first=[make_all],
                 ),
-            )
-        )
-    options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
-    options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
-    if drawn.kept:
-        options.append(
-            Option(
-                id=f"picture:forget{tail}",
-                label="Forget",
-                action=f"picture:forget{tail}",
-                destructive=True,
-                twice=True,
             )
         )
     find = _find_shapes(drawn, picture.finders, tail)
@@ -1538,7 +1856,7 @@ def _canvas_ring(
     whose pieces have categories).
     """
     focus_path = context.targets[0] if context.targets else ""
-    focus = _find(site, focus_path) if site and focus_path else site
+    focus = find_node_by_path(site, focus_path) if site and focus_path else site
     options = [
         option
         for option in (
@@ -1550,7 +1868,7 @@ def _canvas_ring(
                 lambda name: f"site:{name}",
                 shown={UNIVERSE: UNIVERSE_SHOWN},
             ),
-            _view(),
+            _view(site),
             _panels(),
             _pictures(picture),
             Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
@@ -1571,7 +1889,7 @@ def _node_ring(
     sketch: Optional[str] = None,
 ) -> Ring:
     path = context.targets[0] if context.targets else ""
-    node = _find(site, path) if site and path else None
+    node = find_node_by_path(site, path) if site and path else None
     camera = bool(path) and path in picture.camera_parts
 
     # Step in, Move and Why this are every piece's, and keep cells 8, 6 and 2 wherever
@@ -1594,7 +1912,13 @@ def _node_ring(
     # has a camera added above it and holds views; a made piece has its word and
     # can be dropped; a camera has its own verbs, its device first.
     if _is_host(site, path, [*picture.made, *picture.camera_parts]):
-        options.append(_camera_group(floor=False, printer=path in picture.printers))
+        options.append(
+            _camera_group(
+                floor=False,
+                printer=path in picture.printers,
+                machine=path in picture.printers or path in picture.routers,
+            )
+        )
         host_pictures = _picture_group(picture, floor=False)
         assert host_pictures is not None  # a host's always holds Add
         options.append(host_pictures)
@@ -1643,6 +1967,10 @@ def _node_ring(
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))
         view.append(Option(id="part:fit", label="Fit", action="part:fit"))
+        # A part whose pieces move: its Motion window and the window's controls
+        # (widgets/motion.js). After Fit, so no cell of View moves.
+        if seen is not None and seen.motion:
+            view.append(_motion())
         verbs.append(Option(id="part:view", label="View", children=view))
         verbs.append(
             Option(
@@ -1659,6 +1987,22 @@ def _node_ring(
             chosen = _variants_group(seen.variants, seen.deleted)
             if chosen is not None:
                 verbs.append(chosen)
+        # A part's presets and, on an end, the adapter between it and an end kept: after
+        # the rest, where the ring has room (a part built by Python has no Save or
+        # Variants), so no cell above moves.
+        if seen is not None and seen.presets and len(verbs) < MOST_OPTIONS:
+            verbs.append(
+                Option(
+                    id="part:presets",
+                    label="Presets",
+                    children=[
+                        Option(id=f"part:preset:{name}", label=name, action=f"part:preset:{name}")
+                        for name in seen.presets[:MOST_OPTIONS]
+                    ],
+                )
+            )
+        if seen is not None and seen.end and len(verbs) < MOST_OPTIONS:
+            verbs.append(Option(id="part:adapter", label="Adapter", action="part:adapter"))
         options.append(Option(id="part", label="Part", group="Part", children=verbs))
     # A made piece with a printer pinned in its site to print it on: Print,
     # appended after Part so no cell above moves. A piece with nowhere to be
@@ -1696,15 +2040,34 @@ def _node_ring(
         options.append(
             Option(id="device:flash-sketch", label="Flash sketch", action="device:flash-sketch")
         )
-    # The piece it is inside, selected: Parent, last.
+    # The piece it is inside, selected: Parent, after every cell of the piece's own.
     if "." in path:
         parent = path.rsplit(".", 1)[0]
         options.append(Option(id="up", label="Parent", action=f"select:{parent}"))
+    # A Stream Deck +: the Deck window, the device as apothecary has drawn it and what it
+    # has heard, as Open Deck in its Selected opens it. Last, where the ring has room, so
+    # no cell before it moves: a deck on the floor fills it, a host's eight.
+    if (
+        picture.part is not None
+        and picture.part.deck
+        and not camera
+        and len(options) < MOST_OPTIONS
+    ):
+        options.append(
+            Option(
+                id="panel:deck",
+                label="Deck",
+                group=PANEL_GROUPS["deck"],
+                action="panel:toggle:deck",
+            )
+        )
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 
 def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
-    """The device ring as the top ring, opened on a port rather than a node."""
+    """The device ring as the top ring, opened on a port rather than a node: titled by
+    the machine its board is pinned to, as the windows and a reason name it, else by
+    the port."""
     if device is None:
         port = context.targets[0] if context.targets else ""
         if not port:
@@ -1712,7 +2075,7 @@ def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
         device = Device(port=port)
     # The port's last path segment: /dev/ttyUSB0 is ttyUSB0 on the ring.
     leaf = device.port.rstrip("/").rsplit("/", 1)[-1] or device.port
-    return Ring(title=shorten(leaf), options=_device_options(device))
+    return Ring(title=shorten(device.name or leaf), options=_device_options(device))
 
 
 def _device_options(device: Device) -> List[Option]:
@@ -1724,12 +2087,19 @@ def _device_options(device: Device) -> List[Option]:
     same on a devkit and on a printer (Control at 7). Pin and Unpin
     are one cell, since a port is either pinned to this node or not. Control
     appears only for a printer: a board running a sketch has no G-code to be
-    driven with.
+    driven with. Told what the server would refuse of the port now (``device.can``),
+    each act it refuses is greyed with its reason.
     """
     options = [
         Option(id="device:open", label="Open", action="device:open"),
         Option(id="device:poll", label="Poll", action="device:poll"),
-        Option(id="device:flash", label="Flash", action="device:flash", enabled=not device.printer),
+        Option(
+            id="device:flash",
+            label="Flash",
+            action="device:flash",
+            enabled=not device.printer,
+            why=keeps_its_firmware(device) if device.printer else None,
+        ),
         Option(id="device:query", label="Query", action="device:query"),
         (
             Option(id="device:unpin", label="Unpin", action="device:unpin")
@@ -1771,7 +2141,175 @@ def _device_options(device: Device) -> List[Option]:
     ]
     if device.printer:
         options.append(Option(id="control", label="Control", children=control_options(device)))
+    if device.can is not None:
+        judged(options, device.can)
     return options
+
+
+def keeps_its_firmware(device: Device) -> str:
+    """Why a machine's Flash, which holds its cell, is never chosen: the Machine's words."""
+    return f"a {device.machine or 'printer'} keeps its own firmware; Apothecary polls it and never flashes it"
+
+
+class ByJob(NamedTuple):
+    """An act that is the job's while a job runs (its ``running`` command is ok) and the
+    line's otherwise, as the page carries it: a print's Pause is the job paused while a
+    print from the host runs on the port (``print.cancel`` ok, widgets/machine.js
+    HOST_VERBS), else ``M25``; the knobs' On / off is their stop while they run on the deck
+    (``knobs.machine`` ok), else their start."""
+
+    job: str
+    line: Optional[str]
+    running: str = "print.cancel"
+
+
+JOG_AXES = ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
+CORNERS = ("BR", "FR", "FL", "BL")
+
+# Each act on a machine's ring, by the command the server answers for it (firmware/can.py
+# can_now): the verb its button in the Machine names in data-can, or, for a line the pad
+# sends, the verb static/can.js verbOfLine names that line by. None: nothing the server
+# answers stands in its way -- the latch's own switch, what opens a window or a card, what
+# the page alone does. tests/test_can_js.py holds it to the page act by act, and every
+# act a machine's ring carries has an entry.
+CanVerb = Union[str, ByJob, None]
+CAN_VERBS: Dict[str, CanVerb] = {
+    "device:open": None,
+    "device:poll": None,
+    "device:flash": None,  # it opens the Flashing card, whose own buttons answer for a flash
+    "device:query": "identify",
+    "device:pin": None,
+    "device:unpin": None,
+    "device:rescan": None,
+    "device:reconnect": "reconnect",
+    "device:reset": "reset",
+    "device:release": "release",
+    "device:listen": "listen",
+    "device:probe": "probe",
+    "control:arm": None,
+    "control:disarm": None,
+    "control:estop": "estop",
+    "control:hotend-on": "heat",
+    "control:hotend-off": "off",
+    "control:bed-on": "heat",
+    "control:bed-off": "off",
+    "control:fan-on": "heat",
+    "control:fan-off": "off",
+    "control:home": "home",
+    "control:home-xy": "home",
+    "control:home-x": "home.X",
+    "control:home-y": "home.Y",
+    "control:home-z": "home.Z",
+    **{f"control:jog:{axis}": "jog" for axis in JOG_AXES},
+    "control:jog-cancel": "quickstop",
+    "control:motors-off": "control",
+    "control:quickstop": "quickstop",
+    "control:break-wait": "interrupt",
+    "control:mesh-on": "control",
+    "control:mesh-off": "control",
+    **{f"control:corner:{corner}": "control" for corner in CORNERS},
+    "level:probe": "level.probe",
+    "level:read": "level.read",
+    "control:sd-resume": ByJob("print.resume", "control"),
+    "control:sd-pause": ByJob("print.pause", "card.pause"),
+    "control:sd-abort": ByJob("print.cancel", "control"),
+    "control:job-resume": ByJob("print.resume", "resume"),
+    "control:job-hold": ByJob("print.pause", "interrupt"),
+    "control:job-abort": ByJob("print.cancel", "estop"),  # with no job, the soft reset: a stop
+    "print:start": "print.start",
+    "print:preview": None,
+    "print:plan": None,
+    "print:measure": None,
+    # The printer's tuning document (slicer/tuning.py apply, undo), not its port: refused by
+    # the tuning's own answer (static/tuning.js canApply, canUndo), as its button is, which
+    # the page tells beside the port's (PAGE_ANSWERS).
+    "print:tune-apply": "tune.apply",
+    "print:tune-undo": "tune.undo",
+    "control:unlock": "unlock",
+    "control:spindle-on": "spindle",
+    "control:spindle-off": "off",
+    "control:zero-xyz": "control",
+    "control:zero-z": "control",
+    "control:go-zero": "control",
+    "control:top-z": "control",
+    "control:probe-z": "control",
+    "control:probe-plate": "control",
+    # Panels › Machine on the canvas ring (_panels), told the page's ``can`` beside the
+    # context: the open Machine's window and its pad, which the page alone opens; the
+    # knobs, by the deck's answer (firmware/can.py deck_can, the Deck window's data-can),
+    # On / off their stop while they run and their start otherwise; the heater loops, by the
+    # open Machine's port's (the Loops window's data-can). A key ending in a colon is a
+    # family: ``deck:machine:`` is every machine's cell. Choosing a loop, an experiment
+    # or a rule is the window's choice, which nothing the server answers stands in the way of.
+    "panel:toggle:machine": None,
+    "panel:pad": None,
+    "deck:knobs": ByJob("knobs.stop", "knobs.start", running="knobs.machine"),
+    "deck:machine:": "knobs.machine",
+    "deck:step:": "knobs.step",
+    "deck:here": "here",
+    "panel:toggle:deck": None,
+    "deck:screen:": "knobs.screen",
+    "panel:toggle:loops": None,
+    "loops:read": "tune.read",
+    "loops:start": "tune.start",
+    "loops:cancel": "tune.cancel",
+    "loops:set": "tune.set",
+    "loops:loop:": None,
+    "loops:kind:": None,
+    "loops:rule:": None,
+}
+# What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
+NEVER_GREYED = frozenset({"estop"})
+# Commands the page answers itself and tells in a board's ``can`` beside the server's: the
+# printer's tuning document's Apply and Undo turn, as its Print window's two buttons show
+# them (the template's tuneCan). With its Machine not open the page tells neither, and
+# neither is greyed.
+PAGE_ANSWERS = frozenset({"tune.apply", "tune.undo"})
+
+
+def can_entry(action: str) -> Tuple[bool, CanVerb]:
+    """``action``'s entry in ``CAN_VERBS``: its own, else its family's (the key ending in a
+    colon it starts with); ``(False, None)`` when it has none."""
+    if action in CAN_VERBS:
+        return True, CAN_VERBS[action]
+    for key, verb in CAN_VERBS.items():
+        if key.endswith(":") and action.startswith(key):
+            return True, verb
+    return False, None
+
+
+def verdict_of(can: Dict[str, Verdict], verb: str) -> Optional[Verdict]:
+    """The answer for ``verb``, else for the command before its dot (a printer's
+    ``home.X`` is its ``home``), as static/can.js verdictOf reads it."""
+    return can.get(verb) or can.get(verb.split(".")[0])
+
+
+def refusal_of(action: str, can: Dict[str, Verdict]) -> Optional[str]:
+    """Why the server would refuse the act ``action`` names, by ``can``; None when it
+    would take it, or when nothing it answers stands in its way."""
+    _, verb = can_entry(action)
+    if isinstance(verb, ByJob):
+        running = verdict_of(can, verb.running)
+        verb = verb.job if running is not None and running.ok else verb.line
+    if verb is None or verb in NEVER_GREYED:
+        return None
+    verdict = verdict_of(can, verb)
+    if verdict is None or verdict.ok:
+        return None
+    return verdict.why or f"the server refuses {verb} now"
+
+
+def judged(options: Sequence[Option], can: Dict[str, Verdict]) -> None:
+    """Each act among ``options`` the answer refuses greyed with its reason; a ring of
+    acts opens whatever its acts say, so the reasons can be read there."""
+    for option in options:
+        if option.children:
+            judged(option.children, can)
+        elif option.action:
+            why = refusal_of(option.action, can)
+            if why:
+                option.enabled = False
+                option.why = why
 
 
 def control_options(device: Device) -> List[Option]:
@@ -1848,6 +2386,20 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
+                # The piece printed, read: what is read under measured kept as the next
+                # turn of the printer's tuning, or the first field, with nothing read.
+                Option(id="print:measure", label="Measure", action="print:measure"),
+                # The printer's tuning: the last turn's changes into its next slices, or
+                # the last turn dropped with what it applied (slicer/tuning.py). Worded
+                # as the Print window's buttons are: Take turn, Undo turn.
+                Option(
+                    id="print:tune",
+                    label="Tune",
+                    children=[
+                        Option(id="print:tune-apply", label="Take turn", action="print:tune-apply"),
+                        Option(id="print:tune-undo", label="Undo turn", action="print:tune-undo"),
+                    ],
+                ),
             ],
         ),
         Option(
@@ -1873,8 +2425,9 @@ def router_control_options(device: Device) -> List[Option]:
     (``firmware.grbl.CONTROL_CODES`` and the realtime characters), sent by the
     Machine's control chain as a printer's are. Home, Unlock and Jog first, as a
     person homes before anything else; the spindle; work zero and the probe
-    together, since a probe is how Z is zeroed; the cut's own verbs; Stop is the
-    soft reset, destructive as E-STOP is. Eight, as a ring holds.
+    together, since a probe is how Z is zeroed; the cut's own verbs, the piece cut
+    measured among them; Stop is the soft reset, destructive as E-STOP is. Eight, as
+    a ring holds.
     """
     return [
         Option(
@@ -1914,6 +2467,7 @@ def router_control_options(device: Device) -> List[Option]:
                 Option(id="control:go-zero", label="Go to zero", action="control:go-zero"),
                 Option(id="control:top-z", label="Top of Z", action="control:top-z"),
                 Option(id="control:probe-z", label="Probe Z", action="control:probe-z"),
+                Option(id="control:probe-plate", label="Probe plate", action="control:probe-plate"),
             ],
         ),
         # The cut, whichever is running: a hold and a resume reach the controller at
@@ -1928,6 +2482,9 @@ def router_control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
+                # The piece cut, measured: what is typed under measured kept as the
+                # router's tool allowance, or the field, with nothing typed.
+                Option(id="print:measure", label="Measure", action="print:measure"),
             ],
         ),
         Option(id="control:estop", label="Stop", action="control:estop", destructive=True),
@@ -2002,18 +2559,29 @@ CARRIED_BY: Dict[str, Carries] = {
     "toolpath": Carries.VIEWER,
     # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
-    # A printer's Working space: the page opens the window on the printer, watches
+    # A printer's Workspace: the page opens the window on the printer, watches
     # its board and keeps frames with its polls (widgets/working_space.js).
     "working": Carries.VIEWER,
+    # A machine's projector: the page opens the projector's page for it in a window of
+    # its own, for a second display (static/projector.js); nothing is changed.
+    "projector": Carries.VIEWER,
     # GO and Start over: the page hands each to the Procedure window, which fires
     # through the family's hub (widgets/procedure.js).
     "procedure": Carries.VIEWER,
     # The Stream Deck +'s knobs: the page hands each to the server's layout on the deck
     # (static/deck_knobs.js, PUT /firmware/decks/{id}/control).
     "deck": Carries.VIEWER,
+    # A heater loop's acts and choices: the page hands each to the Loops window
+    # (widgets/loops.js), which calls the loop routes for the printer whose Machine is
+    # open (POST /firmware/printers/loops/read, start, cancel, set), never the intent
+    # route, and greys what the server would refuse.
+    "loops": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,
+    # A layer's acts, under View › Layers: the page's pick scope (static/pick_scope.js),
+    # which the Layers window's ticks and the world read too.
+    "layer": Carries.VIEWER,
     # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
     # The tasks they start are the firmware routes' (POST /firmware/install,
     # /cores/install, /libraries/install, /sketches/{name}/compile and /upload,
@@ -2028,6 +2596,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # Marks' verbs: the page carries each to the window (widgets/marks.js), which
     # tells the server a person's word on the mark chosen there.
     "marks": Carries.VIEWER,
+    # The Tour's verbs: the page carries each to its box (widgets/tour_popover.js), which
+    # keeps a person's word on the stage it shows (POST /tour/feedback).
+    "tour": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report
     # -- the page's: only the browser can open a camera, and the device and

@@ -7,7 +7,9 @@ frame behind the upright, the electronics box under the bed at the front
 left, the LCD off the front-right corner and the spool on a bracket over the
 top crossbar. The axes (`z_axis`, `x_axis`, `y_axis`) are parameters, so the
 garage draws its one printer, printer_1, with its nozzle where the last poll
-said.
+said; `piece` draws what stands still, the bed, the X gantry or the hotend
+carriage alone, so a scene moves each with its axes (`KINEMATICS` in the part's
+wrapper).
 
 `ender3.scad` says which numbers are Creality's specifications and which are
 measured off a machine of this kind or chosen to look right. It contains no

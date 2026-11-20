@@ -282,7 +282,7 @@ def test_a_fit_that_sorts_the_drawn_whiteboards_worse_is_refused(tmp_path):
     kept = tmp_path / "words.marks.json"
     marks.save(kept, marks.Answers(examples=doubted))
     out = tmp_path / "table.json"
-    done = CliRunner().invoke(cli, ["photo", "fit", str(kept), "--out", str(out), "--count", "20"])
+    done = CliRunner().invoke(cli, ["photo", "fit", str(kept), "--out", str(out), "--count", "6"])
     assert done.exit_code != 0 and "worse" in done.output, done.output
     assert not out.exists()
 

@@ -15,3 +15,20 @@
 .marks-ui .marks-choose { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 4px; font: 0.74rem ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0.05rem 0.35rem; cursor: pointer; }
 .marks-ui .marks-row.chosen .marks-choose { border-color: var(--group); background: color-mix(in srgb, var(--group) 22%, var(--bg)); }
 .marks-ui .marks-offer { flex-basis: 100%; }
+/* A whiteboard's photograph, its corners as handles and the outline between them. */
+.marks-ui .marks-photo { position: relative; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; touch-action: none; }
+.marks-ui .marks-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; user-select: none; pointer-events: none; }
+.marks-ui .marks-photo svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.marks-ui .marks-photo polygon { fill: color-mix(in srgb, var(--group) 14%, transparent); stroke: var(--group); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.marks-ui .marks-corner { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0; border-radius: 50%; border: 2px solid var(--bg); background: var(--group); cursor: grab; }
+.marks-ui .marks-corner:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+/* A whiteboard's history: a tick per event on one strip, and the slider under it. */
+.marks-ui .marks-strip { width: 100%; height: 24px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
+.marks-ui .marks-strip .tick { stroke-width: 3; vector-effect: non-scaling-stroke; }
+.marks-ui .marks-strip .tick.photograph { stroke: var(--group); stroke-width: 4; }
+.marks-ui .marks-strip .tick.made { stroke: var(--ok); }
+.marks-ui .marks-strip .tick.dropped { stroke: var(--bad); }
+.marks-ui .marks-strip .tick.word, .marks-ui .marks-strip .tick.note { stroke: var(--ink-2); }
+.marks-ui .marks-strip .now { stroke: var(--ink); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.marks-ui .marks-when { width: 100%; accent-color: var(--group); }
+.marks-ui .marks-take, .marks-ui .marks-place { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; font: inherit; padding: 0.1rem 0.45rem; cursor: pointer; }

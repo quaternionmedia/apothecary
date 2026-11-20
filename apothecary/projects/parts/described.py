@@ -2,9 +2,9 @@
 
 A folder under ``parts/`` that holds a ``<name>.scad`` and a ``part.json`` is
 a part, with no module to write: the sidecar says what the wrapper would
-have said (category, tags, colour, orientation, a description) and, for a
-mesh brought from elsewhere, where it came from (source, author, licence,
-units, up axis) -- the provenance the open-license record asks every
+have said (category, tags, colour, how it rests, a description)
+and, for a mesh brought from elsewhere, where it came from (source, author,
+licence, units, up axis) -- the provenance the open-license record asks every
 vendored thing to carry.
 
 The registry records the sidecar on the part's entry (``ProjectInfo.sidecar``)
@@ -20,11 +20,12 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from apothecary.models import BoundingBox3D, Color, Vector3D
+from apothecary.models.interfaces import Interface, InterfaceBase, check_interfaces
 
-from .base import BasePart
+from .base import TURN_REFUSED, BasePart
 
 SIDECAR = "part.json"
 
@@ -50,8 +51,15 @@ class Description(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    parts: Optional[List[str]] = Field(
+        None,
+        description="the registered parts this one is built from; omitted, they are inferred "
+        "from the SCAD's include/use lines and the sites that hold it",
+    )
     preview_color: Optional[List[float]] = Field(None, description="[r, g, b] in 0..1")
-    display_rotation: Optional[List[float]] = Field(None, description="[rx, ry, rz] degrees")
+    rest: Optional[Dict[str, Any]] = Field(
+        None, description='the -D definitions that draw it as it rests, e.g. {"print": false}'
+    )
     bounds: Optional[Dict[str, List[float]]] = Field(
         None, description='{"min": [x, y, z], "max": [x, y, z]} in mm, as placed'
     )
@@ -59,6 +67,16 @@ class Description(BaseModel):
         None, description="a README shared with other parts, relative to this folder"
     )
     source: Optional[Provenance] = None
+    interfaces: List[Interface] = Field(
+        default_factory=list,
+        description="the places where another part meets this one, in its SCAD's frame "
+        "at its defaults (docs/connections.md)",
+    )
+
+    @field_validator("interfaces")
+    @classmethod
+    def _one_part(cls, value: List[InterfaceBase]) -> List[InterfaceBase]:
+        return check_interfaces(value)
 
 
 class DescribedPart(BasePart):
@@ -66,6 +84,12 @@ class DescribedPart(BasePart):
 
     sidecar_path: Optional[Path] = None
     source: Optional[Provenance] = None
+    # Its sidecar's interfaces: at its defaults, since a sidecar holds numbers, not a
+    # rule that moves them with a parameter.
+    declared_interfaces: List[Interface] = Field(default_factory=list)
+
+    def interfaces(self, params=None) -> List[InterfaceBase]:
+        return list(self.declared_interfaces)
 
 
 def sidecar_for(scad_path: Path) -> Optional[Path]:
@@ -75,9 +99,17 @@ def sidecar_for(scad_path: Path) -> Optional[Path]:
 
 
 def read_description(sidecar_path: Path) -> Description:
+    """The sidecar at ``sidecar_path``; ValueError for one that is not a part
+    description, or that says ``display_rotation`` (``TURN_REFUSED``)."""
     try:
-        return Description.model_validate(json.loads(sidecar_path.read_text(encoding="utf-8")))
-    except (OSError, ValueError, ValidationError) as exc:
+        data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{sidecar_path}: not a part description: {exc}") from exc
+    if isinstance(data, dict) and "display_rotation" in data:
+        raise ValueError(f"{sidecar_path}: {TURN_REFUSED}")
+    try:
+        return Description.model_validate(data)
+    except ValidationError as exc:
         raise ValueError(f"{sidecar_path}: not a part description: {exc}") from exc
 
 
@@ -102,9 +134,12 @@ def part_from_sidecar(scad_path: Path, sidecar_path: Optional[Path] = None) -> D
     if described.preview_color and len(described.preview_color) == 3:
         r, g, b = described.preview_color
         kwargs["preview_color"] = Color(r=r, g=g, b=b)
-    if described.display_rotation and len(described.display_rotation) == 3:
-        rx, ry, rz = described.display_rotation
-        kwargs["display_rotation"] = Vector3D(x=rx, y=ry, z=rz)
+    if described.interfaces:
+        kwargs["declared_interfaces"] = list(described.interfaces)
+    if described.parts is not None:
+        kwargs["parts"] = list(described.parts)
+    if described.rest:
+        kwargs["rest"] = dict(described.rest)
     if described.bounds and "min" in described.bounds and "max" in described.bounds:
         lo, hi = described.bounds["min"], described.bounds["max"]
         kwargs["default_bounds"] = BoundingBox3D(

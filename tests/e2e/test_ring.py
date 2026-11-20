@@ -26,7 +26,7 @@ from boards import PRINTER
 from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from rings import cells as _wedges
-from rings import past_the_chord
+from rings import cut_labels, greyed, on_world, open_at, past_the_chord
 
 from apothecary.systems import by_id
 
@@ -50,8 +50,9 @@ def ring_url(start_server):
 
 
 CAPTURE = (
-    "window.__intents = []; "
+    "window.__intents = []; window.__refused = []; "
     "window.addEventListener('apothecary:intent', (e) => window.__intents.push(e.detail));"
+    "window.addEventListener('apothecary:refused', (e) => window.__refused.push(e.detail));"
 )
 
 
@@ -68,6 +69,10 @@ def _title(page: Page) -> str:
 
 def _intents(page: Page) -> list:
     return page.evaluate("() => window.__intents")
+
+
+def _refused(page: Page) -> list:
+    return page.evaluate("() => window.__refused")
 
 
 @pytest.mark.e2e
@@ -138,17 +143,23 @@ def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_ur
 
 
 @pytest.mark.e2e
-def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
+def test_digits_walk_device_control_jog_and_what_leaves_the_ring_carries_the_address(
     page: Page, ring_url: str
 ):
-    """7 7 2 8 reaches Jog > Y+ from printer_1's ring, Device seated last; the intent says so,
-    and so does the page."""
+    """7 7 2 8 reaches Jog > Y+ from printer_1's ring, Device seated last. Disarmed, Y+ is
+    greyed with the server's reason, as the Machine's jog is: chosen anyway, no intent
+    leaves the ring, and what does -- its refusal -- carries the address, and so does
+    the page."""
     # Device's cells: Open (the board's Machine), Flash, ..., and Control, after Link,
     # in cell 7.
     _open_on(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible(timeout=10000)
+    page.wait_for_function(
+        f"() => !!(window.fractalViewer.boards.board('{PRINTER}').status || {{}}).can",
+        timeout=15000,
+    )
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("7")
@@ -172,15 +183,20 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     # The numpad as a jog pad: up, right, down, left, up-right, down-right.
     assert _wedges(page) == {"8": "Y+", "6": "X+", "2": "Y-", "4": "X-", "9": "Z+", "3": "Z-"}
     assert page.locator("#ring-overlay .address").text_content() == "⌗772"
+    expect(page.locator("#ring-overlay .wedge.disabled")).to_have_count(6)
     page.keyboard.press("8")
-    expect(page.locator("#ring-overlay")).to_have_count(0)
-    intents = _intents(page)
-    assert len(intents) == 1
-    intent = intents[0]
+    assert _title(page) == "Jog"  # chosen anyway: the ring stays, nothing is done
+    assert _intents(page) == []
+    refusals = _refused(page)
+    assert len(refusals) == 1
+    intent = refusals[0]
     assert intent["action"] == "control:jog:Y+"
     assert intent["option_id"] == "control:jog:Y+"
     assert intent["address"] == "7728"
     assert intent["context"] == {"pointing": "node", "targets": ["printer_1"]}
+    assert "not armed" in intent["why"]
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
     # The same address, worked out from the ring itself two ways.
     by_path = page.evaluate(
         "() => window.apothecaryRing.addressOf(window.apothecaryRing.lastRing(), "
@@ -190,13 +206,12 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
         "() => window.apothecaryRing.addressOf(window.apothecaryRing.lastRing(), 'control:jog:Y+')"
     )
     assert by_path == by_action == intent["address"]
-    # A board's verb goes to its Machine, opened for it: disarmed, the jog is refused,
-    # and the status line says so as an error, with its address.
+    # The status line says so as an error, with its address; no Machine is opened for
+    # an act that was not done.
     expect(page.locator("#status")).to_contain_text("⌗7728", timeout=5000)
     expect(page.locator("#status")).to_contain_text("not armed")
     expect(page.locator("#status")).to_have_class(re.compile(r"\berror\b"))
-    expect(page.locator(".panel[data-panel='machine']")).to_be_visible()
-    page.evaluate("() => window.fractalViewer.closeMachine()")
+    expect(page.locator(".panel[data-panel='machine']")).to_have_count(0)
     # "Appear as generated": the Device section's buttons wear their addresses.
     opener = page.locator("#selected-body .dev-open")
     expect(opener).to_have_attribute("data-address", "78", timeout=5000)
@@ -369,7 +384,7 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
     expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
     page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    assert _title(page) == "ttyFAKE1"
+    assert _title(page) == "printer_1"
     assert _wedges(page)["1"] == "Link"
     assert _wedges(page)["7"] == "Control"
     page.keyboard.press("7")
@@ -580,12 +595,21 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         # The family's Members and Deliveries, closed until asked for.
         "family-members",
         "family-deliveries",
-        # The Working space, a tab of Site's ring, closed until asked for.
+        # The Layers window, beside the world and a cell of Site's ring, closed until
+        # asked for.
+        "layers",
+        # The Loops window, beside the world and a cell of the Machine's ring, closed
+        # until asked for.
+        "loops",
+        # The Workspace, a tab of Site's ring, closed until asked for.
         "working",
         # The Procedure, a tab of Site's ring, closed until asked for.
         "procedure",
         # The Deck, a stack of its own beside the world, closed until asked for.
         "deck",
+        # The Motion window, a part's pieces moved through its motion, closed until
+        # asked for.
+        "motion",
     ]
     assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)
@@ -640,6 +664,7 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     site_ring = _wedges(page)
     assert sorted(site_ring.values()) == [
         "Jobs",
+        "Layers",
         "Pinned",
         "Problems",
         "Procedure",
@@ -662,8 +687,8 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
 
 @pytest.mark.e2e
 def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_url: str):
-    """Panels › Windows holds the views, World alone and Reset layout; Reset layout lays
-    the page's own layout out again and says so. What a person moved, and what a reset
+    """Panels › Windows holds the views, World alone, Reset layout and the Tour; Reset
+    layout lays the page's own layout out again and says so. What a person moved, and what a reset
     does with it, are the window manager's (tests/e2e/test_window_manager.py)."""
     world = _open_panels(page, ring_url)
     page.evaluate("() => window.apothecaryPanels.applyView('part')")
@@ -672,7 +697,9 @@ def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_ur
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
     assert sorted(_wedges(page).values()) == [
-        "Airgap view", "Family view", "Machine view", "Part view", "Reset layout", "World alone",
+        "Airgap view", "Family view", "Machine view", "Part view", "Print view", "Reset layout",
+        "Tour",
+        "World alone",
     ]  # fmt: skip
     page.keyboard.press(
         next(cell for cell, label in _wedges(page).items() if label == "Reset layout")
@@ -715,7 +742,9 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     # ⊞ Windows: the views, then the windows; the first focused, the arrows moving.
     page.locator("#windows-menu > summary").click()
     body = page.locator(".windows-menu-body")
-    expect(body.locator(".view-item")).to_have_text(["Default", "Part", "Machine", "Airgap", "Family"])
+    expect(body.locator(".view-item")).to_have_text(
+        ["Default", "Part", "Machine", "Airgap", "Family", "Print"]
+    )
     expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
     assert page.evaluate("() => document.activeElement.dataset.view") == "default"
     page.keyboard.press("ArrowDown")
@@ -774,3 +803,142 @@ def test_the_tilde_shows_the_world_alone_and_the_ring_does_too(page: Page, ring_
     page.evaluate("() => window.apothecaryPanels.open('selected')")
     expect(windows.panel(page, "selected")).to_be_visible()
     windows.world_is(page, before)
+
+
+@pytest.mark.e2e
+def test_a_ring_opened_at_the_screens_edge_keeps_every_label_whole(page: Page, ring_url: str):
+    """Opened against either edge of the screen, the ring stands far enough in that no label
+    is cut -- the canvas ring's, and the Panels ring's entered from it, whose Machine and
+    Selected run out past the wedges on the level spokes -- however long the labels of the
+    ring it is on."""
+    open_garage(page, ring_url, settle=False)
+    width, height = page.evaluate("() => [window.innerWidth, window.innerHeight]")
+    for x in (0, width):
+        open_at(page, x, height // 2)
+        assert cut_labels(page) == [], x
+        page.keyboard.press("4")  # Panels
+        expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
+        assert cut_labels(page) == [], x
+        page.keyboard.press("Escape")
+        expect(page.locator("#ring-overlay")).to_have_count(0)
+
+
+NO_MACHINE = "no printer's Machine is open: Loops works on the printer whose Machine is open"
+
+
+@pytest.mark.e2e
+def test_panels_machine_greys_the_loops_and_the_knobs_as_their_windows_do(
+    page: Page, ring_url: str
+):
+    """With no printer's Machine open and no Stream Deck + found, Panels › Machine › Loops'
+    Read, Start, Cancel and Set gains, and the knobs' On / off and Here, are greyed with
+    the words their windows say, rather than live and refused once chosen; the windows
+    themselves are not."""
+    open_garage(page, ring_url, settle=False)
+    on_world(page, "Panels", "Machine", "Loops")
+    assert greyed(page) == {cell: f"Disabled: {NO_MACHINE}" for cell in ("6", "2", "4", "9")}
+    page.keyboard.press("5")
+    page.keyboard.press("2")  # Knobs
+    expect(page.locator("#ring-overlay .title")).to_have_text("Knobs")
+    knobs = greyed(page)
+    assert set(knobs) == {"8", "4"}, knobs  # On / off, Here; the Deck window is live
+    assert all("no Stream Deck + found" in why for why in knobs.values()), knobs
+
+
+@pytest.mark.e2e
+def test_print_tune_is_greyed_on_the_ring_as_its_buttons_are(page: Page, ring_url: str):
+    """Print › Tune › Take turn and Undo turn are the printer's tuning document's, not its
+    port's: with no file a slice made for the printer chosen, the ring greys both, as the
+    Machine refuses them, rather than offering them live."""
+    page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
+    expect(page.locator("#print-measure-row")).to_be_hidden()
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    for digit in "797":  # Control › Print › Tune
+        page.keyboard.press(digit)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Tune")
+    why = "Disabled: choose a file a slice made for this printer"
+    assert greyed(page) == {"8": why, "6": why}
+
+
+@pytest.mark.e2e
+def test_an_open_ring_is_greyed_again_as_the_latch_goes_down_and_up(page: Page, ring_url: str):
+    """A ring left open at Control › Jog is greyed again from each answer the page applies:
+    the latch let go while it is open greys every jog with the server's reason, and armed
+    again they are live, the ring where it was throughout."""
+
+    def latch(armed: bool) -> None:
+        httpx.post(
+            f"{ring_url}/firmware/printers/control",
+            json={"port": PRINTER, "armed": armed},
+            timeout=15.0,
+        ).raise_for_status()
+
+    latch(True)
+    page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    expect(page.locator("#control")).to_be_visible(timeout=10000)  # armed: its pad
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("7")
+    page.keyboard.press("2")
+    expect(page.locator("#ring-overlay .title")).to_have_text("Jog")
+    assert greyed(page) == {}
+    try:
+        latch(False)
+        jogs = page.locator("#ring-overlay .wedge.disabled")
+        expect(jogs).to_have_count(6, timeout=10000)
+        assert all("not armed" in why for why in greyed(page).values()), greyed(page)
+        expect(page.locator("#ring-overlay .title")).to_have_text("Jog")
+        latch(True)
+        expect(jogs).to_have_count(0, timeout=10000)
+    finally:
+        latch(False)
+
+
+@pytest.mark.e2e
+def test_the_headers_menus_the_tour_and_the_procedure_wear_their_cells_addresses(
+    page: Page, ring_url: str
+):
+    """Each control a cell of the ring also is wears that cell's address, once: the
+    header's ⚙ View, ⊞ Windows, Settings and Tour, the universe's crumb out of a site, the
+    site's crumb and its ▾ at the site's own level (the ring's Site), the tour box's
+    buttons, the Procedure's GO and Start over, and the Stream Deck +'s Open Deck (its
+    ring's Deck)."""
+    open_garage(page, ring_url, settle=False)
+    canvas = page.evaluate(
+        """async () => {
+            const ring = await window.apothecaryRing.resolve({ context: { pointing: 'canvas', targets: [] }, site: 'garage' });
+            const at = window.apothecaryRing.addresses(ring);
+            const of = (path) => window.apothecaryRing.addressOf(ring, path);
+            return { ...at, view: of(['view']), windows: of(['panels', 'panel:windows']), site: of(['Site']) };
+        }"""
+    )
+    windows.open_window(page, "procedure")
+    for selector, address in (
+        ("#view-menu > summary", canvas["view"]),
+        ("#windows-menu > summary", canvas["windows"]),
+        ("#settings-open", canvas["view:settings"]),
+        ("#tour-pop-open", canvas["tour:toggle"]),
+        (".tour-pop-next", canvas["tour:next"]),
+        ("#universe-crumb", canvas["site:apothecary"]),
+        ("#site-level", canvas["site"]),
+        ("#site-menu > summary", canvas["site"]),
+        (".panel[data-panel='procedure'] .procedure-again", canvas["procedure:again"]),
+    ):
+        assert address, selector
+        control = page.locator(selector).first
+        expect(control).to_have_attribute("data-address", address, timeout=10000)
+        title = control.get_attribute("title") or ""
+        assert title.endswith(f"⌗{address}") and title.count("⌗") == 1, (selector, title)
+    select(page, "stream_deck")
+    deck = page.evaluate(
+        """async () => {
+            const ring = await window.apothecaryRing.resolve({ context: { pointing: 'node', targets: ['stream_deck'] }, site: 'garage' });
+            return window.apothecaryRing.addresses(ring)['panel:toggle:deck'] || null;
+        }"""
+    )
+    assert deck
+    expect(page.locator(".deck-open")).to_have_attribute("data-address", deck, timeout=10000)

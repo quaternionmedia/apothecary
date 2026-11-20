@@ -122,8 +122,9 @@ def test_the_root_docs_name_only_files_that_exist():
 
 
 def test_the_docs_index_links_every_guide_plan_and_record():
-    """docs/README.md is where a reader finds the guides, the plans and the validation
-    records; one written and not indexed is a page nobody reaches from it."""
+    """docs/README.md is where a reader finds the walkthrough's pages, the guides, the
+    plans and the validation records; one written and not indexed is a page nobody
+    reaches from it."""
     index = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
     linked = {href.split("#", 1)[0] for _, href in docs_site.LINK.findall(index)}
     pages = sorted(
@@ -131,8 +132,56 @@ def test_the_docs_index_links_every_guide_plan_and_record():
         for folder in ("", "plans", "validation")
         for page in (ROOT / "docs" / folder).glob("*.md")
         if page.name != "README.md"
-    )
+    ) + [f"../walkthrough/{name}" for name, _ in docs_site.walkthrough_pages()]
     assert pages and not [page for page in pages if page not in linked]
+
+
+def _walkthrough_table() -> list:
+    """The docs index's walkthrough table alone: each row's link text and target."""
+    index = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    start = index.index("## The walkthrough")
+    table = index[start : index.index("\n## ", start + 1)]
+    return [
+        docs_site.LINK.search(row).groups() for row in table.splitlines() if row.startswith("| [")
+    ]
+
+
+def test_the_walkthrough_table_links_each_page_once_by_its_number():
+    """Read alone, the docs index's walkthrough table links each page of the folder once,
+    in order, by a link whose text starts with the page's number: a row copied for a new
+    page and half edited links one page twice, or names another; a link moved out of the
+    table, or commented out, leaves its page without a row. No page stands in a folder
+    of the walkthrough's own, where the index and `/walkthrough` would not list it."""
+    rows = _walkthrough_table()
+    pages = [f"../walkthrough/{name}" for name, _ in docs_site.walkthrough_pages()]
+    assert [href for _, href in rows] == pages
+    assert [(t, h) for t, h in rows if not t.startswith(f"{h.rpartition('/')[2][:2]} ")] == []
+    assert sorted((ROOT / "walkthrough").glob("*/**/*.md")) == []
+
+
+# A walkthrough page named by its number outside a link: "page 07", "pages 01 to 06",
+# "03 to 06 are the loops".
+BARE_PAGES = re.compile(
+    r"\b[Pp]ages?\s+\d{2}\b(?:(?:,|\s+and|\s+to)\s+\d{2}\b)*"
+    r"|\b\d{2}(?:,\s*\d{2})*\s+(?:to|and)\s+\d{2}\b"
+)
+
+
+def test_the_lists_kept_by_hand_name_a_page_only_by_its_link():
+    """CONTRIBUTING.md and walkthrough page 00 listed the walkthrough's pages by number
+    and fell behind the folder. Each names a page only by a link to it whose text, if
+    it has a number, is that page's; a count or a range of pages is the docs index's."""
+    problems = []
+    for path in (ROOT / "CONTRIBUTING.md", ROOT / "walkthrough" / "00-getting-started.md"):
+        text = path.read_text(encoding="utf-8")
+        for label, href in docs_site.LINK.findall(text):
+            page = re.search(r"(?:^|/)(\d{2})-[\w-]+\.md", href)
+            numbers = re.findall(r"\b\d{2}\b", label)
+            if page and numbers and numbers != [page.group(1)]:
+                problems.append(f"{path.name}: [{label}]({href})")
+        outside = docs_site.LINK.sub("", re.sub(r"\s+", " ", text))
+        problems += [f"{path.name}: {bare}" for bare in BARE_PAGES.findall(outside)]
+    assert problems == []
 
 
 def test_the_configuration_page_names_every_variable_the_code_reads():

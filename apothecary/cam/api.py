@@ -5,16 +5,28 @@ controller is on ``port`` (or the node named), keeps it as a cut file and answer
 the record; ``GET /cam/cuts`` lists the records whose files are still kept, and
 ``GET /cam/cuts/{file_id}`` one of them. A part that does not say how it is cut
 is refused with 400, as is a variant the page no longer holds.
+
+``POST /cam/cuts/{file_id}/measured`` ``{"sizes": {name: mm}}`` takes the piece that
+toolpath cut, measured by a person -- each feature its record names, any of them --
+checks it against what was designed and keeps the router's tool allowance it makes
+(``measured.py``), which its next toolpaths take; a measurement that is not of that
+piece, or an allowance past what a tool's running out explains, is a 422 saying why,
+and nothing is kept. ``GET /cam/corrections?site=&router=`` reads the allowance kept,
+with the measurements that made it; ``null`` where none is.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from . import service
+from .. import sites
+from ..hierarchy import find_node_by_path
+from ..projects.parts.skeleton import ROOT
+from ..projects.registry import part_names
+from . import measured, service
 from .models import CutFor, CutRecord
 
 router = APIRouter(prefix="/cam", tags=["cam"])
@@ -31,20 +43,28 @@ class CutRequest(BaseModel):
     variant: Optional[str] = Field(None, pattern=VARIANT_KEY)
 
 
+class MeasuredRequest(BaseModel):
+    # Millimetres, as measured, by the feature's name; one left out was not measured.
+    sizes: Dict[str, Optional[float]] = Field(..., max_length=24)
+
+
 def _part_named(site: Optional[str], part: str) -> str:
     """The registered part ``part`` names: with a site, the part the node at that
-    path stands for (its ``part_ref``), as the Cut card's makes names it; without
-    one, the registry name itself."""
+    path stands for (its ``part_ref``), as the Cut card's makes names it, else a
+    registered part of that name, which makes lists after the site's pieces;
+    without one, the registry name itself."""
     if site is None:
         return part
-    from ..api import _find_node_by_path, _site_store
-
     try:
-        node = _find_node_by_path(_site_store.get(site), part)
+        node = find_node_by_path(sites.store.get(site), part)
     except KeyError:
         node = None
     if node is None:
-        raise HTTPException(status_code=404, detail=f"{part!r} is not a piece of {site}")
+        if part in part_names(ROOT):
+            return part
+        raise HTTPException(
+            status_code=404, detail=f"{part!r} is no piece of {site} and no part's name"
+        )
     if not node.part_ref:
         raise HTTPException(
             status_code=400,
@@ -80,3 +100,30 @@ def get_cut(file_id: str):
     if record is None:
         raise HTTPException(status_code=404, detail=f"no toolpath is recorded for {file_id!r}")
     return record
+
+
+@router.post("/cuts/{file_id}/measured")
+def cut_measured(file_id: str, body: MeasuredRequest):
+    """The piece the toolpath ``file_id`` cut, measured: checked, and the allowance it
+    makes kept for the router the toolpath was written for."""
+    record = service.get_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no toolpath is recorded for {file_id!r}")
+    try:
+        kept = measured.measure(record, body.sizes)
+    except measured.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "correction": kept.model_dump(mode="json"),
+        "said": measured.said(kept.measurements[-1]),
+    }
+
+
+@router.get("/corrections")
+def cut_correction(
+    site: str = Query(..., pattern=NODE_PATH),
+    at: str = Query(..., alias="router", pattern=NODE_PATH),
+):
+    """The allowance kept for the router node ``router`` in ``site``, or null."""
+    kept = measured.load(site, at)
+    return {"correction": kept.model_dump(mode="json") if kept else None}

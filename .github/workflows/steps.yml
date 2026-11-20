@@ -2,7 +2,7 @@ name: 🚶 Step-through tests
 
 # The step-through tests (tests/e2e/test_steps_*.py) walk loops other browser tests
 # hold end to end -- a picture to a print, firmware, one machine -- a step at a time,
-# as a person walks them on the demo with --step N. Every other run skips them; here
+# as a person walks them on simulated machines with --step N. Every other run skips them; here
 # they run whole at a version tag, and on demand, each on a server of its own. No cap
 # of this file's: it has no record yet to take one from.
 on:

@@ -100,9 +100,9 @@ def checkout(tmp_path) -> Path:
 @pytest.fixture
 def block(checkout, monkeypatch) -> BasePart:
     part = BasePart(name="block", source_file=checkout / "parts" / "block" / "block.scad")
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == "block" else real(name)
+        api, "load_part_wrapper", lambda name: part if name == "block" else real(name)
     )
     return part
 
@@ -304,7 +304,7 @@ class TestTheRoutes:
         loose.parent.mkdir()
         loose.write_text("cube(1);\n")
         part = BasePart(name="loose", source_file=loose)
-        monkeypatch.setattr(api, "_load_part_wrapper", lambda name: part)
+        monkeypatch.setattr(api, "load_part_wrapper", lambda name: part)
         client = TestClient(app)
         assert client.get("/parts/loose/saved").json() == []
         assert client.post("/parts/loose/saved", json={"name": "x"}).status_code == 409
@@ -538,9 +538,9 @@ def thing(superproject, monkeypatch) -> BasePart:
     part = BasePart(
         name="thing", source_file=superproject / "parts" / "thing" / "upstream" / "lib.scad"
     )
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == "thing" else real(name)
+        api, "load_part_wrapper", lambda name: part if name == "thing" else real(name)
     )
     return part
 
@@ -648,6 +648,61 @@ def test_a_real_snapshot_renders_the_overlay_as_it_renders_the_values(
     as_values = renderer.render_stl(thing.source_file, tmp_path / "d.stl", params={"size": 23})
     assert as_overlay.success and as_values.success, as_overlay.stderr
     assert as_overlay.measured["size"] == as_values.measured["size"] == [23.0, 23.0, 23.0]
+
+
+# --- a variant saved before its part's SCAD drew how it rests -----------------------------
+
+
+def test_a_fifel_saved_without_its_print_flag_is_listed_opened_and_sliced_standing(
+    tmp_path, listing_openscad
+):
+    """A variant saved from a fifel.scad with no print flag -- one saved before the SCAD
+    drew how the fife rests -- is listed and opened with its bore, it is drawn, and the
+    render a slice of it reads is its text as it is, the fife standing on its head, the
+    way it prints."""
+    import re
+    import shutil
+
+    from apothecary.meshes import bounds, read_mesh
+    from apothecary.projects.parts.fifel import DEFAULT as FIFE
+    from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
+    from apothecary.projects.parts.variants import make_variant, variant_paths
+    from apothecary.slicer.service import part_target
+
+    text = FIFE.source_file.read_text(encoding="utf-8")
+    then_text, hidden = re.subn(
+        r"\n//everything after the next line is hidden.*?print = true;\n", "\n", text, flags=re.S
+    )
+    then_text, called = re.subn(r"if \(print\) fifel\(\);\nelse [^\n]*\n", "fifel();\n", then_text)
+    assert (hidden, called) == (1, 1) and "print =" not in then_text
+
+    repo = tmp_path / "checkout"
+    (repo / "parts" / "fifel").mkdir(parents=True)
+    scad = repo / "parts" / "fifel" / "fifel.scad"
+    scad.write_text(then_text, encoding="utf-8")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", PERSON[0])
+    git(repo, "config", "user.email", PERSON[1])
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "The fifel, standing")
+    then = FIFE.model_copy(update={"source_file": scad, "rest": None})
+    save_variant(then, "wider", then_text.replace("bore = 20;", "bore = 24;"))
+    shutil.copyfile(FIFE.source_file, scad)
+    git(repo, "commit", "-q", "-am", "The fifel prints standing and rests lying")
+    now = FIFE.model_copy(update={"source_file": scad})
+
+    assert [variant.name for variant in list_saved(now)] == ["wider"]
+    opened = read_saved(now, "wider")
+    assert opened.params == {"bore": 24}
+
+    renderer = OpenSCADRenderer(str(listing_openscad))
+    drawn = make_variant(now, {}, renderer=renderer, draft=opened.scad, pose="rest")
+    assert drawn.success, drawn.error_message
+    printed, _ = variant_paths(now, drawn.key)
+    lo, hi = bounds(read_mesh(printed))
+    assert (lo[2], hi[2]) == pytest.approx((0, FIFE.params_model().height), abs=1e-3)
+    sliced = part_target("fifel", variant=drawn.key).stl(lambda line: None)
+    assert sliced == printed.read_bytes()
 
 
 # --- managing them: rename, duplicate, history, restore, the trash -------------------------

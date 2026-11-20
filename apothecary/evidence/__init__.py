@@ -1,4 +1,4 @@
-"""A working space seen from every kind of evidence at once.
+"""A workspace seen from every kind of evidence at once.
 
 Each source says what it saw as observations in one format
 (``observation``): a subject, a property, a value or why there is none, where

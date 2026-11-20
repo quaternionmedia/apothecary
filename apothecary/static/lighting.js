@@ -24,16 +24,15 @@
  */
 
 import * as THREE from "three";
+// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up, a quarter turn about x, the
+// viewer's sceneAt (frames.js); site units are mm.
+import { sceneAt as toScene } from "/static/frames.js";
 
 const POLL_MS = 200;
 const DEG = Math.PI / 180;
 const GLOW_MM = 250;
 const BEAM_MM = 6000;
 const BEAM_RADIUS_MM = 1500;
-
-// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up, a quarter turn about x as the
-// viewer's sceneAt turns it; site units are mm.
-const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
 
 export function mountLighting({ scene, base, onPanel = null }) {
   const group = new THREE.Group();

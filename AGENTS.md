@@ -206,7 +206,7 @@ uv run apothecary test run     # the ordinary test command: unit tests and the w
 uv run pytest                  # unit tests, the walkthrough and the window manager's page; other browser tests skip
 uv run apothecary test all     # every test: once on a stack's head, before it is pulled (CONTRIBUTING.md, The loop)
 uv run apothecary serve        # the viewer at :6283/viewer (--port or $APOTHECARY_PORT for another); docs at /docs, the API at /openapi.json
-uv run apothecary serve --demo # the same on a state folder of its own, a simulated printer and devkit
+uv run apothecary serve --simulated # the same on a state folder of its own, a simulated printer and devkit
 uv run apothecary check        # what is installed: packages, three.js, OpenSCAD and each part's, the slicer, the firmware toolchains
 uv run --group preflight apothecary preflight   # the CI workflows, run here before a push
 uv run apothecary openscad install            # an OpenSCAD snapshot with Manifold, the fast renders

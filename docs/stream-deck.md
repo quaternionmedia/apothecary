@@ -71,18 +71,60 @@ POST /firmware/decks/{id}/events               a simulated deck's event, given (
 POST /firmware/decks/{id}/release              → let go of the device
 ```
 
+## A deck lost and found
+
+A deck that leaves USB for a moment -- a lead knocked, a hub that dropped it -- comes back
+as another device at the same place. `Deck.mend` opens it again and sends it every key,
+the strip and the brightness as they were last drawn, and what listened to it goes on
+listening. The layout looks at its deck twice a second and mends it as soon as it is back;
+a draw that fails mends and is sent once more; and `GET /firmware/decks/{id}` mends a deck
+no layout runs on. While it is gone the deck's state says `"alive": false` with when it was
+lost, a draw answers 503 in words, and the Deck window says the deck is not answering.
+`"mended"` counts the times. A key held, or a first long press, when it went is forgotten.
+
 ## In the page
 
 The **Deck** window (⊞ Windows › Deck, the ring's Panels › Machine › Knobs › Deck, or **Open Deck** on the
-`stream_deck` piece of the garage) shows the first deck found: its eight keys and its
+`stream_deck` piece of the garage, its ring's Deck) shows the first deck found: its eight keys and its
 strip as the images last sent to them, `–` where nothing has been drawn from here, its
-four knobs, and the events it has heard, newest first. It follows the deck every second
-and a half while it is in front, which opens the deck. A simulated deck is pressed from
+four knobs, and the events it has heard, newest first, in a list that scrolls. It follows
+the deck every second and a half while it is in front, which opens the deck, and asks for
+its events four times a second between, so what is heard is shown where it happened as it
+happens: a key or a knob held is marked for as long as it is down, and a press, the way a
+knob turned and the place the strip was touched are each lit for a moment. A real deck's
+keys and strip are drawn as bright as a simulated one's. A simulated deck is pressed from
 it -- a key, a knob turned a step either way or pressed, the strip tapped -- each the
 event a real deck reports, posted to the deck's routes; a real deck is pressed by hand
-and the window's controls are off.
+and the window's controls are off. Under the strip's picture its two lines are written
+as the server drew them, as text to read and select: the picture's small line is too
+small to read at the window's width, and the picture stays what the deck was sent.
 [Walkthrough 26](../walkthrough/26-the-stream-deck.md) goes round it, written by
 `tests/e2e/test_deck.py`.
+
+### What the Deck window would be refused
+
+The knobs' state (`GET /firmware/decks/{id}/control`, and each running layout's in `GET
+/firmware/decks/control`) carries `can`: for each of the window's controls, whether its
+route would take it now, as `{"ok", "why", "kind"}`, in the shape a port's answer has
+([firmware.md](firmware.md#what-a-command-would-be-refused-for)). The controls are
+`knobs.start` and `knobs.stop` (▶ Knobs), `knobs.machine`, `knobs.step` and
+`knobs.screen` (a machine, a step, a screen chosen), `inject` (a simulated deck's key,
+knob or strip) and, asked with `?port=`, `here` (a Control pad's Knobs here for that
+port's machine). `kind` says what stands in the way: `name` (no deck's name), `found`
+(no such deck), `offline` (the deck library or the HID library missing, the deck's last
+opening failed, or it is lost on USB and not back), `idle` (the knobs are not started),
+`kind` (a real deck, which reports for itself) and `machine` (no machine of the deck's
+has its board on that port). Each is a predicate in `firmware/can.py` that the deck's
+routes raise from, so the answer and the refusal are one check;
+`tests/test_deck_can.py` puts the deck in each condition and requires `ok: false`
+exactly where the route answers 4xx or 5xx. Asking opens no deck: a deck not yet opened
+is judged by its listing, and one whose opening failed by that failure until it opens
+(the window's own look at the deck tries it again every beat); an open deck lost on USB is
+opened again if it is back, as every route that names it does first.
+
+The window greys each control the answer refuses, with the reason in its title
+(`static/can.js`); with no deck found, or no answer yet, every control is refused for
+that. A Control pad's 🎛 Knobs here is greyed from the same answer for its port.
 
 ## The controller
 
@@ -90,30 +132,105 @@ The knobs jog the garage's two machines. `apothecary/firmware/deck_control.py` r
 layout on a deck:
 
 - **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine (held twice,
-  they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm.
+  they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm, and 3 **DISARM** lets go
+  of every machine's control at one press, red while any is armed and grey when none is.
+  It stops nothing -- a move under way finishes -- and the stop keys are the stops.
+- **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm:
+  it sends the router's `$X` through the latch, moves nothing, and keeps the position the
+  controller believes. A knob turned while the router is in alarm says to press it. The
+  deck asks a machine nothing while its control is let go, and a stop lets it go, so after
+  a stop mid-move UNLOCK lights from the next poll by anyone: the router's Machine, a
+  program, or the deck once armed again. Out of alarm the key stops the move under way
+  and no more: **STOP JOG** on the router (GRBL's jog cancel, which keeps the position)
+  and **QUICKSTOP** on the printer (`M410`). Neither needs control armed, and each is
+  sent at once, ahead of any turn still waiting, which is then not sent.
 - **The bottom row's keys** are the stops, two classes of them: 4 **STOP printer_1** and
   5 **STOP cnc_router**, dark red, each stopping that machine alone, and 7 **STOP ALL**,
-  bright red and last, nearest a hand resting on the knobs, stopping every machine, each
-  by its own dialect's stop. Key 6 is dark.
+  bright red and last, nearest a hand resting on the knobs, stopping every machine this
+  server knows of, each by its own dialect's stop and all at once: the garage's two, and
+  any other board that answered as a printer or a router.
 - **The knobs**: one to three jog X, Y and Z by their steps of the chosen size; the fourth
   turns the router's spindle speed in steps of 1000 rpm, or extrudes 1 mm a step on the
-  printer.
+  printer. The spindle is turned only from a reading a few seconds old at most, and never
+  down to nothing: off is the Machine's, or a stop. A turn made while the machine was
+  busy with something else, a home or a probe, is dropped once it is two seconds old and
+  the strip says so: it is never sent when the machine comes free.
 
-The strip says which machine, whether its control is armed and for how long, the chosen
-machine's last poll (X, Y, Z and the fourth quantity), the step, and what the last turn did
-or why it did nothing.
+**The machines are found by where they are pinned.** The printer and the router are the
+boards pinned to the garage's `printer_1` and `cnc_router`. With nothing pinned there and
+plugged in, each is the one board of its kind this server knows, wherever it is pinned.
+Two of a kind and no pin is no machine for the knobs, and both of them for that kind's
+stop key.
 
-**Nothing the deck sends bypasses what bounds a person's jog.** Every line goes through
+The strip's first screen, the knobs', says which machine, whether its control is armed and for how long, the chosen
+machine's newest poll, the deck's own or anyone's (X, Y, Z and the fourth quantity), the
+step, and what the last turn did or why it did nothing.
+
+## The strip's screens
+
+The strip has three screens, in this order, and a swipe along it walks them
+(`apothecary/firmware/deck_screens.py` holds what each says and the swipe; `deck_control.py`
+holds which is showing):
+
+- **Knobs**, the one above, which the strip starts on. While a job holds the chosen
+  machine's port -- a print or a cut the host streams, or a bed reading a poll saw a moment
+  ago -- it says so in the words the server refuses a jog with (`PortHeld`) and that the
+  jogs are refused; on a router it adds that knob 4 still turns the spindle, since a cut's
+  dialect lets that through.
+- **Progress**: the part the job makes, else the file it ran, how far it is as a number
+  and as a bar, its stage and how long it has run. Where no job of the host's is running
+  but the printer's card is, it shows the card's progress and the time the card reports.
+  No remaining time is drawn, because neither the job's record nor a poll carries one.
+- **Status**: the machine's state -- the job's stage where a job holds the port, since a
+  poll made during a job says the busy word whatever its stage: a print paused is
+  paused -- a printer's hotends and bed, or a router's spindle and feed; and the first
+  thing it asks of a person, from its `todo`, else its alarm. It reads
+  the newest status anyone's poll made, and says how old it is when it is over ten seconds.
+
+A **swipe** is the strip's drag event (`{"kind": "drag", "x", "y", "x_out", "y_out"}`,
+where `x` and `y` are where the finger went down and `x_out` and `y_out` where it came up)
+of 200 pixels or more along the strip's 800: a finger moving left shows the next screen,
+right the one before. It stops at either end and does not wrap. A tap or a long press
+moves nothing. Switching screens draws the strip and nothing more: no line goes to a
+machine, no poll is asked, and no key changes (the stops and the machine keys are the same
+on every screen).
+
+A job begun on the chosen machine brings Progress forward once, for that job: a swipe
+away from it is never undone, and the next job is another. A job begun on the other
+machine brings nothing forward. A job that has ended stays on Progress, saying how it
+ended (done, cancelled or failed, and after how long), until a touch of that screen clears
+it; a touch on another screen leaves it. The screens follow the job's own thread, not a
+poller of their own, and the layout's two-second tick draws the elapsed time.
+
+The Deck window says which screen the strip shows, and changes it, a real deck's as a
+simulated one's: a button for each screen beside it, and the ring's Panels › Machine ›
+Knobs › Screen (Knobs, Progress, Status, then Back and Next, a swipe right or left), are
+`PUT /firmware/decks/{id}/control` with a `screen`, its name or `next` or `previous`.
+Chosen this way it is as a swipe is: it stops at either end, draws the strip and nothing
+more, and sends nothing to a machine; unlike a touch, it clears no ended job from
+Progress. Dragged along its strip by the mouse, a quarter of its length or more, a
+simulated deck is swiped; a real deck's strip is a person's to swipe.
+
+While a job holds the chosen machine's port, the window's line under the knobs says
+*held* in the words the knobs' screen says it (`screens.held_words`: the server's own
+refusal of a jog, and what the knobs still do), whichever screen the strip shows, not
+the last thing the knobs did.
+
+**Nothing the deck sends bypasses what bounds a person's jog.** A jog goes through
+`devices.printer_jog`, the function behind `POST /firmware/printers/jog` and the page's
+pad, so it is one act on the port whoever makes it; every other line goes through
 `devices.printer_control`, the function behind `POST /firmware/printers/command`:
 
 - the port's control latch must be armed, and it is armed the page's way (⚙ Control in the
   Machine window) or by **two sequential long presses** of the machine's key: a press held
   0.8 s chooses the machine and says on the strip that a second will arm its control; the
-  second, of the same key, within 5 s of the first being let go, arms it for the latch's own
+  second, of the same key, begun within 5 s of the first being let go and held as long as it
+  likes, arms it for the latch's own
   five minutes through the same `ControlLatch`. One long press alone, a second after the
   window, a short press, another key or a knob turned between them, or a long press of the
-  other machine's key arms nothing. A turn while disarmed sends nothing and the strip says
-  *disarmed*;
+  other machine's key arms nothing. Armed this way, the machine's badge in the world and
+  its row in Site say so with the time left, its Machine open or not. A turn while
+  disarmed sends nothing and the strip says *disarmed*;
 - the line is normalised in the port's dialect and refused outside its bounds before it
   reaches the port: a router's jog is `$J=G91 G21 X.. F1000` and at most 600 mm, a
   printer's is `G91`, `G1 X.. F3000` and `G90`, at most 300 mm, with the return to
@@ -126,7 +243,8 @@ or why it did nothing.
   kind checked before a line goes;
 - a stop key sends the port's dialect's own stop, `devices.emergency_stop_for(port)`: a
   printer's `M112`, a router's soft reset. It goes whatever the latch says, as the pad's
-  E-STOP does, and waits on no poll. The everything key sends each machine's own, one
+  E-STOP does, waits on no poll, and disarms the machine it stops: the next turn moves
+  nothing until its control is armed again. The everything key sends each machine's own, one
   after another, and goes on to the next when one cannot be reached; the strip names
   which it reached.
 
@@ -134,7 +252,7 @@ or why it did nothing.
 for: the deck's stop keys are a USB report, a host process, a link and a queue away from the
 controller. Keep a hand on the machine's own switch, as the bench checklist says.
 
-The layout starts on a deck when `APOTHECARY_DECK_CONTROL` is set (the demo sets it), or
+The layout starts on a deck when `APOTHECARY_DECK_CONTROL` is set (`serve --simulated` sets it), or
 when `POST /firmware/decks/{id}/control` with `{"on": true}` asks; `GET` on the same route
 says whether it runs, the machine chosen, the step, the control's seconds left, what it
 said last and the lines it sent. A real deck is opened by it, which takes the device from
@@ -147,10 +265,12 @@ a step theirs, as the deck's own keys do -- and shows what the deck's keys or an
 else chose. Each Machine's Control pad, while its control is armed, says where the knobs
 are and their step, and its **🎛 Knobs here** points them at its machine. The ring's
 Panels › Machine › Knobs holds the same verbs, **Here** being the open Machine's machine,
-and the Deck window. None of them arms anything: the knobs move a machine only while its
+and the Deck window, each greyed as the deck answers for it (with no deck found, every
+one but the Deck window). None of them arms anything: the knobs move a machine only while its
 control is armed, in its Machine or by two long presses of its key. `GET
 /firmware/decks/control` lists every running layout's state, and `PUT
-/firmware/decks/{id}/control` with a `machine`, a `port` or a `step_mm` chooses.
+/firmware/decks/{id}/control` with a `machine`, a `port`, a `step_mm` or a `screen`
+chooses.
 [Walkthrough 27](../walkthrough/27-the-deck-jogging-the-machines.md) goes round it on the
 simulated bench, written by `tests/e2e/test_deck_jog.py`.
 
@@ -160,8 +280,8 @@ With `APOTHECARY_SERIAL_ENGINE=simulated` no HID device is listed or opened. The
 found are the ones `APOTHECARY_SIMULATED_DECK` names (comma-separated), each a pretend
 Stream Deck + that keeps the images it is sent and hears the events
 `POST /firmware/decks/{id}/events` gives it, validated as a real deck's reports could
-be: a knob turns by a whole number of steps, a touch is a tap, a hold or a drag. The
-demo (`apothecary serve --demo`) has one, `DEMODECK`.
+be: a knob turns by a whole number of steps, a touch is a tap, a hold or a drag.
+`apothecary serve --simulated` has one, `SIMDECK`.
 
 `tests/test_firmware_deck.py` holds the seam against the simulated deck, against a
 stand-in for the library's device that counts what is opened, and against the

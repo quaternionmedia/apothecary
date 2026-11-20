@@ -17,6 +17,7 @@ rendering with the OpenSCAD every server runs, its variant cache a temp folder.
 from __future__ import annotations
 
 import json
+import math
 import re
 
 import part_editing
@@ -25,7 +26,7 @@ import rings
 import windows
 from garage import status as _status
 from playwright.sync_api import Page, expect
-from viewer_ready import settled
+from viewer_ready import origin, settled
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
@@ -65,7 +66,6 @@ def _open(page: Page, url: str) -> None:
     page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     page.wait_for_function(
         f"() => {{ const m = window.fractalViewer.meshByName['{PART}'];"
         " return m && !m.userData.isPlaceholder; }",
@@ -110,13 +110,17 @@ def _applied(page: Page, said: str = "an applied variant, not saved") -> None:
     settled(page)
 
 
+# A mesh's own origin corner in the world -- the least x, y and z of the part's own frame,
+# which is three.js's least x and y and greatest z, its z running along the site's -y --
+# and the corner across from it.
 MESH_BOX = """(key) => {
     const v = window.fractalViewer, mesh = v.meshByName[key];
     const box = new mesh.position.constructor(), top = new mesh.position.constructor();
     const g = mesh.geometry;
     g.computeBoundingBox();
-    mesh.localToWorld(box.copy(g.boundingBox.min));
-    mesh.localToWorld(top.copy(g.boundingBox.max));
+    const { min, max } = g.boundingBox;
+    mesh.localToWorld(box.set(min.x, min.y, max.z));
+    mesh.localToWorld(top.set(max.x, max.y, min.z));
     return { min: [box.x, box.y, box.z], max: [top.x, top.y, top.z] };
 }"""
 
@@ -337,10 +341,12 @@ def test_a_variant_stands_where_it_grew_beside_a_ghost_of_what_was_before(
     _param(page, "size").locator(".param-number").fill("30")
     expect(_summary(page)).to_contain_text("1 change staged, valid", timeout=10000)
     _applied(page)
-    # Grown from where it stood, on the floor: not centred on the envelope it had.
+    # Grown from where it stood, its own origin corner at its node's place, not centred on
+    # the envelope it had; the corner across from it a 30 mm cube's diagonal away, whichever
+    # way the universe's sphere turns it.
     box = page.evaluate(MESH_BOX, PART)
-    assert box["min"][1] == pytest.approx(0, abs=0.05)
-    assert box["max"][1] == pytest.approx(30, abs=0.05)
+    assert box["min"] == pytest.approx(origin(page, PART), abs=0.05)
+    assert math.dist(box["min"], box["max"]) == pytest.approx(30 * math.sqrt(3), abs=0.05)
     expect(page.locator("[data-facts='footprint']")).to_have_text(
         "30 × 30 × 30 mm, as the variant drawn measures (declared 10 × 10 × 10 mm)"
     )

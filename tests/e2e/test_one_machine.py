@@ -173,28 +173,47 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
     expect(machine.locator("#log")).to_contain_text("query refused", timeout=5000)
 
 
+# The reason the server gives for a jog with control disarmed (firmware/can.py).
+LATCH_DOWN = "printer_1: control is not armed -- arm it first"
+# The words a ring writes under itself for its lit wedge, its lines joined.
+WHY_UNDER_THE_RING = (
+    "() => [...document.querySelectorAll('#ring-overlay .why tspan')]"
+    ".map((t) => t.textContent).join(' ')"
+)
+
+
 @pytest.mark.e2e
 def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
-    """A verb the Machine refuses -- a jog while control is not armed, chosen from the
-    ring -- is said in the status bar as an error, with its label and address once, and
-    in the log in the same words."""
+    """A verb the server would refuse -- a jog while control is not armed -- is greyed on
+    the ring as the Machine's jog is, with the server's reason in its title; chosen
+    anyway by its digit, nothing is done, the ring stays with the reason under it, and
+    the status bar says it as an error, with its label and address once, and the log in
+    the same words."""
     open_garage(page, url, settle=False)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     windows.machine_ready(page, "printer")
     _ring_on(page, "printer_1")
-    _choose(page, "Device", "Control", "Jog", "Y+")
-    expect(page.locator("#ring-overlay")).to_have_count(0)
+    _choose(page, "Device", "Control", "Jog")
+    up = page.locator("#ring-overlay .wedge[data-cell='8']")
+    expect(up).to_have_class(re.compile(r"\bdisabled\b"))
+    expect(up).to_have_attribute("aria-disabled", "true")
+    expect(up.locator("title")).to_have_text(f"Disabled: {LATCH_DOWN}")
+    page.keyboard.press("8")
     status = page.locator("#status")
-    said = "Y+ (⌗7728): control is not armed"
+    said = f"Y+ (⌗7728): {LATCH_DOWN}"
     expect(status).to_have_text(said, timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
     expect(machine.locator("#log .sys", has_text=said).last).to_be_visible()
+    assert page.locator("#ring-overlay .title").text_content() == "Jog"
+    assert page.evaluate(WHY_UNDER_THE_RING) == f"Disabled: {LATCH_DOWN}"
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
     # A refused report code from the Machine's own box says so too.
     machine.locator("#q").fill("G28")
     machine.locator("#qform button").click()
-    expect(status).to_contain_text("query refused", timeout=5000)
+    expect(status).to_contain_text("Query refused", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
 
 
@@ -254,6 +273,9 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     windows.machine_ready(page, "devkit")
     expect(machine.locator("#c-board")).to_contain_text(UNO)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno")
+    # A devkit has no bed or table to map: its level card, asked for, draws nothing and
+    # throws nothing (it is asked for whenever a Machine's port is, whatever its kind).
+    page.evaluate("() => window.apothecaryMachine.level.load()")
     sketch = machine.locator("#c-sketch")
     expect(sketch).to_contain_text("should run footpedal@arduino")
     # Listen: the board's serial output, and the hello it says, in the one log.
@@ -291,8 +313,13 @@ def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
     """Device › Flash is in cell 2; Query, Unpin, Rescan, Link and Control keep the cells
     a devkit's device ring gives them -- Control at 7, so from a printer's node 2 7 2 8
     is Control › Jog › Y+. A printer keeps its own firmware: its Flash
-    holds the cell and cannot be chosen."""
+    holds the cell and cannot be chosen, and says why. With no Machine open the jog is
+    greyed from the board's last poll, as it is from an open Machine's answer."""
     open_garage(page, url, settle=False)
+    page.wait_for_function(
+        f"() => !!(window.fractalViewer.boards.board('{PRINTER}').status || {{}}).can",
+        timeout=15000,
+    )
     _ring_on(page, "printer_1")
     _choose(page, "Device")
     assert _wedges(page) == {
@@ -307,14 +334,20 @@ def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
     }
     flash = page.locator("#ring-overlay .wedge[data-cell='2']")
     expect(flash).to_have_class(re.compile(r"\bdisabled\b"))
-    page.keyboard.press("2")  # nothing: the ring stays on Device
+    expect(flash.locator("title")).to_contain_text("keeps its own firmware")
+    page.keyboard.press("2")  # nothing done: the ring stays on Device and says why
     expect(page.locator("#ring-overlay .title")).to_have_text("Device")
+    status = page.locator("#status")
+    expect(status).to_contain_text("Flash (⌗72): a printer keeps its own firmware", timeout=5000)
     for digit in ("7", "2", "8"):
         page.keyboard.press(digit)
+    expect(page.locator("#ring-overlay .wedge[data-cell='8']")).to_have_class(
+        re.compile(r"\bdisabled\b")
+    )
+    expect(status).to_have_text(f"Y+ (⌗7728): {LATCH_DOWN}", timeout=8000)
+    expect(status).to_have_class(re.compile(r"\berror\b"))
+    page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    status = page.locator("#status")
-    expect(status).to_contain_text("⌗7728", timeout=8000)
-    expect(status).to_contain_text("not armed")
     # Selected's buttons wear the same cells.
     _select(page, "printer_1")
     section = page.locator("#selected-body .device-section")
@@ -337,7 +370,8 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     expect(machine.locator("#poll")).to_have_attribute("data-address", "6")
     machine.locator(".kv").first.click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE1")
+    # Titled by the machine its board is pinned to, as the windows name it, not its port.
+    expect(page.locator("#ring-overlay .title")).to_have_text("printer_1")
     cells = _wedges(page)
     assert cells["Control"] == "7" and cells["Link"] == "1" and cells["Flash"] == "2", cells
     for digit in ("7", "7"):  # Control › Arm
@@ -352,11 +386,116 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     expect(pad.locator("button[data-cmd='M25']")).to_have_attribute("data-address", "796")
     assert (pad.locator("button[data-jog='Y+']").get_attribute("title") or "").endswith(" · ⌗728")
     pad.locator(".head").click(button="right", modifiers=["Control"])
-    expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE1", timeout=5000)
+    expect(page.locator("#ring-overlay .title")).to_have_text("printer_1", timeout=5000)
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     pad.locator("#ctl-disarm").click()
     expect(machine.locator("#control")).to_be_hidden(timeout=5000)
+
+
+# Every title on the page that wears one address twice ("⌗77 · ⌗77").
+TWICE = r"""() => [...document.querySelectorAll('[title]')]
+    .map((el) => [el.id || el.dataset.cmd || el.dataset.jog || el.className, el.title])
+    .filter(([, title]) => /⌗(\d+)\b.*⌗\1\b/.test(title))"""
+
+
+@pytest.mark.e2e
+def test_no_control_wears_its_address_twice_as_the_latch_goes_up_and_down(page: Page, url: str):
+    """The ring's addresses (annotate) and the server's answer (applyCan) are written onto
+    the Machine's controls in whichever order they come: each control wears its address
+    once, the latch down, up with the pad popped out, and down again."""
+    open_garage(page, url, settle=False)
+    page.locator(".world-badge[data-path='printer_1']").click()
+    machine = windows.machine(page)
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    expect(machine.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
+    seen = {}
+
+    def after_a_poll(moment: str) -> None:
+        page.wait_for_timeout(POLL_MS + 500)  # an answer applied over the addresses
+        seen[moment] = page.evaluate(TWICE)
+
+    after_a_poll("disarmed")
+    machine.locator("#ctl").click()
+    pad = page.locator("#control")
+    expect(pad).to_be_visible(timeout=5000)
+    expect(pad.locator("button[data-jog='Y+']")).to_have_attribute("data-address", "728", timeout=5000)
+    after_a_poll("armed")
+    pad.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=5000)
+    after_a_poll("disarmed again")
+    assert seen == {"disarmed": [], "armed": [], "disarmed again": []}
+
+
+@pytest.mark.e2e
+def test_the_stream_deck_is_not_made_and_selected_keeps_its_one_section(page: Page, url: str):
+    """The Stream Deck + is bought whole: selected, the header's ⚒ Make does not offer it,
+    and Selected shows its Deck door and nothing else of a device, however many words
+    printer_1's board sends meanwhile."""
+    open_garage(page, url, settle=False)
+    expect(page.locator(".world-badge[data-path='printer_1']")).to_be_visible(timeout=15000)
+    _select(page, "footpedal")
+    expect(page.locator("#make-here")).to_be_visible(timeout=5000)
+    _select(page, "stream_deck")
+    sections = page.locator("#selected-body .device-section")
+    expect(sections.locator(".device-title")).to_have_text(["Deck"], timeout=5000)
+    page.wait_for_timeout(2 * POLL_MS + 500)  # the board's words, each redrawing a Device line
+    expect(sections.locator(".device-title")).to_have_text(["Deck"])
+    expect(page.locator("#selected-body .deck-open")).to_be_visible()
+    expect(page.locator("#make-here")).to_be_hidden()
+
+
+@pytest.mark.e2e
+def test_the_pad_s_tab_is_not_the_machine_s(page: Page, url: str):
+    """Armed, the pad pops out into a window of its own: its tab says it is the control
+    pad, so no two tabs read printer_1."""
+    open_garage(page, url, settle=False)
+    page.locator(".world-badge[data-path='printer_1']").click()
+    machine = windows.machine(page)
+    expect(machine.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
+    machine.locator("#ctl").click()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    titles = page.locator(".lm_tab .lm_title").all_inner_texts()
+    assert "🔓 Control pad" in titles and len(titles) == len(set(titles)), titles
+    page.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=5000)
+
+
+@pytest.mark.e2e
+def test_at_1100_by_700_the_print_window_s_acts_are_in_view_unscrolled(page: Page, url: str):
+    """In the Machine view on a small screen the Print window is shorter than what it
+    holds: its acts -- Print, Pause, Resume, Abort -- stand at its foot all the same, in
+    view without scrolling it."""
+    kept = httpx.post(
+        f"{url}/firmware/printers/prints",
+        params={"name": "square.gcode", "machine": "printer"},
+        content=b"G21\nG90\nG28\nG1 X10 Y10 F3000\nG1 X20 Y10\nG1 X20 Y20\n",
+        headers={"Content-Type": "text/plain"},
+        timeout=15.0,
+    )
+    kept.raise_for_status()
+    page.set_viewport_size({"width": 1100, "height": 700})
+    open_garage(page, url, settle=False)
+    page.locator(".world-badge[data-path='printer_1']").click()
+    windows.machine_ready(page, "printer")
+    windows.show(page, "machine-print")
+    expect(windows.panel(page, "machine-print")).to_be_visible(timeout=5000)
+    # The footpedal under makes and a kept file chosen: the window holds more than it shows.
+    windows.in_machine(page, "#print-part").select_option("footpedal")
+    windows.in_machine(page, "#print-pick").select_option(kept.json()["id"])
+    expect(windows.in_machine(page, "#print-verbs")).to_be_visible(timeout=5000)
+    seen = page.evaluate(
+        """() => {
+            const row = document.querySelector('#print-verbs');
+            let box = row.parentElement;
+            while (box && !['auto', 'scroll'].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
+            const r = row.getBoundingClientRect(), c = box.getBoundingClientRect();
+            return { taller: box.scrollHeight > box.clientHeight + 4, scrolled: box.scrollTop,
+                     inView: r.height > 0 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1 };
+        }"""
+    )
+    assert seen == {"taller": True, "scrolled": 0, "inView": True}, seen
+    expect(windows.in_machine(page, "#print-start")).to_be_in_viewport()
 
 
 PORT_OPENERS = (
@@ -518,7 +657,8 @@ def test_a_board_pinned_nowhere_opens_beside_pictures_on_the_default_site(page: 
         expect(machine.locator(hidden)).to_be_hidden()
     page.wait_for_timeout(1500)
     assert opened == [], opened
-    # Its ring, with nothing selected, is its own device ring.
+    # Its ring, with nothing selected, is its own device ring, titled by its port: it is
+    # pinned to no machine.
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE0", timeout=5000)
     assert _wedges(page)["Flash"] == "2" and "Control" not in _wedges(page)

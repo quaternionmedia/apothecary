@@ -213,3 +213,52 @@ def test_a_problem_names_its_pieces_by_tree_path_where_names_repeat():
     # Among a site's own pieces, the path is the name.
     clash = Site(name="bench", structures=[printer("printer_a", 50, 0), printer("printer_c", 50, 30)])
     assert [v.paths for v in clash.validate().violations] == [["printer_a", "printer_c"]]
+
+
+def _block(**kwargs):
+    return Assembly(
+        name="block",
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=Vector3D(x=10, y=20, z=30)),
+        base=Cube(size=Vector3D(x=10, y=20, z=30), center=False),
+        **kwargs,
+    )
+
+
+def test_a_node_with_no_turn_renders_and_bounds_as_it_always_did():
+    node = _block(position=Vector3D(x=5, y=6, z=7))
+    assert node.turn is None
+    assert "rotate" not in node.to_scad_object().render()
+    box = node.world_bounds()
+    assert (box.min_point, box.max_point) == (
+        Vector3D(x=5, y=6, z=7),
+        Vector3D(x=15, y=26, z=37),
+    )
+
+
+def test_a_turn_is_made_about_the_nodes_origin_before_it_is_placed():
+    node = _block(position=Vector3D(x=100), turn=Vector3D(z=90))
+    rendered = node.to_scad_object().render()
+    assert rendered.index("translate") < rendered.index("rotate")
+
+
+def test_a_turned_nodes_world_bounds_contain_the_turned_footprint():
+    box = _block(position=Vector3D(x=100), turn=Vector3D(z=90)).world_bounds()
+    # x -> y, y -> -x: the 10 x 20 floor becomes 20 x 10, reaching to -20 along x
+    assert (box.min_point.x, box.max_point.x) == pytest.approx((80.0, 100.0))
+    assert (box.min_point.y, box.max_point.y) == pytest.approx((0.0, 10.0))
+    assert (box.min_point.z, box.max_point.z) == pytest.approx((0.0, 30.0))
+
+
+def test_the_tree_reports_the_turn_and_the_turned_bounds_and_none_for_a_node_not_turned():
+    from apothecary.api import _assembly_tree
+
+    plain = _assembly_tree(Assembly(name="s", role="site", children=[_block()]))
+    assert plain["children"][0]["turn"] is None
+    assert plain["children"][0]["world_bounds"]["max"] == [10, 20, 30]
+    turned_tree = _assembly_tree(
+        Assembly(name="s", role="site", children=[_block(turn=Vector3D(z=90))])
+    )
+    node = turned_tree["children"][0]
+    assert node["turn"] == [0, 0, 90]
+    assert node["world_bounds"]["max"][0] == pytest.approx(0.0)
+    assert node["world_bounds"]["min"][0] == pytest.approx(-20.0)

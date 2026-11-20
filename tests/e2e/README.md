@@ -34,12 +34,14 @@ not answer `/health` stops the run.
 | `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer mid-print, and none of the person's own tools: `ESPTOOL`, `CARGO`, `ESPFLASH` and `APOTHECARY_ORCASLICER` are `none` unless a module names scripted ones. Its tools dir, firmware state and render cache (`APOTHECARY_CACHE_DIR`, so a part's variants too) are temp folders of its own, and so are its pictures unless `APOTHECARY_PICTURE_ROOT` names a folder; a variant it saves goes to a bare clone of this checkout (`APOTHECARY_VARIANTS_REPO`), never the checkout's own refs. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
 | `--base-url URL` | Uses a server you started yourself for the tests instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The Bench's and the Machines' tests expect the scripted toolchain, so they fail against a real one. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
-| `--step N` | With `--base-url` naming the demo (`apothecary serve --demo`): a step-through test (`test_steps_*.py`) runs only its step N, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. What they share is `stepping.py`. |
+| `--step N` | With `--base-url` naming the simulated server (`apothecary serve --simulated`): a step-through test (`test_steps_*.py`) runs only its step N, on the simulated server, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. What they share is `stepping.py`. |
 | `--steps` | The step-through tests (`test_steps_*.py`) run whole, every step in order on a server of their own. With neither this nor `--step N` they skip: each walks a loop another browser test holds end to end (a picture to a print, firmware, one machine). The `steps.yml` workflow, at a version tag, passes it, and so can `apothecary test all --steps`. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
-`conftest.py`, on a free port with state of its own. A module whose tests change
+`conftest.py`, on a free port with state of its own. One asked for with nothing named
+starts the next such server as it is handed out, so a later module's is up when it asks:
+a spare nothing touches until then, stopped unused at the end of the run. A module whose tests change
 what a server holds -- a pin, an armed latch, a flash, a print, a saved
 variant -- or need a bench of their own asks it for servers of its own, so what
 they do stays off the session's server (`grep -l start_server
@@ -50,7 +52,7 @@ module for the bench its loop needs:
 mainboard with a scripted OrcaSlicer, `test_part_loop.py` an OpenSCAD that
 refuses one size, `test_scad_loop.py` this machine's OpenSCAD, and
 `test_the_firmware_loop.py` scripted arduino-cli, cargo and espflash around one
-simulated devkit; `test_the_demo.py` runs `serve --demo` itself, with a guard that
+simulated devkit; `test_simulated_machines.py` runs `serve --simulated` itself, with a guard that
 logs any serial port it touches to the file `APOTHECARY_TEST_SERIAL_GUARD` names, and
 fails on any. Every other module uses the session's server, which lives
 for the whole run: take back what a test pins, places or adds, or the tests
@@ -85,17 +87,35 @@ file missing from `durations.json` counts as the average test for each of its
 tests. `--record-durations` writes a run's times into it -- each file run replaces
 its entries, the rest are kept -- so when the shards drift apart, `uv run
 apothecary test all --record-durations` (on as many workers as you like) brings it
-up to date.
+up to date. It is refused with `--shard`: a shard that ends writes the times the next
+one to start is cut by, the two then disagree on whose a file is, and some files run
+in neither.
+
+`--gpu` has the browser draw with this machine's GPU. The headless shell draws in
+software otherwise, and that drawing, not the page's own code or a test's waits, is
+most of a browser test's time. A GPU's pixels are its own, so a run with it rewrites
+no walkthrough picture, and it is a quick local run and not the one before a pull
+request, which is the software one, as CI's is. Its frames come sooner, so it also
+finds what a slow frame hides: the level card asked for on a devkit threw on it first.
+
+The browser a test's `page` opens in draws WebGL without multisampling
+(`--webgl-antialiasing-mode=none`, the conftest's `NO_MSAA`): in software a frame of the
+world costs about half, and a page load about a fifth less, and only a picture's edges
+differ. A test that records pictures -- one that asks for `walkthrough` or
+`doc_recorder` -- has its page in a second browser, antialiased, so every recorded
+picture is drawn as a person's browser draws it.
 
 ## What a change reaches
 
-The suite is in areas -- windows, pictures, machine, parts, lighting, the demo --
+The suite is in areas -- windows, pictures, machine, parts, lighting, the simulated server --
 each with the sources a change to which reaches it and the files that hold it
 (`tests/e2e/areas.py`), as the unit suite is in groups (`tests/groups.py`).
 `apothecary test changed` runs the walkthrough and the unit files of the groups a
 change reaches, then the browser files of the areas it touches: every file when it
-touches shared ground (the page, the app, this suite's helpers and conftest, the
-dependencies), a browser file itself when it changes, none when it reaches no area.
+touches shared ground (the page, the app, the conftests, the dependencies), a browser
+file itself when it changes, none when it reaches no area. A helper -- a module here
+or in `tests/` that is no test file -- reaches the browser files that import it,
+directly or through another helper, and every file when a conftest imports it.
 The change is what the checkout holds against `--since`, the branch's upstream
 when it is not given; `--list` names the files and runs nothing. A new browser file
 goes in one area, and `tests/test_areas.py` fails until it is in one. It is for
@@ -117,7 +137,7 @@ and a feature's test does not break when the layout around it changes:
 | Focused systems (`test_focused_systems.py`) | Every system the registry names, in the viewer, parameterized over the registry: it opens its main window alone, each section shows its part, a ring verb opens the section it acts on, its view lays everything out, a reload keeps or forgets it | the browser suite |
 | Features and loops (the rest) | What a person does with a part, a board, a picture, end to end, and the walkthrough pages and pictures the loops write | the browser suite |
 
-Five rules keep it so:
+Six rules keep it so:
 
 - **A feature's test asserts what the feature does, not where a window stands.**
   It opens what it needs through the shared helpers -- `windows.py` (a window, a
@@ -147,6 +167,12 @@ Five rules keep it so:
 - **A case is a parameter, not a copy.** Where a behaviour has variants -- a
   window's home, a verb and the section it opens, which window a remembered stack
   had in front -- they are one parameterized test, each case named.
+- **A page is shared only by tests that read it.** A test has a `page` of its own,
+  loaded for it. Where several tests of a module only read what one page shows once it
+  has loaded -- or change only what none of the others reads, or put back what they
+  change -- they share the conftest's `module_page`, loaded once (the universe as it
+  opens in `test_the_universe.py`, the garage in `test_viewer.py`), and each passes
+  alone and with the module's tests in reverse order.
 
 ## The two recorders
 
@@ -195,4 +221,7 @@ its changed pixels marked, which is what that person looks at.
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
 level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at
 rest, the badges' occlusion is tested where it came to rest, nothing is part
-way through an animation, and the canvas has drawn it.
+way through an animation, and the canvas has drawn it. The orbit's easing after a
+turn or a pan is run to its end at once, by the same updates its frames would run,
+so the view rests where they would leave it and is drawn there once, not through a
+few hundred frames of software drawing.

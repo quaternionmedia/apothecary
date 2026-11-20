@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import sys
+import time
 import types
 
 import pytest
@@ -55,6 +56,35 @@ def test_a_key_and_the_strip_are_drawn_as_the_jpegs_the_device_takes():
     assert _size(deck.render_strip("cnc_router", "green")) == ("JPEG", (800, 100))
     with pytest.raises(ValueError, match="not a colour"):
         deck.render_key("x", "plaid")
+
+
+def test_the_strip_draws_a_bar_filled_as_far_as_it_is_told():
+    """A bar is pixels along the strip's foot: white where it is filled, so a fuller bar
+    has more of them, and a strip with none draws the picture it always did."""
+
+    def foot_white(jpeg: bytes) -> int:
+        img = Image.open(io.BytesIO(jpeg)).convert("L")
+        return sum(1 for x in range(img.width) if img.getpixel((x, 88)) > 200)
+
+    plain = deck.render_strip("job", "blue", "small")
+    empty = deck.render_strip("job", "blue", "small", 0.0)
+    half = deck.render_strip("job", "blue", "small", 0.5)
+    full = deck.render_strip("job", "blue", "small", 1.0)
+    assert foot_white(plain) == 0 < foot_white(empty) < foot_white(half) < foot_white(full)
+    assert foot_white(half) > foot_white(empty) + 300  # about half of 800 px more
+    assert _size(full) == ("JPEG", (800, 100))
+
+
+def test_a_bar_is_kept_with_the_strip_and_over_the_route(client):
+    one = deck.get_decks().get("SIMDECK0")
+    one.set_strip("job", "blue", "small", 0.25)
+    assert one.strip["bar"] == 0.25
+    sent = client.put("/firmware/decks/SIMDECK0/strip", json={"text": "job", "bar": 0.5})
+    assert sent.status_code == 200 and sent.json()["bar"] == 0.5
+    assert (
+        client.put("/firmware/decks/SIMDECK0/strip", json={"text": "x", "bar": 2}).status_code
+        == 422
+    )
 
 
 # --- the simulated deck ---------------------------------------------------------------
@@ -283,7 +313,7 @@ class _Device:
 
     def __init__(self, name, kind="Stream Deck +"):
         self.name, self.kind, self.opened, self.closed = name, kind, 0, 0
-        self.images, self.strip, self.callbacks = {}, [], {}
+        self.images, self.strip, self.callbacks, self.hz = {}, [], {}, None
 
     def deck_type(self):
         return self.kind
@@ -299,6 +329,9 @@ class _Device:
 
     def get_serial_number(self):
         return "CL12345"
+
+    def set_poll_frequency(self, hz):
+        self.hz = hz
 
     def set_key_callback(self, cb):
         self.callbacks["key"] = cb
@@ -349,6 +382,7 @@ def test_a_real_deck_is_opened_by_what_acts_on_it_and_its_reports_are_events(rea
     plus, _ = real
     one = deck.get_decks().get("path_one")
     assert plus.opened == 1 and one.info.serial == "CL12345"
+    assert plus.hz == deck.READ_HZ  # an idle deck is asked more often than the library's 20
     assert deck.get_decks().get("path_one") is one and plus.opened == 1
     one.set_key(0, "X+")
     one.set_strip("hi")
@@ -359,8 +393,10 @@ def test_a_real_deck_is_opened_by_what_acts_on_it_and_its_reports_are_events(rea
     plus.callbacks["key"](plus, 5, True)
     plus.callbacks["dial"](plus, 2, _Event(name="TURN"), -2)
     plus.callbacks["dial"](plus, 2, _Event(name="PUSH"), True)
-    plus.callbacks["touch"](plus, _Event(name="SHORT"), (400, 50))
-    plus.callbacks["touch"](plus, _Event(name="DRAG"), (10, 20, 300, 25))
+    plus.callbacks["touch"](plus, _Event(name="SHORT"), {"x": 400, "y": 50})
+    plus.callbacks["touch"](
+        plus, _Event(name="DRAG"), {"x": 10, "y": 20, "x_out": 300, "y_out": 25}
+    )
     assert [(e.kind, e.index, e.value) for e in one.events()] == [
         ("key", 5, True),
         ("knob-turn", 2, -2),
@@ -420,3 +456,111 @@ def test_the_real_library_drives_the_adapter_over_its_own_dummy_transport(monkey
     one.set_brightness(50)
     assert one.events() == []  # the dummy reads zeros: no key, knob or touch
     assert deck.get_decks().release(found[0].id)
+
+
+def test_a_touch_the_real_library_reads_is_an_event_and_the_reader_goes_on(monkeypatch):
+    """The strip's reports as the device sends them, parsed by the library's own reader
+    thread: a tap, a drag, then a key, which is only heard if the touches left the
+    reader running."""
+    pytest.importorskip("StreamDeck")
+    from StreamDeck.DeviceManager import DeviceManager
+
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "pyserial")
+    monkeypatch.setattr(deck, "_manager", lambda: DeviceManager(transport="dummy"))
+    one = deck.get_decks().get(deck.get_decks().list()[0].id)
+
+    def touch(kind, x, y, x_out=0, y_out=0):
+        words = b"".join(n.to_bytes(2, "little") for n in (x, y, x_out, y_out))
+        return bytes([0x01, 0x02, 0, 0, kind, 0]) + words
+
+    reports = [
+        touch(1, 400, 50),
+        touch(3, 10, 20, 300, 25),
+        bytes([0x01, 0x00, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]),
+    ]
+    monkeypatch.setattr(
+        one.link.device.device, "read", lambda length: reports.pop(0) if reports else None
+    )
+    deadline = time.monotonic() + 5
+    while len(one.events()) < 3 and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert [(e.kind, e.index, e.value) for e in one.events()] == [
+        ("touch", 0, {"kind": "short", "x": 400, "y": 50}),
+        ("touch", 0, {"kind": "drag", "x": 10, "y": 20, "x_out": 300, "y_out": 25}),
+        ("key", 5, True),
+    ]
+    assert deck.get_decks().release(one.info.id)
+
+
+# --- a deck lost from USB and found again ------------------------------------------------
+
+
+def test_a_real_deck_lost_is_opened_again_and_drawn_as_it_was(real):
+    plus, _ = real
+    one = deck.get_decks().get("path_one")
+    heard = []
+    one.listen(heard.append)
+    one.set_key(0, "X+", "blue")
+    one.set_strip("cnc_router")
+    one.set_brightness(40)
+    assert one.alive() and not one.mend()  # nothing lost, nothing done
+    plus.run_read_thread = False  # as the library leaves it when the transport fails
+    plus.images, plus.strip = {}, []
+    assert not one.alive() and one.state()["alive"] is False
+    assert one.mend() and one.alive() is False  # opened again: the stand-in still says lost
+    assert plus.opened == 2 and plus.closed == 1 and plus.brightness == 40
+    assert set(plus.images) == {0} and len(plus.strip) == 1  # drawn as it was
+    assert one.mended == 1 and one.lost_at is None
+    plus.callbacks["key"](plus, 3, True)  # and what listened still hears it
+    assert [(e.kind, e.index) for e in heard] == [("key", 3)]
+
+
+def test_a_write_that_fails_opens_the_deck_again_and_is_sent_once_more(real):
+    plus, _ = real
+    one = deck.get_decks().get("path_one")
+    one.set_key(0, "X+")
+    taking, fail = plus.set_key_image, [True]
+
+    def once(index, image):
+        if fail.pop() if fail else False:
+            raise RuntimeError("Failed to write out report (-1)")
+        taking(index, image)
+
+    plus.set_key_image = once
+    one.set_key(1, "Y+")  # refused once, the deck opened again, sent again
+    assert plus.opened == 2 and set(plus.images) == {0, 1} and one.mended == 1
+
+
+def test_a_deck_not_back_yet_says_so_and_is_found_when_it_is(real, monkeypatch):
+    plus, _ = real
+    one = deck.get_decks().get("path_one")
+    one.set_key(0, "X+")
+    plus.run_read_thread = False
+    gone = types.SimpleNamespace(enumerate=lambda: [])
+    monkeypatch.setattr(deck, "_manager", lambda: gone)
+    with pytest.raises(DeckUnavailable, match="not on USB"):
+        one.mend()
+    with pytest.raises(DeckUnavailable):
+        one.set_key(1, "Y+")
+    assert one.lost_at is not None and one.mended == 0
+    back = _Device("path/one")
+    monkeypatch.setattr(deck, "_manager", lambda: types.SimpleNamespace(enumerate=lambda: [back]))
+    assert one.mend() and one.alive() and back.opened == 1 and set(back.images) == {0}
+
+
+def test_the_routes_say_a_lost_deck_is_lost_and_draw_it_again_when_it_is_back(
+    real, client, monkeypatch
+):
+    plus, _ = real
+    assert client.put("/firmware/decks/path_one/keys/0", json={"text": "X+"}).status_code == 200
+    plus.run_read_thread = False
+    listed = types.SimpleNamespace(enumerate=lambda: [])
+    monkeypatch.setattr(deck, "_manager", lambda: listed)
+    state = client.get("/firmware/decks/path_one").json()
+    assert state["alive"] is False and state["keys_drawn"]["0"]["text"] == "X+"
+    refused = client.put("/firmware/decks/path_one/keys/1", json={"text": "Y+"})
+    assert refused.status_code == 503 and "USB" in refused.json()["detail"]
+    back = _Device("path/one")
+    monkeypatch.setattr(deck, "_manager", lambda: types.SimpleNamespace(enumerate=lambda: [back]))
+    state = client.get("/firmware/decks/path_one").json()  # looked at, it is found again
+    assert state["alive"] is True and state["mended"] == 1 and set(back.images) == {0}

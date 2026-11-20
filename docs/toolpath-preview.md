@@ -64,13 +64,19 @@ The Print and Cut card has one slider, `preview`, there once a file is chosen
 router), and the ring's Control › Print or Cut ›
 Preview turns it on and off. At the left it is off, and nothing has been asked of the
 server. Moved off the left, the chosen file's path is drawn in the world on its machine:
-what makes the part in colour, moves through the air dim, through each layer or pass, all
-of it at the right. It follows the file chosen, and goes when the Machine closes.
+what makes the part in the page's green, amber and red, a move through the air in a
+dimmer blue, through each layer or pass, all of it at the right. The card says each
+kind's length in the colour it is drawn in, which is the path's key. It follows the file chosen, and goes when the Machine closes.
 
 A printer's file is in the bed's coordinates, so it stands at the bed. A router's counts
 from its work zero, so it stands where the controller's last poll says that is
 (`machine_marks.fileOrigin`), and moves when the zero does: a zero set in the wrong place
-shows before the cut does. In `apothecary serve --demo` the router's work zero is seeded at
+shows before the cut does. Where that is in the working volume turns on which way each
+axis homes -- the AnoleX's X to its minimum, its Y and Z to their maximum -- which the
+poll says once the controller's settings (`$$`) have been read, and the machine's frame
+says too (`homing`). Until either has said, the path is not drawn rather than drawn a
+travel away: the card says so in place of the key, and the Machine view says why on the
+status line, as it does for a machine with no volume. In `apothecary serve --simulated` the router's work zero is seeded at
 the coupon's stock, so the coupon's toolpath is drawn on the coupon.
 
 ⊞ Windows › Machine, and the ring's Panels › Windows › Machine view, land on it. The
@@ -79,9 +85,12 @@ are laid out, the file its card has chosen is drawn, all of it, and the world is
 the path; a slider a person left part way stays there. With no file of that machine's kept, the status line says how
 one comes to be: Slice or Toolpath of a part chosen under makes, or Choose File.
 
-The files kept are every machine's. A card chooses the newest that was not made for the
-other kind of machine -- a router's toolpath is not a printer's to print -- and the Machine
-view draws the other kind's only where a person turned its preview on.
+The files kept are every machine's, each kept for a printer or for a router. A card chooses
+the newest of its own kind -- a router's toolpath is not a printer's to print. Where every file
+kept is the other kind's it chooses none: its list opens on *none kept for a router* (or
+*a printer*), the status line says whose the files are, and one stays chosen only once a
+person chooses it there. The Machine view draws the other kind's only where a person
+turned its preview on.
 
 ## Not built
 

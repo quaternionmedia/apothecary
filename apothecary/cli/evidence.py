@@ -1,4 +1,4 @@
-"""`apothecary evidence`: a working space as its evidence log has it.
+"""`apothecary evidence`: a workspace as its evidence log has it.
 
 Reads the log in the state folder (``apothecary/evidence/``) as the server's
 ``GET /sites/{s}/evidence`` does, and touches no port, camera or server.
@@ -37,7 +37,7 @@ def _value(prop: dict) -> str:
 
 @click.group()
 def evidence():
-    """A working space seen from every kind of evidence: what the log holds."""
+    """A workspace seen from every kind of evidence: what the log holds."""
 
 
 @evidence.command("show")
@@ -57,7 +57,7 @@ def show(space: str, as_json: bool):
     for subject in document["subjects"]:
         click.echo(subject["subject"])
         for prop in subject["properties"]:
-            heard = "" if prop["current"] else f", last known at {prop['at']}"
+            heard = "" if prop["current"] else f", last known at {prop['heard_at'] or prop['at']}"
             how = f"{prop['origin']['kind']}, {prop['standing']}"
             click.echo(f"  {prop['property']:<12} {_value(prop):<28} {how}{heard}")
     if document["unreadable"]:

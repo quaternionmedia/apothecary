@@ -337,7 +337,7 @@ def test_an_observation_unread_says_why_and_its_generic_form_drops_apothecarys_b
 
 
 def test_the_one_module_holds_a_region_a_models_origin_a_pictures_reference_and_its_words():
-    """What the image models add to the working space's module: a subject that is a
+    """What the image models add to the workspace's module: a subject that is a
     region of a picture, ``by`` as a record a model's switch and trust look up, a
     picture's and an invocation's references, and their properties."""
     when = datetime(2026, 10, 31, tzinfo=timezone.utc)

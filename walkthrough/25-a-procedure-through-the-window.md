@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. The Procedure, beside the world: the steps
 
-The garage has a procedure, so the Procedure stands beside the world without being asked for. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
+The garage has a procedure, so the Procedure stands in the column beside the world without being asked for, at its foot under Pictures, the world keeping its room. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
 
 ![The Procedure, beside the world: the steps](screenshots/25-01-the-procedure-beside-the-world-the-steps.png)
 
@@ -77,10 +77,10 @@ Panels › Windows › Family view lays the Procedure tall beside the world, Mem
 
 ## 10. A member's name is a door: board's opens the devkit's Machine
 
-A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine.
+A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine. The printer's Machine goes, and with it the pad of the printer armed since step 7, so the printer is disarmed, said first.
 
 ```
-Opened esp32_blink's Machine: ⌗ Panels › Windows › Machine view lays out its sections
+printer_1 disarmed, its pad gone with its Machine · Opened esp32_blink's Machine: ⌗ Panels › Windows › Machine view lays out its sections
 ```
 
 ## 11. Start over counts what came before no more; the ring's GO and Start over do the same

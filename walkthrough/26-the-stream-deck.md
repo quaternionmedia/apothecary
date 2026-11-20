@@ -25,7 +25,7 @@ The Stream Deck + stands on the bench's right end; its piece's Open Deck opens t
 
 ## 2. A program draws its eight keys and its strip
 
-Each key and the strip were set by a PUT to the deck's routes: a label on a colour, drawn here and sent as the JPEG the device takes. The window shows what was sent, since a deck cannot be asked what it shows.
+Each key and the strip were set by a PUT to the deck's routes: a label on a colour, drawn here and sent as the JPEG the device takes. The window shows what was sent, since a deck cannot be asked what it shows, and writes the strip's two lines under its picture, where they can be read and selected.
 
 ![A program draws its eight keys and its strip](screenshots/26-02-a-program-draws-its-eight-keys-and-its-strip.png)
 
@@ -34,6 +34,12 @@ Each key and the strip were set by a PUT to the deck's routes: a label on a colo
 Key 3 pressed, knob 1 turned two steps clockwise, knob 0 one step the other way, knob 2 pressed and the strip tapped: each is the event a real deck reports, listed here newest first and kept by the server, which a program reads with `GET /firmware/decks/{id}/events`. The strip's tap carries its position in the strip's own pixels, 800 across.
 
 ![A key pressed, knobs turned and pressed, the strip tapped](screenshots/26-03-a-key-pressed-knobs-turned-and-pressed-the-strip-t.png)
+
+## 4. A key held down is marked in the window
+
+Key 5 is down and not yet let go: its picture is outlined for as long as it is held, as a knob pressed is. A press, a turn's direction and a touch's place on the strip are each lit for a moment as they are heard, so the window answers a hand on the deck as well as listing it.
+
+![A key held down is marked in the window](screenshots/26-04-a-key-held-down-is-marked-in-the-window.png)
 
 ## What this page does not show
 

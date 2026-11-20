@@ -1,6 +1,6 @@
-"""The Working space, as a person goes through it, from each of its doors.
+"""The Workspace, as a person goes through it, from each of its doors.
 
-⊞ Windows › Working space opens it on the site: a row per pinned printer, each
+⊞ Windows › Workspace opens it on the site: a row per pinned printer, each
 with its hour's button, and its first line naming the next step. printer_1's
 hour has no camera yet, so that line offers to add one above it; three added,
 each chooses its device in its own row, and a frame set is kept with the next
@@ -8,9 +8,9 @@ poll. A frame opens beside the poll it rests on, the budget is set, ‹ garage
 goes back to the site, and printer_1's ring (Camera › Workspace) and the canvas
 ring (Panels › Site › Workspace) open the same two views.
 
-This module is a walkthrough page too: `walkthrough/18-the-working-space.md` is
-written by its run, as the browser suite runs it, and not by the quicker
-`apothecary test run`.
+This module writes two walkthrough pages, `walkthrough/18-the-working-space.md` and
+`walkthrough/32-a-quiet-board-and-a-router-s-pins.md`, as the browser suite runs it,
+and not the quicker `apothecary test run`.
 
 Its server is the module's own: the simulated Ender printing, its progress held
 still so the pictures are the same on every run, identified and pinned to
@@ -21,6 +21,7 @@ cameras, as the bench plan has the Ender's three: the bed, the head, the room.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -108,7 +109,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     story = walkthrough(
         ordinal="18",
         slug="the-working-space",
-        title="The working space",
+        title="The workspace",
         intro=(
             "A site as its evidence has it, and a printer's hour in it: its state, its "
             "heaters, a frame from each camera that looks at it, kept with its polls, and "
@@ -147,7 +148,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     said_first = lead.locator("span").first  # its words, without its buttons
     open_garage(page, url)
 
-    # 1. ⊞ Windows › Working space: the site, a row per pinned printer.
+    # 1. ⊞ Windows › Workspace: the site, a row per pinned printer.
     windows.from_the_windows_menu(page, "working")
     expect(lead).to_contain_text("Choose a machine to see its hour")
     printer = window.locator(".ws-printer[data-printer='printer_1']")
@@ -157,8 +158,8 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     # Maximised, as a double-click on its tab does: every step after is the window's own.
     windows.tab(page, "working").dblclick()
     story.shows(
-        "⊞ Windows › Working space opens it on the site",
-        "The header's ⊞ Windows, Working space under Site: the window opens on the "
+        "⊞ Windows › Workspace opens it on the site",
+        "The header's ⊞ Windows, Workspace under Site: the window opens on the "
         "garage, maximised here by a double-click on its tab. Its first line names the "
         "next step: choose a printer. printer_1's row says what it is doing, that it is "
         "answering now and that no camera looks at it, and its button opens its hour. "
@@ -170,7 +171,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
 
     # 2. printer_1's hour: its state and heaters, and no camera yet.
     printer.get_by_role("button", name="printer_1's hour ›").click()
-    said(page, "printer_1's hour in the Working space: No camera looks at printer_1 yet")
+    said(page, "printer_1's hour in the Workspace: No camera looks at printer_1 yet")
     expect(window.locator(".ws-title")).to_have_text("garage › printer_1")
     expect(window.locator("rect.ws-state.ws-printing")).to_have_count(1)
     expect(window.locator("path.ws-hotend")).to_have_count(1)
@@ -287,7 +288,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
 
     # 8. ‹ garage: the site again, printer_1 with its cameras.
     window.get_by_role("button", name="‹ garage").click()
-    said(page, "the Working space of garage: Choose a machine")
+    said(page, "the Workspace of garage: Choose a machine")
     expect(printer).to_contain_text(f"{CAMERAS} cameras")
     expect(window.locator(".ws-subject", has_text="printer_1 › bed heater")).to_be_visible()
     story.shows(
@@ -302,11 +303,11 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     # 9. The other doors: printer_1's ring, and the canvas ring.
     windows.tab(page, "working").dblclick()
     on_row(page, "printer_1", "Camera", "Workspace")
-    said(page, f"printer_1's hour in the Working space: Frames from {', '.join(names)} are kept")
+    said(page, f"printer_1's hour in the Workspace: Frames from {', '.join(names)} are kept")
     expect(window.locator(".ws-title")).to_have_text("garage › printer_1")
     hour = _words(status(page).inner_text())
     on_world(page, "Panels", "Site", "Workspace")
-    said(page, "the Working space of garage: Choose a machine")
+    said(page, "the Workspace of garage: Choose a machine")
     expect(window.locator(".ws-title")).to_have_text("garage")
     story.says(
         "Camera › Workspace on printer_1's ring, and Panels › Site › Workspace",
@@ -378,8 +379,27 @@ def test_closed_it_keeps_no_frame_whoever_polls_the_printer(page, url):
 
 
 @pytest.mark.e2e
+def test_before_its_first_read_it_says_it_is_reading_not_that_none_is_pinned(page, url):
+    """Opened on the site, the window says it is reading the site's machines until it
+    has read them, and never that no machine is pinned: printer_1 is pinned here. The
+    site's machines are held back until the first line has been looked at."""
+    open_garage(page, url)
+    held: list = []
+    machines = re.compile(r"/sites/garage/evidence/printers$")
+    page.route(machines, lambda route: held.append(route))
+    windows.from_the_windows_menu(page, "working")
+    lead = page.locator(f"{WINDOW} .ws-next")
+    expect(lead).to_have_text("Reading the machines pinned in garage…")
+    while held:
+        held.pop().continue_()
+    page.unroute(machines)
+    expect(lead).to_contain_text("Choose a machine to see its hour")
+    expect(page.locator(f"{WINDOW} .ws-printer[data-printer='printer_1']")).to_be_visible()
+
+
+@pytest.mark.e2e
 def test_opened_again_from_the_windows_menu_it_is_the_site_and_read_again(page, url):
-    """⊞ Windows › Working space, after the window was closed on printer_1, opens it on
+    """⊞ Windows › Workspace, after the window was closed on printer_1, opens it on
     the site, as it does the first time, and the site is read again on its timer."""
     page.clock.install()
     _on_printer_1(page, url)
@@ -416,3 +436,142 @@ def test_another_site_loaded_is_the_one_it_shows(page, url):
     page.evaluate("() => window.fractalViewer.loadSite('theatre')")
     windows.show(page, "working")
     expect(page.locator(f"{WINDOW} .ws-title")).to_have_text("theatre")
+
+
+@pytest.mark.e2e
+def test_a_quiet_board_and_a_router_s_pins_as_the_site_reads_them(page, url, walkthrough):
+    """Two values as the site's table reads them. A printer whose board has not answered
+    lately is last heard, and each of its values last known, at the board's last answer,
+    not at the poll that last changed the value. A value that is a list -- a router's
+    pins, from its poll's `Pn:` -- reads as its items, and an empty one as none, as the
+    Machine's Status card shows them. The simulated printer answers every poll and this
+    server has no router, so the site's document is given a printer_1 not heard for ten
+    minutes whose state last changed two hours ago, and a router's pins. Walkthrough page
+    32 is what it writes."""
+    story = walkthrough(
+        ordinal="32",
+        slug="a-quiet-board-and-a-router-s-pins",
+        title="A quiet board, and a router's pins",
+        intro=(
+            "Two values as the Workspace's table reads them from the site's evidence. "
+            "A board that has not answered lately is last heard at its last answer, and "
+            "each of its values is last known then, not at the poll that last changed it: "
+            "every answer says a value again. A value that is a list -- the pins a "
+            "router's poll says are on, its `Pn:` -- reads as its items, or none. "
+            "[Page 18](18-the-working-space.md) is the window from each of its doors; "
+            "[docs/working-space.md](../docs/working-space.md#the-window) is the reference."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own, page 18's: the "
+            "simulated Ender, printing and answering every poll, and no router. So the "
+            "site's document, as the page reads it, is given what neither can say: a "
+            "printer_1 whose board last answered ten minutes ago and whose state last "
+            "changed two hours ago, and a cnc_router whose pins are X and Z, then none. "
+            "What the window makes of that document is its own. It needs no network and "
+            "opens no serial port."
+        ),
+        does_not_show=[
+            "**A board going quiet at the bench.** The simulated printer answers every poll; "
+            "a board unplugged is the bench's ([docs/bench-checklist.md](../docs/bench-checklist.md)).",
+            "**A switch held.** The pins a real router reports are its switches and its "
+            "probe; pressing each is section I of "
+            "[docs/bench-checklist.md](../docs/bench-checklist.md).",
+            "**What changes on every run.** The moments and a temperature to its tenth are "
+            "blanked in the pictures and left out of the words.",
+        ],
+        page=page,
+        browser_suite_only=True,
+    )
+    when: dict = {}
+    pins: list = ["X", "Z"]
+
+    def given(route):
+        doc = route.fetch().json()
+        at = datetime.fromisoformat(doc["at"])
+        when["changed"] = (at - timedelta(hours=2)).isoformat()
+        when["answered"] = (at - timedelta(minutes=10)).isoformat()
+        for subject in doc["subjects"]:
+            for p in subject["properties"]:
+                if subject["subject"] == "garage:printer_1" and p["property"] == "state":
+                    p.update(current=False, at=when["changed"], heard_at=when["answered"])
+        doc["subjects"].append(
+            {
+                "subject": "garage:cnc_router",
+                "properties": [
+                    {
+                        "property": "pins",
+                        "value": list(pins),
+                        "unit": None,
+                        "why": None,
+                        "confidence": None,
+                        "origin": {"kind": "measured", "by": {"name": "router poll: ?, $G"}},
+                        "at": doc["at"],
+                        "evidence": [],
+                        "standing": "one kind",
+                        "current": True,
+                        "heard_at": doc["at"],
+                        "sources": [],
+                    }
+                ],
+            }
+        )
+        route.fulfill(json=doc)
+
+    # The cameras another test here added are taken away: the page is the same whichever
+    # ran before it.
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        for camera in http.get("/sites/garage/attached").json()["cameras"]:
+            http.delete(f"/sites/garage/cameras/{camera['name']}").raise_for_status()
+    page.route(re.compile(r"/sites/garage/evidence(\?.*)?$"), given)
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "working")
+    windows.tab(page, "working").dblclick()
+    window = page.locator(WINDOW)
+    printer = window.locator(".ws-printer[data-printer='printer_1']")
+    row = window.locator("tr.ws-property", has=page.locator("td", has_text=re.compile("^state$")))
+    pins_row = window.locator(
+        "tr.ws-property", has=page.locator("td", has_text=re.compile("^pins$"))
+    )
+
+    # 1. printer_1 not heard for ten minutes: last heard, and its state last known, at
+    #    its board's last answer.
+    expect(printer).to_contain_text("last heard")
+    hhmm = "async (iso) => (await import('/static/format.js')).clock(iso)"
+    answered = page.evaluate(hhmm, when["answered"])
+    expect(printer).to_contain_text(f"last heard {answered}")
+    expect(printer).to_contain_text("no camera")
+    expect(row.locator("td").nth(3)).to_have_text(f"last known {answered}")
+    story.shows(
+        "printer_1 not heard for ten minutes: last heard, and its state last known, then",
+        "⊞ Windows › Workspace, maximised by a double-click on its tab. printer_1's "
+        "board last answered ten minutes ago: its row says last heard then, and its "
+        "state's row under it says last known at that same moment, not two hours ago "
+        "when a poll last changed the state, since each answer says the state again. "
+        "Its other rows were heard now.",
+        shown=re.sub(
+            r"\d+(?:\.\d)? °C", "… °C", _words(f"{printer.inner_text()}\n{row.inner_text()}")
+        ),
+        blank=CHANGING,
+    )
+
+    # 2. A router's pins, a list, read as their items.
+    expect(pins_row.locator("td").nth(1)).to_have_text("X · Z")
+    story.says(
+        "A router's pins read as their items",
+        "Under cnc_router, at the foot of the table in the picture above, its pins row: "
+        "the pins its poll's `Pn:` says are on, X and Z, read as their items, as its "
+        "Machine's Status card reads them.",
+        shown=pins_row.inner_text(),
+    )
+
+    # 3. No pin on: none, not a blank cell.
+    pins.clear()
+    expect(pins_row.locator("td").nth(1)).to_have_text("none", timeout=2 * REFRESH_MS)
+    story.shows(
+        "No pin on reads as none",
+        "The window asks for the site's document again every five seconds, and the next "
+        "says no pin is on: the row reads none, as the Status card does, and not a blank "
+        "cell.",
+        shown=pins_row.inner_text(),
+        blank=CHANGING,
+    )

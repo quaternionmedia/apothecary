@@ -11,7 +11,9 @@
  * espflash, each checksum-verified, and every Rust sketch's crates vendored).
  * Each is a task, followed in the Bench's task log (`tasks`, widgets/tasks.js).
  * The modules are the status's `toolchains`: a module added later is drawn here
- * without a change to this file.
+ * without a change to this file. Arduino's is the first of them, and the first
+ * section is read from it: its tools (arduino-cli, esptool), its `config_file`,
+ * its `cores` and `suggested_cores`, its problems.
  *
  * The slicer's modules follow them (GET /slicer/status): OrcaSlicer, what it
  * slices, where it is and the release pinned, with its own Install -- POST
@@ -65,25 +67,28 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
         return body;
     }
     const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data ?? {}) });
+    // Arduino's module in a status, and one of a module's tools by its name.
+    const arduinoOf = (s) => ((s && s.toolchains) || []).find((m) => m.id === "arduino") || {};
+    const tool = (m, name) => (m.tools || []).find((t) => t.name === name) || {};
 
     function render() {
         const s = status;
         if (!s) return;
         // Every value from the server is escaped here; only the markup built around it is markup.
+        const arduino = arduinoOf(s), cli = tool(arduino, "arduino-cli"), esptool = tool(arduino, "esptool");
         const rows = [
             ["tools dir", esc(s.tools_dir)],
-            ["arduino-cli", s.arduino_cli_ok ? `<b class="ok">✓ ${esc(s.arduino_cli_version)}</b> ${esc(s.arduino_cli_path)}` : '<b class="bad">✗ not installed</b>'],
-            ["config", esc(s.config_file || "–")],
-            ["esptool", s.esptool_ok ? `<b class="ok">✓ ${esc(s.esptool_version)}</b> ${esc(s.esptool_path)}` : '<span class="warn">• not found (optional)</span>'],
+            ["arduino-cli", cli.ok ? `<b class="ok">✓ ${esc(cli.version)}</b> ${esc(cli.path)}` : '<b class="bad">✗ not installed</b>'],
+            ["config", esc(arduino.config_file || "–")],
+            ["esptool", esptool.ok ? `<b class="ok">✓ ${esc(esptool.version)}</b> ${esc(esptool.path)}` : '<span class="warn">• not found (optional)</span>'],
+            // Arduino, as a module: installed or not, and what it can do.
+            ["Arduino", `${arduino.ok ? '<b class="ok">installed</b>' : '<span class="warn">not installed</span>'} · can ${esc((arduino.can || []).join(", "))}`],
         ];
-        // Arduino, as a module: installed or not, and what it can do.
-        const arduino = (s.toolchains || []).find((m) => m.id === "arduino");
-        if (arduino) rows.push(["Arduino", `${arduino.ok ? '<b class="ok">installed</b>' : '<span class="warn">not installed</span>'} · can ${esc((arduino.can || []).join(", "))}`]);
         $(".tc-status").innerHTML = rows.map(([k, v]) => `<div><span class="meta">${k}:</span> ${v}</div>`).join("")
-            + (s.problems || []).map((p) => `<div class="warn">! ${esc(p)}</div>`).join("");
-        $(".install-btn").textContent = s.arduino_cli_ok ? "Update arduino-cli" : "Install arduino-cli";
-        const installed = new Map((s.cores || []).map((c) => [c.id, c]));
-        const suggested = s.suggested_cores || [];
+            + (arduino.problems || []).map((p) => `<div class="warn">! ${esc(p)}</div>`).join("");
+        $(".install-btn").textContent = arduino.ok ? "Update arduino-cli" : "Install arduino-cli";
+        const installed = new Map((arduino.cores || []).map((c) => [c.id, c]));
+        const suggested = arduino.suggested_cores || [];
         const items = suggested.map(({ id, label }) => {
             const c = installed.get(id);
             return `<li data-id="${esc(id)}"><span>${esc(label)}</span> <span class="meta">${esc(id)}</span><span class="grow"></span>`
@@ -130,7 +135,7 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
     // with arduino-cli installed.
     function enable() {
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
-        const ok = !!(status && status.arduino_cli_ok);
+        const ok = !!arduinoOf(status).ok;
         $(".install-btn").disabled = busy;
         $(".lib-btn").disabled = busy || !ok;
         for (const b of root.querySelectorAll(".core-install")) b.disabled = busy || !ok;
