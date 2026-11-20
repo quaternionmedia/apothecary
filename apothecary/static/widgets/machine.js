@@ -1786,32 +1786,55 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // load (slicer/filaments.py): its next slices are made with it and take its own tuning.
     // And a look at the piece the chosen file made: each fault seen, none to bad, kept as the
     // printer's next look (print_faults.py), whose one change Take turn takes.
-    const fil = { shown: null, answer: null, faults: null, asking: false };
+    // shown: the printer whose filaments the row holds; loading: the one asked, or the one
+    // whose ask failed until it is asked again; drawn: the options the drop-down holds.
+    const fil = { shown: null, answer: null, loading: null, failing: null, fails: 0, drawn: null, faults: null, asking: false };
     function printerAt() {
         if (machineAt && machineAt.site && machineAt.path) return { site: machineAt.site, printer: machineAt.path };
         const c = prt.choices;
         return c && c.site ? { site: c.site, printer: printerName() } : null;
     }
-    function renderFilament() {
+    function renderFilament(force) {
         const at = state.kind === "printer" ? printerAt() : null, row = $("print-filament-row");
         const key = at ? `${at.site}:${at.printer}` : null;
         if (key !== fil.shown) {
-            fil.shown = key; fil.answer = null;
-            if (key) {
-                api(`/slicer/filaments?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.printer)}`)
-                    .then((a) => { if (fil.shown === key) { fil.answer = a; renderFilament(); } })
-                    .catch(() => {});  // no slicer installed, or a printer with no profile: no row
-            }
+            fil.shown = null; fil.answer = null;
+            if (key && fil.loading !== key) askFilaments(key, at);
         }
         const a = fil.answer;
         row.hidden = !(a && a.chooses);
         if (row.hidden) return;
         const sel = $("print-filament"), now = a.loaded ? a.loaded.loaded.filament : a.profile;
-        sel.innerHTML = a.choices.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}${c.nozzle_temperature ? ` · ${esc(c.nozzle_temperature)} °C` : ""}</option>`).join("");
-        sel.value = now;
+        // Drawn again only when what it offers or holds changed, and never while a person
+        // has it: a print renders this once a second, and would reset it under them.
+        if (force || document.activeElement !== sel) {
+            const options = a.choices.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}${c.nozzle_temperature ? ` · ${esc(c.nozzle_temperature)} °C` : ""}</option>`).join("");
+            if (fil.drawn !== options) { sel.innerHTML = options; fil.drawn = options; }
+            if (sel.value !== now) sel.value = now;
+        }
         $("print-filament-said").textContent = a.loaded
             ? `loaded ${a.loaded.loaded.at.slice(0, 16).replace("T", " ")} UTC${a.loaded.loaded.note ? ` (${a.loaded.loaded.note})` : ""}`
             : "the profile's own: choose what is loaded";
+    }
+    // A printer's filaments are asked once; an ask that failed (no slicer installed, a
+    // printer with no profile, the server away) leaves no row and is asked again, each
+    // wait twice the last, up to a minute.
+    function askFilaments(key, at) {
+        if (fil.failing !== key) fil.fails = 0;
+        fil.loading = key;
+        api(`/slicer/filaments?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.printer)}`)
+            .then((a) => {
+                if (fil.loading !== key) return;
+                fil.loading = fil.failing = null; fil.fails = 0;
+                fil.shown = key; fil.answer = a;
+                renderFilament();
+            })
+            .catch(() => {
+                if (fil.loading !== key) return;
+                fil.failing = key;
+                const wait = Math.min(60000, 2000 * 2 ** fil.fails++);
+                setTimeout(() => { if (fil.loading === key) { fil.loading = null; renderFilament(); } }, wait);
+            });
     }
     async function loadFilament() {
         const at = printerAt();
@@ -1819,13 +1842,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const filament = $("print-filament").value;
         let kept;
         try { kept = await post("/slicer/filaments/loaded", { ...at, filament }); }
-        catch (e) { refuse(`filament: ${e.message}`); renderFilament(); return false; }
+        catch (e) { refuse(`filament: ${e.message}`); renderFilament(true); return false; }
         fil.answer = { ...fil.answer, loaded: kept };
         renderFilament();
         tell(`${filament} loaded on ${at.printer}: its next slices are made with it, and take its own tuning`);
         return true;
     }
     $("print-filament").onchange = () => loadFilament();
+    $("print-filament").addEventListener("blur", () => renderFilament());
 
     function renderSeen(m) {
         const row = $("print-seen-row");
