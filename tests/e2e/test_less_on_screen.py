@@ -552,9 +552,11 @@ def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: s
 
 @pytest.mark.e2e
 def test_every_window_from_the_windows_menu_wears_the_pages_own_controls(page: Page, bench: str):
-    """Each window ⊞ Windows lists, opened from it, shows its buttons, drop-downs and boxes
-    in the page's dark look, whichever widget drew them, never the browser's own light
-    ones; a window with nothing of its subject to show is held to it too."""
+    """Each window ⊞ Windows lists, opened from it, is in front and shows its buttons,
+    drop-downs and boxes in the page's dark look, whichever widget drew them, never the
+    browser's own light ones; a window with nothing of its subject to show is held to it
+    too. None is passed over: a window that cannot be seen once chosen is one whose
+    controls nobody looked at."""
     _open(page, bench)
     page.locator("#windows-menu > summary").click()
     listed = page.locator(".windows-menu-body .window-item[data-window]").evaluate_all(
@@ -563,18 +565,17 @@ def test_every_window_from_the_windows_menu_wears_the_pages_own_controls(page: P
     page.locator("#windows-menu > summary").click()
     expect(page.locator(".windows-menu-body")).to_be_hidden()
     assert len(listed) >= 10, listed
-    shown, light = [], {}
+    unseen, light = [], {}
     for pid in listed:
         windows.from_the_windows_menu(page, pid)
         try:
             expect(windows.panel(page, pid)).to_be_visible(timeout=5000)
         except AssertionError:
-            continue  # a window with nothing to show gives its room away
-        shown.append(pid)
+            unseen.append(pid)
+            continue
         if found := windows.light_controls(page, pid):
             light[pid] = found
-    assert len(shown) >= len(listed) // 2, (shown, listed)
-    assert light == {}
+    assert not unseen and not light, {"unseen": unseen, "light": light}
 
 
 @pytest.mark.e2e
