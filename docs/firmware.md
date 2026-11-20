@@ -439,7 +439,11 @@ probing it with esptool or listening for a hello banner opens the port
 through another process, evicts the held link and may reset the board, so
 the viewer polls a printer instead of streaming it, and a printer's Machine
 offers Poll and no Listen, Probe or flashing. Identifying or polling a port
-closes any monitor on it. Uploading to a port releases only that port's
+closes any monitor on it, and while a board is being identified no stream may open on
+its port (409, saying so): a devkit's Machine listening reconnects its stream by itself,
+and the stream's open would close the link the question is asked on, so a printer taken
+for a devkit until it answers was never heard. A devkit's Identify stops listening before
+it asks `M115`. Uploading to a port releases only that port's
 link. `POST /firmware/printers/release` drops the link when another program
 (a slicer's USB print, OctoPrint) needs the port.
 

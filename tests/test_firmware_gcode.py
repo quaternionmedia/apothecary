@@ -302,6 +302,52 @@ def test_a_board_that_answers_neither_dialect_is_refused_naming_both(
     assert scripted_links.open_ports == []
 
 
+def test_a_stream_may_not_take_a_port_while_its_board_is_asked_what_it_is(
+    fake_arduino_cli, scripted_links, monkeypatch
+):
+    """A devkit's Machine listening reconnects its stream by itself, and a stream's open
+    closes the port's link: while the board is asked what it is, a stream is refused, 409,
+    so the answer reaches the question; once it has answered, the port is free again."""
+    import asyncio
+
+    from apothecary.firmware import api as firmware_api
+    from apothecary.firmware.toolchains import PortHeld
+
+    asked = []
+    real = devices._identify
+
+    def identify_meanwhile(link, reset):
+        asked.append(devices.identifying("/dev/ttyFAKE1"))
+        # The route asked as a reconnecting stream asks it; a stream let through would
+        # never end, so it is asked by its handler, which refuses before it opens anything
+        # (PortHeld is every firmware route's 409).
+        try:
+            asyncio.run(firmware_api.firmware_stream(None, "/dev/ttyFAKE1", baud=115200))
+            asked.append("let through")
+        except PortHeld as held:
+            asked.append(str(held))
+        return real(link, reset)
+
+    monkeypatch.setattr(devices, "_identify", identify_meanwhile)
+    d = devices.identify_printer("/dev/ttyFAKE1", 115200)
+    assert d.printer.machine_type == "TH3D EZABL"
+    assert asked == [
+        True,
+        "/dev/ttyFAKE1 is being asked what it is: listened to once it has answered",
+    ]
+    assert scripted_links.open_ports == ["/dev/ttyFAKE1"]
+    assert devices.identifying("/dev/ttyFAKE1") is False
+    monkeypatch.undo()
+
+    # A question that met nothing lets the port go all the same.
+    scripted_links.factory = lambda port, baud: ScriptedTransport(
+        port, baud, {"M115": [], "$I": []}, boot=[]
+    )
+    with pytest.raises(ToolchainError):
+        devices.identify_printer("/dev/ttyFAKE0", 115200)
+    assert devices.identifying("/dev/ttyFAKE0") is False
+
+
 def test_poll_failure_goes_offline_and_drops_link(fake_arduino_cli, scripted_links):
     devices.identify_printer("/dev/ttyFAKE1", 115200)
     ScriptedTransport.instances[0].replies = {"M105": []}

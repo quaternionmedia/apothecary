@@ -750,17 +750,38 @@ def identify_printer(
     base = next((d for d in detected_devices(cli, state) if d.port == port), None)
     if base is None:
         raise ToolchainError(f"no board detected on {port}")
-    get_streams().close(port)
-    link = links.open(port, baud)
+    # While it is asked, no serial stream may take the port: a devkit's Machine listening
+    # reconnects its stream by itself, and the stream's open closes this link, so the
+    # board's answer -- after the reset opening the port gives it -- would reach nobody.
+    with _IDENTIFYING_LOCK:
+        _IDENTIFYING.add(port)
     try:
-        info = _identify(link, reset)
-    except ToolchainError:
-        if link.job is None:  # a job's link is the job's to let go of
-            links.close(port)
-        raise
+        get_streams().close(port)
+        link = links.open(port, baud)
+        try:
+            info = _identify(link, reset)
+        except ToolchainError:
+            if link.job is None:  # a job's link is the job's to let go of
+                links.close(port)
+            raise
+    finally:
+        with _IDENTIFYING_LOCK:
+            _IDENTIFYING.discard(port)
     device = base.model_copy(update={"printer": info})
     state.remember_device(device)
     return device
+
+
+# The ports being asked what they are (``identify_printer``), which a stream may not take.
+_IDENTIFYING: set = set()
+_IDENTIFYING_LOCK = threading.Lock()
+
+
+def identifying(port: str) -> bool:
+    """Whether ``port`` is being asked what it is now: a stream opened on it would close
+    the link the question is asked on."""
+    with _IDENTIFYING_LOCK:
+        return port in _IDENTIFYING
 
 
 def _identify(link: gcode.GcodeLink, reset: bool) -> PrinterInfo:
