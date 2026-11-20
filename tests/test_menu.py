@@ -294,9 +294,12 @@ def test_a_long_plain_list_is_cut_into_as_few_lettered_runs_as_fit():
     assert _fit("w", leaves[:8]) == leaves[:8]
 
 
-def test_a_ring_with_nothing_to_group_simply_does_not_offer_it():
+def test_a_canvas_cell_with_nothing_to_group_is_greyed_in_its_cell():
+    """The canvas ring's cells are always there, each at its address (``_canvas_ring``):
+    Site with no site registered is greyed in its cell rather than gone."""
     ring = resolve(Context(pointing=Pointing.CANVAS), _photo_site())
-    assert "Site" not in [option.id for option in ring.options]
+    site = next(option for option in ring.options if option.id == "Site")
+    assert (site.cell, site.enabled, site.children) == (6, False, None)
     view = next(option for option in ring.options if option.id == "view")
     assert "fit" in [option.id for option in view.children]
 
@@ -1261,6 +1264,36 @@ def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
     assert [c.action for c in leaf.options[0].children] == [
         "select:printer_1.frame_system.mainboard"
     ]
+
+
+def test_the_canvas_ring_keeps_every_address_where_there_is_nothing_to_list():
+    """An empty site, a target no longer in the site, no site at all, no site registered:
+    each cell keeps the address it has on the garage, Pieces and Site greyed, saying why,
+    where they have nothing to list."""
+    from apothecary.hierarchy import Assembly
+
+    def seats(ring):
+        return [(o.label, o.cell) for o in ring.options]
+
+    canvas = Context(pointing=Pointing.CANVAS)
+    asked = {"site_names": ["garage"]}
+    populated = seats(resolve(canvas, _garage(), **asked))
+    empty = Assembly(name="empty", role="site", children=[])
+    stale = Context(pointing=Pointing.CANVAS, targets=["printer_9"])
+    rings = {
+        "an empty site": resolve(canvas, empty, **asked),
+        "a stale target": resolve(stale, _garage(), **asked),
+        "no site": resolve(canvas, None, **asked),
+        "no site registered": resolve(canvas, _garage(), site_names=[]),
+    }
+    for case, ring in rings.items():
+        assert seats(ring) == populated, case
+    for case in ("an empty site", "a stale target", "no site"):
+        pieces = rings[case].options[0]
+        assert not pieces.enabled and pieces.why and pieces.children is None, case
+    assert "printer_9" in rings["a stale target"].options[0].why
+    site = rings["no site registered"].options[1]
+    assert not site.enabled and site.why
 
 
 def test_a_system_and_a_kind_named_alike_are_never_two_cells_of_one_ring():

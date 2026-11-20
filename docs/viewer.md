@@ -615,7 +615,8 @@ it was first built: chosen twice), Step out 1 (at a site's own level, to the uni
 greyed at the universe's own, nothing being above it) and Systems 7, Kinds in the universe
 (each System or kind beneath the level in view, in its colour: its pieces opened in place,
 as Site's chip for it opens them; greyed where there is none). Every cell is there wherever the ring opens, so
-none moves.
+none moves: one with nothing to list is greyed in its cell, saying why -- Pieces with no
+site, a target no longer in it or nothing at its level, Site with no site registered.
 
 - **Panels** is one cell per group of windows ([below](#the-windows)), each a ring of
   its group's windows and their verbs: Site › Site, Problems, Pinned, Jobs, SCAD,

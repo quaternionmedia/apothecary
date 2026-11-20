@@ -1969,6 +1969,13 @@ def _pictures(picture: PictureContext) -> Option:
     )
 
 
+def _nothing_to_list(prefix: str, family: str, why: str) -> Option:
+    """A cell of the canvas ring with nothing to list now, greyed and saying why, so that
+    every cell keeps its address (``_canvas_ring``). Its action, ``<family>:none``, is
+    never carried out: a greyed cell chosen does nothing (static/ring.js)."""
+    return Option(id=prefix, label=shorten(prefix), action=f"{family}:none", enabled=False, why=why)
+
+
 def _canvas_pieces(
     prefix: str,
     focus_path: str,
@@ -1976,11 +1983,13 @@ def _canvas_pieces(
     made: Sequence[str],
     faceted: Dict[str, Tuple[Optional[str], Optional[str]]],
     universe: bool,
-) -> Optional[Option]:
+    site_name: Optional[str],
+) -> Option:
     """Pieces at this level, more than fit cut by facet (``_pieces``). At the top, the
     pieces made from pictures are one Made cell after the code's own, so they cannot crowd
     the ring out; in the universe, Pieces lists its parts, and its sites are the canvas
-    ring's Site cell's."""
+    ring's Site cell's. Greyed, saying why, where there is nothing to list: no site, a
+    target no longer in it, a level with nothing in it."""
     if focus is not None and focus_path and not focus.children:
         # A leaf stepped into is drawn as itself: the one piece at its level.
         return Option(
@@ -1995,7 +2004,11 @@ def _canvas_pieces(
             ],
         )
     if focus is None:
-        return None
+        return _nothing_to_list(
+            prefix,
+            "select",
+            f"{focus_path} is not in {site_name}" if site_name else "no site is loaded",
+        )
     at_top = not focus_path
     made_here = sorted({c.name for c in focus.children if c.name in set(made)}) if at_top else []
     names = sorted(
@@ -2011,7 +2024,14 @@ def _canvas_pieces(
     if made_cell is not None:
         children.append(made_cell)
     if not children:
-        return None
+        here = focus_path or focus.name
+        return _nothing_to_list(
+            prefix,
+            "select",
+            f"nothing is in {here} but sites, which Site lists"
+            if at_top and universe
+            else f"nothing is in {here}",
+        )
     return Option(id=prefix, label=shorten(prefix), children=children)
 
 
@@ -2074,42 +2094,42 @@ def _canvas_ring(
 
     Every cell is always there and keeps one address wherever the ring is opened: Pieces
     8, Site 6, View 2, Panels 4, Pictures 9, Rebuild 3, Step out 1 and the level's groups
-    7, Kinds in the universe and Systems in a site (``_facet_cell``). Step out at a site's
-    own level goes to the universe, and is greyed at the universe's own, where there is
-    nothing above.
+    7, Kinds in the universe and Systems in a site (``_facet_cell``). A cell with nothing
+    to do or list now is greyed, saying why, and holds its address: Pieces with no site, a
+    target no longer in it or nothing at its level; Site with no site registered; the
+    level's groups where none is beneath it. Step out at a site's own level goes to the
+    universe, and is greyed at the universe's own, where there is nothing above.
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = find_node_by_path(site, focus_path) if site and focus_path else site
     universe = site is not None and facet_of(site) == KIND
     faceted = kinds_and_systems(site, part_category) if site is not None else {}
     top_of_everything = universe and not focus_path
+    site_name = site.name if site is not None else None
     options = [
-        option
-        for option in (
-            _canvas_pieces("Pieces", focus_path, focus, picture.made, faceted, universe),
-            # The universe is listed with the sites, by the name the page gives it.
-            _grouped(
-                "Site",
-                site_names,
-                lambda name: f"site:{name}",
-                shown={UNIVERSE: UNIVERSE_SHOWN},
-            ),
-            _view(site, part_category, focus_path),
-            _panels(rig),
-            _pictures(picture),
-            Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
-            Option(
-                id="up",
-                label="Step out",
-                action="zoom-out",
-                enabled=not top_of_everything,
-                why="the universe is the top: there is nothing to step out to"
-                if top_of_everything
-                else None,
-            ),
-            _facet_cell(site, part_category, focus_path),
+        _canvas_pieces("Pieces", focus_path, focus, picture.made, faceted, universe, site_name),
+        # The universe is listed with the sites, by the name the page gives it.
+        _grouped(
+            "Site",
+            site_names,
+            lambda name: f"site:{name}",
+            shown={UNIVERSE: UNIVERSE_SHOWN},
         )
-        if option is not None
+        or _nothing_to_list("Site", "site", "no site is registered"),
+        _view(site, part_category, focus_path),
+        _panels(rig),
+        _pictures(picture),
+        Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
+        Option(
+            id="up",
+            label="Step out",
+            action="zoom-out",
+            enabled=not top_of_everything,
+            why="the universe is the top: there is nothing to step out to"
+            if top_of_everything
+            else None,
+        ),
+        _facet_cell(site, part_category, focus_path),
     ]
     title = shorten(focus.name) if focus is not None else (shorten(site.name) if site else None)
     return Ring(title=title, options=options)
