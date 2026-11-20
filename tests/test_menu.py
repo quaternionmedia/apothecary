@@ -1263,6 +1263,55 @@ def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
     ]
 
 
+def test_a_system_and_a_kind_named_alike_are_never_two_cells_of_one_ring():
+    """Machines is a System and a Kind. A level of more than fit, a machine in the Machines
+    System and a part standing loose whose kind is Machines, is cut into cells told apart:
+    the loose parts' kinds under Parts, each cell's id saying its facet, every piece
+    reached, on the canvas ring's Pieces and the node ring's Inside alike."""
+    from apothecary.hierarchy import Assembly
+
+    def level(name: str) -> Assembly:
+        return Assembly(
+            name=name,
+            role="structure",
+            children=[
+                Assembly(name="printer", role="structure", category="machine"),
+                Assembly(name="spare_printer", role="structure", part_ref="a_machine"),
+                *(Assembly(name=f"wall_{i}", role="structure", category="wall") for i in range(7)),
+            ],
+        )
+
+    site = level("bench").model_copy(update={"role": "site"})
+    holder = Assembly(name="hall", role="site", children=[level("shelf")])
+    asked = {
+        "site_names": ["bench"],
+        "part_category": lambda name: "machine" if name == "a_machine" else None,
+    }
+
+    def ids(option):
+        return [option.id, *(i for c in option.children or () for i in ids(c))]
+
+    def leaves(option):
+        return [option] if option.action else [x for c in option.children for x in leaves(c)]
+
+    canvas = resolve(Context(pointing=Pointing.CANVAS), site, **asked).options[0]
+    inside = next(
+        o
+        for o in resolve(
+            Context(pointing=Pointing.NODE, targets=["shelf"]), holder, **asked
+        ).options
+        if o.label == "Inside"
+    )
+    names = ["printer", "spare_printer", *(f"wall_{i}" for i in range(7))]
+    for cut, under in ((canvas, ""), (inside, "shelf.")):
+        assert [c.label for c in cut.children] == ["Building", "Machines", "Parts"]
+        assert [c.label for c in cut.children[-1].children] == ["Machines"]
+        assert cut.children[1].id == f"{cut.id}:system:machines"
+        assert cut.children[-1].children[0].id == f"{cut.id}:parts:kind:machines"
+        assert len(set(ids(cut))) == len(ids(cut))
+        assert sorted(x.action for x in leaves(cut)) == [f"select:{under}{n}" for n in names]
+
+
 def test_the_node_ring_lists_the_pieces_inside_and_selects_the_parent():
     """Inside selects one of the pieces this one holds; Parent, last, the piece it is
     inside. Neither steps in or out: Step in and Step out do."""

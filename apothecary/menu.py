@@ -33,7 +33,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequenc
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .facets import KIND, KINDS, SYSTEM_LAYER, facet_of, facets_of, kinds_and_systems
+from .facets import KIND, KINDS, SYSTEM, SYSTEM_LAYER, facet_of, facets_of, kinds_and_systems
 from .facets import SYSTEMS as SITE_SYSTEMS
 from .hierarchy import Assembly, find_node_by_path
 from .journeys import JOURNEYS
@@ -671,10 +671,13 @@ def _by_facet(
 ) -> Optional[List[Option]]:
     """A long list of pieces cut by facet, ``leaves`` being each piece's option with its
     kind and its System: one ring per System its pieces are in, in the vocabulary's order,
-    then one per kind of the pieces with no System; where those do not fit, the kinds go
-    under one ring more, Parts. Each ring's pieces are listed by name (``_fit``). None where
-    the facet does not cut the list -- a piece in neither, every piece in one -- or where,
-    folded, it still does not fit: the list is lettered then."""
+    then one per kind of the pieces with no System; where those do not fit, or a kind is
+    named as one of those Systems is (Machines), the kinds go under one ring more, Parts, so
+    no two cells of a ring read the same. Each ring's id says its facet
+    (``<prefix>:system:machines``, ``<prefix>:parts:kind:machines``), and its pieces are
+    listed by name (``_fit``). None where the facet does not cut the list -- a piece in
+    neither, every piece in one -- or where, folded, it still does not fit: the list is
+    lettered then."""
     if any(kind is None and system is None for _, kind, system in leaves):
         return None
     systems = [s for s in SITE_SYSTEMS if any(system == s for _, _, system in leaves)]
@@ -682,22 +685,25 @@ def _by_facet(
     if len(systems) + len(kinds) < 2:
         return None
 
-    def ring(value: str, members: Sequence[Option], at: str) -> Option:
-        cut = f"{at}:{value.lower().replace(' ', '-')}"
+    def ring(facet: str, value: str, members: Sequence[Option], at: str) -> Option:
+        cut = f"{at}:{facet}:{value.lower().replace(' ', '-')}"
         return Option(id=cut, label=value, children=_fit(cut, members))
 
     def of_kind(kind: str) -> List[Option]:
         return [o for o, k, system in leaves if system is None and k == kind]
 
-    by_system = [ring(s, [o for o, _, system in leaves if system == s], prefix) for s in systems]
-    if len(systems) + len(kinds) <= room:
-        return [*by_system, *(ring(k, of_kind(k), prefix) for k in kinds)]
+    by_system = [
+        ring(SYSTEM, s, [o for o, _, system in leaves if system == s], prefix) for s in systems
+    ]
+    named_alike = set(systems) & set(kinds)
+    if not named_alike and len(systems) + len(kinds) <= room:
+        return [*by_system, *(ring(KIND, k, of_kind(k), prefix) for k in kinds)]
     if len(systems) + 1 > room:
         return None
     parts = f"{prefix}:parts"
     return [
         *by_system,
-        Option(id=parts, label=PARTS, children=[ring(k, of_kind(k), parts) for k in kinds]),
+        Option(id=parts, label=PARTS, children=[ring(KIND, k, of_kind(k), parts) for k in kinds]),
     ]
 
 
