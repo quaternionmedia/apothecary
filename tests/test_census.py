@@ -423,7 +423,7 @@ def test_motions_controls_are_each_a_cell_a_moving_parts_ring_really_produces():
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
-    """The header's Docs is a control of its own, ring-backed by Panels › Docs; Back
+    """The header's Docs is a control of its own, ring-backed by Panels › Tools › Docs; Back
     and Forward are the browser's, the page listening for them as for a resize."""
     taken = census.take()
     by_name = {f.name: f for f in taken.controls_of_its_own()}
@@ -552,7 +552,7 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
         for table in (census.CONTROLS, census.LISTENING, census.RING_BACKED):
             assert gone not in table
     by_name = {f.name: f for f in taken.controls_of_its_own()}
-    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"], groups=["wall"])
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"])
     produced = set()
 
     def walk(options):
@@ -594,7 +594,7 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
         assert by_name[name].source == "settings.js", name
         assert by_name[name].ring_action is None and by_name[name].taken_back is None, name
     assert by_name["settings-open"].ring_action == "view:settings"
-    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"], groups=["wall"])
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"])
     view = next(o for o in ring.options if o.label == "View")
     assert "view:settings" in [c.action for c in view.children]
     listening = {f.key: f for f in taken.found if f.how == "listening"}
@@ -611,7 +611,7 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
 
 def test_the_knobs_controls_are_cells_of_panels_machine_knobs():
     """The Deck window's knobs and a Control pad's Knobs here are each backed by a cell of
-    Panels › Machine › Knobs that is there: on or off, a machine, a step, and Here; and
+    Panels › Tools › Deck that is there: on or off, a machine, a step, and Here; and
     the piece's Open Deck by its Deck."""
     from apothecary.menu import _panels
 

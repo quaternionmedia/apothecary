@@ -131,7 +131,7 @@ def test_the_cnc_router_is_idle_on_its_stand_with_its_working_area():
     assert [c.name for c in router.children] == ["frame_system", "gantry_system"]
     box = next(c for c in router.children if c.name == "frame_system")
     controller = next(c for c in box.children if c.name == "controller")
-    assert controller.category == "electrical" and controller.part_ref == "anolex_grbl_esp32"
+    assert controller.category is None and controller.part_ref == "anolex_grbl_esp32"
     gantry = next(c for c in router.children if c.name == "gantry_system")
     assert {a.name for a in gantry.additions} == {"left_leg", "right_leg", "cross_beam"}
     z_carriage = next(c for c in gantry.children if c.name == "z_carriage_system")

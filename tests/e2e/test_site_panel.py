@@ -152,14 +152,14 @@ def test_jobs_with_none_says_what_it_lists_and_where_one_comes_from(page, base_u
 
 @pytest.mark.e2e
 def test_in_a_low_site_the_chips_leave_the_rows_in_view(page, base_url: str):
-    """On a page 1100 by 700, the universe's Site: its many category chips take two rows
-    at most, scrolled to past those, and the tree's first rows are in the window under
-    them."""
+    """On a page 1100 by 700, the universe's Site: its chips, one for each of its eight
+    Kinds, take two rows at most, scrolled to past those, and the tree's first rows are
+    in the window under them."""
     page.set_viewport_size({"width": 1100, "height": 700})
     _open(page, base_url, "apothecary")
     site = windows.panel(page, "site").bounding_box()
     chips = page.locator("#category-filters")
-    expect(chips.locator(".category-chip").nth(8)).to_be_attached(timeout=10000)
+    expect(chips.locator(".category-chip")).to_have_count(8, timeout=10000)
     first = page.locator("#contents-list .contents-item").first.bounding_box()
     assert first["y"] + first["height"] <= site["y"] + site["height"], (first, site)
     one = chips.locator(".category-chip").first.bounding_box()

@@ -51,6 +51,7 @@ from .core import OpenSCADObject
 from .docs_site import router as docs_router
 from .evidence import printers as evidence_printers
 from .example_hierarchy import MACHINE_STATUSES, PRINTER_STATUSES
+from .facets import SYSTEM, facet_of, facets_of, kind_and_system, layer_of
 from .family import hub as family_hub
 from .family import members as family_members
 from .firmware import deck_control
@@ -127,6 +128,7 @@ from .projects.parts.variants import wants as request_wants
 from .projects.registry import (
     PartLoadError,
     ProjectInfo,
+    category_of,
     load_part,
     part_names,
     sanitize_module_name,
@@ -431,6 +433,13 @@ def is_bought(part_ref: Optional[str]) -> bool:
         except HTTPException:
             _BOUGHT[part_ref] = False
     return _BOUGHT[part_ref]
+
+
+def part_category(part_ref: Optional[str]) -> Optional[str]:
+    """A part's category, the word its kind holds (facets.py); None for no part, or one
+    that is not registered (``projects.registry.category_of``, kept while its part.json is
+    unchanged)."""
+    return category_of(part_ref, ROOT) if part_ref else None
 
 
 def _available_part_names() -> List[str]:
@@ -1621,6 +1630,8 @@ def _assembly_tree(
     node: Assembly,
     parent_world_position: Vector3D | None = None,
     parent_category: str | None = None,
+    by: str | None = None,
+    parent_part: str | None = None,
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
@@ -1650,10 +1661,20 @@ def _assembly_tree(
     ancestor set -- a viewer can color-code a whole Structure's tree from
     one tag on its root instead of needing every Substructure/Feature
     tagged individually.
+
+    ``kind`` and ``system`` are the facets the node is grouped by (``facets.py``): its
+    part's kind and its word's System, a node inside a part being of that part. ``layer``
+    is the one layer it is on beside its shell's, its System's or its category's
+    (``facets.layer_of``). ``by`` is the facet its site is grouped by, read from the site
+    at the root.
     """
+    by = by if by is not None else facet_of(node)
     parent_world_position = parent_world_position or Vector3D()
     world_position = parent_world_position + node.position
     category = node.category if node.category is not None else parent_category
+    part = node.part_ref if node.part_ref is not None else parent_part
+    of_part = part_category(part)
+    kind, system = kind_and_system(by, category, of_part)
     world_bounds = node.turned_bounds(world_position)
 
     # A site's piece is one piece: what it holds is how it is drawn, not a level.
@@ -1682,6 +1703,9 @@ def _assembly_tree(
         # A thing bought whole and drawn as it is (the Stream Deck +): never made here.
         "bought": is_bought(node.part_ref),
         "category": category,
+        "kind": kind,
+        "system": system,
+        "layer": layer_of(by, category, of_part),
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         # How the node is turned about its own origin: [rx, ry, rz] degrees, OpenSCAD's
         # rotate order, or None for a node that is not turned (the footprint is then
@@ -1712,7 +1736,7 @@ def _assembly_tree(
         ),
         "children": [
             {
-                **_assembly_tree(child, world_position, category),
+                **_assembly_tree(child, world_position, category, by, part),
                 "composition": composition,
             }
             for child, composition in composed
@@ -1736,6 +1760,8 @@ def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
             {
                 "name": box.name,
                 "category": box.category,
+                # Its layer in its own site, whose colour it wears.
+                "layer": layer_of(SYSTEM, box.category, None),
                 "bounds": _bounds_dict(
                     BoundingBox3D(
                         min_point=box.footprint.min_point + world_position + box.position,
@@ -1770,7 +1796,10 @@ def site_payload(site, report) -> Dict[str, object]:
         "tree": _assembly_tree(site),
         # The colour of each layer the site has, the one table (layer_colours.py): the
         # page draws a layer, its ring cells and its row in it.
-        "layer_colours": layer_colours(site),
+        "layer_colours": layer_colours(site, part_category),
+        # What the page groups the site's pieces by, and each group's colour (facets.py):
+        # Kind in the universe, System in a site.
+        "facets": facets_of(site, part_category),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
         "scad": scad,

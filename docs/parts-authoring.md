@@ -82,6 +82,13 @@ parameters passes no `params_model` and states its envelope as
 further `BasePart` fields; [Geometry models](models.md) describes the
 types.
 
+A part's `category` is a word one of the eight **kinds** holds
+(`apothecary/facets.py`): Electronics, Cameras, Machines, Motors, Test
+pieces, Shop, Housings and Things. Its kind is what the universe groups it
+by, and its category's colour is a shade of its kind's. A new word is added
+under the kind it belongs to; `tests/test_facets.py` refuses a part whose
+category no kind holds.
+
 ## A sidecar instead of a wrapper
 
 A folder whose SCAD has a `part.json` beside it and no Python module is a

@@ -13,22 +13,35 @@
  * window's tab, the window itself, and its heading and rows in ⊞ Windows and a stack's
  * +. Each is validated against --bg and kept clear of the colours that mean a state
  * (--ok, --warn, --bad) and of a focused tab's line. A group with no rule here wears
- * --ink-3; tests/test_group_colours.py holds that every group the page registers has one. */
+ * --ink-3; tests/test_group_colours.py holds that every group the page registers has one.
+ * The groups are a ring's eight at most, each a cell of Panels (apothecary/menu.py). */
 :root {
-    --group-site: #58c4b8; --group-selected: #c3a2ec; --group-pictures: #ea96c2;
-    --group-tools: #aab4c4; --group-lighting: #e6dc8c; --group-part: #a9c868;
-    --group-machine: #f0906a; --group-airgap: #8ea2f4; --group-family: #cfa87c;
+    --group-site: #58c4b8; --group-part: #a9c868; --group-pictures: #ea96c2;
+    --group-machine: #f0906a; --group-tools: #aab4c4; --group-family: #cfa87c;
+    --group-airgap: #8ea2f4;
 }
 [data-group] { --group: var(--ink-3); }
 [data-group="Site"] { --group: var(--group-site); }
-[data-group="Selected"] { --group: var(--group-selected); }
 [data-group="Pictures"] { --group: var(--group-pictures); }
 [data-group="Tools"] { --group: var(--group-tools); }
-[data-group="Lighting"] { --group: var(--group-lighting); }
 [data-group="Part"] { --group: var(--group-part); }
 [data-group="Machine"] { --group: var(--group-machine); }
 [data-group="Airgap"] { --group: var(--group-airgap); }
 [data-group="Family"] { --group: var(--group-family); }
+
+/* A facet's colour, said once (apothecary/facets.py): a part's Kind, what it is, and a
+ * site's System, what part of the place it serves. A kind's categories are shades of its
+ * colour, made from it; a System that is a kind's same thing names the kind's token. Each
+ * is held at 3:1 against --bg and kept clear of the colours that mean a state, of the
+ * shells' and of the world's own (tests/test_facets.py). */
+:root {
+    --kind-electronics: #3a9e5c; --kind-cameras: #d47ad0; --kind-machines: #e07a5f;
+    --kind-motors: #7a8fd0; --kind-test-pieces: #b8b030; --kind-shop: #3aa0a0;
+    --kind-housings: #b85060; --kind-things: #bc9668;
+    --system-building: #9c8f7a; --system-furniture: #8a5a3c; --system-machines: var(--kind-machines);
+    --system-mechanical: #5b7a99; --system-electrical: #d8c11a; --system-plumbing: #2f8fbf;
+    --system-lighting: #e8a33a; --system-scenery: #8f7bb5;
+}
 
 /* A window's controls, said once: every button, drop-down and box in a window
  * (section.panel, panels.js) wears the page's dark controls, the look the Machine's head

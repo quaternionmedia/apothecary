@@ -85,7 +85,7 @@ Left to right, one row:
   front.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
-  its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Docs opens the same.
+  its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Tools › Docs opens the same.
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does; its tooltip names
   the key and the modifier Settings gives the ring.
 - **The validity count**, "Layout valid" or the number of violations: a click
@@ -148,7 +148,7 @@ names, with pieces of its own inside it -- the router, a printer -- is drawn
 itself too: stepped into, its part stands whole, with its working volume and
 its board's badge and nothing else of the site, and the view frames it. Its
 pieces are drawn inside it as any level draws its pieces -- outlined, under
-View's Detail, opened by Site's category chips -- and are Site's rows. A click,
+View's Detail, opened by Site's chips -- and are Site's rows. A click,
 a double-click or a drop that meets the part and a piece of it on the same ray
 takes the piece, so a double-click on the printer's electronics box steps into
 its `frame_system`, where the piece's own contents are drawn and the machine
@@ -167,8 +167,9 @@ it. Depth is read from a part's SCAD `include` and `use` of another registered
 part and from sites that hold one part in another, and a part's own `parts` list
 in `part.json` wins ([parts-authoring.md](parts-authoring.md#what-a-part-is-built-from)).
 The shells are dense, so none is empty, and each stands clear of the one inside it.
-A leaf carries its part's category, and on a shell the parts of one category sit
-together, a cluster in one piece of the shell; a part stands as nearly under the
+A leaf carries its part's category, and on a shell the parts of one kind -- their
+category's ([facets](#layers), `apothecary/facets.py`) -- sit together, a cluster in one
+piece of the shell; a part stands as nearly under the
 part built from it as its shell allows, and a part several are built from stands
 under the first of them by name, so its cluster gathers under theirs
 (`apothecary/orbitals.py`).
@@ -186,15 +187,15 @@ frames the whole sphere from outside, draws no floor grid there, and the camera 
 travel inside it. At the universe's own level it draws the orbitals
 (`apothecary/static/orbits.js`): each shell's three rings, faint, in the shell's
 colour, the same three planes for every shell so the shells' rings nest; round each
-category's cluster on a shell, an outline in the category's colour, as wide as its
+kind's cluster on a shell, an outline in the kind's colour, as wide as its
 largest part needs, so on a crowded shell two outlines may cross where large parts' clusters
 meet; and from a part to
 each part it is built from, a faint line. None of them is a piece: a click passes
 through them, and they hide nothing. Each shell wears a label at its top, in its
 layer's colour and in the words of this section (`Shell 0 · built from nothing`, `Shell 1 ·
 built from those inside`, and `· sites` outermost), the words its row in Layers says too, and each cluster's outline a label with
-its category's name, and its shell's where the category has clusters on more than one
-(`camera · shell 1`); the labels are the size of the page's text at any distance, hung from
+its kind's name, and its shell's where the kind has clusters on more than one
+(`Cameras · shell 1`); the labels are the size of the page's text at any distance, hung from
 the highest point of their loop on the canvas, laid clear of one another, of the pieces drawn
 and of the hint and the depth ladder as the measurement's are laid (`layLabels`,
 `apothecary/static/measure.js`), and a label with no clear place is left out rather than
@@ -208,9 +209,10 @@ rises above any label of its measurement it would cover. Each shell's sphere is 
 its edge, the circle the eye sees it end at (`limbOf`), faint in its layer's colour, so the
 shells nest at a glance from outside; it is no filled surface, so nothing inside is tinted,
 and from inside a shell its edge is not drawn. Each is drawn while the layers it is drawn for
-are shown, a line while both its parts are; and a still click that meets no piece and
-lands on a ring or an outline opens that layer's ring ([Layers](#layers)) where it
-landed, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned
+are shown, an outline while its shell and any of its kind's categories are, a line while
+both its parts are; and a still click that meets no piece and lands on a ring or an
+outline opens that layer's ring ([Layers](#layers)) where it landed, an outline its
+kind's, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned
 as the sphere stands it, on a grid laid under it. A site's piece is drawn
 in miniature: its site's top-level pieces as boxes, coloured as the site
 colours them, a wall faded, scaled to fit and never larger than they
@@ -247,8 +249,8 @@ box being typed in keeps its own.
 **Walls are drawn faded**, whatever is in front of them: anything whose
 category is `wall` is see-through, and a click passes through it to what is
 behind or inside. A wall is solid while it is selected. To pick one, tick
-⚙ View › Select walls (the ring's View › Select walls), which is the wall
-layer's Selectable tick in [Layers](#layers), or click its row in Site's
+⚙ View › Select walls (the ring's View › Select walls), which is the Building
+System's Selectable tick in [Layers](#layers), or click its row in Site's
 tree, which works either way.
 
 **Badges** stand over things in the world, their words shown on hover or
@@ -305,49 +307,60 @@ drawn.
 the first, a level is its own pieces, each a single piece however much it holds;
 at 2 each piece that holds pieces draws them inside it too, and a click on one
 selects it -- the piece around them gives way to a piece of it on the same ray, as
-the part of a machine stepped into does. The pieces of a category expanded from
-Site's chips are drawn at every depth, as before.
+the part of a machine stepped into does. The pieces a chip of Site's opens are drawn
+at every depth, as before.
 
-A **layer** is a kind of thing the world draws, with a **Shown** tick and a
+A **layer** is a set of things the world draws, with a **Shown** tick and a
 **Selectable** tick, selectable always within shown: hiding a layer clears
 Selectable (and showing it restores what was chosen), ticking Selectable shows it.
+The window's rows are the layers of what lies beneath the level in view, the pieces'
+in the order of their facets (`apothecary/facets.py`): Systems,
+then Kinds, each over its categories, then words.
 
 | Layer | Is | Ticks |
 |---|---|---|
 | Shell N | The parts laid on shell N of the universe's sphere, 0 the innermost and the sites outermost; a row for each shell the loaded site has, worded as the shell's label in the world (`Shell 0 · built from nothing`) | Shown, Selectable |
-| A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
+| A System | A site's pieces in that System, the walls the Building System's | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
+| A Kind | A heading over its categories' rows, no layer itself: its ticks are set when every one of its categories' is, half set when some are, and set or clear them all | Shown, Selectable |
+| A category | The parts of that category, beneath its Kind: the universe's, and a site's parts standing loose; and a site's piece whose word is a kind's category (datum_core's enclosure) | Shown, Selectable |
+| A word | The pieces of a word neither facet holds, a picture's | Shown, Selectable |
 | Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
 | Measure | Dimension lines on the selection, and a click that drops a point to measure between and reads the diameter or the wall under it ([below](#measure)) | Shown (off at first) |
 
 **Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
 server sends with the site (`layer_colours`, beside `tree`), so the page writes none of
-its own: a category's pieces are drawn in it, the build volumes in the grid's (the floor grid's lines are the faint greys a floor is drawn in, and the row says so), the
+its own: a System's or a category's pieces are drawn in it, the build volumes in the grid's (the floor grid's lines are the faint greys a floor is drawn in, and the row says so), the
 measurement in its own, and a machine's badges wear the Machine group's, which is the
-machine buttons' layer's. A category nobody wrote down, a picture's word, takes a
+machine buttons' layer's. A System's, a Kind's and a category's are the facets' tokens,
+a category a shade of its kind's. A word nobody wrote down, a picture's, takes a
 colour from its name, the same every time. The Layers window's rows wear their layers'
 colours, a legend, and a tick, the stepper's - and + and Reset each name in their tip
 the address of the ring's cell that does the same.
 
 **Each layer has a ring of its own**, under the canvas ring's View › Layers: Window 8
 (the Layers window), World 6 (the grid's, the machine buttons' and the measurement's
-rings), Reset 2 (the window's Reset), then the site's own -- Shells 4 in the universe,
-and its Categories after them -- listed as the window lists them, more than eight
-grouped as any list is. A layer's ring wears its colour, and holds what its row does
-and two acts over its kind (the shells, the categories, or the grid and the machine
-buttons):
+rings), Reset 2 (the window's Reset), then the layers of what lies beneath the level in
+view -- Shells 4 in the universe, then its Systems, its Kinds and its words -- listed as
+the window lists them, more than eight grouped as any list is. A Kind's ring holds Shown
+and Selectable over all its categories, its heading's ticks, then each category's ring.
+A layer's ring wears its colour, and holds what its row does and two acts over its set
+(the shells, the pieces' layers, or the grid and the machine buttons):
 
 | Cell | Does |
 |---|---|
 | Shown | Shows the layer, or hides it: the row's Shown tick |
-| Selectable | A click picks what it draws, or passes through it: the row's Selectable tick (a shell's and a category's) |
-| Only this | This layer shown and the others of its kind hidden, what was chosen selectable kept |
-| All | Every layer of its kind shown |
+| Selectable | A click picks what it draws, or passes through it: the row's Selectable tick (a shell's, a System's, a category's and a word's) |
+| Only this | This layer shown and the others of its set hidden, what was chosen selectable kept |
+| All | Every layer of its set shown |
 
 The measurement's ring has Shown alone: it is a mode. The ring, the window's ticks and
 the world read and write the one choice, so whichever is used, the other two follow.
 
-A piece is on its shell's layer and its category's, and is drawn only if every layer
+A piece is on its shell's layer and on one more, sent with it (`layer`): its System's,
+else its category's -- its part's, or its word's -- a piece inside a part being of that
+part. The bench's boards are `electrical` parts and the wiring is the Electrical
+System's: two layers. A piece is drawn only if every layer
 it is on is shown and picked only if every one is selectable. A layer not shown is
 neither drawn nor hit; a layer not selectable is drawn, and a click passes through
 it to what is behind, which is how an inner shell is reached from outside the
@@ -556,8 +569,13 @@ so Ctrl+click opens the ring there.
 Its cells are a numeric keypad, `7 8 9 / 4 5 6 / 1 2 3`. A ring holds up to
 eight options, seated in the order it lists them: 8, 6, 2 and 4 first, then
 9, 3, 1 and 7. **5** is the hub: it backs out one ring, and closes the first.
-A label ending `›` opens a ring of its own. The digits pressed through nested
-rings are the option's **address**, shown in the hub as you go and after
+A label ending `›` opens a ring of its own. **A list longer than its ring is cut,
+nothing dropped** (`apothecary/menu.py`'s `_fit`): pieces by what they are grouped by
+(a site's Systems, its loose parts under Parts by kind; the universe's kinds,
+`apothecary/facets.py`), and a plain list of names into as few runs as fit, of near-equal
+length, each named for its letters (`a–e`, `f–p`); a list kept in its own order, the
+newest pictures first, is cut in that order, each run named for its first. The digits
+pressed through nested rings are the option's **address**, shown in the hub as you go and after
 every verb in the status line: `(⌗98)` is 9, then 8. The ring is drawn on a
 ground of its own, so nothing it is opened over shows through a wedge, and a
 ring opened near the screen's edge stands far enough in that no label is cut.
@@ -590,29 +608,39 @@ way when a newer one has come -- the latch taken and let go again before it land
 is dropped when it does.
 
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
-the pieces made from pictures are one more cell, Made; at a leaf, the leaf
-itself), Site 6 (every site, Apothecary among them), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
-site built again from its factory, as it was first built: chosen twice); then
-Step out 1 (when stepped in) and Group (each category of the site's pieces:
-expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
+the pieces made from pictures are one more cell, Made; in the universe its parts, its
+sites being Site's; at a leaf, the leaf itself), Site 6 (every site, Apothecary among
+them), View 2, Panels 4, Pictures 9, Rebuild 3 (the site built again from its factory, as
+it was first built: chosen twice), Step out 1 (at a site's own level, to the universe;
+greyed at the universe's own, nothing being above it) and Systems 7, Kinds in the universe
+(each System or kind beneath the level in view, in its colour: its pieces opened in place,
+as Site's chip for it opens them -- in the universe, whose parts hold nothing to open, a
+kind's ring instead, View › Layers › Kinds › it, as a click on its outline opens it;
+greyed where there is none). Every cell is there wherever the ring opens, so
+none moves: one with nothing to list is greyed in its cell, saying why -- Pieces with no
+site, a target no longer in it or nothing at its level, Site with no site registered.
 
-- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD, Workspace and Layers (the
-  Workspace, [working-space.md](working-space.md)); Selected;
+- **Panels** is one cell per group of windows ([below](#the-windows)), each a ring of
+  its group's windows and their verbs: Site › Site, Problems, Pinned, Jobs, SCAD,
+  Workspace ([working-space.md](working-space.md)), Lighting (a rig's, greyed on a site
+  without one, [lighting.md](lighting.md)) and Layers; Part › Selected and Motion;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
   word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
   Place, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
-  Machine, as the pad's ⧉ Pop out and ⇥ Put back), Knobs (the Stream Deck +'s:
-  On / off, Machine, Step, Here, the Deck window and Screen -- Knobs, Progress,
-  Status, Back and Next, the screen its strip shows -- [stream-deck.md](stream-deck.md)) and
+  Machine, as the pad's ⧉ Pop out and ⇥ Put back) and
   Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
   Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view; Bench › Bench (show it), Install (a cell per toolchain
-  module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
-  Libraries; Docs (the documentation in a new tab, as the header's Docs); and
-  Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
-  Copy metrics, Reset ([the Airgap](airgap.md)).
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view;
+  Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
+  slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
+  Deck window, then the Stream Deck +'s knobs: On / off, Machine, Step, Here and Screen
+  -- Knobs, Progress, Status, Back and Next, the screen its strip shows --
+  [stream-deck.md](stream-deck.md)) and Docs (the documentation in a new tab, as the
+  header's Docs); Family › Procedure (the window, GO and Start over), Members and
+  Deliveries ([family.md](family.md)); and Airgap › Airgap (show it), Play, Sweep, To
+  editor, From editor, Copy SCAD, Copy metrics, Reset ([the Airgap](airgap.md)).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
@@ -675,7 +703,8 @@ layout a person makes is remembered by this browser; Panels › Windows › Rese
 layout puts every window where the page puts it.
 
 Every stack but the world's wears a **+** beside its ☐: it lists every window
-by its group -- Site, Selected, Pictures, Tools, Part, Machine, Airgap, Family -- and a
+by its group -- Site, Part, Pictures, Machine, Tools, Family, Airgap, eight at most, a
+ring's cells, and each a cell of the canvas ring's Panels -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
 at its place, and above them the **views**: windows laid out together for one
@@ -814,7 +843,10 @@ full; the others are entered from ⊞ Windows › Journeys and from the
 - **✕ leaves the journey**: the rail goes, the address forgets it, and the
   windows stay where they are.
 
-- **Site**: its category chips and the **Contents** tree (a click selects a
+- **Site**: its chips, one for each System, Kind and word beneath the level in view
+  in the facets' order and colours, each opening its pieces at every depth (a Kind's in
+  the universe, whose parts hold nothing to open, its ring), and the
+  **Contents** tree (a click selects a
   row, a double-click steps in, ⚠ marks a piece in a problem). Site's own
   windows are tabs beside it, each reached by Panels › Site too:
   **Problems** (its tab counts them, red while there are any; each row selects

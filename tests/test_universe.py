@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apothecary import api, sites
+from apothecary.facets import kind_of
 from apothecary.hierarchy import Assembly, LayoutReport, Site, Structure
 from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.vectors import Vector3D
@@ -149,10 +150,10 @@ def _angle(a, b) -> float:
     return math.acos(max(-1.0, min(1.0, dot)))
 
 
-def test_the_leaves_of_a_category_are_one_piece_of_their_shell():
-    """Each leaf joined to those of its category among its six nearest on its shell,
-    the neighbours a point of the lattice has about it: every category of every shell
-    is one piece."""
+def test_the_leaves_of_a_kind_are_one_piece_of_their_shell():
+    """Each leaf joined to those of its kind (its category's, apothecary/facets.py) among
+    its six nearest on its shell, the neighbours a point of the lattice has about it:
+    every kind of every shell is one piece."""
     universe = sites.store.get(UNIVERSE)
     by_shell = {}
     for leaf in _leaves(universe):
@@ -168,7 +169,7 @@ def test_the_leaves_of_a_category_are_one_piece_of_their_shell():
             ]
             for a in leaves
         }
-        kind = {leaf.name: leaf.category for leaf in leaves}
+        kind = {leaf.name: kind_of(leaf.category) for leaf in leaves}
         for category in set(kind.values()):
             members = [n for n in kind if kind[n] == category]
             seen, stack = {members[0]}, [members[0]]

@@ -1,13 +1,18 @@
 /* Pick scope: how deep a click in the world reaches, and which layers are shown and
  * which of those a click can select (docs/viewer.md, "Layers").
  *
- * A layer is a kind of thing the world draws, named by an id:
+ * A layer is a set of things the world draws, named by an id:
  *   shell:N          the parts of shell N of the universe's sphere (0 innermost)
- *   category:NAME    the pieces of a category (walls among them)
+ *   system:NAME      a site's pieces in a System (apothecary/facets.py), the walls the
+ *                    Building System's
+ *   category:NAME    the pieces of a category: a part's, or a word no System holds
  *   grid             the alignment grid: the floor grid and the machines' build volumes
  *   machine-buttons  the badges standing on a machine in the world
  *   measure          the measurement layer: dimension lines on the selection, and a click
  *                    in the world drops a point to measure between rather than selecting
+ * A piece is on its shell's layer, where it has one, and on its System's or its
+ * category's, as the server sends it (node.layer). A Kind (kind:NAME) is no layer: a
+ * heading over its categories', each shown or made selectable at once (setShownEach).
  * The grid, the machine buttons and the measurement are only ever shown or not: a click
  * never picks the first two, and the third is a mode, so none has a selectable tick.
  * Measure is off at first, and, like walls selectable, the session's: never kept.
@@ -22,9 +27,9 @@
  * selectable shows it. Walls selectable is the page's session's, never
  * kept, as the View menu's Select walls always was.
  *
- * A layer's ring (View › Layers) also shows one layer alone of its kind, or every one of
- * its kind (showOnly, showAll, kindOf): the shells, the categories, or the grid and the
- * machine buttons.
+ * A layer's ring (View › Layers) also shows one layer alone of its set, or every one of
+ * its set (showOnly, showAll, setOf): the shells, the pieces' layers (Systems and
+ * categories), or the grid and the machine buttons.
  *
  * Plain ES module, no dependencies and no listeners of its own: the page asks it
  * (pickable, drawn) and is told (onChange).
@@ -32,7 +37,7 @@
 
 export const PICK_SCOPE_KEY = "apothecary.pickScope";
 export const DEPTH_MAX = 8;
-export const WALL = "category:wall";
+export const WALL = "system:building";
 export const GRID = "grid";
 export const MACHINE_BUTTONS = "machine-buttons";
 // Layers a click never picks: only their being shown is the person's to say.
@@ -41,27 +46,29 @@ export const SHOWN_ONLY = new Set([GRID, MACHINE_BUTTONS, MEASURE]);
 
 export const shellLayer = (n) => `shell:${n}`;
 export const categoryLayer = (name) => `category:${name}`;
+const isPieceLayer = (id) => id.startsWith("system:") || id.startsWith("category:");
 
-/* The layers a node is on: its shell's, when it is in one, and its category's. */
+/* The layers a node is on: its shell's, when it is in one, and its System's or its
+ * category's (node.layer). */
 export function layersOf(node) {
     const out = [];
     if (!node) return out;
     if (Number.isInteger(node.shell)) out.push(shellLayer(node.shell));
-    if (node.category) out.push(categoryLayer(node.category));
+    if (node.layer) out.push(node.layer);
     return out;
 }
 
-/* The one layer a row in a list names a node by: its shell's, else its category's. */
+/* The one layer a row in a list names a node by: its shell's, else its own. */
 export function layerOf(node) {
     return layersOf(node)[0] ?? null;
 }
 
-/* The layers of `id`'s kind, `id` among them, which Only this and All act among: the
- * shells the site has, its categories, or the grid and the machines' buttons. The
- * measurement is a mode, a kind of its own. */
-export function kindOf(id, { shells = [], categories = [] } = {}) {
+/* The layers of `id`'s set, `id` among them, which Only this and All act among: the
+ * shells the site has, its pieces' layers (`layers`: its Systems and categories), or the
+ * grid and the machines' buttons. The measurement is a mode, a set of its own. */
+export function setOf(id, { shells = [], layers = [] } = {}) {
     if (id.startsWith("shell:")) return [...new Set([...shells.map(shellLayer), id])];
-    if (id.startsWith("category:")) return [...new Set([...categories.map(categoryLayer), id])];
+    if (isPieceLayer(id)) return [...new Set([...layers.filter(isPieceLayer), id])];
     if (id === GRID || id === MACHINE_BUTTONS) return [GRID, MACHINE_BUTTONS];
     return [id];
 }
@@ -155,21 +162,38 @@ export function makePickScope({ storage = null, storageKey = PICK_SCOPE_KEY } = 
             told({ layer: id, selectable: !!on });
             return true;
         },
-        /* `id` shown and every other layer of `kind` (kindOf) hidden, at once: told once.
+        /* Every layer of `ids` shown, or every one hidden, at once, told once and said
+         * as `as` (a Kind's heading over its categories). False when all were so. */
+        setShownEach(ids, on, as = null) {
+            const changing = ids.filter((id) => !!on === hidden.has(id));
+            if (!changing.length) return false;
+            for (const id of changing) { if (on) hidden.delete(id); else hidden.add(id); }
+            told({ layer: as, layers: [...ids], shown: !!on });
+            return true;
+        },
+        /* Every layer of `ids` selectable, or none, as setSelectable does each: told once. */
+        setSelectableEach(ids, on, as = null) {
+            const changing = ids.filter((id) => !SHOWN_ONLY.has(id) && !!on !== api.isSelectable(id));
+            if (!changing.length) return false;
+            for (const id of changing) { if (on) { unselectable.delete(id); hidden.delete(id); } else unselectable.add(id); }
+            told({ layer: as, layers: [...ids], selectable: !!on });
+            return true;
+        },
+        /* `id` shown and every other layer of `set` (setOf) hidden, at once: told once.
          * What was chosen selectable stays chosen. False when it was so already. */
-        showOnly(id, kind) {
-            const others = kind.filter((k) => k !== id);
+        showOnly(id, set) {
+            const others = set.filter((k) => k !== id);
             if (!hidden.has(id) && others.every((k) => hidden.has(k))) return false;
             hidden.delete(id);
             for (const k of others) hidden.add(k);
             told({ layer: id, only: true });
             return true;
         },
-        /* Every layer of `kind` shown, at once: told once. False when all were. */
-        showAll(kind) {
-            if (kind.every((k) => !hidden.has(k))) return false;
-            for (const k of kind) hidden.delete(k);
-            told({ layers: [...kind], all: true });
+        /* Every layer of `set` shown, at once: told once. False when all were. */
+        showAll(set) {
+            if (set.every((k) => !hidden.has(k))) return false;
+            for (const k of set) hidden.delete(k);
+            told({ layers: [...set], all: true });
             return true;
         },
         /* Everything back to the defaults. */

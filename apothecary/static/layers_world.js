@@ -14,8 +14,13 @@
  *                                   every grid is drawn by: the alignment grid layer shown,
  *                                   and a level with a floor at all: the universe's own level,
  *                                   a sphere of shells a floor would cut through, has none
- *   layerKinds(tree)                the shells the site's pieces are on, innermost first, and
- *                                   the categories they are of: the Layers window's rows
+ *   layersInView(facets, nodes)     what lies beneath the level in view, grouped: the shells
+ *                                   its pieces are on, innermost first, then, as the site's
+ *                                   facets list them (apothecary/facets.py), its Systems, its
+ *                                   Kinds each with its categories, and the words neither
+ *                                   holds, each where a piece in view is on its layer: the
+ *                                   Layers window's rows and Site's chips
+ *   pieceLayers(groups)             the layers of those groups pieces are on, in that order
  *   redrawsLevel(what)              whether a change to the scope draws the level again: a
  *                                   depth, a reset, a scope read back
  *   layersSaid(what, { wallsSaid }) what the status line says of a change to the scope
@@ -42,15 +47,31 @@ export function gridWanted(scope, { site, universe, focusPath }) {
     return scope.isShown(GRID) && !(site === universe && focusPath.length === 0);
 }
 
-export function layerKinds(tree) {
-    const shells = new Set(), categories = new Set();
-    const walk = (node) => {
+/* `facets` is the site's, as it was sent ({ by, values, kinds, loose }); `nodes` every
+ * node beneath the level in view. A System is kept where a piece is on its layer; a Kind
+ * with the categories of it pieces are on, where there is one. */
+export function layersInView(facets, nodes) {
+    const shells = new Set(), on = new Set();
+    for (const node of nodes || []) {
         if (Number.isInteger(node.shell)) shells.add(node.shell);
-        if (node.category) categories.add(node.category);
-        for (const child of node.children || []) walk(child);
-    };
-    if (tree) for (const child of tree.children || []) walk(child);
-    return { shells: [...shells].sort((a, b) => a - b), categories: [...categories].sort() };
+        if (node.layer) on.add(node.layer);
+    }
+    const sent = facets || {};
+    const byKind = sent.by === "kind";
+    const systems = byKind ? [] : (sent.values || []).filter((value) => on.has(value.layer));
+    const kinds = ((byKind ? sent.values : sent.kinds) || [])
+        .map((kind) => ({ ...kind, words: kind.words.filter((word) => on.has(word.layer)) }))
+        .filter((kind) => kind.words.length);
+    const words = (sent.loose || []).filter((word) => on.has(word.layer));
+    return { shells: [...shells].sort((a, b) => a - b), systems, kinds, words };
+}
+
+export function pieceLayers({ systems = [], kinds = [], words = [] } = {}) {
+    return [
+        ...systems.map((value) => value.layer),
+        ...kinds.flatMap((kind) => kind.words.map((word) => word.layer)),
+        ...words.map((word) => word.layer),
+    ];
 }
 
 export function redrawsLevel(what) {
@@ -68,7 +89,7 @@ export function layersSaid(what, { wallsSaid }) {
             ? "Measure: on. A click drops a point and reads the diameter or the wall under it, selecting nothing; a second reads the distance, a third starts again (Escape too)"
             : "Measure: off, a click selects again";
     }
-    if (what.only) return `${layerLabel(what.layer)} alone of its kind shown: the others hidden, and a click passes through them`;
+    if (what.only) return `${layerLabel(what.layer)} alone of its set shown: the others hidden, and a click passes through them`;
     if (what.all) return `Every one shown: ${what.layers.map(layerLabel).join(", ")}`;
     if (what.shown !== undefined) return `${layerLabel(what.layer)}: ${what.shown ? "shown" : "hidden, and a click passes through it"}`;
     if (what.selectable !== undefined) return `${layerLabel(what.layer)}: ${what.selectable ? "a click picks it" : "a click passes through it"}`;

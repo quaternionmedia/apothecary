@@ -1,6 +1,6 @@
 """The universe's orbitals in the world (apothecary/static/orbits.js, docs/viewer.md's
 "Apothecary is the universe" and "Layers"): each shell's rings drawn in its layer's
-colour and never picked as a piece, an outline round each category's cluster on its
+colour and never picked as a piece, an outline round each Kind's cluster on its
 shell, a line from a part to each part it is built from, a drawn ring that opens its
 layer's ring where it is clicked, and the ring's cells, the Layers window's ticks and the
 world reading one choice whichever of the three is used.
@@ -16,7 +16,7 @@ import httpx
 import pytest
 import rings
 import windows
-from garage import said
+from garage import said, status
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -102,7 +102,7 @@ def test_each_shell_is_drawn_as_rings_in_its_colour_and_a_click_passes_through_t
     shells = sorted({int(k.split(":")[1]) for k in colours if k.startswith("shell:")})
     assert len(shells) >= 3
     for n in shells:
-        rings_of = [loop for loop in drawn["loops"] if loop["layers"] == [f"shell:{n}"]]
+        rings_of = [loop for loop in drawn["loops"] if loop["layer"] == f"shell:{n}"]
         assert len(rings_of) == 3, n
         assert all(loop["drawn"] and loop["colour"] == colours[f"shell:{n}"] for loop in rings_of)
     assert not any(loop["piece"] for loop in drawn["loops"])
@@ -119,35 +119,72 @@ def test_each_shell_is_drawn_as_rings_in_its_colour_and_a_click_passes_through_t
 
 
 @pytest.mark.e2e
-def test_a_categorys_cluster_is_outlined_on_its_shell_and_hidden_with_its_layer(
+def test_a_kinds_cluster_is_outlined_on_its_shell_and_hidden_with_its_categories(
     page: Page, url: str
 ):
-    """The two machines on the shell they share are outlined in the machine category's
-    colour; the category's Shown ticked off hides the outline and the machines both."""
+    """The two machines on the shell they share are outlined in the Machines kind's
+    colour, its heading's in the Layers window; a still click on the outline opens the
+    kind's ring, its Shown and Selectable over its categories and then each one's; the
+    kind's Shown ticked off hides the outline and the machines both."""
     colours = httpx.get(f"{url}/sites/{UNIVERSE}").json()["layer_colours"]
     _universe(page, url)
     windows.from_the_windows_menu(page, "layers")
     outline = [
-        loop for loop in page.evaluate(ORBITS)["loops"] if loop["layer"] == "category:machine"
+        loop for loop in page.evaluate(ORBITS)["loops"] if loop["layer"] == "kind:machines"
     ]
     assert len(outline) == 1
     (machine,) = outline
-    assert machine["drawn"] and machine["colour"] == colours["category:machine"]
-    assert machine["layers"][0].startswith("shell:")
+    assert machine["drawn"] and machine["colour"] == colours["kind:machines"]
+    assert machine["layers"] == [machine["layers"][0]] and machine["layers"][0].startswith("shell:")
     swatch = page.locator(
-        ".panel[data-panel='layers'] tr[data-row='category:machine'] .layers-swatch"
+        ".panel[data-panel='layers'] tr[data-row='kind:machines'] .layers-swatch"
     )
-    expect(swatch).to_have_css("background-color", _rgb(colours["category:machine"]))
+    expect(swatch).to_have_css("background-color", _rgb(colours["kind:machines"]))
 
-    _tick(page, "category:machine", "shown").uncheck()
-    said(page, "machine: hidden")
-    outline = [o for o in page.evaluate(ORBITS)["loops"] if o["layer"] == "category:machine"]
+    spot = page.evaluate(ON_A_LOOP, "kind:machines")
+    assert spot, "no point of the canvas on the Machines outline clear of every piece"
+    page.mouse.click(spot["x"], spot["y"])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=rings.RING_MS)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Machines")
+    assert [label.rstrip(" ›") for label in rings.labels(page)] == [
+        "Shown",
+        "Selectable",
+        "machine",
+    ]
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+
+    _tick(page, "kind:machines", "shown").uncheck()
+    said(page, "Machines: hidden")
+    outline = [o for o in page.evaluate(ORBITS)["loops"] if o["layer"] == "kind:machines"]
     assert outline[0]["drawn"] is False
     hidden = page.evaluate(
         """() => { const v = window.fractalViewer;
             return ['ender3', 'anolex_4060_evo_ultra_2'].map((k) => v.meshByName[k].visible); }"""
     )
     assert hidden == [False, False]
+
+
+@pytest.mark.e2e
+def test_a_kind_chosen_in_the_universe_opens_its_ring_as_its_outline_does(page: Page, url: str):
+    """The universe's parts hold no pieces to open in place, so a Kind chosen -- the
+    canvas ring's Kinds › Machines, or Site's Machines chip -- opens the kind's ring, as a
+    click on its outline does: Shown and Selectable over its categories, then each one's.
+    The status line says so, and never that anything was expanded."""
+    _universe(page, url)
+    chip = page.locator("#category-filters .category-chip", has_text="Machines")
+    for choose in (lambda: rings.on_world(page, "Kinds", "Machines"), chip.click):
+        choose()
+        expect(page.locator("#ring-overlay .title")).to_have_text("Machines", timeout=rings.RING_MS)
+        assert [label.rstrip(" ›") for label in rings.labels(page)] == [
+            "Shown",
+            "Selectable",
+            "machine",
+        ]
+        said(page, "Machines: its ring")
+        expect(status(page)).not_to_contain_text("Expanded")
+        page.keyboard.press("Escape")
+        expect(page.locator("#ring-overlay")).to_have_count(0)
 
 
 @pytest.mark.e2e
@@ -196,7 +233,7 @@ def test_a_click_on_a_shells_ring_opens_that_shells_ring_and_only_this_hides_the
     assert colour == httpx.get(f"{url}/sites/{UNIVERSE}").json()["layer_colours"][f"shell:{outer}"]
 
     rings.press(page, "Only this")
-    said(page, f"Shell {outer} alone of its kind shown")
+    said(page, f"Shell {outer} alone of its set shown")
     hidden = page.evaluate(SCOPE)["hidden"]
     assert sorted(hidden) == sorted(f"shell:{n}" for n in range(outer))
     for n in range(outer):
@@ -289,7 +326,7 @@ def test_each_shell_and_cluster_is_labelled_at_the_universes_level_and_hidden_wi
     page: Page, url: str
 ):
     """A label for each shell, in the docs' words, and one for each cluster, naming its
-    category; each is of its loop's layers, no piece and no hit, and gone where the
+    Kind; each is of its loop's layers, no piece and no hit, and gone where the
     orbitals are (a part stepped into)."""
     _universe(page, url)
     windows.from_the_windows_menu(page, "layers")
@@ -298,11 +335,11 @@ def test_each_shell_and_cluster_is_labelled_at_the_universes_level_and_hidden_wi
     shells = [lab for lab in labels if lab["text"].startswith("Shell ")]
     assert [lab["text"].split(" · ")[1] for lab in shells][0] == "built from nothing"
     assert [lab["text"].split(" · ")[1] for lab in shells][-1] == "sites"
-    categories = {lab["text"] for lab in labels} - {lab["text"] for lab in shells}
-    assert "machine" in categories
-    # The camera's parts stand on two shells: each of its outlines names its shell.
-    cameras = sorted(t for t in categories if t.startswith("camera"))
-    assert len(cameras) == 2 and all(re.fullmatch(r"camera · shell \d+", t) for t in cameras), cameras
+    kinds = {lab["text"] for lab in labels} - {lab["text"] for lab in shells}
+    assert "Machines" in kinds
+    # The cameras stand on two shells: each of the kind's outlines names its shell.
+    cameras = sorted(t for t in kinds if t.startswith("Cameras"))
+    assert len(cameras) == 2 and all(re.fullmatch(r"Cameras · shell \d+", t) for t in cameras), cameras
     assert not any(lab["piece"] for lab in labels) and all(lab["inScene"] for lab in labels)
     drawn = [lab for lab in labels if lab["drawn"]]
     assert drawn, "no label is drawn at the opening view"

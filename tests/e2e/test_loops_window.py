@@ -466,7 +466,7 @@ def test_the_ring_opens_the_window_and_a_refused_act_says_the_server_s_reason(pa
     expect(_loops(page).locator(".loops-machine")).to_contain_text(PRINTER, timeout=10000)
     _drawn(page)
     address = rings.on_world(page, "Panels", "Machine", "Loops", "Experiment", "Autotune")
-    assert address == "44416"
+    assert address == "44216"
     expect(_loops(page).locator("select.loops-kind")).to_have_value("autotune", timeout=10000)
     expect(_loops(page).locator("input.loops-param[data-param='cycles']")).to_be_visible()
     start = _button(page, "start")
@@ -477,7 +477,7 @@ def test_the_ring_opens_the_window_and_a_refused_act_says_the_server_s_reason(pa
     rings.on_world(page, "Panels", "Machine", "Loops", "Start")
     assert rings.greyed(page)["2"] == f"Disabled: {reason}"
     status = page.locator("#status")
-    expect(status).to_contain_text(f"Start (⌗4442): {reason}", timeout=10000)
+    expect(status).to_contain_text(f"Start (⌗4422): {reason}", timeout=10000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
     with _http(url) as http:
         assert (

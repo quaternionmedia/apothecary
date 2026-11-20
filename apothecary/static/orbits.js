@@ -1,6 +1,6 @@
 /* The universe's orbitals as the world draws them (docs/viewer.md, "Apothecary is the
- * universe"): each shell's rings, the outline round each category's cluster on its shell,
- * and a line from a part to each part it is built from. Pure arithmetic in the site's
+ * universe"): each shell's rings, the outline round each Kind's cluster on its shell
+ * (apothecary/facets.py), and a line from a part to each part it is built from. Pure arithmetic in the site's
  * frame (x, y, z; z up), no three.js and no DOM, so node can hold it
  * (tests/test_orbits_drawn.py); the page turns each point into three.js's (sceneAt) and
  * draws it in its layer's colour.
@@ -11,15 +11,15 @@
  *   ringsOf(radius, count)         `count` great circles of a sphere, each a closed loop
  *                                  of points, tilted as an atom's orbits are: every shell
  *                                  in the same planes, so the shells' rings nest
- *   clustersOf(nodes)              [{ shell, category, centre, angle, radius, members }]:
- *                                  the cap of its shell that holds a category's nodes
+ *   clustersOf(nodes)              [{ shell, kind, centre, angle, radius, members }]:
+ *                                  the cap of its shell that holds a Kind's nodes
  *   capOutline(cluster, segments)  the cap's edge, a closed loop on its shell
  *   linksOf(nodes)                 [{ from, to }]: a node's key to each node it is built
  *                                  from, both drawn
  *   shellLabel(shell, nodes)       what a shell is, in a few words: built from nothing, built
  *                                  from those inside it, or the sites
- *   clusterLabel(cluster, clusters)   a cluster's category, and its shell where the
- *                                  category has clusters on more than one
+ *   clusterLabel(cluster, clusters)   a cluster's Kind, and its shell where the Kind has
+ *                                  clusters on more than one
  *   limbOf(radius, eye)            the edge of a shell's sphere as the eye sees it: a circle,
  *                                  none from inside
  *   facesEye(eye, point)           whether a point of a sphere is on the side the eye sees
@@ -100,9 +100,9 @@ export function clustersOf(nodes) {
     const groups = new Map();
     for (const node of nodes) {
         const at = middleOf(node);
-        if (!Number.isInteger(node.shell) || !node.category || !at || !length(at)) continue;
-        const id = `${node.shell}\u0000${node.category}`;
-        if (!groups.has(id)) groups.set(id, { shell: node.shell, category: node.category, members: [] });
+        if (!Number.isInteger(node.shell) || !node.kind || !at || !length(at)) continue;
+        const id = `${node.shell}\u0000${node.kind}`;
+        if (!groups.has(id)) groups.set(id, { shell: node.shell, kind: node.kind, members: [] });
         groups.get(id).members.push({ key: node.key, at, reach: reachOf(node) });
     }
     const out = [];
@@ -116,12 +116,12 @@ export function clustersOf(nodes) {
             angle = Math.max(angle, angleBetween(centre, unit(m.at)) + own);
         }
         out.push({
-            shell: group.shell, category: group.category, centre, radius,
+            shell: group.shell, kind: group.kind, centre, radius,
             angle: Math.min(Math.PI - CLUSTER_MARGIN, angle + CLUSTER_MARGIN),
             members: group.members.map((m) => m.key).sort(),
         });
     }
-    return out.sort((a, b) => a.shell - b.shell || (a.category < b.category ? -1 : a.category > b.category ? 1 : 0));
+    return out.sort((a, b) => a.shell - b.shell || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
 }
 
 export function capOutline(cluster, segments = 96) {
@@ -173,12 +173,12 @@ export function shellLabel(shell, nodes) {
     return `Shell ${shell} \u00b7 ${what}`;
 }
 
-/* What a cluster's outline is labelled: its category, and where the category has a
- * cluster on more than one shell, which shell this one is on, so two outlines of one
- * category are told apart. `clusters` is every cluster drawn (clustersOf). */
+/* What a cluster's outline is labelled: its Kind, and where the Kind has a cluster on
+ * more than one shell, which shell this one is on, so two outlines of one Kind are told
+ * apart. `clusters` is every cluster drawn (clustersOf). */
 export function clusterLabel(cluster, clusters) {
-    const shells = new Set(clusters.filter((c) => c.category === cluster.category).map((c) => c.shell));
-    return shells.size > 1 ? `${cluster.category} · shell ${cluster.shell}` : cluster.category;
+    const shells = new Set(clusters.filter((c) => c.kind === cluster.kind).map((c) => c.shell));
+    return shells.size > 1 ? `${cluster.kind} · shell ${cluster.shell}` : cluster.kind;
 }
 
 /* The circle a sphere of `radius` about the middle shows an eye at `eye` ([x, y, z]):

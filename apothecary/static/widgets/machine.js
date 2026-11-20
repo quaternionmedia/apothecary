@@ -1947,7 +1947,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-slice").disabled = slc.running;
         $("print-slice").title = slicerOk
             ? words().prepareTitle
-            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Bench › Install › OrcaSlicer installs it`;
+            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`;
         const went = !!(job && (running || job.stage));
         $("print-progress-row").hidden = !went;
         $("print-bar").hidden = !went;
@@ -2133,7 +2133,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
         if (slc.running) { refuse("slice: one is running; its log is in Print from here"); return false; }
         const status = await loadSlicer();
-        if (!status.ok) { refuse(`slice: no slicer here (${status.why}); Panels › Bench › Install › OrcaSlicer installs it`); return false; }
+        if (!status.ok) { refuse(`slice: no slicer here (${status.why}); Panels › Tools › Bench › Install › OrcaSlicer installs it`); return false; }
         slc.running = true; renderPrint();
         // A part the page draws from a variant it applied is sliced as drawn: that
         // variant's STL, which the slice's record names (variantFor, the page's).

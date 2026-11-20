@@ -33,10 +33,14 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequenc
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .facets import KIND, KINDS, SYSTEM, SYSTEM_LAYER, facet_of, facets_of, kinds_and_systems
+from .facets import SYSTEMS as SITE_SYSTEMS
 from .hierarchy import Assembly, find_node_by_path
 from .journeys import JOURNEYS
 from .journeys import by_id as journey_by_id
-from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, layers_in
+from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, shells_in
+from .projects.parts.skeleton import ROOT
+from .projects.registry import category_of
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import SYSTEMS, by_id
 
@@ -541,13 +545,19 @@ def resolve(
     site: Optional[Assembly] = None,
     *,
     site_names: Sequence[str] = (),
-    groups: Sequence[str] = (),
+    part_category: Optional[Callable[[str], Optional[str]]] = None,
     device: Optional[Device] = None,
     picture: Optional[PictureContext] = None,
     sketch: Optional[str] = None,
     can: Optional[Dict[str, Verdict]] = None,
+    rig: bool = False,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
+
+    ``part_category`` gives a part's category by its name, for the facets a piece is
+    grouped by (``facets.py``): the registry's, unless told another.
+
+    ``rig`` is whether the site has a lighting rig, whose window Panels › Site opens.
 
     ``device`` is what the page knows about the board under the ring: for a
     node ring, the board pinned to that node, if any; for a device ring, the
@@ -561,13 +571,14 @@ def resolve(
     ``device.can`` greys a board's; told nothing, nothing is.
     """
     picture = picture or PictureContext()
+    category = part_category or _registered_category
     if context.pointing is Pointing.CANVAS:
-        ring = _canvas_ring(context, site, site_names, groups, picture)
+        ring = _canvas_ring(context, site, site_names, category, picture, rig)
         if can is not None:
             judged(ring.options, {verb: Verdict.model_validate(v) for verb, v in can.items()})
         return ring
     if context.pointing is Pointing.NODE:
-        return _node_ring(context, site, device, picture, sketch)
+        return _node_ring(context, site, device, picture, sketch, category)
     if context.pointing is Pointing.DEVICE:
         return _device_ring_on_top(context, device)
     raise ValueError(f"no ring is built for {context.pointing!r}")
@@ -583,38 +594,122 @@ def _grouped(
 
     Each name is a leaf whose id and action are ``action_of(name)``, labelled
     so that no two read the same -- by what ``shown`` says of it, where it says
-    anything. A list of things is not a list of verbs, so
-    more than eight are split into groups of at most eight -- one more press,
-    nothing hidden -- and more than two levels of eight can hold is refused.
+    anything. A list of things is not a list of verbs, so more than eight are cut
+    into lettered runs (``_fit``) -- one more press, nothing hidden -- and more than
+    eight runs of eight is refused.
     """
     ordered = list(names)
     if not ordered:
         return None
     shown = shown or {}
+    said = distinct([shown.get(name, name) for name in ordered])
+    leaves = [
+        Option(id=action_of(name), label=label, action=action_of(name))
+        for name, label in zip(ordered, said, strict=True)
+    ]
+    return Option(id=prefix, label=shorten(prefix), children=_fit(prefix, leaves))
 
-    def leaves(members: Sequence[str]) -> List[Option]:
-        said = distinct([shown.get(name, name) for name in members])
-        return [
-            Option(id=action_of(name), label=label, action=action_of(name))
-            for name, label in zip(members, said, strict=True)
-        ]
 
-    if len(ordered) <= MOST_OPTIONS:
-        return Option(id=prefix, label=shorten(prefix), children=leaves(ordered))
-    if len(ordered) > MOST_OPTIONS * MOST_OPTIONS:
+def _letters(runs: Sequence[Sequence[str]]) -> List[str]:
+    """Each run of a list sorted by name, named for its letters: its first entry's and its
+    last's, as many as tell the runs apart (``a–k``, ``pa–pr``), one alone where the two
+    share it. Where no such letters fit a label, each run is named for its first entry."""
+    for count in range(1, (LONGEST_LABEL - 1) // 2 + 1):
+        named = []
+        for run in runs:
+            first, last = run[0][:count].lower(), run[-1][:count].lower()
+            named.append(first if first == last else f"{first}–{last}")
+        if len(set(named)) == len(named):
+            return named
+    return distinct([run[0] for run in runs])
+
+
+def _fit(
+    prefix: str, options: Sequence[Option], room: int = MOST_OPTIONS, *, by_name: bool = True
+) -> List[Option]:
+    """A list in the ``room`` cells a ring has for it, every entry kept. It is as it is
+    when it fits; else it is cut into as few runs as fit, of near-equal length and eight at
+    most each, each a ring of its own. A list listed by name is sorted, and each run named
+    for its letters (``_letters``); a list kept in its own order (the newest pictures first,
+    a vocabulary's order) is cut in that order, and each run named for its first. More than
+    ``room`` runs of eight is refused: it needs searching, not a bigger menu."""
+    if len(options) <= room:
+        return list(options)
+    listed = sorted(options, key=lambda o: o.label.lower()) if by_name else list(options)
+    count = -(-len(listed) // MOST_OPTIONS)
+    if count > room:
         raise RingTooFull(
-            f"{len(ordered)} to choose between under {prefix!r}, and two levels "
-            f"of grouping hold {MOST_OPTIONS * MOST_OPTIONS}. This needs "
-            "searching, not a bigger menu."
+            f"{len(listed)} to choose between under {prefix!r}, and {room} runs of "
+            f"{MOST_OPTIONS} hold {room * MOST_OPTIONS}. This needs searching, not a "
+            "bigger menu."
         )
-    return Option(
-        id=prefix,
-        label=shorten(prefix),
-        children=[
-            Option(id=f"{prefix}:group{index}", label=head, children=leaves(members))
-            for index, (head, members) in enumerate(_bucket(ordered))
-        ],
+    each, over = divmod(len(listed), count)
+    runs: List[List[Option]] = []
+    for index in range(count):
+        start = index * each + min(index, over)
+        runs.append(listed[start : start + each + (1 if index < over else 0)])
+    named = (
+        _letters([[o.label for o in run] for run in runs])
+        if by_name
+        else distinct([run[0].label for run in runs])
     )
+    return [
+        Option(id=f"{prefix}:run{index}", label=name, children=run)
+        for index, (name, run) in enumerate(zip(named, runs, strict=True))
+    ]
+
+
+# A site's pieces with no System, gathered when the Systems and their kinds would not fit
+# one ring: each a part standing loose, grouped by its kind.
+PARTS = "Parts"
+
+
+def _by_facet(
+    prefix: str,
+    leaves: Sequence[Tuple[Option, Optional[str], Optional[str]]],
+    room: int = MOST_OPTIONS,
+) -> Optional[List[Option]]:
+    """A long list of pieces cut by facet, ``leaves`` being each piece's option with its
+    kind and its System: one ring per System its pieces are in, in the vocabulary's order,
+    then one per kind of the pieces with no System; where those do not fit, or a kind is
+    named as one of those Systems is (Machines), the kinds go under one ring more, Parts, so
+    no two cells of a ring read the same. Each ring's id says its facet
+    (``<prefix>:system:machines``, ``<prefix>:parts:kind:machines``), and its pieces are
+    listed by name (``_fit``). None where the facet does not cut the list -- a piece in
+    neither, every piece in one -- or where, folded, it still does not fit: the list is
+    lettered then."""
+    if any(kind is None and system is None for _, kind, system in leaves):
+        return None
+    systems = [s for s in SITE_SYSTEMS if any(system == s for _, _, system in leaves)]
+    kinds = [k for k in KINDS if any(kind == k and system is None for _, kind, system in leaves)]
+    if len(systems) + len(kinds) < 2:
+        return None
+
+    def ring(facet: str, value: str, members: Sequence[Option], at: str) -> Option:
+        cut = f"{at}:{facet}:{value.lower().replace(' ', '-')}"
+        return Option(id=cut, label=value, children=_fit(cut, members))
+
+    def of_kind(kind: str) -> List[Option]:
+        return [o for o, k, system in leaves if system is None and k == kind]
+
+    by_system = [
+        ring(SYSTEM, s, [o for o, _, system in leaves if system == s], prefix) for s in systems
+    ]
+    named_alike = set(systems) & set(kinds)
+    if not named_alike and len(systems) + len(kinds) <= room:
+        return [*by_system, *(ring(KIND, k, of_kind(k), prefix) for k in kinds)]
+    if len(systems) + 1 > room:
+        return None
+    parts = f"{prefix}:parts"
+    return [
+        *by_system,
+        Option(id=parts, label=PARTS, children=[ring(KIND, k, of_kind(k), parts) for k in kinds]),
+    ]
+
+
+def _registered_category(name: str) -> Optional[str]:
+    """A registered part's category, by its name (``projects.registry.category_of``)."""
+    return category_of(name, ROOT)
 
 
 # What can be done to a saved variant: each its own cell, under the variant's name,
@@ -660,19 +755,7 @@ def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Op
             ring_of(prefix, verbs, name, label)
             for name, label in zip(members, distinct(members), strict=True)
         ]
-        if len(made) <= room:
-            return made
-        return [
-            Option(
-                id=f"{prefix}:group{index}",
-                label=head,
-                children=[
-                    ring_of(prefix, verbs, name, label)
-                    for name, label in zip(group, distinct(group), strict=True)
-                ],
-            )
-            for index, (head, group) in enumerate(_bucket(list(members)))
-        ]
+        return _fit(prefix, made, room)
 
     trash: Optional[Option] = None
     if deleted:
@@ -695,26 +778,40 @@ def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Op
     return Option(id="part:variants", label="Variants", children=children)
 
 
-def _pieces(prefix: str, parent: str, node: Optional[Assembly]) -> Optional[Option]:
-    """The pieces directly inside a node; choosing one is ``select:<its dotted path>``."""
-    names = sorted({child.name for child in node.children}) if node is not None else []
-    return _grouped(
-        prefix, names, lambda name: f"select:{parent}.{name}" if parent else f"select:{name}"
-    )
+def _pieces(
+    prefix: str,
+    parent: str,
+    node: Optional[Assembly],
+    faceted: Optional[Dict[str, Tuple[Optional[str], Optional[str]]]] = None,
+    *,
+    names: Optional[Sequence[str]] = None,
+    room: int = MOST_OPTIONS,
+) -> List[Option]:
+    """The pieces directly inside a node, or those of them ``names`` says, by name, each
+    ``select:<its dotted path>``, in the ``room`` cells a ring has for them. More than fit
+    are cut by facet -- ``faceted`` being each piece's kind and System by its path
+    (``_by_facet``) -- else into lettered runs (``_fit``)."""
+    if names is None:
+        names = sorted({child.name for child in node.children}) if node is not None else []
 
+    def path(name: str) -> str:
+        return f"{parent}.{name}" if parent else name
 
-def _bucket(names: Sequence[str]) -> List[Tuple[str, List[str]]]:
-    """Split a long list into groups of at most eight, in order.
-
-    Each group is named for the first thing in it, so a person can guess where
-    to look. A list rather than a dictionary keyed by that name, so two groups
-    that would share a name cannot swallow each other.
-    """
-    ordered = sorted(names)
-    per = -(-len(ordered) // MOST_OPTIONS)
-    chunks = [ordered[start : start + per] for start in range(0, len(ordered), per)]
-    heads = distinct([chunk[0] for chunk in chunks])
-    return list(zip(heads, chunks, strict=True))
+    leaves = [
+        Option(id=f"select:{path(n)}", label=label, action=f"select:{path(n)}")
+        for n, label in zip(names, distinct(list(names)), strict=True)
+    ]
+    cut = None
+    if len(leaves) > room and faceted is not None:
+        cut = _by_facet(
+            prefix,
+            [
+                (leaf, *faceted.get(path(n), (None, None)))
+                for leaf, n in zip(leaves, names, strict=True)
+            ],
+            room,
+        )
+    return cut or _fit(prefix, leaves, room)
 
 
 # The panels the world's page registers, in the order the ring seats them
@@ -781,10 +878,13 @@ PANELS: Sequence[Tuple[str, str]] = (
     # acts are a ring of their own under Panels › Machine (_loops).
     ("loops", "Loops"),
     # Motion: the selected part's pieces moved through its motion (widgets/motion.js), a
-    # window in the column registered at start and closed until asked for. Its cell is
-    # the part's own, Part › View › Motion, on a part whose pieces move, not one of
-    # Panels'.
+    # window in the column registered at start and closed until asked for: Panels ›
+    # Part's, beside Selected, and the part's own Part › View › Motion, on a part whose
+    # pieces move.
     ("motion", "Motion"),
+    # Lighting: a rig's legend and its console's levels (static/lighting.js), registered
+    # while the site has a rig: Panels › Site's, greyed on a site without one.
+    ("lighting", "Lighting"),
 )
 # The group each panel's window is registered under, as the page registers it (its
 # markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
@@ -797,8 +897,9 @@ PANEL_GROUPS = {
     "scad": "Site",
     "layers": "Site",
     "working": "Site",
+    "lighting": "Site",
     "procedure": "Family",
-    "selected": "Selected",
+    "selected": "Part",
     "pictures": "Pictures",
     "models": "Pictures",
     "gather": "Pictures",
@@ -821,13 +922,12 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
     (journey.id, journey.cell) for journey in JOURNEYS if journey.cell
 )
 JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
-# The panels seated before the windows' own cell (Panels › Windows, 49); a panel
-# registered after them is seated after it. Site's cell is a ring of Site and its
-# own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
-# Machine and its control pad.
-_BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
+# Panels is one cell per group of windows, each a ring of its group's windows and their
+# verbs: Site 8, Part 6, Pictures 2, Machine 4, then the layout's own Windows 9, Tools 3,
+# Family 1 and Airgap 7. These four come before Windows.
+_BEFORE_WINDOWS = ("site", "part", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure", "layers"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "lighting", "layers"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
     # Marks last, so Models and Gather keep their addresses.
@@ -835,7 +935,11 @@ _RINGS = {
 }
 
 
-def _panels() -> Option:
+def _panels(rig: bool = False) -> Option:
+    """Panels, cell 4 of the canvas ring: one cell per group of windows, each a ring of its
+    group's windows, each a toggle, and their verbs, wearing the group's colour. ``rig``:
+    the site has a lighting rig, whose window is Site's; without one its cell is greyed."""
+
     def toggle(pid: str, label: str) -> Option:
         return Option(
             id=f"panel:{pid}",
@@ -846,83 +950,134 @@ def _panels() -> Option:
 
     labels = dict(PANELS)
 
-    def cell(pid: str, label: str) -> Option:
-        if pid == "machine":
-            # A board's Machine, and an armed printer's control pad in a loud window
-            # of its own or put back in its Machine, as the pad's ⧉ Pop out and
-            # ⇥ Put back do (widgets/machine.js); then the knobs, and the heater loops
-            # of the printer whose Machine is open, each after the cells before it.
-            return Option(
-                id="panels:machine",
-                label=label,
-                group=PANEL_GROUPS[pid],
-                children=[
-                    toggle(pid, label),
-                    Option(id="panel:pad", label="Control pad", action="panel:pad"),
-                    _knobs(),
-                    _loops(toggle("loops", labels["loops"])),
-                ],
-            )
-        if pid not in _RINGS:
-            return toggle(pid, label)
-        return Option(
-            id=f"panels:{pid}",
-            label=label,
-            group=PANEL_GROUPS.get(pid),
-            children=[
-                _models(toggle(each, labels[each]))
-                if each == "models"
-                else _marks(toggle(each, labels[each]))
-                if each == "marks"
-                else _procedure(toggle(each, labels[each]))
-                if each == "procedure"
-                else toggle(each, labels[each])
-                for each in _RINGS[pid]
-            ],
-        )
+    def lighting() -> Option:
+        cell = toggle("lighting", labels["lighting"])
+        if not rig:
+            cell.enabled = False
+            cell.why = "this site has no lighting rig"
+        return cell
 
+    def of_site(each: str) -> Option:
+        if each == "lighting":
+            return lighting()
+        return toggle(each, labels[each])
+
+    def of_pictures(each: str) -> Option:
+        if each == "models":
+            return _models(toggle(each, labels[each]))
+        if each == "marks":
+            return _marks(toggle(each, labels[each]))
+        return toggle(each, labels[each])
+
+    family = by_id("family")
+    cells = {
+        "site": Option(
+            id="panels:site",
+            label="Site",
+            group="Site",
+            children=[of_site(each) for each in _RINGS["site"]],
+        ),
+        # Part: Selected, the Part system's main window, and Motion; the part's own
+        # sections are its ring's (Part › Edit, View, History, Variants).
+        "part": Option(
+            id="panels:part",
+            label="Part",
+            group="Part",
+            children=[toggle("selected", labels["selected"]), toggle("motion", labels["motion"])],
+        ),
+        "pictures": Option(
+            id="panels:pictures",
+            label="Pictures",
+            group="Pictures",
+            children=[of_pictures(each) for each in _RINGS["pictures"]],
+        ),
+        # A board's Machine, and an armed printer's control pad in a loud window of its own
+        # or put back in its Machine, as the pad's ⧉ Pop out and ⇥ Put back do
+        # (widgets/machine.js); then the heater loops of the printer whose Machine is open.
+        "machine": Option(
+            id="panels:machine",
+            label="Machine",
+            group="Machine",
+            children=[
+                toggle("machine", labels["machine"]),
+                Option(id="panel:pad", label="Control pad", action="panel:pad"),
+                _loops(toggle("loops", labels["loops"])),
+            ],
+        ),
+    }
+    windows = Option(
+        id="panel:windows",
+        label="Windows",
+        # The layout itself: the world alone (its window maximised) and every window
+        # back, as the tilde key does; the page's own layout again, whatever was dragged,
+        # split or closed; each view; and the Tour, after the views, so no cell before it
+        # moves: its box over the page and its verbs.
+        children=[
+            Option(id="panel:world", label="World alone", action="panel:world:toggle"),
+            Option(id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"),
+            *(
+                Option(
+                    id=f"panel:view:{vid}",
+                    label=label,
+                    group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
+                    action=f"panel:view:{vid}",
+                )
+                for vid, label in VIEWS
+            ),
+            _tour(),
+        ],
+    )
+    # Tools: the Bench and its verbs, Settings (View › Settings opens it too), the Deck
+    # with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of
+    # the browser's own, as the header's Docs opens them.
+    tools = Option(
+        id="panels:tools",
+        label="Tools",
+        group="Tools",
+        children=[
+            _bench(toggle("bench", labels["bench"])),
+            toggle("settings", labels["settings"]),
+            _deck(toggle("deck", labels["deck"])),
+            Option(id="panel:docs", label="Docs", action="panel:docs"),
+        ],
+    )
+    # Family: the Procedure and its verbs, then the family system's sections (systems.py).
+    family_cell = Option(
+        id="panels:family",
+        label="Family",
+        group="Family",
+        children=[
+            _procedure(toggle("procedure", labels["procedure"])),
+            *(
+                Option(
+                    id=f"panel:{family.id}-{section.id}",
+                    label=section.title,
+                    group=family.group,
+                    action=f"panel:toggle:{family.id}-{section.id}",
+                )
+                for section in family.sections
+            ),
+        ],
+    )
     return Option(
         id="panels",
         label="Panels",
-        children=[cell(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
-        # The layout itself: the world alone (its window maximised) and every window
-        # back, as the tilde key does; the page's own layout again, whatever was
-        # dragged, split or closed; and each view.
-        + [
-            Option(
-                id="panel:windows",
-                label="Windows",
-                children=[
-                    Option(id="panel:world", label="World alone", action="panel:world:toggle"),
-                    Option(
-                        id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"
-                    ),
-                ]
-                + [
-                    Option(
-                        id=f"panel:view:{vid}",
-                        label=label,
-                        group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
-                        action=f"panel:view:{vid}",
-                    )
-                    for vid, label in VIEWS
-                ]
-                # The Tour, after the views, so no cell before it moves: its box over
-                # the page and its verbs.
-                + [_tour()],
-            )
-        ]
-        + [_bench(toggle("bench", "Bench"))]
-        # The documentation and the walkthrough, in a tab of the browser's own, as
-        # the header's Docs opens them. After the others, so no cell before it moves.
-        + [Option(id="panel:docs", label="Docs", action="panel:docs")]
-        # The Airgap, a group of its own: the panel and its verbs. The eighth cell,
-        # the ring's last.
-        + [_airgap(toggle("airgap", "Airgap"))],
+        children=[
+            *(cells[pid] for pid in _BEFORE_WINDOWS),
+            windows,
+            tools,
+            family_cell,
+            # The Airgap, a group of its own: the panel and its verbs. The eighth cell.
+            _airgap(toggle("airgap", labels["airgap"])),
+        ],
     )
 
 
-def _view(site: Optional[Assembly] = None) -> Option:
+def _view(
+    site: Optional[Assembly] = None,
+    part_category: Callable[[str], Optional[str]] = lambda _: None,
+    under: str = "",
+) -> Option:
     """View, cell 2 of the canvas ring: how the world is drawn.
 
     Its cells are the header's ⚙ View menu's items. Fit, first, frames the pieces
@@ -935,7 +1090,8 @@ def _view(site: Optional[Assembly] = None) -> Option:
     the ring is not told how they stand. Settings opens the Settings panel --
     the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
     before it moves. Layers and Depth come after it, in the two cells left: Layers is
-    a ring of ``site``'s layers, each a ring of its own acts (``_layers``), and Depth
+    a ring of the layers of what lies beneath the level in view (``under``), each a ring
+    of its own acts (``_layers``), and Depth
     is how many levels below this one a click reaches and the world draws, one to four
     by name and one more or less, as the Layers window's stepper (to eight). Select
     walls is the wall layer's Selectable tick.
@@ -959,7 +1115,7 @@ def _view(site: Optional[Assembly] = None) -> Option:
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
             # After Settings, which keeps its cell: the two cells still free.
-            _layers(site),
+            _layers(site, part_category, under),
             Option(
                 id="view:depth",
                 label="Depth",
@@ -982,7 +1138,7 @@ def _view(site: Optional[Assembly] = None) -> Option:
 
 
 # The world's own layers, and the words their cells say. The grid and the machines'
-# buttons are a kind of their own, among which Only this and All act; the measurement
+# buttons are a set of their own, among which Only this and All act; the measurement
 # is a mode, so it is only ever shown or not.
 WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
     (GRID, "Grid"),
@@ -993,10 +1149,11 @@ WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
 
 def _layer_ring(layer: str, label: str) -> Option:
     """One layer's ring, in its colour: Shown, then Selectable where a click can pick
-    what it draws (a shell's, a category's), then Only this and All -- this layer shown
-    and the others of its kind hidden, and every one of its kind shown -- where it has
-    a kind (not the measurement). Each does what its row of the Layers window does, or
-    the same over its kind (``layer:<verb>:<layer>``, the page's)."""
+    what it draws (a shell's, a System's, a category's), then Only this and All -- this
+    layer shown and the others of its set hidden, and every one of its set shown -- where
+    it has a set (not the measurement): the shells, the pieces' layers, or the grid and
+    the buttons. Each does what its row of the Layers window does, or the same over its
+    set (``layer:<verb>:<layer>``, the page's)."""
     colour = colour_of(layer)
 
     def act(verb: str, said: str) -> Option:
@@ -1005,7 +1162,7 @@ def _layer_ring(layer: str, label: str) -> Option:
         )
 
     acts = [act("shown", "Shown")]
-    if layer.startswith((SHELL, CATEGORY)):
+    if layer.startswith((SHELL, SYSTEM_LAYER, CATEGORY)):
         acts.append(act("selectable", "Selectable"))
     if layer != MEASURE:
         acts += [act("only", "Only this"), act("all", "All")]
@@ -1013,30 +1170,52 @@ def _layer_ring(layer: str, label: str) -> Option:
 
 
 def _in_order(prefix: str, label: str, rings: Sequence[Option]) -> Option:
-    """A ring of rings, in the order given; more than eight are split into groups of at
-    most eight, each named for its first, as any long list is (``_bucket``), in order."""
-    if len(rings) <= MOST_OPTIONS:
-        return Option(id=prefix, label=label, children=list(rings))
-    per = -(-len(rings) // MOST_OPTIONS)
-    chunks = [list(rings[start : start + per]) for start in range(0, len(rings), per)]
-    heads = distinct([chunk[0].label for chunk in chunks])
+    """A ring of rings, in the order given, cut in that order where they do not fit
+    (``_fit``)."""
+    return Option(id=prefix, label=label, children=_fit(prefix, rings, by_name=False))
+
+
+def _kind_ring(kind: Dict[str, object]) -> Option:
+    """A Kind's ring, in its colour: Shown and Selectable over every one of its categories
+    at once, as its heading's ticks in the Layers window, then each category's ring
+    (``_layer_ring``)."""
+    layer, colour = str(kind["layer"]), str(kind["colour"])
+    acts = [
+        Option(
+            id=f"layer:{verb}:{layer}", label=said, action=f"layer:{verb}:{layer}", colour=colour
+        )
+        for verb, said in (("shown", "Shown"), ("selectable", "Selectable"))
+    ]
+    words = [str(word["word"]) for word in kind["words"]]  # type: ignore[union-attr]
+    rings = [
+        _layer_ring(f"{CATEGORY}{word}", said)
+        for word, said in zip(words, distinct(words), strict=True)
+    ]
     return Option(
-        id=prefix,
-        label=label,
-        children=[
-            Option(id=f"{prefix}:group{i}", label=head, children=chunk)
-            for i, (head, chunk) in enumerate(zip(heads, chunks, strict=True))
-        ],
+        id=f"layer:{layer}",
+        label=str(kind["name"]),
+        colour=colour,
+        children=acts + _fit(f"layer:{layer}:in", rings, MOST_OPTIONS - len(acts), by_name=False),
     )
 
 
-def _layers(site: Optional[Assembly]) -> Option:
+# What View › Layers names the layers of a level's pieces by, as the Layers window does.
+LAYERS_SYSTEMS, LAYERS_KINDS, LAYERS_WORDS = "Systems", "Kinds", "Words"
+
+
+def _layers(
+    site: Optional[Assembly],
+    part_category: Callable[[str], Optional[str]] = lambda _: None,
+    under: str = "",
+) -> Option:
     """View › Layers: the Layers window, the world's own layers, Reset (depth 1, every
     layer shown and selectable but walls, as the window's Reset), then the layers that
-    come and go with the site -- its shells, then its categories, as the window lists
-    them (``layer_colours.layers_in``) -- each a ring of its acts (``_layer_ring``). A
-    layer's drawn ring in the world opens the ring of its acts here."""
-    shells, categories = layers_in(site) if site is not None else ([], [])
+    come and go with what lies beneath the level in view, as the window lists them: the
+    site's shells, then, as ``facets.facets_of`` lists them, its Systems, each a ring of
+    its acts (``_layer_ring``); its Kinds, each a ring of its categories
+    (``_kind_ring``); and the words neither holds. A layer's drawn ring in the world
+    opens the ring of its acts here."""
+    shells = shells_in(site) if site is not None else []
     children = [
         Option(id="view:layers:window", label="Window", action="view:layers"),
         Option(
@@ -1054,14 +1233,33 @@ def _layers(site: Optional[Assembly]) -> Option:
                 [_layer_ring(f"{SHELL}{n}", f"Shell {n}") for n in shells],
             )
         )
-    if categories:
+    sent = facets_of(site, part_category, under) if site is not None else None
+    if sent is None:
+        return Option(id="view:layers", label="Layers", children=children)
+    by_kind = sent["by"] == KIND
+    systems = [] if by_kind else list(sent["values"])  # type: ignore[arg-type]
+    kinds = list(sent["values"] if by_kind else sent["kinds"])  # type: ignore[arg-type]
+    if systems:
         children.append(
             _in_order(
-                "layers:categories",
-                "Categories",
+                "layers:systems",
+                LAYERS_SYSTEMS,
+                [_layer_ring(str(value["layer"]), str(value["name"])) for value in systems],
+            )
+        )
+    if kinds:
+        children.append(
+            _in_order("layers:kinds", LAYERS_KINDS, [_kind_ring(kind) for kind in kinds])
+        )
+    loose = [str(w["word"]) for w in sent["loose"]]  # type: ignore[index]
+    if loose:
+        children.append(
+            _in_order(
+                "layers:words",
+                LAYERS_WORDS,
                 [
-                    _layer_ring(f"{CATEGORY}{name}", said)
-                    for name, said in zip(categories, distinct(categories), strict=True)
+                    _layer_ring(f"{CATEGORY}{word}", said)
+                    for word, said in zip(loose, distinct(loose), strict=True)
                 ],
             )
         )
@@ -1090,7 +1288,7 @@ def _colours(words: Sequence[str]) -> List[Option]:
 
 
 def _procedure(toggle: Option) -> Option:
-    """Panels › Site › Procedure: the window, then its verbs, which the page hands to it
+    """Panels › Family › Procedure: the window, then its verbs, which the page hands to it
     (widgets/procedure.js). Seated after the window's own cell."""
     return Option(
         id="panels:procedure",
@@ -1103,18 +1301,19 @@ def _procedure(toggle: Option) -> Option:
     )
 
 
-def _knobs() -> Option:
-    """Panels › Machine › Knobs: the Stream Deck +'s knobs, the server's layout on the deck
-    (firmware/deck_control.py), which the page hands each verb to -- on or off, the machine
-    they move, their step, and the machine of the Machine that is open -- then the Deck
-    window, which shows them, and the screen the deck's strip shows. Seated after the
-    Machine's own two cells, so neither moves."""
+def _deck(toggle: Option) -> Option:
+    """Panels › Tools › Deck: the Deck window, then the Stream Deck +'s knobs, the server's
+    layout on the deck (firmware/deck_control.py), which the page hands each verb to -- on
+    or off, the machine they move, their step, and the machine of the Machine that is open
+    -- and the screen the deck's strip shows."""
     from .firmware.deck_control import MACHINES, STEPS_MM
 
     return Option(
-        id="panels:knobs",
-        label="Knobs",
+        id="panels:deck",
+        label="Deck",
+        group="Tools",
         children=[
+            toggle,
             Option(id="deck:knobs", label="On / off", action="deck:knobs"),
             Option(
                 id="deck:machine",
@@ -1137,10 +1336,8 @@ def _knobs() -> Option:
                 ],
             ),
             Option(id="deck:here", label="Here", action="deck:here"),
-            Option(id="panel:deck", label="Deck", action="panel:toggle:deck"),
             # The strip's screen, by its name or a step either way as a swipe along the
-            # strip takes it (firmware/deck_screens.py). After the Deck window, so no
-            # cell before it moves.
+            # strip takes it (firmware/deck_screens.py).
             Option(
                 id="deck:screen",
                 label="Screen",
@@ -1153,7 +1350,7 @@ def _knobs() -> Option:
     )
 
 
-# The cells of Knobs › Screen: each screen of the strip in its order, then a step back and on.
+# The cells of Deck › Screen: each screen of the strip in its order, then a step back and on.
 SCREEN_CELLS = (
     ("knobs", "Knobs"),
     ("progress", "Progress"),
@@ -1441,18 +1638,6 @@ NEWEST = MOST_OPTIONS - 1
 PIN_CHOSEN = "Pin "
 
 
-def _chunks(items: Sequence, most_groups: int) -> List[List]:
-    """Split a list, in order, into at most ``most_groups`` groups of at most eight."""
-    per = max(-(-len(items) // most_groups), 1)
-    if per > MOST_OPTIONS:
-        raise RingTooFull(
-            f"{len(items)} to choose between, and {most_groups} groups of "
-            f"{MOST_OPTIONS} hold {most_groups * MOST_OPTIONS}. This needs searching, "
-            "not a bigger menu."
-        )
-    return [list(items[start : start + per]) for start in range(0, len(items), per)]
-
-
 def _listed(
     group_id: str,
     leaves: Sequence[Tuple[str, str]],
@@ -1460,25 +1645,14 @@ def _listed(
     first: Sequence[Option] = (),
 ) -> List[Option]:
     """Options ``first``, then one leaf per ``(action, name)``, labelled so no two
-    read the same; grouped, each group named for its first, when the leaves do
-    not fit beside ``first`` in one ring."""
-    room = MOST_OPTIONS - len(first)
+    read the same, in the order given; cut in that order, each run named for its
+    first, when they do not fit beside ``first`` in one ring (``_fit``)."""
     labels = distinct([name for _, name in leaves])
     made = [
         Option(id=action, label=label, action=action)
         for (action, _), label in zip(leaves, labels, strict=True)
     ]
-    if len(made) <= room:
-        return [*first, *made]
-    groups = _chunks(made, room)
-    heads = distinct([group[0].label for group in groups])
-    return [
-        *first,
-        *(
-            Option(id=f"{group_id}:group{i}", label=head, children=group)
-            for i, (head, group) in enumerate(zip(heads, groups, strict=True))
-        ),
-    ]
+    return [*first, *_fit(group_id, made, MOST_OPTIONS - len(first), by_name=False)]
 
 
 def _stem(path: str) -> str:
@@ -1795,11 +1969,27 @@ def _pictures(picture: PictureContext) -> Option:
     )
 
 
+def _nothing_to_list(prefix: str, family: str, why: str) -> Option:
+    """A cell of the canvas ring with nothing to list now, greyed and saying why, so that
+    every cell keeps its address (``_canvas_ring``). Its action, ``<family>:none``, is
+    never carried out: a greyed cell chosen does nothing (static/ring.js)."""
+    return Option(id=prefix, label=shorten(prefix), action=f"{family}:none", enabled=False, why=why)
+
+
 def _canvas_pieces(
-    prefix: str, focus_path: str, focus: Optional[Assembly], made: Sequence[str]
-) -> Optional[Option]:
-    """Pieces at this level. At the top, the pieces made from pictures are one
-    grouped Made cell after the code's own, so they cannot crowd the ring out."""
+    prefix: str,
+    focus_path: str,
+    focus: Optional[Assembly],
+    made: Sequence[str],
+    faceted: Dict[str, Tuple[Optional[str], Optional[str]]],
+    universe: bool,
+    site_name: Optional[str],
+) -> Option:
+    """Pieces at this level, more than fit cut by facet (``_pieces``). At the top, the
+    pieces made from pictures are one Made cell after the code's own, so they cannot crowd
+    the ring out; in the universe, Pieces lists its parts, and its sites are the canvas
+    ring's Site cell's. Greyed, saying why, where there is nothing to list: no site, a
+    target no longer in it, a level with nothing in it."""
     if focus is not None and focus_path and not focus.children:
         # A leaf stepped into is drawn as itself: the one piece at its level.
         return Option(
@@ -1813,35 +2003,85 @@ def _canvas_pieces(
                 )
             ],
         )
-    made_here = sorted(
-        {c.name for c in focus.children if c.name in set(made)} if focus is not None else set()
+    if focus is None:
+        return _nothing_to_list(
+            prefix,
+            "select",
+            f"{focus_path} is not in {site_name}" if site_name else "no site is loaded",
+        )
+    at_top = not focus_path
+    made_here = sorted({c.name for c in focus.children if c.name in set(made)}) if at_top else []
+    names = sorted(
+        {
+            c.name
+            for c in focus.children
+            if c.name not in made_here and not (at_top and universe and c.site_ref)
+        }
     )
-    if focus_path or focus is None or not made_here:
-        return _pieces(prefix, focus_path, focus)
-    names = sorted({c.name for c in focus.children if c.name not in set(made_here)})
     made_cell = _grouped("Made", made_here, lambda name: f"select:{name}")
-    assert made_cell is not None
-    children = _listed(prefix, [(f"select:{n}", n) for n in names], first=[])
-    if len(children) >= MOST_OPTIONS:
-        groups = _chunks(names, MOST_OPTIONS - 1)
-        heads = distinct([group[0] for group in groups])
-        children = [
-            Option(
-                id=f"{prefix}:group{i}",
-                label=head,
-                children=_listed(f"{prefix}:group{i}", [(f"select:{n}", n) for n in group]),
-            )
-            for i, (head, group) in enumerate(zip(heads, groups, strict=True))
-        ]
-    return Option(id=prefix, label=shorten(prefix), children=[*children, made_cell])
+    room = MOST_OPTIONS - (1 if made_cell is not None else 0)
+    children = _pieces(prefix, focus_path, focus, faceted, names=names, room=room)
+    if made_cell is not None:
+        children.append(made_cell)
+    if not children:
+        here = focus_path or focus.name
+        return _nothing_to_list(
+            prefix,
+            "select",
+            f"nothing is in {here} but sites, which Site lists"
+            if at_top and universe
+            else f"nothing is in {here}",
+        )
+    return Option(id=prefix, label=shorten(prefix), children=children)
+
+
+# The canvas ring's cell of the level's groups: what each is called where its site is
+# grouped by it.
+GROUPS_LABEL = {"kind": "Kinds", "system": "Systems"}
+
+
+def _facet_cell(site: Optional[Assembly], part_category, under: str = "") -> Option:
+    """Kinds in the universe, Systems in a site: a cell of each value what lies beneath
+    the level in view (``under``) has (``facets.facets_of``), in its colour, each opening
+    what its pieces hold in their places, as Site's chips do (``facet:<facet>:<value>``).
+    Greyed, saying why, where there is none, so its address holds still."""
+    if site is None:
+        return Option(
+            id="facets",
+            label=GROUPS_LABEL["system"],
+            action="facet:none",
+            enabled=False,
+            why="no site is loaded",
+        )
+    sent = facets_of(site, part_category, under)
+    by = str(sent["by"])
+    label = GROUPS_LABEL[by]
+    values = [(str(value["name"]), str(value["colour"])) for value in sent["values"]]  # type: ignore[index]
+    if not values:
+        return Option(
+            id="facets",
+            label=label,
+            action="facet:none",
+            enabled=False,
+            why=f"nothing {'beneath ' + under if under else 'in ' + site.name} is in one of the {label}",
+        )
+    return Option(
+        id="facets",
+        label=label,
+        children=[
+            Option(id=f"facet:{by}:{name}", label=name, action=f"facet:{by}:{name}", colour=colour)
+            for name, colour in values
+        ],
+    )
 
 
 def _canvas_ring(
     context: Context,
     site: Optional[Assembly],
     site_names: Sequence[str],
-    groups: Sequence[str],
+    part_category,
     picture: PictureContext,
+    rig: bool = False,
 ) -> Ring:
     """The ring on empty canvas: the pieces at this level, the rest, and the way out.
 
@@ -1852,32 +2092,44 @@ def _canvas_ring(
     it; Panels opens and closes what stands in front of it; Rebuild builds the
     site again from its factory, asked twice.
 
-    The cells that are always there come first and keep one address wherever the ring is
-    opened: Pieces 8, Site 6, View 2, Panels 4, Pictures 9, Rebuild 3. The two that come
-    and go are seated after them: Step out (one level in or deeper), then Group (a site
-    whose pieces have categories).
+    Every cell is always there and keeps one address wherever the ring is opened: Pieces
+    8, Site 6, View 2, Panels 4, Pictures 9, Rebuild 3, Step out 1 and the level's groups
+    7, Kinds in the universe and Systems in a site (``_facet_cell``). A cell with nothing
+    to do or list now is greyed, saying why, and holds its address: Pieces with no site, a
+    target no longer in it or nothing at its level; Site with no site registered; the
+    level's groups where none is beneath it. Step out at a site's own level goes to the
+    universe, and is greyed at the universe's own, where there is nothing above.
     """
     focus_path = context.targets[0] if context.targets else ""
     focus = find_node_by_path(site, focus_path) if site and focus_path else site
+    universe = site is not None and facet_of(site) == KIND
+    faceted = kinds_and_systems(site, part_category) if site is not None else {}
+    top_of_everything = universe and not focus_path
+    site_name = site.name if site is not None else None
     options = [
-        option
-        for option in (
-            _canvas_pieces("Pieces", focus_path, focus, picture.made),
-            # The universe is listed with the sites, by the name the page gives it.
-            _grouped(
-                "Site",
-                site_names,
-                lambda name: f"site:{name}",
-                shown={UNIVERSE: UNIVERSE_SHOWN},
-            ),
-            _view(site),
-            _panels(),
-            _pictures(picture),
-            Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
-            Option(id="up", label="Step out", action="zoom-out") if focus_path else None,
-            _grouped("Group", groups, lambda name: f"group:{name}"),
+        _canvas_pieces("Pieces", focus_path, focus, picture.made, faceted, universe, site_name),
+        # The universe is listed with the sites, by the name the page gives it.
+        _grouped(
+            "Site",
+            site_names,
+            lambda name: f"site:{name}",
+            shown={UNIVERSE: UNIVERSE_SHOWN},
         )
-        if option is not None
+        or _nothing_to_list("Site", "site", "no site is registered"),
+        _view(site, part_category, focus_path),
+        _panels(rig),
+        _pictures(picture),
+        Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
+        Option(
+            id="up",
+            label="Step out",
+            action="zoom-out",
+            enabled=not top_of_everything,
+            why="the universe is the top: there is nothing to step out to"
+            if top_of_everything
+            else None,
+        ),
+        _facet_cell(site, part_category, focus_path),
     ]
     title = shorten(focus.name) if focus is not None else (shorten(site.name) if site else None)
     return Ring(title=title, options=options)
@@ -1889,6 +2141,7 @@ def _node_ring(
     device: Optional[Device],
     picture: PictureContext,
     sketch: Optional[str] = None,
+    part_category=None,
 ) -> Ring:
     path = context.targets[0] if context.targets else ""
     node = find_node_by_path(site, path) if site and path else None
@@ -1906,9 +2159,16 @@ def _node_ring(
 
     # The pieces inside this one, a ring of them: selecting, not stepping in --
     # a chosen piece becomes the ring's next subject.
-    into = _pieces("Inside", path, node)
-    if into is not None:
-        options.append(into)
+    inside = _pieces(
+        "Inside",
+        path,
+        node,
+        kinds_and_systems(site, part_category or _registered_category)
+        if site is not None and node is not None and len(node.children) > MOST_OPTIONS
+        else None,
+    )
+    if inside:
+        options.append(Option(id="Inside", label="Inside", children=inside))
 
     # Appended after every cell the ring had, so none of them moves: a host
     # has a camera added above it and holds views; a made piece has its word and
@@ -1997,14 +2257,22 @@ def _node_ring(
                 Option(
                     id="part:presets",
                     label="Presets",
-                    children=[
-                        Option(
-                            id=f"part:preset:{name}",
-                            label=seen.preset_labels.get(name) or name,
-                            action=f"part:preset:{name}",
-                        )
-                        for name in seen.presets[:MOST_OPTIONS]
-                    ],
+                    children=_fit(
+                        "part:presets",
+                        [
+                            Option(
+                                id=f"part:preset:{name}",
+                                label=label,
+                                action=f"part:preset:{name}",
+                            )
+                            for name, label in zip(
+                                seen.presets,
+                                distinct([seen.preset_labels.get(n) or n for n in seen.presets]),
+                                strict=True,
+                            )
+                        ],
+                        by_name=False,
+                    ),
                 )
             )
         if seen is not None and seen.end and len(verbs) < MOST_OPTIONS:
@@ -2540,7 +2808,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # Choosing which arrangement to look at, and which pieces to show, are both
     # about what is on screen rather than what the arrangement is.
     "site": Carries.VIEWER,
-    "group": Carries.VIEWER,
+    "facet": Carries.VIEWER,
     # Discarding every edit and rebuilding from the factory.
     "reset": Carries.SERVER,
     # A board's verbs. The pages already have a handler for each -- Selected's

@@ -240,7 +240,7 @@ def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
 
 @pytest.mark.e2e
 def test_the_decks_knobs_wear_the_rings_addresses_and_its_words(page: Page, url: str):
-    """The Deck window's knobs controls are the cells of Panels › Machine › Knobs: the ring
+    """The Deck window's knobs controls are the cells of Panels › Tools › Deck: the ring
     writes each one's address after its tip, as it does on a Machine's buttons, where the
     window once spelled the path out; and the strip's screens are called as the ring calls
     them."""

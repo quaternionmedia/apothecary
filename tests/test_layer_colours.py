@@ -1,6 +1,7 @@
 """One colour for each layer the world draws (apothecary/layer_colours.py): a table the
-server and the page share, each colour held apart from the others, a category nobody
-wrote down given the colour the page always gave it, and a site sent with its own."""
+server and the page share, the shells' and the world's own held apart from the others and
+the facets' read from apothecary/facets.py, a word nobody wrote down given the colour the
+page always gave it, and a site sent with its own."""
 
 from __future__ import annotations
 
@@ -17,13 +18,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apothecary import api, layer_colours, sites
+from apothecary.facets import KIND, KINDS, SYSTEM, SYSTEMS, category_shade
+from apothecary.facets import colour as facet_colour
 from apothecary.layer_colours import (
-    CATEGORIES,
     SHELLS,
     WORLD,
     category_colour,
     colour_of,
-    layers_in,
+    shells_in,
 )
 from apothecary.layer_colours import (
     layer_colours as colours_for,
@@ -64,11 +66,20 @@ def _states() -> list:
     return [found[name] for name in ("--ok", "--warn", "--bad")]
 
 
+def _facets() -> list:
+    """Every colour of a facet: each kind's, each of its categories' and each System's."""
+    return [
+        *(facet_colour(KIND, name) for name in KINDS),
+        *(category_shade(word) for words in KINDS.values() for word in words),
+        *(facet_colour(SYSTEM, name) for name in SYSTEMS),
+    ]
+
+
 # --- the table --------------------------------------------------------------------------
 
 
 def test_every_colour_written_down_is_one_the_page_can_draw():
-    for colour in [*WORLD.values(), *SHELLS, *CATEGORIES.values()]:
+    for colour in [*WORLD.values(), *SHELLS, *_facets()]:
         assert re.fullmatch(r"#[0-9a-f]{6}", colour), colour
 
 
@@ -77,9 +88,15 @@ def test_a_layer_is_named_as_the_pick_scope_names_it():
     assert colour_of("measure") == WORLD["measure"]
     assert colour_of("shell:0") == SHELLS[0]
     assert colour_of(f"shell:{len(SHELLS) + 1}") == SHELLS[1]
-    assert colour_of("category:wall") == CATEGORIES["wall"]
-    with pytest.raises(KeyError):
-        colour_of("floor")
+    # A System's, a Kind's and a category's are the facets' (apothecary/facets.py).
+    assert colour_of("system:building") == facet_colour(SYSTEM, "Building") == "#9c8f7a"
+    assert colour_of("kind:test-pieces") == facet_colour(KIND, "Test pieces")
+    assert colour_of("category:coupon") == category_shade("coupon")
+    # The System's furniture and the part's are two layers in two colours.
+    assert colour_of("system:furniture") != colour_of("category:furniture")
+    for nowhere in ("floor", "system:nowhere", "kind:wall"):
+        with pytest.raises(KeyError):
+            colour_of(nowhere)
 
 
 def test_the_machines_buttons_wear_the_machine_groups_colour_as_tokens_say_it():
@@ -90,32 +107,16 @@ def test_the_machines_buttons_wear_the_machine_groups_colour_as_tokens_say_it():
 
 def test_the_shells_and_the_worlds_own_stand_apart_from_each_other_and_from_what_they_meet():
     """A shell's rings, the build volumes and the measurement are drawn beside the
-    categories' clusters and pieces, the badges of each group and the colours that mean a
-    state: each is at least 20 apart (ΔE*76) from all of those and from each other."""
+    facets' clusters and pieces, the badges of each group and the colours that mean a
+    state: each is at least 20 apart (ΔE*76) from all of those and from each other. The
+    facets' are held apart from each other in tests/test_facets.py."""
     own = [*SHELLS, WORLD["grid"], WORLD["measure"]]
     for a, b in itertools.combinations(own, 2):
         assert _apart(a, b) >= 20, (a, b)
-    met = [*CATEGORIES.values(), *_groups().values(), *_states()]
+    met = [*_facets(), *_groups().values(), *_states()]
     for colour in own:
         for other in met:
             assert _apart(colour, other) >= 20, (colour, other)
-
-
-def test_the_categories_written_down_stand_apart_from_each_other():
-    """The clusters of one shell are told apart by colour: every two categories written
-    down at least 15 apart."""
-    for (a, x), (b, y) in itertools.combinations(CATEGORIES.items(), 2):
-        assert _apart(x, y) >= 15, (a, b)
-
-
-def test_a_category_written_down_stands_apart_from_the_colours_that_mean_a_state():
-    """A piece's row in Site wears its category's colour beside its state's dot: no
-    category is read as a state, each as far from them as from another category. The
-    garage's structure was the page's green, a shade off ok."""
-    for name, colour in CATEGORIES.items():
-        for state in _states():
-            assert _apart(colour, state) >= 15, (name, state)
-    assert "structure" in CATEGORIES
 
 
 def _hue(colour: str) -> float:
@@ -158,45 +159,63 @@ def test_a_word_nobody_wrote_down_has_the_colour_the_page_always_gave_it(word):
 # --- a site's own ------------------------------------------------------------------------
 
 
-def test_the_garage_has_its_categories_and_the_worlds_layers_and_no_shell():
+def test_the_garage_has_its_systems_its_loose_parts_kinds_and_the_worlds_layers_and_no_shell():
     garage = sites.store.get("garage")
-    shells, categories = layers_in(garage)
-    assert shells == []
-    assert {"wall", "furniture", "electrical", "structure"} <= set(categories)
-    # Those written down first, in the table's order, the rest by name.
-    written = [c for c in categories if c in CATEGORIES]
-    assert written == [c for c in CATEGORIES if c in written]
-    assert categories[len(written) :] == sorted(categories[len(written) :])
-    colours = colours_for(garage)
-    assert colours["category:wall"] == "#9c8f7a"
-    assert colours["category:structure"] == CATEGORIES["structure"]
-    assert list(colours)[-3:] == ["grid", "machine-buttons", "measure"]
+    assert shells_in(garage) == []
+    colours = colours_for(garage, api.part_category)
+    # Its Systems, then each kind of its loose parts, a heading, and its categories, as
+    # the facets list them; the world's own last.
+    assert list(colours) == [
+        "system:building",
+        "system:furniture",
+        "system:machines",
+        "system:mechanical",
+        "system:electrical",
+        "system:plumbing",
+        "kind:electronics",
+        "category:electrical",
+        "category:electronics",
+        "kind:test-pieces",
+        "category:coupon",
+        "kind:things",
+        "category:furniture",
+        "grid",
+        "machine-buttons",
+        "measure",
+    ]
+    assert colours["system:building"] == "#9c8f7a"
+    # A machine's System wears the Machines token's colour (apothecary/facets.py).
+    machines = re.search(r"--kind-machines: (#[0-9a-f]{6})", TOKENS).group(1)
+    assert colours["system:machines"] == machines
 
 
-def test_the_universe_has_its_shells_its_parts_categories_and_its_miniatures():
+def test_the_universe_has_its_shells_its_parts_kinds_and_categories_and_its_miniatures():
     universe = sites.store.get("apothecary")
-    shells, categories = layers_in(universe)
+    shells = shells_in(universe)
     assert shells == sorted({c.shell for c in universe.children})
-    assert {"machine", "electrical", "camera"} <= set(categories)
-    # A site's piece is one node: the theatre's walls are drawn in it, not layers of it.
-    assert "wall" not in categories
-    colours = colours_for(universe)
+    colours = colours_for(universe, api.part_category)
     assert colours["shell:0"] == SHELLS[0]
-    assert colours["category:wall"] == CATEGORIES["wall"]
-    assert colours["category:lighting"] == CATEGORIES["lighting"]
+    assert {"kind:machines", "category:machine", "category:electrical", "category:camera"} <= set(
+        colours
+    )
+    # A site's piece is one node: the theatre's walls are drawn in it, not layers of it,
+    # yet its boxes wear their Systems' colours.
+    assert colours["system:building"] == facet_colour(SYSTEM, "Building")
+    assert colours["system:lighting"] == facet_colour(SYSTEM, "Lighting")
+    assert not any(layer.startswith("category:wall") for layer in colours)
 
 
 def test_a_site_is_sent_with_its_colours():
     for name in ("garage", "apothecary"):
         body = client.get(f"/sites/{name}").json()
-        assert body["layer_colours"] == colours_for(sites.store.get(name)), name
+        assert body["layer_colours"] == colours_for(sites.store.get(name), api.part_category), name
 
 
 def test_the_page_holds_no_palette_of_its_own():
-    """The categories' colours, the build volumes' and the measurement's are the table's,
+    """The facets' colours, the build volumes' and the measurement's are the table's,
     read from the site the page is sent: none is written in the page."""
     assert "CATEGORY_COLORS" not in TEMPLATE
-    for colour in [*CATEGORIES.values(), WORLD["grid"], WORLD["measure"], "#ffb347"]:
+    for colour in [*_facets(), WORLD["grid"], WORLD["measure"], "#ffb347"]:
         assert f"0x{colour[1:]}" not in TEMPLATE, colour
         assert colour not in TEMPLATE, colour
     assert layer_colours.TOKENS.name == "tokens.css"
@@ -208,12 +227,11 @@ MODULE = ROOT / "apothecary" / "static" / "layer_colours.js"
 NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 
 READ = """
-import { takeLayerColours, layerHex, layerColour, categoriesInOrder } from "%(module)s";
+import { takeLayerColours, layerHex, layerColour } from "%(module)s";
 const payload = JSON.parse(process.argv[2]);
 const out = { before: layerColour("grid", -1), took: takeLayerColours(payload) };
 out.grid = layerHex("grid");
-out.wall = layerColour("category:wall", -1);
-out.categories = categoriesInOrder();
+out.wall = layerColour("system:building", -1);
 out.missing = layerColour("category:nobody", -1);
 out.ignored = takeLayerColours({ tree: {} });
 out.kept = layerHex("grid");
@@ -225,9 +243,9 @@ console.log(JSON.stringify(out));
 
 @pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 def test_the_page_reads_the_colours_its_site_is_sent_with(tmp_path):
-    """static/layer_colours.js takes a payload's colours in place of the last, reads them
-    by layer and lists the categories in the chips' order; a payload with none leaves
-    them, and a value that is no colour is not taken."""
+    """static/layer_colours.js takes a payload's colours in place of the last and reads
+    them by layer; a payload with none leaves them, and a value that is no colour is not
+    taken."""
     body = client.get("/sites/garage").json()
     script = tmp_path / "read.mjs"
     script.write_text(READ % {"module": MODULE.as_posix()}, encoding="utf-8")
@@ -238,10 +256,7 @@ def test_the_page_reads_the_colours_its_site_is_sent_with(tmp_path):
     out = json.loads(run.stdout)
     assert out["before"] == -1 and out["took"] is True
     assert out["grid"] == WORLD["grid"]
-    assert out["wall"] == int(CATEGORIES["wall"][1:], 16)
-    assert out["categories"] == [
-        key.split(":", 1)[1] for key in body["layer_colours"] if key.startswith("category:")
-    ]
+    assert out["wall"] == int(facet_colour(SYSTEM, "Building")[1:], 16)
     assert out["missing"] == -1
     assert out["ignored"] is False and out["kept"] == WORLD["grid"]
     assert out["refused"] == [None, "#3d7eff"]

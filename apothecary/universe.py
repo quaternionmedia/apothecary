@@ -11,7 +11,7 @@ navigating down to it and a site by stepping into its piece:
   inside it. The shells are dense, so none is empty. A leaf stands on its shell facing
   outward: its ``turn`` stands its up along the ray from the middle of the universe,
   and its footprint's middle is on the shell. A leaf carries its part's ``category``,
-  and the leaves of one category sit together on their shell; it carries what it is
+  and the leaves of one kind (``facets.py``) sit together on their shell; it carries what it is
   ``built_from``, and each of those stands as nearly under it as its shell allows --
   under the first by name, of the leaves that are built from one. The layout is a
   catalog, not a build: nothing constrains it (``validate_universe``);
@@ -38,6 +38,7 @@ from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Set
 from pydantic import PrivateAttr
 
 from .composition import nesting_fingerprint, nesting_of, scad_children, with_nesting
+from .facets import kind_of
 from .hierarchy import Assembly, LayoutReport
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
@@ -182,8 +183,9 @@ def arrange(universe: Assembly) -> None:
     """Every leaf and every piece of ``universe`` on its shell, from their footprints.
 
     A leaf's shell is its ``depth`` ranked among the depths that occur; the pieces
-    stand on the shell outside the last. On a shell the nodes of one ``category`` sit
-    together, and a leaf another is ``built_from`` stands under it -- under the first by
+    stand on the shell outside the last. On a shell the nodes of one kind -- their
+    ``category``'s (``facets.kind_of``) -- sit together, and a leaf another is
+    ``built_from`` stands under it -- under the first by
     name, where several are built from it (``orbitals.lay_out``). Nothing already placed
     is read, so a hand-moved node goes back, and the pieces, being outermost and built
     into nothing, move no leaf."""
@@ -193,7 +195,7 @@ def arrange(universe: Assembly) -> None:
     outermost = max(shells.values(), default=-1) + 1
     shell_of = {**shells, **{piece.name: outermost for piece in pieces}}
     size_of = {node.name: _bounding_radius(node.footprint) for node in (*leaves, *pieces)}
-    category_of = {node.name: node.category for node in (*leaves, *pieces)}
+    category_of = {node.name: kind_of(node.category) for node in (*leaves, *pieces)}
     built_into: dict = {}
     for leaf in leaves:
         for child in leaf.built_from or ():

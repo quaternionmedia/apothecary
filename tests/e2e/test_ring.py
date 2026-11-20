@@ -474,10 +474,10 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
-    assert wedges["8"] == "Pieces" and "Step out" not in wedges.values()
-    # The garage's pieces, grouped in small lettered groups, each named for its
-    # first piece in name order. The page knows the address; the test asks
-    # rather than guesses.
+    # Step out is there at the site's own level too, to the universe, at its one address.
+    assert wedges["8"] == "Pieces" and wedges["1"] == "Step out" and wedges["7"] == "Systems"
+    # The garage's pieces, cut by System, its loose parts under Parts by kind. The page
+    # knows the address; the test asks rather than guesses.
     address = page.evaluate(
         "() => window.apothecaryRing.addressOf("
         "window.apothecaryRing.current().root, 'select:printer_1')"
@@ -485,7 +485,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     assert address.startswith("8") and len(address) == 3 and "5" not in address
     page.keyboard.press("8")
     groups = _wedges(page)
-    assert len(groups) >= 2 and groups["8"].startswith("arduino")  # sorted, named for the first
+    assert groups["8"] == "Building" and "Parts" in groups.values()  # the vocabulary's order
     for digit in address[1:]:
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)
@@ -651,12 +651,12 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     inner = _panels_ring(page)
     assert sorted(inner.values()) == [
         "Airgap",
-        "Bench",
-        "Docs",
+        "Family",
         "Machine",
+        "Part",
         "Pictures",
-        "Selected",
         "Site",
+        "Tools",
         "Windows",
     ]
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
@@ -665,9 +665,9 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     assert sorted(site_ring.values()) == [
         "Jobs",
         "Layers",
+        "Lighting",
         "Pinned",
         "Problems",
-        "Procedure",
         "SCAD",
         "Site",
         "Workspace",
@@ -677,9 +677,10 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     expect(windows.panel(page, "site")).to_be_visible()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
 
-    # Panels › Bench › Bench brings the Bench in front of Pictures.
+    # Panels › Tools › Bench › Bench brings the Bench in front of Pictures.
     inner = _panels_ring(page)
-    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Bench"))
+    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Tools"))
+    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Bench"))
     page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Bench"))
     expect(windows.panel(page, "bench")).to_be_visible(timeout=5000)
     expect(windows.panel(page, "pictures")).to_be_hidden()
@@ -725,7 +726,7 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     spawn = page.locator(".spawn-list")
     expect(spawn).to_be_visible()
     groups = spawn.locator(".spawn-group").all_inner_texts()
-    assert [g.lower() for g in groups[:3]] == ["site", "selected", "pictures"]
+    assert [g.lower() for g in groups[:3]] == ["site", "part", "pictures"]
     assert "airgap" in [g.lower() for g in groups]
     expect(spawn.locator(".window-item[data-window='gather']")).to_have_text("○ Gather")
     expect(spawn.locator(".window-item[data-window='site']")).to_have_text("● Site")
@@ -831,17 +832,18 @@ def test_panels_machine_greys_the_loops_and_the_knobs_as_their_windows_do(
     page: Page, ring_url: str
 ):
     """With no printer's Machine open and no Stream Deck + found, Panels › Machine › Loops'
-    Read, Start, Cancel and Set gains, and the knobs' On / off and Here, are greyed with
-    the words their windows say, rather than live and refused once chosen; the windows
-    themselves are not."""
+    Read, Start, Cancel and Set gains, and Panels › Tools › Deck's knobs On / off and Here,
+    are greyed with the words their windows say, rather than live and refused once chosen;
+    the windows themselves are not."""
     open_garage(page, ring_url, settle=False)
     on_world(page, "Panels", "Machine", "Loops")
     assert greyed(page) == {cell: f"Disabled: {NO_MACHINE}" for cell in ("6", "2", "4", "9")}
-    page.keyboard.press("5")
-    page.keyboard.press("2")  # Knobs
-    expect(page.locator("#ring-overlay .title")).to_have_text("Knobs")
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
+    on_world(page, "Panels", "Tools", "Deck")
+    expect(page.locator("#ring-overlay .title")).to_have_text("Deck")
     knobs = greyed(page)
-    assert set(knobs) == {"8", "4"}, knobs  # On / off, Here; the Deck window is live
+    assert set(knobs) == {"6", "9"}, knobs  # On / off, Here; the Deck window is live
     assert all("no Stream Deck + found" in why for why in knobs.values()), knobs
 
 

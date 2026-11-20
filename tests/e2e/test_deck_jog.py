@@ -440,15 +440,15 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     assert _control(url)["machine"] == "cnc_router"
 
     # 4. The ring's Knobs: the step, which the pad and the window both show.
-    rings.on_world(page, "Panels", "Machine", "Knobs", "Step", "0.1 mm")
+    rings.on_world(page, "Panels", "Tools", "Deck", "Step", "0.1 mm")
     expect(said).to_have_text("knobs on this machine · step 0.1 mm", timeout=10000)
     windows.open_window(page, "deck")  # the Machine view laid its own windows out
     expect(step).to_have_text("0.1", timeout=10000)
 
-    # 5. The strip's screen, from the ring's Knobs › Screen and from the window: a real
+    # 5. The strip's screen, from the ring's Deck › Screen and from the window: a real
     #    deck's is changed from here too, and nothing goes to a machine.
     sent = (_control(url)["sent"], _router(url)["position"])
-    rings.on_world(page, "Panels", "Machine", "Knobs", "Screen", "Status")
+    rings.on_world(page, "Panels", "Tools", "Deck", "Screen", "Status")
     shown = knobs.locator(".deck-screen-to[aria-pressed='true']")
     expect(shown).to_have_text("Status", timeout=10000)
     expect(knobs.locator(".deck-screen")).to_contain_text("strip screen: Status (3/3)")

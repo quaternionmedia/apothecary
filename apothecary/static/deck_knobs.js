@@ -2,7 +2,7 @@
  * deck (firmware/deck_control.py) -- whether it runs, the machine its knobs move, their
  * step, the screen its strip shows and that machine's control. There is one such state,
  * the server's, and the Deck window, each Machine's Control pad and the ring's Panels ›
- * Machine › Knobs each read and change it, so each shows what the others did. Each answer
+ * Tools › Deck each read and change it, so each shows what the others did. Each answer
  * carries `can`, what the deck's routes would refuse now (firmware/can.py), which greys
  * the window's controls and a pad's Knobs here (can.js). Nothing here moves a machine:
  * the knobs do, through the control latch.
@@ -37,7 +37,7 @@ export const armedWords = (knobs) => (knobs.armed_s > 0
     ? `armed ${span(knobs.armed_s)}`
     : "disarmed: arm it in its Machine, or long press its key twice");
 
-// What the deck's routes would refuse now, for the ring's Panels › Machine › Knobs: the
+// What the deck's routes would refuse now, for the ring's Panels › Tools › Deck: the
 // answer of the deck `steer` acts on (the first found; firmware/can.py deck_can), with
 // `here` for the open Machine's port; with no deck found, each refused for that, in
 // steer's words. Empty when the server could not be asked: the ring is then told nothing.
@@ -57,7 +57,7 @@ export async function knobsCan(base, port = null) {
     }
 }
 
-// A verb of Panels › Machine › Knobs -- "knobs", "machine:<name>", "step:<mm>", "here" or
+// A verb of Panels › Tools › Deck -- "knobs", "machine:<name>", "step:<mm>", "here" or
 // "screen:<name>" -- on the first deck found; `port` is the open Machine's, which "here"
 // points the knobs at. Answers what came of it.
 export async function steer(base, verb, { port = null } = {}) {

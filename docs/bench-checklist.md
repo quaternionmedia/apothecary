@@ -244,15 +244,15 @@ one machine on the number another held; nothing in them moves a machine.
 
 ## H. The ESP32: the Rust blink, and the Arduino one beside it
 
-- [ ] The **Bench** tab (or Panels › Bench › Bench, ⌗438): its toolchain card
+- [ ] The **Bench** tab (or Panels › Tools › Bench › Bench, ⌗4388): its toolchain card
       shows *Rust for the ESP32*, installed, with cargo's and espflash's
-      versions; its install cell is Panels › Bench › Install › Rust ESP32
-      (⌗4366). Choose sketch **esp32_blink@rust-esp32 · esp32** and the
+      versions; its install cell is Panels › Tools › Bench › Install › Rust ESP32
+      (⌗43866). Choose sketch **esp32_blink@rust-esp32 · esp32** and the
       ESP32's port -- check it is not the printer's.
-- [ ] **Compile** (⌗432): the log shows `cargo build --release --offline`
+- [ ] **Compile** (⌗4382): the log shows `cargo build --release --offline`
       and, last, *no build path in the image*. With the network unplugged,
       Compile again: it still builds.
-- [ ] **Compile & upload** (Bench › Upload, ⌗434) → the dialog → espflash ends
+- [ ] **Compile & upload** (Bench › Upload, ⌗4384) → the dialog → espflash ends
       *Flashing has completed!*; the LED on GPIO 2 blinks once a second.
 - [ ] `esp32_blink`'s ring › Device › Open (⌗18): the Sketch card reads
       *should run esp32_blink@rust-esp32 · esp32*. Device › Query (⌗14): the
@@ -489,7 +489,7 @@ not find it.
       Surface@2.1.2"`: the versions its `firmware.json` pins.
 - [ ] The **Bench** tab: choose sketch **footpedal@arduino · arduino:avr:uno**
       and the pedal's port -- check it is not the printer's. **Compile**
-      (⌗432) ends with the sketch's size; **Compile & upload** (⌗434) ends
+      (⌗4382) ends with the sketch's size; **Compile & upload** (⌗4384) ends
       without an error.
 - [ ] Release the port, and open it in Hairless MIDI at 115200 baud, its MIDI
       out to a monitor. Press and release each button: a Note On and a Note

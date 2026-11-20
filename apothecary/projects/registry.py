@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from .parts.base import BasePart
@@ -126,6 +126,40 @@ def part_named(name: str, root: Path) -> "BasePart":
     raise KeyError(name)
 
 
+# Each part's category by its name and root, with the part.json it was read from and that
+# file's time when it was read (``category_of``).
+_CATEGORIES: Dict[Tuple[str, Path], Tuple[Optional[Path], Optional[int], Optional[str]]] = {}
+
+
+def category_of(name: str, root: Path) -> Optional[str]:
+    """The category of the registered part called ``name``, the word its kind holds
+    (``apothecary/facets.py``); None for no such part, or one that will not load. An
+    answer is kept per part and root while its part.json is as it was read -- a wrapper's
+    while the process runs, its module imported once -- and None never is, so a part
+    added or mended is found when next asked."""
+    key = (name, Path(root))
+    kept = _CATEGORIES.get(key)
+    if kept is not None:
+        sidecar, stamp, category = kept
+        if sidecar is None or _mtime_ns(sidecar) == stamp:
+            return category
+        del _CATEGORIES[key]
+    item = next(
+        (p for p in scan_projects(root) if p.kind == "part" and p.name == name and p.has_part),
+        None,
+    )
+    if item is None:
+        return None
+    # Read before the part is, so an edit made while it loads is read next time.
+    stamp = _mtime_ns(item.sidecar) if item.sidecar is not None else None
+    try:
+        category = load_part(item).category
+    except PartLoadError:
+        return None
+    _CATEGORIES[key] = (item.sidecar, stamp, category)
+    return category
+
+
 def load_parts(root: Path) -> LoadedParts:
     """Load every registered part under ``root``; one that fails is recorded in
     ``failed``, never dropped."""
@@ -171,8 +205,10 @@ def _scan_stamp(root: Path) -> tuple:
 
 
 def invalidate() -> None:
-    """Forget every scan, so the next ``scan_projects`` reads the disk again."""
+    """Forget every scan and every category kept, so the next ``scan_projects`` and
+    ``category_of`` read the disk again."""
     _SCANS.clear()
+    _CATEGORIES.clear()
 
 
 def scan_projects(root: Path) -> List[ProjectInfo]:

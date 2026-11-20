@@ -84,7 +84,7 @@ lost, a draw answers 503 in words, and the Deck window says the deck is not answ
 
 ## In the page
 
-The **Deck** window (⊞ Windows › Deck, the ring's Panels › Machine › Knobs › Deck, or **Open Deck** on the
+The **Deck** window (⊞ Windows › Deck, the ring's Panels › Tools › Deck › Deck, or **Open Deck** on the
 `stream_deck` piece of the garage, its ring's Deck) shows the first deck found: its eight keys and its
 strip as the images last sent to them, `–` where nothing has been drawn from here, its
 four knobs, and the events it has heard, newest first, in a list that scrolls. It follows
@@ -204,7 +204,7 @@ poller of their own, and the layout's two-second tick draws the elapsed time.
 
 The Deck window says which screen the strip shows, and changes it, a real deck's as a
 simulated one's: a button for each screen beside it, and the ring's Panels › Machine ›
-Knobs › Screen (Knobs, Progress, Status, then Back and Next, a swipe right or left), are
+Deck › Screen (Knobs, Progress, Status, then Back and Next, a swipe right or left), are
 `PUT /firmware/decks/{id}/control` with a `screen`, its name or `next` or `previous`.
 Chosen this way it is as a swipe is: it stops at either end, draws the strip and nothing
 more, and sends nothing to a machine; unlike a touch, it clears no ended job from
@@ -264,7 +264,7 @@ move and their step. The Deck window shows it under the deck's name and changes 
 a step theirs, as the deck's own keys do -- and shows what the deck's keys or anything
 else chose. Each Machine's Control pad, while its control is armed, says where the knobs
 are and their step, and its **🎛 Knobs here** points them at its machine. The ring's
-Panels › Machine › Knobs holds the same verbs, **Here** being the open Machine's machine,
+Panels › Tools › Deck holds the same verbs, **Here** being the open Machine's machine,
 and the Deck window, each greyed as the deck answers for it (with no deck found, every
 one but the Deck window). None of them arms anything: the knobs move a machine only while its
 control is armed, in its Machine or by two long presses of its key. `GET

@@ -543,7 +543,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "deck-press": (WIDGET, WHAT_IS_THERE, "a button that presses a simulated deck's knob"),
     # The knobs, the server's layout on the deck: started or stopped, the machine they
     # move and their step chosen, in the Deck window; Knobs here in a Control pad. Each
-    # is a cell of Panels › Machine › Knobs.
+    # is a cell of Panels › Tools › Deck.
     "deck-run": (
         WIDGET,
         WHAT_IS_THERE,
@@ -885,7 +885,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 # `apothecary.menu`'s vocabulary, so a control cannot claim a backing that
 # does not exist.
 RING_BACKED: Dict[str, str] = {
-    # the header's Docs is the canvas ring's Panels › Docs
+    # the header's Docs is the canvas ring's Panels › Tools › Docs
     "docs-link": "panel:docs",
     # The Tour's box and its buttons are the cells of Panels › Windows › Tour
     "tour-pop-open": "tour:toggle",
@@ -909,7 +909,7 @@ RING_BACKED: Dict[str, str] = {
     "marks:input:closest": "marks:later",
     "marks-place": "marks:place",
     "models:keydown:closest": "models:say:colour:red",
-    # GO and Start over are the cells of Panels › Site › Procedure; a step's node opens
+    # GO and Start over are the cells of Panels › Family › Procedure; a step's node opens
     # the window its ring's Device › Open does
     "procedure-go": "procedure:go",
     "procedure-again": "procedure:again",
@@ -1011,7 +1011,7 @@ RING_BACKED: Dict[str, str] = {
     "corner:FR": "control:corner:FR",
     "corner:BL": "control:corner:BL",
     "corner:BR": "control:corner:BR",
-    # The Bench's buttons are the cells of the canvas ring's Panels › Bench, each
+    # The Bench's buttons are the cells of the canvas ring's Panels › Tools › Bench, each
     # acting on what the Bench has chosen; a core's Install is Bench › Cores › its
     # core. The form's boxes and drop-downs, the force tick-box and raw flash's
     # boxes choose what a cell acts on, and no cell chooses them.
@@ -1134,7 +1134,7 @@ RING_BACKED: Dict[str, str] = {
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
     "deck-open": "panel:toggle:deck",
-    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines,
+    # the knobs' controls are the cells of Panels › Tools › Deck (whose machines,
     # steps and screens are leaves deck:machine:<name>, deck:step:<mm> and
     # deck:screen:<name>)
     "deck-run": "deck:knobs",
@@ -1431,7 +1431,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a recent apply's row in a part's editor, drawing it again from the cache",
     ),
     # the trails, trees and rows beside the scene
-    "chip:click:delete": (LIST, WHAT_YOU_SEE, "a word button that folds and unfolds"),
+    "chip:click:chooseFacet": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a System's, a Kind's or a word's button that opens and closes its pieces, "
+        "or opens a Kind's ring in the universe",
+    ),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
     # A board's badge, at the board in the world (anchors.js, machine_marks.js).
