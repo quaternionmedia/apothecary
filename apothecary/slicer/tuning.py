@@ -71,6 +71,8 @@ WITHIN = 0.05
 NEAR = 1.0
 # A caliper's resolution taken for a turn that states none: a digital caliper's step.
 RESOLUTION = 0.01
+# The most a look says of where a fault shows, in characters.
+WHERE_MOST = 200
 # The older shape's rule assumed these none: what its turns are solved with.
 EARLIER_ASSUMED = {"scale_x": 0.0, "scale_y": 0.0, "foot": 0.0}
 
@@ -344,7 +346,7 @@ class Seen(BaseModel):
 
     fault: str
     severity: int = Field(..., ge=0, le=3)
-    where: str = Field("", max_length=200)  # a height, a feature: where it shows
+    where: str = Field("", max_length=WHERE_MOST)  # a height, a feature: where it shows
     basis: Literal["seen"] = "seen"
     source: str
 
@@ -1100,9 +1102,14 @@ def add_look(
         if not isinstance(severity, int) or isinstance(severity, bool) or not 0 <= severity <= 3:
             raise Refused(f"{fault_id}: a severity is 0 (none) to 3 (bad), not {severity!r}")
     where = dict(where or {})
-    for fault_id in where:
+    for fault_id, text in where.items():
         if fault_id not in seen:
             raise Refused(f"{fault_id}: where it shows is said for a fault seen")
+        if len(str(text)) > WHERE_MOST:
+            raise Refused(
+                f"{fault_id}: where it shows is at most {WHERE_MOST} characters, "
+                f"not {len(str(text))}"
+            )
     applies = applies_of(record)
     used = used_by(record)
     with _LOCK:

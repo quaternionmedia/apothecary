@@ -205,6 +205,17 @@ def test_a_look_that_is_not_one_keeps_nothing(fake_orcaslicer, built, seen, said
     assert client.get("/slicer/tuning", params=WHERE).json()["documents"] == []
 
 
+def test_where_a_fault_shows_past_its_length_is_refused_and_nothing_kept(fake_orcaslicer, built):
+    record = _slice()
+    r = client.post(
+        f"/slicer/slices/{record['file_id']}/seen",
+        json={"seen": {"stringing": 2}, "where": {"stringing": "x" * 201}},
+    )
+    assert r.status_code == 422, r.text
+    assert client.get("/slicer/tuning", params=WHERE).json()["documents"] == []
+    assert "stringing: where it shows is at most 200 characters, not 201" in r.json()["detail"]
+
+
 def _apply_at_the_command_line():
     return CliRunner().invoke(
         cli, ["tuning", "apply", "--site", WHERE["site"], "--printer", WHERE["printer"]]
