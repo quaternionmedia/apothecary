@@ -439,7 +439,11 @@ probing it with esptool or listening for a hello banner opens the port
 through another process, evicts the held link and may reset the board, so
 the viewer polls a printer instead of streaming it, and a printer's Machine
 offers Poll and no Listen, Probe or flashing. Identifying or polling a port
-closes any monitor on it. Uploading to a port releases only that port's
+closes any monitor on it, and while a board is being identified no stream may open on
+its port (409, saying so): a devkit's Machine listening reconnects its stream by itself,
+and the stream's open would close the link the question is asked on, so a printer taken
+for a devkit until it answers was never heard. A devkit's Identify stops listening before
+it asks `M115`. Uploading to a port releases only that port's
 link. `POST /firmware/printers/release` drops the link when another program
 (a slicer's USB print, OctoPrint) needs the port.
 
@@ -514,6 +518,19 @@ a devkit's Sketch and the Log, Flash its Flashing, a print's or a slice's
 verbs Print, the bed's Bed level -- by a link to the board (below), or with
 every other one by Panels › Windows › Machine view. A refusal is said in the
 log and in the status bar.
+
+**Several boards at once.** One Machine is in front, its sections those windows;
+another board's Machine opened, the one in front is **kept open** beside it, in a window
+of its own (`kept-machine-1` to `-3`, a tab beside the Machine named for its machine, red
+and 🔓 while it is armed, which takes the front from no window) holding its head -- link,
+latch, ⏹ E-STOP, state -- and its control pad; its tab dragged out stands it beside the
+other. A kept
+Machine keeps polling, stays armed and follows its job, and a board's verbs on the ring
+go to its own Machine wherever it stands, so a printer and a router are armed and driven
+at once from one page. Its Machine opened again -- its badge, Device › Open -- brings it
+in front, the one there kept in its place. A kept Machine closes by its window's ✕; with
+three kept, the oldest closes to make room. A machine planned with no board holds
+nothing to keep, and closes.
 
 A devkit's port is opened only when asked. Opening its Machine shows what is
 known of it and opens no port; **Listen** streams what the board says into
@@ -632,9 +649,10 @@ tab is in front: a real machine is armed. Every arming pops it out, from the
 Machine, the ring or another browser. Its **⇥ Put back**, or its window's ✕,
 puts it back in the Machine's window; its **⧉ Pop out** pops
 it out again, and the ring's Panels › Machine › Control pad does either. Disarmed, it
-goes. The pad goes with its Machine -- closed by its ✕, another board's Machine opened
-in its place, another site loaded, or the board unpinned or gone from the site -- so
-the board is disarmed then, and the status bar says so.
+goes. The pad goes with its Machine -- closed by its ✕ or its kept window's, the oldest
+kept Machine closed to make room, another site loaded, or the board unpinned or gone
+from the site -- so the board is disarmed then, and the status bar says so. Another
+board's Machine opened keeps this one open beside it with its pad, and disarms nothing.
 
 Popped out, the pad has an **⏹ E-STOP** of its own in its head, the Machine's being in
 another window. What interrupts -- Quickstop, Break wait, Stop jog, Hold and Resume --

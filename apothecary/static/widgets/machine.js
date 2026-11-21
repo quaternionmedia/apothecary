@@ -970,6 +970,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
                     return;
                 }
                 if (!pressed) { logLine("sys", "no hello heard -- Identify asks M115 too, when pressed"); return; }
+                // Listening no more first: its stream, reconnecting, would take the port the
+                // question is asked on (the server refuses it meanwhile, 409).
+                if (state.listening) { state.listening = false; schedule(); renderDevkit(); logLine("sys", "listening stopped to ask M115"); }
                 try { await model.identify(state.port); }
                 catch (e) { refuse(`no hello heard in ${heard.seconds} s, and ${e.message}`); }
                 return;

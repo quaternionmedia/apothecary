@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -255,6 +256,81 @@ def test_a_part_printed_to_its_end_opens_its_drawer_in_feedback(page: Page, simu
     assert drawer["file"]["file_id"] == kept["id"] and drawer["job"]["outcome"] == "done"
     expect(feedback.locator("#feedback-piece")).to_have_value(f"drawer:{drawer['id']}")
     expect(feedback.locator("#feedback-piece-said")).to_contain_text("job done")
+
+
+def _armed_ports(page: Page, url: str) -> set:
+    return set(page.request.get(f"{url}/firmware/printers/armed").json()["armed"])
+
+
+def _sent(page: Page, url: str, port: str, line: str, timeout: float = 10.0) -> None:
+    """``line`` reached the board on ``port``: its comms log holds it, sent."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        log = page.request.get(f"{url}/firmware/printers/log", params={"port": port}).json()
+        if any(line in str(entry) for entry in log.get("entries", [])):
+            return
+        time.sleep(0.2)
+    raise AssertionError(f"{line!r} never reached {port}")
+
+
+@pytest.mark.e2e
+def test_two_machines_are_armed_and_driven_at_once_in_one_page(page: Page, simulated, shots):
+    """printer_1's Machine armed, then cnc_router's opened: the printer's is kept open beside
+    it, a tab of its own beside the Machine with its latch, ⏹ and pad, red while it is armed,
+    taking the front from nothing; it stays armed. The router armed in front, both are
+    armed at once, and each is driven from its own pad. printer_1's Machine opened again
+    comes in front, the router kept in its place, still armed; a kept Machine's ✕ closes it,
+    and its board is disarmed, said."""
+    url = simulated["url"]
+    viewer = "window.fractalViewer"
+    _open_garage(page, url)
+    try:
+        page.evaluate(f"() => {viewer}.openMachine('printer_1')")
+        windows.machine_ready(page, "printer")
+        windows.machine(page).locator("#ctl").check()
+        expect(windows.panel(page, "control").locator("#control")).to_be_visible(timeout=5000)
+        assert _armed_ports(page, url) == {PRINTER}
+
+        page.evaluate(f"() => {viewer}.openMachine('cnc_router')")
+        windows.machine_ready(page, "router")
+        kept = windows.panel(page, "kept-machine-1")
+        expect(windows.tab(page, "kept-machine-1")).to_have_text(re.compile("🔓 printer_1"))
+        expect(kept.locator("#ctl")).to_be_checked()
+        # Beside the Machine, taking the front from it no more than from any window.
+        expect(windows.panel(page, "machine").locator("#ctl")).to_be_visible()
+        assert _armed_ports(page, url) == {PRINTER}
+
+        windows.machine(page).locator("#ctl").check()
+        expect(windows.panel(page, "control").locator("#control")).to_be_visible(timeout=5000)
+        assert _armed_ports(page, url) == {PRINTER, ROUTER}
+        settled(page)
+        page.screenshot(path=str(shots / "two-machines-armed.png"))
+        # Each driven from its own pad: the printer's in its kept window, the router's out.
+        windows.show(page, "kept-machine-1")
+        expect(kept.locator("#control")).to_be_visible()
+        kept.locator('button[data-cmd^="M106"]').click()
+        _sent(page, url, PRINTER, "M106")
+        windows.panel(page, "control").locator('button[data-cmd="HOME"]').click()
+        _sent(page, url, ROUTER, "$H")
+
+        page.evaluate(f"() => {viewer}.openMachine('printer_1')")
+        windows.machine_ready(page, "printer")
+        expect(windows.tab(page, "kept-machine-1")).to_have_text(re.compile("🔓 cnc_router"))
+        assert _armed_ports(page, url) == {PRINTER, ROUTER}
+        expect(page.locator("#status")).to_contain_text("printer_1's Machine in front again")
+
+        windows.close(page, "kept-machine-1")
+        expect(page.locator("#status")).to_contain_text("disarmed, its pad gone with its Machine")
+        expect(windows.tab(page, "kept-machine-1")).to_have_count(0)
+        deadline = time.monotonic() + 5
+        while _armed_ports(page, url) != {PRINTER} and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert _armed_ports(page, url) == {PRINTER}
+    finally:
+        for port in (PRINTER, ROUTER):
+            page.request.post(
+                f"{url}/firmware/printers/control", data={"port": port, "armed": False}
+            )
 
 
 @pytest.mark.e2e

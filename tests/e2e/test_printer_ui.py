@@ -929,10 +929,11 @@ def _disarmed(url: str):
 
 
 @pytest.mark.e2e
-def test_another_board_s_machine_disarms_the_armed_one_it_replaces(page: Page, printer_url: str):
-    """A Machine going takes its control pad with it, so its board is disarmed, and the
-    status line says so ahead of what the turn said. Here another board's Machine opens
-    in its place; its own Machine opened again is the same Machine, and leaves it armed."""
+def test_another_board_s_machine_keeps_the_armed_one_open_beside_it(page: Page, printer_url: str):
+    """Another board's Machine opened, the armed one is kept open beside it, in a window of
+    its own with its pad, latch and ⏹, and stays armed: its pad never leaves the screen.
+    Its own Machine opened again is the same Machine, and leaves it armed. Closed by its
+    kept window's ✕, it goes, and its board is disarmed, said."""
     _armed(page, printer_url)
     page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
     expect(windows.tab(page, "control")).to_have_count(1)
@@ -941,8 +942,18 @@ def test_another_board_s_machine_disarms_the_armed_one_it_replaces(page: Page, p
     page.evaluate(f"() => window.fractalViewer.openMachineFor('{UNO}')")
     expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
     expect(page.locator("#status")).to_have_text(
-        f"{GONE} · Opened {UNO}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections"
+        f"Opened {UNO}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections"
     )
+    expect(windows.tab(page, "kept-machine-1")).to_have_text("🔓 printer_1")
+    kept = windows.panel(page, "kept-machine-1")
+    expect(kept.locator("#ctl")).to_be_checked()
+    windows.show(page, "kept-machine-1")
+    expect(kept.locator("#control")).to_be_visible()
+    expect(kept.locator("#estop")).to_be_visible()
+    assert _armed_now(printer_url)
+
+    windows.close(page, "kept-machine-1")
+    expect(page.locator("#status")).to_have_text(GONE)
     _disarmed(printer_url)
 
 

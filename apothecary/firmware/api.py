@@ -864,6 +864,10 @@ async def firmware_stream(
 ):
     """Server-sent events: live serial lines until the client leaves or a task takes the port."""
     _busy_guard(port)
+    # A board being asked what it is keeps its port until it has answered (409): the
+    # stream's open would close the link the question is asked on.
+    if devices.identifying(port):
+        raise PortHeld(f"{port} is being asked what it is: listened to once it has answered")
     # The module that found the port listens to it: arduino-cli's monitor, or the
     # Rust module's own (pyserial); refused here when nothing can.
     devices.listener_argv(port, baud)

@@ -63,7 +63,7 @@ def test_a_printer_opens_with_its_print_window_and_makes_any_part(page: Page, ur
     open_garage(page, url, settle=False)
     _machines_known(page)
     assert page.evaluate("() => window.fractalViewer.openMachine('printer_1')") is True
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-printer")).to_be_attached(timeout=15000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-printer")).to_be_attached(timeout=15000)
     # Its Print, open and in front, in a stack of its own under the Machine, so the
     # Machine's head stays in view beside it.
     page.wait_for_function("() => window.apothecaryPanels.isShown('machine-print')", timeout=10000)

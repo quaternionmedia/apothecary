@@ -59,7 +59,7 @@ GO on the printer's step with its control down is refused in the machine member'
 
 ## 7. The door opens the printer's Machine; ⚙ Control armed there
 
-The printer's Machine takes the devkit's place, one Machine at a time. ⚙ Control arms the latch for five minutes of activity and opens the control pad: GO never does.
+The printer's Machine comes in front, the devkit's kept open beside it. ⚙ Control arms the latch for five minutes of activity and opens the control pad: GO never does.
 
 ![The door opens the printer's Machine; ⚙ Control armed there](screenshots/25-07-the-door-opens-the-printer-s-machine-control-armed.png)
 
@@ -77,10 +77,10 @@ Panels › Windows › Family view lays the Procedure tall beside the world, Mem
 
 ## 10. A member's name is a door: board's opens the devkit's Machine
 
-A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine. The printer's Machine goes, and with it the pad of the printer armed since step 7, so the printer is disarmed, said first.
+A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine. The printer's Machine is kept open beside it, a red tab of its own with the pad of the printer armed since step 7, which stays armed.
 
 ```
-printer_1 disarmed, its pad gone with its Machine · Opened esp32_blink's Machine: ⌗ Panels › Windows › Machine view lays out its sections
+esp32_blink's Machine in front again, printer_1 (armed) kept open beside it
 ```
 
 ## 11. Start over counts what came before no more; the ring's GO and Start over do the same

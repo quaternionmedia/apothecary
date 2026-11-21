@@ -336,7 +336,7 @@ def test_a_router_whose_zero_is_not_known_draws_no_path_and_says_why(page: Page,
     _settings_unread(page, None)
     _selected(page, url, machine.node)
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-router")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-router")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     said = body.locator("#print-preview-said")
     expect(said).to_contain_text("not drawn", timeout=10000)
@@ -439,7 +439,7 @@ def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path
     entry.click(timeout=5000)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
 
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     assert windows.state(page, "machine-print")["shown"] is True
@@ -475,7 +475,7 @@ def test_windows_machine_lands_on_the_path_of_the_machine_stepped_into(
     expect(status(page)).to_contain_text(f"Stepped into {machine.node}")
     assert not page.evaluate("() => window.fractalViewer.selectedName")
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
@@ -513,7 +513,7 @@ def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_univers
     _select(page, machine.node)
     assert page.evaluate("() => window.fractalViewer.machine") is None
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-router")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-router")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
@@ -562,7 +562,7 @@ def test_with_no_file_kept_the_machine_view_says_how_one_comes_to_be(
     _keep_only(url)
     _selected(page, url, machine.node)
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     said = status(page)
     expect(said).to_contain_text("No path is drawn: no file is kept yet", timeout=10000)
     expect(said).to_contain_text(

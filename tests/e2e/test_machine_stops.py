@@ -247,13 +247,13 @@ def test_the_machine_views_head_and_its_stop_stay_in_view(page: Page, url: str, 
     _machine(page, url)
     for selector in ("#estop", "#ctl-label", "#reconnect"):
         assert page.evaluate(INSIDE, selector), selector
-    body = page.locator(f"{windows.MACHINE} > .machine")
+    body = page.locator(windows.MACHINE_BODY)
     head = page.locator(f"{windows.MACHINE} .machine-head")
     top = head.bounding_box()["y"]
     assert body.evaluate("(e) => e.scrollHeight > e.clientHeight")
     body.evaluate("(e) => { e.scrollTop = e.scrollHeight; }")
     page.wait_for_function(
-        "(s) => document.querySelector(s).scrollTop > 0", arg=f"{windows.MACHINE} > .machine"
+        "(s) => document.querySelector(s).scrollTop > 0", arg=windows.MACHINE_BODY
     )
     assert head.bounding_box()["y"] == pytest.approx(top, abs=1)
     assert page.evaluate(INSIDE, "#estop")
@@ -340,12 +340,12 @@ def test_a_status_gone_old_says_its_age(page: Page, url: str):
     page.route("**/firmware/printers/status*", lambda route: route.abort())
     expect(age).to_be_visible(timeout=15000)
     expect(age).to_have_text(re.compile(r"^status \d+ s old$"))
-    expect(page.locator(f"{windows.MACHINE} > .machine.status-old")).to_be_attached()
+    expect(page.locator(f"{windows.MACHINE_ROOT}.status-old")).to_be_attached()
     said = int(re.search(r"\d+", age.text_content()).group())
     expect(age).not_to_have_text(f"status {said} s old", timeout=5000)  # it counts
     page.unroute("**/firmware/printers/status*")
     expect(age).to_be_hidden(timeout=WITHIN_A_POLL)
-    expect(page.locator(f"{windows.MACHINE} > .machine.status-old")).to_have_count(0)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.status-old")).to_have_count(0)
 
 
 @pytest.mark.e2e

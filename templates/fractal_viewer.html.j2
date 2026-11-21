@@ -257,7 +257,9 @@
         }
         @media (prefers-reduced-motion: reduce) { .panel-window.loud.alert { animation: none; } }
         /* The Machine: a board's one surface (widgets/machine.js), its log in it. */
-        .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="control"] .panel-body-slot { padding: 0; }
+        .panel[data-panel="machine"] .panel-body-slot, .panel[data-panel="control"] .panel-body-slot, .panel[data-panel^="kept-machine-"] .panel-body-slot { padding: 0; }
+        /* A Machine section window holds the Machine in front's own element for it. */
+        .machine-host { height: 100%; min-height: 0; }
         /* Pictures (widgets/picture_list.js) and Site's Pinned (widgets/pinned.js): rows, each with its buttons */
         .panel-ui { font-size: 0.8rem; color: #bbb; display: flex; flex-direction: column; gap: 0.4rem; }
         .panel-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
@@ -1097,6 +1099,9 @@
         const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
         // And ROUTER_STATUSES, with them: every status a machine's polls set on its node.
         const MACHINE_STATUSES = ['idle', 'printing', 'running', 'hold', 'alarm', 'offline', 'maintenance'];
+        // The windows a Machine kept open beside the one in front stands in (keepFront): a
+        // machine in front and three kept, each with its own latch, pad and ⏹.
+        const KEPT_MACHINES = ['kept-machine-1', 'kept-machine-2', 'kept-machine-3'];
         const STATUS_COLORS = {
             idle: 0x4488cc,
             printing: 0xffaa00,
@@ -1669,7 +1674,7 @@
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
                     known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'motion', ...knownWindows(SYSTEMS)],
-                    transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
+                    transient: ['control', 'lighting', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
@@ -1688,10 +1693,13 @@
                 document.querySelector('.side-panel')?.remove();
                 // Every board the page knows, polled once whatever draws it (boards.js):
                 // the badges, Site's tree, Selected's Device line and the Machine all
-                // read it and redraw on its one event. One Machine at a time.
+                // read it and redraw on its one event. One Machine in front, its sections the
+                // Machine's windows; another board's opened, the one in front is kept open
+                // in a window of its own (keepFront), so two machines are driven at once.
                 this.boards = mountBoards({ base: BASE_URL, site: () => this.siteName });
                 window.apothecaryBoards = this.boards;
                 this.machine = null;
+                this.kept = [];
                 // The last view asked for (openView), settled once it is laid out and said.
                 this.viewDone = Promise.resolve(true);
                 // What pictures and cameras wear in the world (picture_marks.js): each
@@ -2672,8 +2680,9 @@
                 // The site before's machines followed no more, before its Machine closes and
                 // would hand them to the world's own watch on the way out (followMachines).
                 if (name !== this.siteName) this.followMachines(new Map());
-                // A board armed in the site before is disarmed, said again once it loads.
-                const disarmed = this.closeMachine();
+                // A board armed in the site before is disarmed, said again once it loads: every
+                // Machine of it, the one in front and those kept.
+                const disarmed = this.closeAllMachines();
                 let first = disarmed ? `${disarmed} · ` : '';
                 // The site left is not followed while the next loads, whatever redraws its
                 // marks meanwhile (followMachines): nothing is left polling its machines. A
@@ -2696,7 +2705,7 @@
                     // the site left answering nothing (boards.js); and a Machine opened on the
                     // site left while this one loaded closes, as one open before did.
                     if (name !== this.siteName) {
-                        const late = this.closeMachine();
+                        const late = this.closeAllMachines();
                         if (late) first = `${first}${late} · `;
                         this.boards.forget();
                         this.machinesHere = [];
@@ -8734,6 +8743,14 @@
                     if (!moved) { this.closeMachine(); return; }
                     this.machine.path = moved;
                 }
+                // A kept Machine the same: its board found on another port, or gone, it closes
+                // (opened again from its badge, it is its board's there).
+                for (const kept of [...this.kept]) {
+                    const row = kept.pin && this.bindings[kept.pin.path];
+                    const port = row && row.device && row.device.port;
+                    if ((port && port !== kept.port) || (kept.path && !wanted.has(kept.path) && !anchorOf[kept.port])) { this.closeKept(kept); continue; }
+                    if (kept.path && !wanted.has(kept.path)) kept.path = anchorOf[kept.port];
+                }
             }
 
             // The world follows each machine it draws by polls of its own (boards.js watch),
@@ -8758,7 +8775,7 @@
                     }
                 }
                 for (const [port, w] of Object.entries(this.following)) {
-                    const machineOpen = !!(this.machine && this.machine.port === port && this.machine.handle);
+                    const machineOpen = !!(this.machineOn(port) && this.machineOn(port).handle);
                     const live = this.boards.isHeld(port) && !machineOpen;
                     if (live === w.live) continue;
                     w.live = live;
@@ -9050,6 +9067,14 @@
             }
             showMachine(port, anchor, row) {
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.makingWith(this.machine); return true; }
+                const kept = this.kept.find((m) => m.port === port);
+                if (kept) {
+                    this.bringForward(kept);
+                    this.panels.open('machine');
+                    this.makingWith(kept);
+                    this.setStatus(`${kept.path || port}'s Machine in front again, ${this.keptSaid()}`, 'success');
+                    return true;
+                }
                 this.mountMachinePanel(port, anchor, row);
                 this.panels.open('machine');
                 // Opened alone, as a system's main window is: the next step is named.
@@ -9214,10 +9239,11 @@
                 // The site's own level: a piece is chosen and opened among the site's.
                 if (this.focusPath.length) { this.goUpTo(0, 'the tour'); did.push(`stepped out to ${this.siteName}`); }
                 // A journey with no machine in it: the one open is closed, as its tab's ✕ does.
-                if (this.machine && !JSON.stringify(journey.view).includes('"machine')) {
-                    const who = this.machine.path || this.machine.port;
-                    this.closeMachine();
-                    did.push(`${who}'s Machine closed: ${journey.name} has no machine in it`);
+                if (this.openMachines().length && !JSON.stringify(journey.view).includes('"machine')) {
+                    const who = this.openMachines().map((m) => `${m.path || m.port}'s`);
+                    this.closeAllMachines();
+                    const named = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]} Machines` : `${who[0]} Machine`;
+                    did.push(`${named} closed: ${journey.name} has no machine in it`);
                 }
                 let needs = null;
                 for (const [verb, subject] of [...(journey.staged_on || []), ...(step.puts || [])]) {
@@ -9468,9 +9494,16 @@
             // person. A board pinned inside a printer is the printer's, whatever it has
             // been identified as so far: its Machine has no Flashing.
             mountMachinePanel(port, anchor, row, planned = null) {
-                this.closeMachine();
-                const machine = { port, path: anchor, pin: row, handle: null, plan: !!planned };
+                // The one in front is kept open, not closed: its board stays armed, with its
+                // pad and ⏹ in its own window. A plan holds no board, and is closed.
+                this.keepFront();
+                // Its own root, moved between the Machine's window and a kept one, and its own
+                // element for each section, shown in the section's window while it is in front.
+                const root = document.createElement('div');
+                const sectionEls = Object.fromEntries(Object.keys(this.systems.machine.sections).map((id) => [id, document.createElement('div')]));
+                const machine = { port, path: anchor, pin: row, handle: null, plan: !!planned, root, sectionEls, kind: null, keptId: null };
                 this.machine = machine;
+                this.showMachineSections(machine);
                 const bearer = row ? this.statusBearerFor(row.path) : null;
                 const inPrinter = !!(bearer && MACHINE_STATUSES.includes(bearer.status));
                 // Its sections for any kind of board now (the Log); its kind's once the
@@ -9481,8 +9514,9 @@
                     kind,
                     without: planned ? ['status', 'temperature', 'level', 'sketch', 'flashing', 'log'] : (inPrinter ? ['flashing'] : []),
                 });
+                machine.sectionsOf = sectionsOf;
                 sectionsOf(null);
-                this.panels.register('machine', {
+                this.registerMachineWindow(machine, {
                     // Never laid out lower than its head -- the latch and ⏹ E-STOP -- and its
                     // state under it, at any width the page is laid out for (panels.js).
                     group: 'Machine', least: 250,
@@ -9491,24 +9525,28 @@
                     // port's last part, pinned nowhere); the whole title its tooltip.
                     tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
                     body: (slot) => {
-                        machine.handle = mountMachine(slot, {
+                        slot.appendChild(root);
+                        machine.handle = mountMachine(root, {
                             base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter, name: anchor,
                             kind: planned ? planned.kind : null,
                             // The machine's node, whose plan it keeps (machine_plans.py).
                             machineAt: anchor && (planned || this.plannedMachineOf(anchor)) ? { site: this.siteName, path: anchor } : null,
-                            sections: this.systems.machine.sections,
-                            onVerb: (action) => this.openSectionsFor(action),
+                            sections: sectionEls,
+                            onVerb: (action) => { if (this.machine === machine) this.openSectionsFor(action); },
                             onKind: (kind) => {
-                                if (this.machine !== machine) return;
+                                machine.kind = kind;
+                                if (this.machine !== machine) { if (machine.keptId) this.registerKept(machine); return; }
                                 sectionsOf(kind);
                                 // A printer's Print or a router's Cut opens with its Machine,
                                 // once the Machine is laid out (makingWith).
                                 if (kind === 'printer' || kind === 'router') setTimeout(() => this.makingWith(machine, { forward: false }), 0);
                             },
-                            // Its pad popped out: a loud window of its own beside the world.
+                            // Its pad popped out: a loud window of its own beside the world; kept,
+                            // the pad stays in its window, whose tab goes red. Closing, with no
+                            // window kept, its pad's window goes with it.
                             padWindow: {
-                                open: (pad, who) => this.openPadWindow(machine, pad, who),
-                                close: (pad, putBack) => this.closePadWindow(putBack),
+                                open: (pad, who) => (machine.keptId ? this.registerKept(machine) : this.openPadWindow(machine, pad, who)),
+                                close: (pad, putBack) => (machine.keptId ? this.registerKept(machine) : this.closePadWindow(putBack)),
                             },
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
@@ -9520,9 +9558,128 @@
                         });
                         if (this.machine === machine) { window.apothecaryMachine = machine.handle; if (planned) this.planOpened(planned); else this.machineOpened(port); }
                     },
-                    onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
                 return machine;
+            }
+            // The Machine's window, the one in front's: its root in the body, its ✕ the
+            // close of whichever Machine is in front then.
+            registerMachineWindow(machine, { title, tab, body, group = 'Machine', least = 250 }) {
+                this.panels.register('machine', {
+                    group, least, title, tab, body,
+                    onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
+                });
+                machine.title = title; machine.tab = tab;
+            }
+            // Every Machine open on this page: the one in front, then those kept.
+            openMachines() { return [this.machine, ...this.kept].filter(Boolean); }
+            // The open Machine of a board, in front or kept, by its port; else null.
+            machineOn(port) { return port ? this.openMachines().find((m) => m.port === port) || null : null; }
+            // The Machine in front's own section elements, shown in the Machine's section
+            // windows: each window holds the Machine in front's, and none while none is.
+            showMachineSections(machine) {
+                for (const [id, host] of Object.entries(this.systems.machine.sections)) {
+                    host.classList.add('machine-host');
+                    host.replaceChildren(...(machine ? [machine.sectionEls[id]] : []));
+                }
+            }
+            // The Machine in front kept open, to make room in front for another: its root goes
+            // to a window of its own (a kept slot, KEPT_MACHINES) and its sections leave the
+            // Machine's section windows with it; its pad, popped out, comes back into it.
+            // Nothing is disarmed: its pad and ⏹ E-STOP stay in its window, a tab beside the
+            // Machine, red while it is armed. Its board is polled and its job followed as before. A plan, which
+            // holds no board, is closed instead. With every slot taken, the oldest kept closes.
+            keepFront() {
+                const machine = this.machine;
+                if (!machine) return null;
+                if (machine.plan || !machine.handle) return this.closeMachine();
+                if (!KEPT_MACHINES.some((id) => !this.kept.some((m) => m.keptId === id))) this.closeKept(this.kept[0]);
+                machine.handle.padBack();
+                this.panels.unregister('control');
+                this.machine = null;
+                window.apothecaryMachine = null;
+                this.showMachineSections(null);
+                this.systems.machine.detach();
+                machine.keptId = KEPT_MACHINES.find((id) => !this.kept.some((m) => m.keptId === id));
+                this.kept.push(machine);
+                // Out of the Machine's window, which the next Machine fills.
+                machine.root.remove();
+                this.registerKept(machine);
+                this.keepMachineInAddress(null);
+                this.followMachines();
+                return null;
+            }
+            // A kept Machine's window: its root, titled by its machine and whether it is
+            // armed, its tab red while it is. Registered again as its latch changes.
+            registerKept(machine) {
+                if (!machine.keptId) return;
+                const who = machine.path || machine.port;
+                const armed = !!(machine.handle && machine.handle.ctl.armed);
+                // Its latch watched while it is kept, however it changes -- its own ⚙, the
+                // ring, a lapse -- so its tab is red exactly while it is armed.
+                if (!machine.latchWatch && machine.handle) {
+                    machine.latchWatch = new MutationObserver(() => { if (machine.keptId && machine.keptLoud !== !!machine.handle.ctl.armed) this.registerKept(machine); });
+                    machine.latchWatch.observe(machine.handle.$('ctl-label'), { attributes: true, attributeFilter: ['class'] });
+                }
+                if (machine.keptRegistered === machine.keptId && machine.keptLoud === armed) return;
+                // A tab beside the Machine in front, which takes the front from no window -- the
+                // Machine, a Procedure beside the world -- however a view lays the page out: so
+                // it is never a loud window, which panels.js puts in front. Armed, its tab wears
+                // the loud window's red (a flag) and says 🔓; a click brings it forward, and its
+                // tab dragged out stands it beside the other.
+                const title = `${who} · kept open beside the Machine in front${armed ? ': control armed, it can heat and move' : ''}: its link, latch, ⏹ E-STOP and pad. Opening its Machine again brings it in front`;
+                this.panels.register(machine.keptId, {
+                    group: 'Machine', least: 250, home: 'machine', title, body: machine.root,
+                    tab: `${armed ? '🔓 ' : ''}${who.split('.').pop()}`,
+                    onClose: () => { if (machine.keptId) this.closeKept(machine); },
+                });
+                this.panels.retitle(machine.keptId, title, { flag: armed ? 'loud' : null });
+                machine.keptRegistered = machine.keptId; machine.keptLoud = armed;
+            }
+            // A kept Machine in front again: the one in front kept in its place, its window
+            // taken away, its root in the Machine's window and its sections in theirs.
+            bringForward(machine) {
+                if (this.machine === machine) return machine;
+                const keptId = machine.keptId;
+                machine.keptId = null;  // its window's ✕, called as it goes, closes nothing
+                machine.keptRegistered = null;
+                this.kept = this.kept.filter((m) => m !== machine);
+                machine.root.remove();
+                machine.handle.padBack();
+                this.panels.unregister(keptId);
+                this.keepFront();
+                this.machine = machine;
+                this.showMachineSections(machine);
+                machine.sectionsOf(machine.kind);
+                this.registerMachineWindow(machine, { title: machine.title, tab: machine.tab, body: machine.root });
+                window.apothecaryMachine = machine.handle;
+                this.machineOpened(machine.port);
+                return machine;
+            }
+            // A kept Machine closed -- its window's ✕, its slot needed, its site left, its
+            // board gone: its board disarmed, as the Machine in front's is when it closes.
+            closeKept(machine) {
+                if (!machine || !this.kept.includes(machine)) return null;
+                const said = this.disarmGone(machine);
+                const keptId = machine.keptId;
+                machine.keptId = null;
+                machine.keptRegistered = null;
+                if (machine.latchWatch) machine.latchWatch.disconnect();
+                this.kept = this.kept.filter((m) => m !== machine);
+                if (machine.handle) machine.handle.destroy();
+                machine.root.remove();
+                if (keptId) this.panels.unregister(keptId);
+                this.followMachines();
+                return said;
+            }
+            // Every Machine closed, in front and kept: what each said, joined, or null.
+            closeAllMachines() {
+                const said = [this.closeMachine(), ...[...this.kept].map((m) => this.closeKept(m))].filter(Boolean);
+                return said.length ? said.join(' · ') : null;
+            }
+            // What is kept open beside the Machine in front, said.
+            keptSaid() {
+                const kept = this.kept.map((m) => `${m.path || m.port}${m.handle && m.handle.ctl.armed ? ' (armed)' : ''}`);
+                return kept.length ? `${kept.join(', ')} kept open beside it` : 'no other Machine open';
             }
             // A printer's Print or a router's Cut, open whenever its Machine is: what a
             // machine is opened for is what it makes. It stands under the Machine, as its
@@ -9731,6 +9888,8 @@
                 if (planMarks && planMarks.plan) { planMarks.marks?.destroy(); delete this.marks[machine.path]; this.invalidate(); }
                 window.apothecaryMachine = null;
                 if (machine.handle) machine.handle.destroy();
+                if (machine.root) machine.root.remove();
+                this.showMachineSections(null);
                 this.systems.machine.detach();
                 this.panels.unregister('machine');
                 this.keepMachineInAddress(null);
@@ -10565,7 +10724,7 @@
                 if (this.meshByName[path] && this.renderNodeByKey[path]) this.rebuildDetailForKey(path);
                 else this.renderSelectedPanel();
                 if (this.selectedName === path && this.meshByName[path] && this.isEditableSelection(this.currentFocusNode(), this.renderNodeByKey[path])) this.showHandles(this.meshByName[path]);
-                if (this.machine && this.machine.handle) this.machine.handle.print.loadChoices();
+                for (const m of this.openMachines()) if (m.handle) m.handle.print.loadChoices();
                 return this.pictureMarks.refresh();
             }
 
@@ -10584,7 +10743,7 @@
                 this.orbitControls.minDistance = near; this.orbitControls.maxDistance = far;
                 if (reach) this.reach = reach;
                 this.orbitControls.update();
-                if (this.machine && this.machine.handle) this.machine.handle.print.loadChoices();
+                for (const m of this.openMachines()) if (m.handle) m.handle.print.loadChoices();
                 return this.pictureMarks.refresh();
             }
 
@@ -11061,10 +11220,10 @@
         function deviceFor(path, { judged = false } = {}) {
             const { row } = viewer.bindingFor(path);
             if (!row || !row.device) return undefined;
-            // The latch as the board's open Machine knows it, so the ring says Disarm
-            // while it is armed; a board with no Machine open is taken as disarmed.
-            const m = viewer.machine;
-            const armed = !!(m && m.handle && m.port === row.device.port && m.handle.ctl.armed);
+            // The latch as the board's open Machine knows it, in front or kept, so the ring
+            // says Disarm while it is armed; a board with no Machine open is taken as disarmed.
+            const m = viewer.machineOn(row.device.port);
+            const armed = !!(m && m.handle && m.handle.ctl.armed);
             const device = { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
             return judged ? { ...device, can: canOf(row.device.port) } : device;
         }
@@ -11078,8 +11237,8 @@
         // over it; else the board's last poll, with a latch that lapsed since counted down
         // (can.js withLatch). Null when nothing has been asked of it yet.
         function canOf(port) {
-            const m = viewer.machine;
-            if (m && m.handle && m.port === port) return machineDevice(m).can;
+            const m = viewer.machineOn(port);
+            if (m && m.handle) return machineDevice(m).can;
             const board = viewer.boards ? viewer.boards.board(port) : null;
             const can = board ? (board.status && board.status.can) || (board.info && board.info.can) : null;
             return can ? withLatch(can, board.armedUntil > Date.now(), port) : null;
@@ -11135,12 +11294,17 @@
         };
 
         // A board's Machine has a ring of its own, the device ring on its port: its
-        // cells are the Machine's buttons.
-        const machineSpec = (at) => ({
-            context: { pointing: 'device', targets: [viewer.machine.port] },
-            device: machineDevice(viewer.machine), at,
-            again: () => (viewer.machine && viewer.machine.handle ? { device: machineDevice(viewer.machine) } : null),
+        // cells are the Machine's buttons. The Machine in front's, or a kept one's.
+        const machineSpec = (at, m = viewer.machine) => ({
+            context: { pointing: 'device', targets: [m.port] },
+            device: machineDevice(m), at,
+            again: () => (viewer.openMachines().includes(m) && m.handle ? { device: machineDevice(m) } : null),
         });
+        // The kept Machine whose window an element stands in, or null.
+        const keptAt = (el) => {
+            const win = el.closest("[data-panel^='kept-machine-']");
+            return win ? viewer.kept.find((m) => m.keptId === win.dataset.panel && m.handle) || null : null;
+        };
         // Ctrl+right-click (Settings' modifier), or a long press by touch: on a piece
         // in the world, a badge or a Contents row, the node ring for that piece (and
         // it is selected, so the panel agrees); a badge's is what it stands for, and
@@ -11165,6 +11329,9 @@
             const at = { x: event.clientX, y: event.clientY };
             const target = event.target && event.target.closest ? event.target : null;
             if (!target) return null;
+            // A kept Machine's window, its pad in it: that Machine's ring.
+            const kept = keptAt(target);
+            if (kept) return opening ? machineSpec(at, kept) : 'page';
             // The Machine, or its control pad popped out of it over the world.
             if (machineOpen && target.closest(".panel[data-panel='machine'], #control")) return opening ? machineSpec(at) : 'page';
             const row = target.closest('#contents-list .contents-item');
@@ -11230,7 +11397,7 @@
                 // on a piece. Open is the Machine it was opened in; a pin is taken back
                 // from the piece it is pinned to, and made from Selected.
                 if (intent.context.pointing === 'device') {
-                    const m = viewer.machine;
+                    const m = viewer.machineOn(port) || viewer.machine;
                     if (action === 'device:open') { viewer.setStatus(`${intent.label}: this is ${port}'s Machine${tail}`, 'success'); return; }
                     if (action === 'device:unpin') {
                         if (m && m.pin && m.pin.binding_source === 'manual') { await viewer.setNodeDevice(m.pin.path, null); viewer.setStatus(`Unpinned ${port} from ${m.pin.path}${tail}`, 'success'); }
@@ -11299,9 +11466,13 @@
                 // said here as an error, as well as in its log; what it told (a
                 // print started, and where it is followed) is said after the label.
                 if (action === 'device:flash-sketch') { await viewer.flashSketchOf(path); return; }
+                // Its Machine kept open beside the one in front carries it where it stands, so
+                // two machines are driven from their rings at once; only a board with no
+                // Machine open has one opened, the one in front kept beside it.
                 if (MACHINE_VERB.test(action) && (port || viewer.machine)) {
-                    if (port && !(viewer.machine && viewer.machine.port === port) && !viewer.openMachine(path)) return;
-                    const done = await viewer.machine.handle.carry(intent);
+                    if (port && !viewer.machineOn(port) && !viewer.openMachine(path)) return;
+                    const carrier = (port && viewer.machineOn(port)) || viewer.machine;
+                    const done = await carrier.handle.carry(intent);
                     if (done) {
                         // A refusal naming the verb and its address, as the Machine's log
                         // keeps it, is said as it is; one that names the verb alone, or
@@ -11795,21 +11966,23 @@
         // the board as it is now -- a printer or a devkit, armed or not -- and again
         // when its latch or what it is identified as changes.
         const machineRings = new Map();
+        // Every open Machine's: the one in front and those kept, each its own board's ring.
         async function annotateMachine() {
-            const m = viewer.machine;
-            if (!m || !m.handle) return;
-            const device = unjudged(m.handle.device());
-            if (!device.port) return;
-            const key = JSON.stringify(device);
-            if (!machineRings.has(key)) {
-                machineRings.set(key, resolveRing({ base: BASE, context: { pointing: 'device', targets: [device.port] }, device }).catch(() => null));
-            }
-            const ring = await machineRings.get(key);
-            if (ring && viewer.machine === m) annotate(ring, m.handle.pairs());
-            if (!m.watched) {
-                m.watched = true;
-                new MutationObserver(annotateMachine).observe(m.handle.$('ctl-label'), { attributes: true, attributeFilter: ['class'] });
-                new MutationObserver(annotateMachine).observe(m.handle.$('ident'), { childList: true });
+            for (const m of viewer.openMachines()) {
+                if (!m.handle) continue;
+                const device = unjudged(m.handle.device());
+                if (!device.port) continue;
+                const key = JSON.stringify(device);
+                if (!machineRings.has(key)) {
+                    machineRings.set(key, resolveRing({ base: BASE, context: { pointing: 'device', targets: [device.port] }, device }).catch(() => null));
+                }
+                const ring = await machineRings.get(key);
+                if (ring && viewer.openMachines().includes(m)) annotate(ring, m.handle.pairs());
+                if (!m.watched) {
+                    m.watched = true;
+                    new MutationObserver(annotateMachine).observe(m.handle.$('ctl-label'), { attributes: true, attributeFilter: ['class'] });
+                    new MutationObserver(annotateMachine).observe(m.handle.$('ident'), { childList: true });
+                }
             }
         }
 
@@ -11821,15 +11994,18 @@
             onIntent: carry,
             onResolved: async (ring, spec) => {
                 if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
-                if (spec.context.pointing === 'device' && viewer.machine && viewer.machine.handle) { machineRings.set(JSON.stringify(unjudged(spec.device)), Promise.resolve(ring)); annotate(ring, viewer.machine.handle.pairs()); }
+                if (spec.context.pointing === 'device') {
+                    const m = viewer.machineOn(spec.context.targets[0]);
+                    if (m && m.handle) { machineRings.set(JSON.stringify(unjudged(spec.device)), Promise.resolve(ring)); annotate(ring, m.handle.pairs()); }
+                }
             },
             // A greyed cell chosen anyway: nothing is done, and the reason is said as a
             // refused verb's is -- through its Machine, in its log too, when it is a verb
             // of the Machine open on that board.
             onRefused: (refusal) => {
-                const m = viewer.machine;
                 const port = refusal.device ? refusal.device.port : null;
-                if (m && m.handle && MACHINE_VERB.test(refusal.action || '') && (!port || m.port === port)) m.handle.refuse(refusal.said);
+                const m = port ? viewer.machineOn(port) : viewer.machine;
+                if (m && m.handle && MACHINE_VERB.test(refusal.action || '')) m.handle.refuse(refusal.said);
                 else viewer.setStatus(refusal.said, 'error');
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
