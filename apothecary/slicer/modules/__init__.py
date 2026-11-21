@@ -86,6 +86,9 @@ class Output:
     gcode: Optional[Path]
     estimate: Optional[dict] = None
     messages: List[dict] = field(default_factory=list)
+    # The configuration the slicer says it sliced with, by its own names, where it
+    # writes one: what a slice's record takes for a value its profiles leave out.
+    config: Dict[str, str] = field(default_factory=dict)
 
 
 class SlicerModule(ABC):

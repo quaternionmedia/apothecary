@@ -39,25 +39,14 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..hierarchy import Assembly
+from .. import sites
 from ..models.vectors import Vector3D
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..vision import cameras
 from ..vision.camera_part import CameraPart
+from .views import site_answer
 
 router = APIRouter(tags=["cameras"])
-
-
-def _site(site_name: str) -> Assembly:
-    from ..api import _get_site_or_404
-
-    return _get_site_or_404(site_name)
-
-
-def _site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
-    from ..api import _site_payload, _site_store
-
-    return _site_payload(site, _site_store.validator(site_name)(site))
 
 
 def _record_or_404(site_name: str, name: str) -> cameras.Camera:
@@ -84,14 +73,14 @@ async def add_camera(site_name: str, body: AddCamera):
 
     site = check_host(site_name, body.host)
     camera = cameras.add_here(site_name, site, body.host)
-    return {"camera": cameras.answer(camera, site), "site": _site_answer(site_name, site)}
+    return {"camera": cameras.answer(camera, site), "site": site_answer(site_name, site)}
 
 
 @router.get("/sites/{site_name}/cameras/{name}")
 def get_camera(site_name: str, name: str):
     """One camera part: its pose, the pose it was added at, its lens, its device,
     and where its next picture would land."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     return cameras.answer(_record_or_404(site_name, name), site)
 
 
@@ -120,7 +109,7 @@ class PoseBody(BaseModel):
 @router.put("/sites/{site_name}/cameras/{name}/pose")
 async def pose_camera(site_name: str, name: str, body: PoseBody):
     """Move, turn or tilt a camera. The pictures it took already stay where they landed."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     _record_or_404(site_name, name)
     position = (
         Vector3D(x=body.position[0], y=body.position[1], z=body.position[2])
@@ -130,7 +119,7 @@ async def pose_camera(site_name: str, name: str, body: PoseBody):
     camera = cameras.set_pose(
         site_name, site, name, position=position, turn=body.turn, tilt=body.tilt
     )
-    return {"camera": cameras.answer(camera, site), "site": _site_answer(site_name, site)}
+    return {"camera": cameras.answer(camera, site), "site": site_answer(site_name, site)}
 
 
 class DeviceBody(BaseModel):
@@ -147,7 +136,7 @@ class DeviceBody(BaseModel):
 def set_camera_device(site_name: str, name: str, body: DeviceBody):
     """Tell a camera which of a browser's cameras it is. One device is one camera:
     it is taken off any other camera it was, in any site (``taken_from`` names them)."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     _record_or_404(site_name, name)
     camera, taken = cameras.set_device(
         site_name, name, cameras.Device(id=body.id, label=body.label)
@@ -161,7 +150,7 @@ def set_camera_device(site_name: str, name: str, body: DeviceBody):
 @router.delete("/sites/{site_name}/cameras/{name}/device")
 def clear_camera_device(site_name: str, name: str):
     """A camera that is none of a browser's cameras now."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     _record_or_404(site_name, name)
     camera, _taken = cameras.set_device(site_name, name, None)
     return cameras.answer(camera, site)
@@ -172,7 +161,7 @@ def camera_params(site_name: str, name: str):
     """What a camera's editor edits, in the form ``GET /parts/{name}/params`` answers:
     its lens's position, its turn and tilt and its field of view, defaulting to what
     the camera is now, and where each started as the candidates to turn back to."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     return params_spec(CameraPart.of(_record_or_404(site_name, name), site))
 
 
@@ -186,7 +175,7 @@ def validate_camera(site_name: str, name: str, body: Optional[StagedParams] = No
     /parts/{name}/validate`` does: an unknown field, a tilt past straight up or a
     field of view of nothing is refused here, and a valid set says the box the
     camera would fill about its lens."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     part = CameraPart.of(_record_or_404(site_name, name), site)
     return validate_staged(part, body.params if body else {})
 
@@ -208,7 +197,7 @@ async def edit_camera(site_name: str, name: str, body: EditBody):
     an unknown field or a value out of range."""
     from ..vision import views as viewing
 
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     camera = _record_or_404(site_name, name)
     try:
         given = CameraPart.of(camera, site).validate_overrides(body.params)
@@ -229,7 +218,7 @@ async def edit_camera(site_name: str, name: str, body: EditBody):
     return {
         "camera": cameras.answer(cameras.record(site_name, name), site),
         "rebuilt": rebuilt,
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 
@@ -238,16 +227,14 @@ async def remove_camera(site_name: str, name: str):
     """Remove a camera: it leaves the site, and its record goes. The pictures it took,
     and the pieces made from them, stay. A camera whose site is gone is removed
     from the records all the same (``site`` is null)."""
-    from ..api import _site_store
-
-    site = _site(site_name) if site_name in _site_store.names() else None
+    site = sites.store.get(site_name) if site_name in sites.store.names() else None
     try:
         cameras.remove(site_name, site, name)
     except cameras.CameraNotFound as missing:
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     return {
         "removed": name,
-        "site": _site_answer(site_name, site) if site is not None else None,
+        "site": site_answer(site_name, site) if site is not None else None,
     }
 
 

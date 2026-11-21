@@ -31,6 +31,32 @@ and the task carries the slice's answer once it ends:
 - ``POST /slicer/tasks/{id}/cancel``.
 - ``GET /slicer/slices``, ``GET /slicer/slices/{file_id}``: the slices whose
   files the Print card still keeps.
+- ``POST /slicer/slices/{file_id}/measured`` ``{readings, resolution, repeatability,
+  assume}``: the piece the printer made from that slice, read with calipers -- each
+  feature its plan names (``readings``: a name and its values), the caliper's step and
+  the person's repeatability in mm -- kept as the next turn of that printer's tuning
+  for the slice's filament and process (``tuning.py``): solved, and each setting's
+  change proposed, nothing applied. A reading that is not of that piece is a 422
+  saying why, and nothing is kept.
+- ``POST /slicer/slices/{file_id}/seen`` ``{seen, where, note}``: the same piece read
+  by eye -- each fault seen (``seen``: a fault's id and its severity, 0 none to 3
+  bad; ``where``: where one shows) -- kept as the next look of that printer's tuning:
+  the one setting's change it implies proposed, nothing applied
+  (apothecary/print_faults.py).
+- ``GET /slicer/faults``: the faults a look reads, each with what it looks like, the
+  settings that govern it in the order they are tried, and what to look at when none
+  does; and the severities.
+- ``GET /slicer/tuning?site=&printer=``: the printer's tuning documents, one per
+  filament and process, each with its terms' trends and each fault's over its looks.
+- ``POST /slicer/tuning/apply``, ``POST /slicer/tuning/undo`` ``{site, printer,
+  filament, process}``: the last turn's or look's changes taken into the printer's
+  next slices; the last turn or look dropped, with what it applied.
+- ``GET /slicer/filaments?site=&printer=``: the filament loaded on that printer, and
+  every filament it can load (the slicer's profiles of its vendor that fit its
+  machine); ``POST /slicer/filaments/loaded`` ``{site, printer, filament, note}``:
+  another loaded, its next slices made with it (slicer/filaments.py).
+- ``GET /slicer/tuning/schema``, ``POST /slicer/tuning/validate``: ``print/tuning/1``'s
+  JSON Schema, and a document read back.
 
 Slices run one at a time on a task runner of their own, so a slice never waits
 for a flash, nor a flash for a slice. Slicing writes files only: no route here
@@ -39,15 +65,17 @@ opens a serial port or sends anything to a printer.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
+from .. import cabinet
+from .. import print_faults as pf
 from ..firmware.models import Port
 from ..firmware.tasks import Running, TaskBusy, TaskRunner
-from . import compose, service
+from . import compose, filaments, service, tuning
 from .models import SliceRecord, SlicerStatus
 from .modules import NotInstalled, SlicerError, chosen_id, get_module, modules, reset_modules
 from .profiles import printers
@@ -105,6 +133,41 @@ class SliceRequest(BaseModel):
     # A cached variant of the part (its key, as generate answered it): the
     # variant a page draws is what is sliced, and the record names it.
     variant: Optional[str] = Field(None, pattern=VARIANT_KEY)
+
+
+class MeasuredRequest(BaseModel):
+    # Each feature read, by the name the piece's plan gives it: one value in mm, or its
+    # repeated readings.
+    readings: Dict[str, Union[float, List[float]]] = Field(..., max_length=64)
+    resolution: float = Field(tuning.RESOLUTION, gt=0, le=1)  # the caliper's step, mm
+    repeatability: Optional[float] = Field(None, ge=0, le=1)  # a person's, as stated, mm
+    # Terms held at a value a person states rather than solved: said as assumed.
+    assume: Dict[str, float] = Field(default_factory=dict, max_length=8)
+
+
+class TuningRequest(BaseModel):
+    site: str = Field(..., pattern=SITE_NAME)
+    printer: str = Field(..., pattern=NODE_PATH)
+    filament: str = Field(..., min_length=1, max_length=200)
+    process: str = Field(..., min_length=1, max_length=200)
+
+    def applies(self) -> tuning.AppliesTo:
+        return tuning.AppliesTo(filament=self.filament, process=self.process)
+
+
+class SeenRequest(BaseModel):
+    # Each fault seen on the piece, by its id: 0 none, 1 slight, 2 clear, 3 bad.
+    seen: Dict[str, int] = Field(..., max_length=32)
+    # Where a fault shows, in words: a height, a feature.
+    where: Dict[str, str] = Field(default_factory=dict, max_length=32)
+    note: str = Field("", max_length=2000)
+
+
+class FilamentRequest(BaseModel):
+    site: str = Field(..., pattern=SITE_NAME)
+    printer: str = Field(..., pattern=NODE_PATH)
+    filament: str = Field(..., min_length=1, max_length=200)
+    note: str = Field("", max_length=200)  # the spool: its brand, its colour
 
 
 class Piece(BaseModel):
@@ -227,3 +290,191 @@ def slicer_slice_record(file_id: str):
     if record is None:
         raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
     return record
+
+
+@router.post("/slices/{file_id}/measured")
+def slicer_slice_measured(file_id: str, body: MeasuredRequest):
+    """The piece the slice ``file_id`` made, read: kept as the next turn of its printer's
+    tuning, solved, and each setting's change proposed; nothing is applied."""
+    record = service.get_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
+    values = {
+        name: [v] if isinstance(v, (int, float)) else list(v) for name, v in body.readings.items()
+    }
+    for name, read in values.items():
+        if len(read) > 20 or any(not (0 < v <= 2000) for v in read):
+            raise HTTPException(status_code=422, detail=f"{name}: up to 20 sizes, each over 0 mm")
+    instrument = tuning.Instrument(resolution=body.resolution, repeatability=body.repeatability)
+    drawer = None
+    try:
+        # A part's piece is filed in its drawer (apothecary/cabinet.py), which makes the turn.
+        if cabinet.part_of_slice(record):
+            drawer, doc, turn = cabinet.measured(
+                cabinet.for_slice(record), values, instrument, body.assume
+            )
+        else:
+            doc, turn = tuning.add_turn(record, values, instrument, body.assume)
+    except (tuning.Refused, cabinet.Refused) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _tuned(doc) | {"turn": turn.id, "said": tuning.said(turn), **_filed_in(drawer)}
+
+
+@router.post("/slices/{file_id}/seen")
+def slicer_slice_seen(file_id: str, body: SeenRequest):
+    """The piece the slice ``file_id`` made, read by eye: kept as the next look of its
+    printer's tuning, and the one setting's change it implies proposed; nothing is
+    applied."""
+    record = service.get_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
+    drawer = None
+    try:
+        if cabinet.part_of_slice(record):
+            drawer, doc, look = cabinet.looked(
+                cabinet.for_slice(record), body.seen, body.where, body.note
+            )
+        else:
+            doc, look = tuning.add_look(record, body.seen, body.where, body.note)
+    except (tuning.Refused, cabinet.Refused) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _tuned(doc) | {"look": look.id, "said": tuning.said_look(look), **_filed_in(drawer)}
+
+
+@router.get("/faults")
+def slicer_faults():
+    """The faults a look reads, and the severities."""
+    return {
+        "severity": {str(k): v for k, v in pf.SEVERITY.items()},
+        "faults": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "looks_like": f.looks_like,
+                "otherwise": f.otherwise,
+                "levers": [
+                    {
+                        "setting": lv.key,
+                        "kind": lv.kind,
+                        "unit": lv.unit,
+                        "step": lv.step,
+                        "least": lv.least,
+                        "most": lv.most,
+                        "why": lv.why,
+                    }
+                    for lv in f.levers
+                ],
+            }
+            for f in pf.FAULTS
+        ],
+    }
+
+
+def _printer_profile(site: str, printer: str):
+    """The slicer profile of ``printer`` standing in ``site``: 422 where it is none."""
+    try:
+        chosen = None
+        for answer in service.PRINTERS:
+            at = answer(None, site, printer)
+            if at is not None:
+                chosen = at
+                break
+        if chosen is None:
+            raise SlicerError(f"{printer} in {site}: no printer that keeps a slicer profile")
+        return service.load_profile(chosen.part)
+    except SlicerError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/filaments")
+def slicer_filaments(
+    site: str = Query(..., pattern=SITE_NAME), printer: str = Query(..., pattern=NODE_PATH)
+):
+    """The filament loaded on ``printer`` and every filament it can load."""
+    profile = _printer_profile(site, printer)
+    try:
+        found = filaments.choices(profile)
+    except NotInstalled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except SlicerError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    kept = filaments.loaded(site, printer)
+    return {
+        "chooses": filaments.chooses(profile),
+        "profile": (profile.sections.get("orcaslicer") or {}).get("filament"),
+        "loaded": kept.model_dump(mode="json") if kept else None,
+        "choices": [c.model_dump() for c in found],
+    }
+
+
+@router.post("/filaments/loaded")
+def slicer_filament_loaded(body: FilamentRequest):
+    """Another filament loaded on the printer: its next slices are made with it."""
+    profile = _printer_profile(body.site, body.printer)
+    try:
+        kept = filaments.load(profile, body.site, body.printer, body.filament, body.note)
+    except filaments.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except NotInstalled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return kept.model_dump(mode="json")
+
+
+def _filed_in(drawer: Optional["cabinet.Drawer"]) -> dict:
+    """Where a filing went: the part's drawer, or nothing for a piece no part's."""
+    return {"drawer": {"part": drawer.part, "id": drawer.id}} if drawer is not None else {}
+
+
+def _tuned(doc: "tuning.TuningDocument") -> dict:
+    return tuning.answer(doc)
+
+
+@router.get("/tuning")
+def slicer_tuning(
+    site: str = Query(..., pattern=SITE_NAME), printer: str = Query(..., pattern=NODE_PATH)
+):
+    """The tuning documents kept for ``printer`` in ``site``, one per filament and process."""
+    return {"documents": [_tuned(d) for d in tuning.documents(site, printer)]}
+
+
+@router.post("/tuning/apply")
+def slicer_tuning_apply(body: TuningRequest):
+    """The last turn's proposed changes, taken into the printer's next slices."""
+    try:
+        doc, changes = tuning.apply(body.site, body.printer, body.applies())
+    except tuning.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _tuned(doc) | {"applied": [c.model_dump(mode="json") for c in changes]}
+
+
+@router.post("/tuning/undo")
+def slicer_tuning_undo(body: TuningRequest):
+    """The last turn or look dropped, with what it applied."""
+    try:
+        doc, gone = tuning.undo(body.site, body.printer, body.applies())
+    except tuning.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # The filing in the part's cabinet that made it says it was undone.
+    cabinet.undone(gone.slice.part, body.site, body.printer, body.applies(), gone.id)
+    return _tuned(doc) | {"undone": gone.id}
+
+
+@router.get("/tuning/schema")
+def slicer_tuning_schema():
+    """``print/tuning/1``'s JSON Schema."""
+    return tuning.TuningDocument.model_json_schema(by_alias=True)
+
+
+@router.post("/tuning/validate")
+def slicer_tuning_validate(body: dict):
+    """A tuning document read back: 422 with the first figure that rests on nothing."""
+    try:
+        doc = tuning.TuningDocument.model_validate(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "turns": len(doc.turns),
+        "looks": len(doc.looks),
+        "settings": sorted(doc.settings),
+    }

@@ -1,10 +1,10 @@
-/* Working space: a site as every kind of evidence has it (apothecary/evidence/,
+/* Workspace: a site as every kind of evidence has it (apothecary/evidence/,
  * GET /sites/{s}/evidence), and a printer's timeline in it.
  *
  * Its first line, under the title, always names the next step, with the button
  * that takes it: whichever door opened the window, it says what to do.
  *
- * Opened on the site (Panels › Site › Workspace, or ⊞ Windows › Working space) it
+ * Opened on the site (Panels › Site › Workspace, or ⊞ Windows › Workspace) it
  * is a row per printer a board pinned here drives, each with what it is doing and
  * the button that opens its hour, then every subject the log has said of: each
  * property's value, how it is known and when. Opened on a printer (Camera ›
@@ -33,6 +33,8 @@
  * it holds no printer and keeps nothing, and shown() opens it on the site again;
  * an open() overtaken by a later one, or by close(), stops where it is.
  */
+
+import { clock } from "/static/format.js";
 
 const KEEP_EVERY = 0.05;        // a frame set at every 5 % of progress
 // What a machine's hour draws over its state: a printer's heaters, a router's spindle,
@@ -78,7 +80,9 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const say = (text, kind = "") => { if (log) log(text, kind); };
     const state = {
-        path: null, watch: null, refused: null, printers: [], doc: null, last: null, next: "",
+        // printers: null until the site's machines are read, so none is not said of a site
+        // not read yet.
+        path: null, watch: null, refused: null, printers: null, doc: null, last: null, next: "",
         kept: { at: 0, state: null, step: null, cameras: "" }, timer: null, unwatch: null, keeping: false,
         turn: 0, closed: false,
     };
@@ -146,7 +150,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
 
     // --- words ---------------------------------------------------------------------------
     const time = (iso) => new Date(iso).getTime();
-    const hhmm = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const hhmm = (iso) => clock(iso);
     const degrees = (v) => (typeof v === "number" ? Math.round(v * 10) / 10 : esc(v));
     const size = (bytes) => (bytes < 1e6 ? `${Math.ceil(bytes / 1e3)} kB` : bytes < 1e9 ? `${(bytes / 1e6).toFixed(1)} MB` : `${(bytes / 1e9).toFixed(2)} GB`);
     // A subject as a person names it: garage:printer_1#heater:bed is printer_1's bed
@@ -166,6 +170,8 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         if (p.value === null || p.value === undefined) return `unread: ${esc(p.why)}`;
         if (p.value === true) return "yes";
         if (p.value === false) return "no";
+        // A list, a router's pins: its items, as the Machine's Status card shows them.
+        if (Array.isArray(p.value)) return p.value.length ? p.value.map(esc).join(" · ") : "none";
         if (typeof p.value === "object") return Object.entries(p.value).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(" · ");
         if (p.unit === "fraction") return `${Math.round(p.value * 100)} %`;
         if (p.unit === "°C") return `${degrees(p.value)} °C`;
@@ -183,6 +189,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     function lead() {
         const path = state.path;
         if (!path) {
+            if (!state.printers) return { text: `Reading the machines pinned in ${site()}…` };
             if (!state.printers.length) return { text: `No machine is pinned in ${site()} yet: a printer's or a router's Device, on its ring, pins its board, and its polls are kept from then.` };
             return { text: "Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on." };
         }
@@ -209,7 +216,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     // --- the site: a row per printer ----------------------------------------------------------
     function printers(doc) {
         if (state.path) return "";
-        return state.printers.map((pr) => {
+        return (state.printers || []).map((pr) => {
             const s = pr.subject;
             const st = doc ? prop(doc, s, "state") : null;
             const heat = doc ? SERIES.map((line) => {
@@ -217,7 +224,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
                 if (!t || t.value == null) return "";
                 return line.unit === "°C" ? `${line.name} ${degrees(t.value)} °C` : `${line.name} ${esc(t.value)} ${line.unit}`;
             }).filter(Boolean).join(" · ") : "";
-            const heard = st ? (st.current ? "answering now" : `last heard ${hhmm(st.at)}`) : pr.port ? "not polled yet" : "its board is not answering";
+            const heard = st ? (st.current ? "answering now" : `last heard ${hhmm(st.heard_at || st.at)}`) : pr.port ? "not polled yet" : "its board is not answering";
             const cams = pr.cameras.length ? `${pr.cameras.length} camera${pr.cameras.length === 1 ? "" : "s"}` : "no camera";
             return `<div class="ws-printer" data-printer="${esc(pr.path)}"><strong>${esc(pr.path)}</strong> <span>${st ? esc(st.value) : ""}${heat ? ` · ${heat}` : ""}</span> <span class="muted">${heard} · ${cams}</span> <button type="button" class="ws-hour" data-do="hour" data-path="${esc(pr.path)}">${esc(pr.path)}'s hour ›</button></div>`;
         }).join("");
@@ -293,7 +300,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         q(".ws-subjects thead").innerHTML = shown.length ? "<tr><th>what</th><th>value</th><th>how it is known</th><th>when</th></tr>" : "";
         return shown.map((e) => `<tr class="ws-subject" title="${esc(e.subject)}"><th colspan="4">${esc(named(e.subject))}</th></tr>` + e.properties.map((p) => {
             const poll = (p.evidence || []).find((r) => r.kind === "poll");
-            const heard = p.current ? "now" : `last known ${hhmm(p.at)}`;
+            const heard = p.current ? "now" : `last known ${hhmm(p.heard_at || p.at)}`;
             return `<tr class="ws-property${p.current ? "" : " ws-stale"}"${poll ? ` data-poll="${esc(poll.id)}"` : ""} title="${esc(p.origin.kind)} by ${esc(p.origin.by.name)}${poll ? ": click for the poll's lines" : ""}"><td>${esc(p.property)}</td><td>${value(p)}</td><td>${known(p)}</td><td>${heard}</td></tr>`;
         }).join("")).join("") || `<tr><td class="muted">nothing is said of ${esc(s ? state.path : site())} yet: a machine pinned here says it once it is polled</td></tr>`;
     }
@@ -332,8 +339,8 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
 
     // --- what a person does here ------------------------------------------------------------------
     async function act(what, el) {
-        if (what === "site") { await open(null); say(`the Working space of ${site()}: ${state.next}`); return; }
-        if (what === "hour") { await open(el.dataset.path); say(`${state.path}'s hour in the Working space: ${state.next}`); return; }
+        if (what === "site") { await open(null); say(`the Workspace of ${site()}: ${state.next}`); return; }
+        if (what === "hour") { await open(el.dataset.path); say(`${state.path}'s hour in the Workspace: ${state.next}`); return; }
         if (what === "close") { q(".ws-evidence").innerHTML = ""; return; }
         if (what === "keep") {
             const done = await keepSet(state.last, { now: true });
@@ -416,6 +423,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         const turn = state.turn;
         state.closed = false;
         state.path = path; state.last = null; state.refused = null;
+        if (!path) state.printers = null;  // the site's, read again: another site's may be loaded
         state.kept = { at: 0, state: null, step: null, cameras: "" };
         q(".ws-evidence").innerHTML = "";
         q(".ws-timeline").innerHTML = "";

@@ -28,6 +28,12 @@ def state_dir() -> Path:
     return Path(override).expanduser() if override else Path.home() / ".apothecary"
 
 
+def named() -> bool:
+    """Whether a state folder of its own is named (``APOTHECARY_STATE_DIR``), and so
+    this is not the person's ``~/.apothecary``."""
+    return bool(os.environ.get("APOTHECARY_STATE_DIR", "").strip())
+
+
 def private_folder(folder: Path) -> Path:
     """Make ``folder`` (and what is above it, up to the state folder) readable by
     this account alone: serial numbers, camera labels and readings are the

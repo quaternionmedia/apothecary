@@ -18,6 +18,7 @@
  */
 
 import { esc } from "/static/board_text.js";
+import { clock } from "/static/format.js";
 
 const POLL_MS = 500;
 
@@ -117,7 +118,7 @@ export function mountTasks(root, { base = "", history = true, say = null, onStar
         $(".task-history").innerHTML = tasks.length
             ? tasks.map((t) => {
                 const [cls, sign] = mark(t.status);
-                return `<li data-id="${esc(t.id)}" title="Show this task's output"><span class="${cls}">${sign}</span> <span>${esc(t.title)}</span><span class="grow"></span><span class="meta">${esc(new Date(t.started).toLocaleTimeString())}</span></li>`;
+                return `<li data-id="${esc(t.id)}" title="Show this task's output"><span class="${cls}">${sign}</span> <span>${esc(t.title)}</span><span class="grow"></span><span class="meta">${esc(clock(t.started))}</span></li>`;
             }).join("")
             : '<li class="empty">–</li>';
         return tasks;

@@ -82,13 +82,19 @@ def rust_only_url(start_server, tmp_path_factory):
 CHANGING = (
     ".task-log",
     ".task-history .meta",
-    "#log .t",
+    # The device log scrolls as the board blinks: which lines the window holds is the moment's.
+    "#log",
     # When the board was flashed, a grey of one width whatever the time.
     *all_words("#c-sketch .when"),
     ".tc-status",
     # The stand-in tools' folders, which the toolchains' cards name.
     (".tc-module .kv", FOLDER),
 )
+
+
+# The board's badge in the world and on Site's row pulse while it is flashed: lit or not
+# as the moment falls.
+BOARD_BADGES = (".world-badge", ".contents-item .dev-badge")
 
 
 def _title(where) -> str:
@@ -109,7 +115,7 @@ def _lines(log, *wanted: str) -> str:
 @pytest.mark.e2e  # the browser suite's alone: not walkthrough, so `test run` stays quick
 def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: str, walkthrough):
     """Round one, from the Bench: the Arduino esp32_blink, chosen, built for its board
-    and uploaded to the devkit's port by the ring's Panels › Bench cells. The
+    and uploaded to the devkit's port by the ring's Panels › Tools › Bench cells. The
     garage's esp32_blink, bound by its sketch, now wears the board; its Machine says
     what it should run, and the ring's Query hears it say so. Change it -- round two,
     from the Machine's Flashing card: the Rust esp32_blink, listed beside the Arduino
@@ -160,8 +166,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     open_garage(page, url, settle=False)
 
     # ---------------------------------------------------------------- round one
-    # 1. The Bench, from the canvas ring: Panels › Bench › Bench.
-    _canvas_ring(page, "4", "3", "8")
+    # 1. The Bench, from the canvas ring: Panels › Tools › Bench › Bench.
+    _canvas_ring(page, "4", "3", "8", "8")
     bench = page.locator(BENCH)
     expect(bench).to_be_visible(timeout=5000)
     select = bench.locator(".sketch-select")
@@ -201,7 +207,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     assert "orcaslicer: not installed" in installed, installed
     story.shows(
         "The Bench lists both builds of esp32_blink, each with its toolchain",
-        "Panels › Bench › Bench on the canvas ring opens the Bench, maximised here from its "
+        "Panels › Tools › Bench › Bench on the canvas ring opens the Bench, maximised here "
+        "from its "
         "stack: arduino-cli's status and its cores, and under them the other modules as "
         "installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run "
         "leaves uninstalled -- "
@@ -217,25 +224,25 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(bench).to_be_visible(timeout=5000)
     assert windows.state(page, "bench")["shown"] is True
 
-    # 2. Compile, from the ring: Panels › Bench › Compile.
-    _canvas_ring(page, "4", "3", "2")
+    # 2. Compile, from the ring: Panels › Tools › Bench › Compile.
+    _canvas_ring(page, "4", "3", "8", "2")
     _ended(bench, f"Compile {ARDUINO} (esp32:esp32:esp32)")
     expect(bench.locator(".task-log")).to_contain_text("fake compile")
-    expect(page.locator("#status")).to_contain_text("⌗432")
+    expect(page.locator("#status")).to_contain_text("⌗4382")
     story.says(
         "Compile builds it for its board",
-        "Panels › Bench › Compile (⌗432) builds what the Bench has chosen, as a task "
+        "Panels › Tools › Bench › Compile (⌗4382) builds what the Bench has chosen, as a task "
         "whose output is in the Bench's log; nothing is sent to a board. Upload is next.",
         shown=_title(bench),
     )
 
     # 3. Upload, from the ring, after asking.
-    _canvas_ring(page, "4", "3", "4")
+    _canvas_ring(page, "4", "3", "8", "4")
     _ended(bench, f"Upload {ARDUINO} → {DEVKIT}")
     expect(bench.locator(".task-log")).to_contain_text("fake upload")
     story.says(
         "Upload writes it to the devkit, after asking",
-        "Panels › Bench › Upload (⌗434) asks first, naming the sketch with its toolchain "
+        "Panels › Tools › Bench › Upload (⌗4384) asks first, naming the sketch with its toolchain "
         "and the port; then it builds again and uploads that fresh build. The garage's "
         "esp32_blink, which runs the sketch of that name, now wears the board.",
         shown=f"{dialogs[0]}\n{_title(bench)}",
@@ -370,7 +377,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         + _lines(sketch, "should run", "observed").replace(
             sketch.locator(".when").inner_text(), "…"
         ),
-        blank=CHANGING,
+        blank=(*CHANGING, *BOARD_BADGES),
     )
 
     # 9. Listen: the hello on the wire.
@@ -428,7 +435,8 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     expect(rust).to_contain_text("espflash 4.6.0")
     install = rust.locator(".module-install")
     expect(install).to_have_text("Update Rust for the ESP32")
-    expect(install).to_have_attribute("data-address", "4366")  # Panels › Bench › Install › Rust
+    # Panels › Tools › Bench › Install › Rust ESP32.
+    expect(install).to_have_attribute("data-address", "43866")
     expect(install).to_be_enabled()
     assert "vendor every Rust sketch's crates" in (install.get_attribute("title") or "")
     expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9")  # arduino-cli's
@@ -444,11 +452,11 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
         button="right", modifiers=["Control"], position={"x": 30, "y": 30}
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    for digit in ("4", "3", "2"):  # Panels › Bench › Compile
+    for digit in ("4", "3", "8", "2"):  # Panels › Tools › Bench › Compile
         page.keyboard.press(digit)
     _ended(bench, f"Compile {RUST} (esp32)")
     expect(bench.locator(".task-log")).to_contain_text("--offline")
-    expect(page.locator("#status")).to_contain_text("⌗432")
+    expect(page.locator("#status")).to_contain_text("⌗4382")
 
 
 @pytest.mark.e2e
@@ -463,7 +471,7 @@ def test_with_rust_alone_the_loop_goes_round_with_no_arduino_cli(page: Page, rus
     dialogs: list[str] = []
     page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
     open_garage(page, url, settle=False)
-    _canvas_ring(page, "4", "3", "8")
+    _canvas_ring(page, "4", "3", "8", "8")
     bench = page.locator(BENCH)
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=10000)
     expect(bench.locator(".tc-module[data-id='rust-esp32']")).to_contain_text("installed: can")

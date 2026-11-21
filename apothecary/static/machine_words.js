@@ -6,7 +6,7 @@
  * words label.
  *
  * A G-code kind: `job` is what it runs (apothecary/jobs.py), `dialect` what its
- * board answers in, `running` the status its node takes while a job runs, `stop`
+ * board answers in, `pauseWord` what its pad and ring call a job's pause (a printer's Pause, a router's Hold), `running` the status its node takes while a job runs, `stop`
  * its emergency stop's line, `prepare` the step that makes a file to run (a
  * printer's Slice, a router's Toolpath), `byHand` the status words a person sets
  * on its node (the rest its polls set), `feedMax` and `feedDefault` the jog feed's
@@ -18,7 +18,7 @@
  */
 export const KINDS = {
     printer: {
-        icon: "🖨", job: "print", verb: "Print", volume: "Build volume", dialect: "marlin", running: "printing", stop: "M112", can: "heat and move",
+        icon: "🖨", job: "print", verb: "Print", volume: "Build volume", dialect: "marlin", running: "printing", stop: "M112", can: "heat and move", pauseWord: "Pause",
         fileTitle: "A sliced G-code file to keep on the host. It is checked (no EEPROM writes, no temperatures over the caps) and listed here; nothing is sent until Print",
         partTitle: "The part or piece this print makes, from the site the printer is pinned in: the print's job records it, and Site lists the job. The ring's Send file prints what is chosen here",
         notIdentified: "not identified as a printer",
@@ -29,15 +29,15 @@ export const KINDS = {
         identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …",
         homeAxis: (a) => `Home ${a} alone (G28 ${a}): the other axes stay where they stand. Moves the machine: control must be armed`,
         start: "▶ Print", title: "Print from here",
-        startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file",
+        startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed.",
         pause: "Stop feeding lines; the printer finishes what it has queued",
         cancel: "Stop feeding, then heaters off, fan off, motors free",
         estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.",
         arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.",
-        level: { card: "Bed level", button: "▤ Probe bed", buttonTitle: "G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe", none: "no reading yet", across: "across the bed", ask: "Home and probe the bed on {port}?\nThe nozzle will travel the whole bed." },
+        level: { card: "Bed level", button: "▤ Probe bed", buttonTitle: "G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed.", none: "no reading yet", across: "across the bed", ask: "Home and probe the bed on {port}?\nThe nozzle will travel the whole bed." },
     },
     router: {
-        icon: "🪚", job: "cut", verb: "Cut", volume: "Working area", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move",
+        icon: "🪚", job: "cut", verb: "Cut", volume: "Working area", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move", pauseWord: "Hold",
         fileTitle: "A CAM post's file to keep on the host. It is checked (no settings, no tool change, no spindle over the router's) and listed here; nothing is sent until Cut",
         partTitle: "The part this cut makes, from the site the router is pinned in: the cut's job names it, and Toolpath writes its toolpath from the cuts it declares",
         notIdentified: "not identified as a router",
@@ -48,7 +48,7 @@ export const KINDS = {
         identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?",
         homeAxis: (a) => `Home ${a} alone ($H${a}): the other axes stay where they stand. Moves the machine: control must be armed`,
         start: "▶ Cut", title: "Cut from here",
-        startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file",
+        startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed.",
         pause: "Feed hold: the controller stops where it is, and nothing more is fed",
         cancel: "Hold, then the soft reset: the queue empties and the spindle is off",
         estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.",

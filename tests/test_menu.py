@@ -13,8 +13,10 @@ script to regenerate it.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from ring_helpers import address_of, every_action, every_address, walk
@@ -42,6 +44,7 @@ from apothecary.menu import (
     control_options,
     nearest,
     resolve,
+    router_control_options,
     shorten,
 )
 from apothecary.primitives import Cube
@@ -211,19 +214,92 @@ def test_a_long_single_word_is_cut_rather_than_left_over_length():
 # ---------------------------------------------------------------- what is offered
 
 
-def test_the_canvas_ring_offers_the_sites_and_the_groups():
-    ring = resolve(
-        Context(pointing=Pointing.CANVAS),
-        _photo_site(),
-        site_names=["bench", "garage"],
-        groups=["plate", "disc"],
+def test_the_canvas_ring_offers_the_sites_and_the_sites_systems():
+    """Systems, cell 7: each System beneath the level in view, in its colour, opening its
+    pieces in place as Site's chips do; greyed, saying why, where its pieces are in
+    none."""
+    from apothecary.layer_colours import colour_of
+
+    garage = resolve(Context(pointing=Pointing.CANVAS), _garage(), site_names=["garage"])
+    systems = garage.options[-1]
+    assert (systems.label, systems.cell) == ("Systems", 7)
+    assert [(c.label, c.action) for c in systems.children] == [
+        (name, f"facet:system:{name}")
+        for name in ("Building", "Furniture", "Machines", "Mechanical", "Electrical", "Plumbing")
+    ]
+    assert systems.children[0].colour == colour_of("system:building")
+    assert carried_by("facet:system:Building").name == "VIEWER"
+    inside = resolve(
+        Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), site_names=["garage"]
     )
-    assert every_action([ring]).keys() >= {"site:bench", "group:plate", "fit", "reset"}
+    assert [c.label for c in inside.options[-1].children] == ["Machines"]
+    coupon = resolve(
+        Context(pointing=Pointing.CANVAS, targets=["router_coupon"]),
+        _garage(),
+        site_names=["garage"],
+    ).options[-1]
+    assert (coupon.label, coupon.enabled) == ("Systems", False)
+    assert coupon.why == "nothing beneath router_coupon is in one of the Systems"
+
+    photos = resolve(
+        Context(pointing=Pointing.CANVAS), _photo_site(), site_names=["bench", "garage"]
+    )
+    assert every_action([photos]).keys() >= {"site:bench", "fit", "reset"}
+    none = photos.options[-1]
+    assert (none.label, none.cell, none.enabled) == ("Systems", 7, False)
+    assert none.why == "nothing in bench is in one of the Systems"
 
 
-def test_a_ring_with_nothing_to_group_simply_does_not_offer_it():
+def test_the_universe_lists_its_parts_by_kind_and_has_nothing_above_it():
+    """In the universe Pieces is its parts cut by kind, every part kept and no site among
+    them (Site opens those); its cell 7 is Kinds; and Step out, at the top of everything, is
+    greyed and says why."""
+    from apothecary import sites
+    from apothecary.facets import KINDS
+
+    universe = sites.store.get("apothecary")
+    ring = resolve(Context(pointing=Pointing.CANVAS), universe, site_names=["garage"])
+    pieces, out, kinds = ring.options[0], ring.options[-2], ring.options[-1]
+    assert [c.label for c in pieces.children] == list(KINDS)
+
+    def leaves(option):
+        return [option] if option.action else [x for c in option.children for x in leaves(c)]
+
+    parts = sorted(c.name for c in universe.children if c.part_ref)
+    assert sorted(x.action for x in leaves(pieces)) == [f"select:{p}" for p in parts]
+    assert (out.label, out.cell, out.enabled) == ("Step out", 1, False)
+    assert "nothing to step out to" in out.why
+    assert (kinds.label, kinds.cell) == ("Kinds", 7)
+    assert [c.label for c in kinds.children] == list(KINDS)
+
+
+def test_a_long_plain_list_is_cut_into_as_few_lettered_runs_as_fit():
+    """Nine names are two runs, five and four, each named for its letters; a list kept in
+    its own order is cut in that order, each run named for its first; nothing is dropped."""
+    from apothecary.menu import _fit
+
+    names = ["arch", "bolt", "cog", "disc", "eye", "fin", "gear", "hub", "pin"]
+    leaves = [Option(id=n, label=n, action=n) for n in reversed(names)]
+    runs = _fit("x", leaves)
+    assert [(r.label, [c.label for c in r.children]) for r in runs] == [
+        ("a–e", names[:5]),
+        ("f–p", names[5:]),
+    ]
+    same = [Option(id=f"p{i}", label=f"plate {i}", action=f"p{i}") for i in range(10)]
+    told = _fit("y", same)
+    assert [r.label for r in told] == ["plate 0", "plate 5"]
+    kept = _fit("z", leaves, by_name=False)
+    assert [r.label for r in kept] == ["pin", "disc"]
+    assert [c.label for r in kept for c in r.children] == list(reversed(names))
+    assert _fit("w", leaves[:8]) == leaves[:8]
+
+
+def test_a_canvas_cell_with_nothing_to_group_is_greyed_in_its_cell():
+    """The canvas ring's cells are always there, each at its address (``_canvas_ring``):
+    Site with no site registered is greyed in its cell rather than gone."""
     ring = resolve(Context(pointing=Pointing.CANVAS), _photo_site())
-    assert "Site" not in [option.id for option in ring.options]
+    site = next(option for option in ring.options if option.id == "Site")
+    assert (site.cell, site.enabled, site.children) == (6, False, None)
     view = next(option for option in ring.options if option.id == "view")
     assert "fit" in [option.id for option in view.children]
 
@@ -262,7 +338,6 @@ def test_every_kind_of_ring_obeys_both_limits(pointing):
         Context(pointing=pointing, targets=["plate_1"]),
         _photo_site(),
         site_names=["bench", "garage"],
-        groups=["plate", "disc"],
     )
     assert 1 <= len(ring.options) <= MOST_OPTIONS
     for option in ring.options:
@@ -736,6 +811,44 @@ def test_the_control_ring_offers_every_allowlisted_verb():
 
 
 ROUTER = Device(port="/dev/ttyUSB1", printer=True, machine="router", armed=False, bound=True)
+STATIC = Path(__file__).parents[1] / "apothecary" / "static"
+
+
+def _labels_by_action(options) -> dict:
+    out = {}
+    for o in options:
+        if o.action:
+            out[o.action] = o.label
+        out.update(_labels_by_action(o.children or []))
+    return out
+
+
+def test_the_control_ring_says_what_the_machine_s_windows_say():
+    """A job's acts are worded once: the Print window's Abort, and a printer's Pause where a
+    router's is Hold (static/machine_words.js pauseWord), are what the control ring's cells
+    say too; the Feedback window's Take turn and Undo turn, what a part's piece's Feedback
+    cells say."""
+    machine = (STATIC / "widgets" / "machine.js").read_text(encoding="utf-8")
+    feedback = (STATIC / "widgets" / "feedback.js").read_text(encoding="utf-8")
+    words = (STATIC / "machine_words.js").read_text(encoding="utf-8")
+
+    def button(name: str, text: str = machine) -> str:
+        said = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', text)[1]
+        return re.sub(r"^\W+", "", said)
+
+    pause = dict(re.findall(r'verb: "(\w+)".*?pauseWord: "(\w+)"', words))
+    printer = _labels_by_action(control_options(PRINTER))
+    router = _labels_by_action(router_control_options(ROUTER))
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    piece = _labels_by_action(
+        resolve(on, _garage(), picture=PictureContext(printers=["printer_1"])).options
+    )
+    assert piece["feedback:tune-apply"] == button("feedback-tune-apply", feedback) == "Take turn"
+    assert piece["feedback:tune-undo"] == button("feedback-tune-undo", feedback) == "Undo turn"
+    assert printer["control:sd-abort"] == router["control:job-abort"] == button("print-cancel")
+    assert button("print-cancel") == "Abort"
+    assert printer["control:sd-pause"] == pause["Print"] == "Pause"
+    assert router["control:job-hold"] == pause["Cut"] == "Hold"
 
 
 def test_a_machine_drawn_as_a_part_has_no_slice_and_its_ring_holds():
@@ -789,6 +902,7 @@ def test_a_router_s_control_ring_is_its_own():
         "control:go-zero",
         "control:top-z",
         "control:probe-z",
+        "control:probe-plate",
         "control:job-resume",
         "control:job-hold",
         "control:job-abort",
@@ -815,10 +929,130 @@ def test_stop_is_marked_destructive_and_nothing_else_on_the_ring_is():
     assert {o.id for o in ring.options if o.destructive} == {"control:estop"}
 
 
+# ------------------------------------------------- greyed from the server's answer
+
+LATCH_DOWN = "/dev/ttyUSB0: control is not armed -- arm it first"
+
+
+def _refused(why: str, kind: str = "armed") -> dict:
+    return {"ok": False, "why": why, "kind": kind}
+
+
+def _judged(base: Device, can: dict) -> Device:
+    """``base`` told what the server would refuse of its port now."""
+    return Device(**{**base.model_dump(), "can": can})
+
+
+def _leaves_of(option) -> list:
+    return [o for o in (option.children or []) if o.action]
+
+
+def test_a_machine_cell_the_server_would_refuse_is_greyed_with_its_reason():
+    """Told the port's answer (``can`` on its status, firmware/can.py), the ring greys
+    each act the server would refuse, with the server's words, as the Machine greys
+    its button; what the answer allows stays, and no cell moves."""
+    device = _judged(PRINTER, {"jog": _refused(LATCH_DOWN), "home": {"ok": True}})
+    ring = _device_ring(device)
+    jog = walk(ring, "72")  # Control › Jog
+    assert [(c.label, c.enabled, c.why) for c in jog.children] == [
+        (axis, False, LATCH_DOWN) for axis in ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
+    ]
+    assert all(c.enabled and c.why is None for c in walk(ring, "76").children)  # Home
+    assert walk(ring, "72").enabled  # a ring of acts opens whatever its acts say
+    assert every_address(ring) == every_address(_device_ring(PRINTER))
+    # The same from a piece's ring: the Device it carries is greyed alike.
+    node = _node_with_printer(device)
+    assert walk(node, "4728").why == LATCH_DOWN
+    # Told nothing, nothing is greyed.
+    assert all(walk(_device_ring(PRINTER), a).enabled for a in every_address(ring) if a != "2")
+
+
+def test_a_printers_one_axis_home_is_its_home_and_a_routers_is_its_own():
+    """A verb with a dot falls back to the one before it, as static/can.js reads it: a
+    printer's Home X is answered by its ``home``; a router's by its own ``home.X``."""
+    printer = _device_ring(_judged(PRINTER, {"home": _refused("not homed", "homed")}))
+    assert all(not c.enabled for c in walk(printer, "76").children)
+    router = _device_ring(
+        _judged(ROUTER, {"home": {"ok": True}, "home.X": _refused("X has not shown its switch")})
+    )
+    home = {c.label: c for c in walk(router, "78").children}
+    assert not home["X"].enabled and home["X"].why == "X has not shown its switch"
+    assert home["All"].enabled and home["Y"].enabled and home["Z"].enabled
+
+
+def test_a_print_cell_is_the_jobs_while_one_runs_from_here_and_the_lines_otherwise():
+    """Print's Pause, Resume and Abort do whichever is running, as the Machine carries
+    them: the job's verb while a job from the host runs (its ``print.cancel`` is ok), the
+    card's line otherwise."""
+    idle = {"print.cancel": _refused("no print is running", "idle"), "card.pause": {"ok": True}}
+    pause = {c.label: c for c in walk(_device_ring(_judged(PRINTER, idle)), "79").children}
+    assert pause["Pause"].enabled  # M25, to the card
+    paused = {
+        "print.cancel": {"ok": True},
+        "print.pause": _refused("the print is paused, not running", "idle"),
+        "card.pause": _refused("a print holds the port", "held"),
+    }
+    pause = {c.label: c for c in walk(_device_ring(_judged(PRINTER, paused)), "79").children}
+    assert not pause["Pause"].enabled and pause["Pause"].why == "the print is paused, not running"
+    assert pause["Abort"].enabled
+
+
+def _answered(monkeypatch, kind: str, armed: bool) -> dict:
+    """What the server answers for an idle port of ``kind``, its latch as ``armed``."""
+    from apothecary.firmware import can
+
+    facts = can.Facts("/dev/x", None, armed, None, None, None, None, None, kind, None)
+    monkeypatch.setattr(can, "facts_of", lambda *a, **k: facts)
+    return can.can_now("/dev/x")
+
+
+@pytest.mark.parametrize("base", [PRINTER, ROUTER], ids=["printer", "router"])
+def test_the_stops_are_never_greyed_on_the_ring(base, monkeypatch):
+    """E-STOP is never greyed, whatever an answer says of it, as the Machine's E-STOP and
+    the pad's are not; and with the latch down what interrupts or turns off -- Break
+    wait, Quickstop, Stop jog, Hold, the heaters and the spindle off -- stays, as the
+    server takes it, while what needs the latch is greyed for it."""
+    everything = {
+        verb: _refused("refused")
+        for verb in _answered(monkeypatch, base.machine or "printer", True)
+    }
+    ring = _device_ring(_judged(base, everything))
+    stop = walk(ring, address_of(ring, "control:estop"))
+    assert stop.enabled and stop.why is None
+    down = _answered(monkeypatch, base.machine or "printer", False)
+    ring = _device_ring(_judged(base, down))
+    acts = {a: walk(ring, address) for address, a in every_address(ring).items()}
+    live = {
+        "printer": ("control:break-wait", "control:quickstop", "control:hotend-off",
+                    "control:bed-off", "control:fan-off", "control:sd-pause", "control:estop"),
+        "router": ("control:jog-cancel", "control:job-hold", "control:spindle-off",
+                   "control:job-abort", "control:estop"),
+    }[base.machine or "printer"]  # fmt: skip
+    for action in live:
+        assert acts[action].enabled, (action, acts[action].why)
+    assert not acts["control:jog:Y+"].enabled and "not armed" in acts["control:jog:Y+"].why
+    assert not acts["control:home"].enabled
+
+
+def test_a_printers_flash_says_why_it_cannot_be_chosen():
+    flash = walk(_device_ring(), "2")
+    assert flash.enabled is False and "keeps its own firmware" in flash.why
+    devkit = walk(_device_ring(Device(port="/dev/ttyACM0", bound=True)), "2")
+    assert devkit.enabled and devkit.why is None
+
+
 def test_the_device_ring_stands_on_the_port_s_last_segment():
     assert _device_ring().title == "ttyUSB0"
     long_leaf = _device_ring(Device(port="/dev/serial/by-id/usb-Marlin_Ender-if00")).title
     assert len(long_leaf) <= LONGEST_LABEL and "/" not in long_leaf
+
+
+def test_the_device_ring_is_titled_by_the_machine_its_board_is_pinned_to():
+    """Told the machine's name (the server's firmware/can.py ``who``), the ring on the port
+    says it, as the windows and a reason do; told none, it says the port."""
+    named = Device(port="/dev/ttyUSB0", printer=True, name="printer_1")
+    assert _device_ring(named).title == "printer_1"
+    assert _device_ring(Device(port="/dev/ttyUSB0", printer=True)).title == "ttyUSB0"
 
 
 def test_a_device_ring_with_nothing_to_stand_on_is_refused():
@@ -970,37 +1204,54 @@ def _garage():
 
 
 def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
-    """At the root, Pieces and no Step out; stepped in, Pieces of the focus and Step out,
-    seated after every cell the ring always has, so none of them moves; at a leaf, its
-    Pieces is the leaf itself, the one piece drawn there."""
+    """Every cell is there wherever the ring opens, at one address: Step out 1 and the
+    level's Systems 7 too, Step out at a site's own level going to the universe. Pieces cuts
+    the garage's pieces by System, its loose parts under Parts by kind, nothing lost;
+    stepped in, Pieces of the focus; at a leaf, the leaf itself, the one piece drawn."""
     from apothecary.menu import carried_by
 
-    root = resolve(Context(pointing=Pointing.CANVAS), _garage())
-    labels = [o.label for o in root.options]
-    assert labels[0] == "Pieces" and "Step out" not in labels
-    pieces = root.options[0]
-    assert pieces.cell == 8 and pieces.children is not None
-    # Every piece of the garage, in lettered groups, nothing lost.
+    asked = {"site_names": ["apothecary", "garage"]}
+    top = resolve(Context(pointing=Pointing.CANVAS), _garage(), **asked)
+    nested = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), **asked)
+    for ring in (top, nested):
+        assert [(o.label, o.cell) for o in ring.options] == [
+            ("Pieces", 8),
+            ("Site", 6),
+            ("View", 2),
+            ("Panels", 4),
+            ("Pictures", 9),
+            ("Rebuild", 3),
+            ("Step out", 1),
+            ("Systems", 7),
+        ]
+        out = ring.options[6]
+        assert out.action == "zoom-out" and out.enabled
+    pieces = top.options[0]
+    assert [c.label for c in pieces.children] == [
+        "Building",
+        "Furniture",
+        "Machines",
+        "Mechanical",
+        "Electrical",
+        "Plumbing",
+        "Parts",
+    ]
+    assert [c.label for c in pieces.children[-1].children] == [
+        "Electronics",
+        "Test pieces",
+        "Things",
+    ]
+
+    def leaves(option):
+        return [option] if option.action else [x for c in option.children for x in leaves(c)]
+
     names = sorted(c.name for c in _garage().children)
-    leaves = [leaf for group in pieces.children for leaf in group.children]
-    assert [leaf.action for leaf in leaves] == [f"select:{n}" for n in names]
-    assert all(len(leaf.label) <= LONGEST_LABEL for leaf in leaves)
+    assert sorted(x.action for x in leaves(pieces)) == [f"select:{n}" for n in names]
+    assert all(len(x.label) <= LONGEST_LABEL for x in leaves(pieces))
     assert carried_by("select:printer_1").name == "VIEWER"
 
     zoomed = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage())
-    labels = [o.label for o in zoomed.options]
-    assert labels[0] == "Pieces"
-    # As the page asks for it, with the sites and the site's groups.
-    asked = {"site_names": ["apothecary", "garage"], "groups": ["wall"]}
-    top = resolve(Context(pointing=Pointing.CANVAS), _garage(), **asked)
-    nested = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), **asked)
-    out = next(o for o in nested.options if o.label == "Step out")
-    assert out.action == "zoom-out" and out.cell == 1
-    assert [(o.label, o.cell) for o in nested.options][-2:] == [("Step out", 1), ("Group", 7)]
-    for at_root, stepped_in in zip(top.options, nested.options, strict=False):
-        if at_root.label == "Group":
-            break
-        assert (at_root.label, at_root.cell) == (stepped_in.label, stepped_in.cell)
+    assert zoomed.options[0].label == "Pieces"
     inside = zoomed.options[0].children
     assert [o.action for o in inside] == [
         "select:printer_1.frame_system",
@@ -1015,6 +1266,85 @@ def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
     assert [c.action for c in leaf.options[0].children] == [
         "select:printer_1.frame_system.mainboard"
     ]
+
+
+def test_the_canvas_ring_keeps_every_address_where_there_is_nothing_to_list():
+    """An empty site, a target no longer in the site, no site at all, no site registered:
+    each cell keeps the address it has on the garage, Pieces and Site greyed, saying why,
+    where they have nothing to list."""
+    from apothecary.hierarchy import Assembly
+
+    def seats(ring):
+        return [(o.label, o.cell) for o in ring.options]
+
+    canvas = Context(pointing=Pointing.CANVAS)
+    asked = {"site_names": ["garage"]}
+    populated = seats(resolve(canvas, _garage(), **asked))
+    empty = Assembly(name="empty", role="site", children=[])
+    stale = Context(pointing=Pointing.CANVAS, targets=["printer_9"])
+    rings = {
+        "an empty site": resolve(canvas, empty, **asked),
+        "a stale target": resolve(stale, _garage(), **asked),
+        "no site": resolve(canvas, None, **asked),
+        "no site registered": resolve(canvas, _garage(), site_names=[]),
+    }
+    for case, ring in rings.items():
+        assert seats(ring) == populated, case
+    for case in ("an empty site", "a stale target", "no site"):
+        pieces = rings[case].options[0]
+        assert not pieces.enabled and pieces.why and pieces.children is None, case
+    assert "printer_9" in rings["a stale target"].options[0].why
+    site = rings["no site registered"].options[1]
+    assert not site.enabled and site.why
+
+
+def test_a_system_and_a_kind_named_alike_are_never_two_cells_of_one_ring():
+    """Machines is a System and a Kind. A level of more than fit, a machine in the Machines
+    System and a part standing loose whose kind is Machines, is cut into cells told apart:
+    the loose parts' kinds under Parts, each cell's id saying its facet, every piece
+    reached, on the canvas ring's Pieces and the node ring's Inside alike."""
+    from apothecary.hierarchy import Assembly
+
+    def level(name: str) -> Assembly:
+        return Assembly(
+            name=name,
+            role="structure",
+            children=[
+                Assembly(name="printer", role="structure", category="machine"),
+                Assembly(name="spare_printer", role="structure", part_ref="a_machine"),
+                *(Assembly(name=f"wall_{i}", role="structure", category="wall") for i in range(7)),
+            ],
+        )
+
+    site = level("bench").model_copy(update={"role": "site"})
+    holder = Assembly(name="hall", role="site", children=[level("shelf")])
+    asked = {
+        "site_names": ["bench"],
+        "part_category": lambda name: "machine" if name == "a_machine" else None,
+    }
+
+    def ids(option):
+        return [option.id, *(i for c in option.children or () for i in ids(c))]
+
+    def leaves(option):
+        return [option] if option.action else [x for c in option.children for x in leaves(c)]
+
+    canvas = resolve(Context(pointing=Pointing.CANVAS), site, **asked).options[0]
+    inside = next(
+        o
+        for o in resolve(
+            Context(pointing=Pointing.NODE, targets=["shelf"]), holder, **asked
+        ).options
+        if o.label == "Inside"
+    )
+    names = ["printer", "spare_printer", *(f"wall_{i}" for i in range(7))]
+    for cut, under in ((canvas, ""), (inside, "shelf.")):
+        assert [c.label for c in cut.children] == ["Building", "Machines", "Parts"]
+        assert [c.label for c in cut.children[-1].children] == ["Machines"]
+        assert cut.children[1].id == f"{cut.id}:system:machines"
+        assert cut.children[-1].children[0].id == f"{cut.id}:parts:kind:machines"
+        assert len(set(ids(cut))) == len(ids(cut))
+        assert sorted(x.action for x in leaves(cut)) == [f"select:{under}{n}" for n in names]
 
 
 def test_the_node_ring_lists_the_pieces_inside_and_selects_the_parent():
@@ -1087,7 +1417,6 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         Context(pointing=Pointing.CANVAS),
         _garage(),
         site_names=["apothecary", "garage"],
-        groups=["wall", "furniture"],
     )
     panels = next(o for o in root.options if o.label == "Panels")
     assert panels.cell == 4 and panels.children is not None  # after Pieces, Site, View
@@ -1102,26 +1431,47 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    # Site, a ring of Site (its chips and its Contents) and its own windows --
-    # Problems, Pinned, Jobs, SCAD; Selected; Pictures, a ring of Pictures and the
-    # gathering; Machine, a ring of a board's Machine (its log in it) and an armed
-    # printer's control pad, in a loud window of its own or back in its Machine;
-    # then Windows: the world alone and the page's own layout again; then the
-    # Bench, a group of its own: the panel and its verbs. Then Docs: the
-    # documentation and the walkthrough in a new tab, as the header's Docs opens
-    # them; last, the Airgap, the panel and its verbs.
-    assert [(c.label, c.action, c.cell) for c in panels.children] == [
-        ("Site", None, 8),
-        ("Selected", "panel:toggle:selected", 6),
-        ("Pictures", None, 2),
-        ("Machine", None, 4),
-        ("Windows", None, 9),
-        ("Bench", None, 3),
-        ("Docs", "panel:docs", 1),
-        # The Airgap, the eighth cell and the ring's last: the panel and its verbs.
-        ("Airgap", None, 7),
+    # One cell per group of windows, each a ring of its windows and their verbs, then
+    # the layout's own Windows: Site, Part, Pictures and Machine; Windows; Tools,
+    # Family and, last, the Airgap.
+    assert [(c.label, c.action, c.cell, c.group) for c in panels.children] == [
+        ("Site", None, 8, "Site"),
+        ("Part", None, 6, "Part"),
+        ("Pictures", None, 2, "Pictures"),
+        ("Machine", None, 4, "Machine"),
+        ("Windows", None, 9, None),
+        ("Tools", None, 3, "Tools"),
+        ("Family", None, 1, "Family"),
+        ("Airgap", None, 7, "Airgap"),
     ]
-    assert address_of(root, "panel:docs") == "41"
+    part = next(c for c in panels.children if c.label == "Part")
+    assert [(c.label, c.action, c.cell) for c in part.children] == [
+        ("Selected", "panel:toggle:selected", 8),
+        ("Motion", "panel:toggle:motion", 6),
+    ]
+    assert address_of(root, "panel:selected") == "468"
+    tools = next(c for c in panels.children if c.label == "Tools")
+    assert [(c.label, c.action, c.cell) for c in tools.children] == [
+        ("Bench", None, 8),
+        ("Settings", "panel:toggle:settings", 6),
+        ("Deck", None, 2),
+        ("Docs", "panel:docs", 4),
+    ]
+    assert address_of(root, "panel:docs") == "434"
+    family = next(c for c in panels.children if c.label == "Family")
+    assert [(c.label, c.action, c.cell) for c in family.children] == [
+        ("Procedure", None, 8),
+        ("Members", "panel:toggle:family-members", 6),
+        ("Deliveries", "panel:toggle:family-deliveries", 2),
+    ]
+    procedure = family.children[0]
+    assert [(c.label, c.action) for c in procedure.children] == [
+        ("Procedure", "panel:toggle:procedure"),
+        ("GO", "procedure:go"),
+        ("Start over", "procedure:again"),
+    ]
+    assert address_of(root, "procedure:go") == "4186"
+    assert carried_by("procedure:go").name == "VIEWER"
     airgap = next(c for c in panels.children if c.label == "Airgap")
     assert [(c.label, c.action, c.cell) for c in airgap.children] == [
         ("Airgap", "panel:toggle:airgap", 8),
@@ -1144,25 +1494,77 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in machine.children] == [
         ("Machine", "panel:toggle:machine", 8),
         ("Control pad", "panel:pad", 6),
-        # The Stream Deck +'s knobs, seated after the Machine's own two.
-        ("Knobs", None, 2),
+        # The heater loops of the printer whose Machine is open.
+        ("Loops", None, 2),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
-    knobs = next(c for c in machine.children if c.label == "Knobs")
-    assert [(c.label, c.action, c.cell) for c in knobs.children] == [
-        ("On / off", "deck:knobs", 8),
-        ("Machine", None, 6),
-        ("Step", None, 2),
-        ("Here", "deck:here", 4),
-        ("Deck", "panel:toggle:deck", 9),
+    # The Deck, a tool: its window, then the Stream Deck +'s knobs and the strip's screen.
+    deck = next(c for c in tools.children if c.label == "Deck")
+    assert [(c.label, c.action, c.cell) for c in deck.children] == [
+        ("Deck", "panel:toggle:deck", 8),
+        ("On / off", "deck:knobs", 6),
+        ("Machine", None, 2),
+        ("Step", None, 4),
+        ("Here", "deck:here", 9),
+        # The strip's screen, as a swipe along it changes it.
+        ("Screen", None, 3),
     ]
-    assert address_of(root, "deck:knobs") == "4428"
-    assert address_of(root, "panel:deck") == "4429"
-    assert address_of(root, "deck:machine:cnc_router") == "44266"
-    assert address_of(root, "deck:step:10") == "44222"
+    assert address_of(root, "deck:knobs") == "4326"
+    assert address_of(root, "panel:deck") == "4328"
+    assert address_of(root, "deck:machine:cnc_router") == "43226"
+    assert address_of(root, "deck:step:10") == "43242"
+    screen = next(c for c in deck.children if c.label == "Screen")
+    assert [(c.label, c.action, c.cell) for c in screen.children] == [
+        ("Knobs", "deck:screen:knobs", 8),
+        ("Progress", "deck:screen:progress", 6),
+        ("Status", "deck:screen:status", 2),
+        ("Back", "deck:screen:previous", 4),
+        ("Next", "deck:screen:next", 9),
+    ]
+    assert address_of(root, "deck:screen:status") == "43232"
     for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
         assert carried_by(action).name == "VIEWER"
+    assert carried_by("deck:screen:next").name == "VIEWER"
+    # Loops: the window, then a loop's acts on the open Machine's printer, then the
+    # choices the window makes. Nothing saves to the board's memory.
+    loops = next(c for c in machine.children if c.label == "Loops")
+    assert [(c.label, c.action, c.cell) for c in loops.children] == [
+        ("Loops", "panel:toggle:loops", 8),
+        ("Read", "loops:read", 6),
+        ("Start", "loops:start", 2),
+        ("Cancel", "loops:cancel", 4),
+        ("Set gains", "loops:set", 9),
+        ("Loop", None, 3),
+        ("Experiment", None, 1),
+        ("Rule", None, 7),
+    ]
+    assert address_of(root, "panel:loops") == "4428"
+    assert address_of(root, "loops:start") == "4422"
+    assert address_of(root, "loops:loop:bed") == "44236"
+    assert address_of(root, "loops:kind:perturbation") == "44212"
+    assert address_of(root, "loops:rule:simc:pi") == "442798"
+    by_label = {c.label: c for c in loops.children}
+    assert [(c.label, c.action) for c in by_label["Loop"].children] == [
+        ("Hotend 0", "loops:loop:hotend"),
+        ("Bed", "loops:loop:bed"),
+    ]
+    assert [c.action for c in by_label["Experiment"].children] == [
+        "loops:kind:step",
+        "loops:kind:autotune",
+        "loops:kind:perturbation",
+    ]
+    from apothecary.control_loops import RULES
+
+    rules = by_label["Rule"].children
+    assert [c.id for c in rules] == [f"loops:rule:{name}" for name in RULES]
+    assert [[k.action for k in c.children] for c in rules] == [
+        [f"loops:rule:{r.name}:{kind}" for kind in r.kinds] for r in RULES.values()
+    ]
+    every = set(every_action([SimpleNamespace(options=loops.children)]))
+    assert not any("save" in a or "memory" in a for a in every), every
+    for action in every:
+        assert carried_by(action).name == "VIEWER", action
     site = next(c for c in panels.children if c.label == "Site")
     assert [(c.label, c.action, c.cell) for c in site.children] == [
         ("Site", "panel:toggle:site", 8),
@@ -1171,15 +1573,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Jobs", "panel:toggle:jobs", 4),
         ("SCAD", "panel:toggle:scad", 9),
         ("Workspace", "panel:toggle:working", 3),
-        ("Procedure", None, 1),
+        # A rig's Lighting, in the Procedure's old seat so Layers keeps its address; greyed
+        # on a site without a rig.
+        ("Lighting", "panel:toggle:lighting", 1),
+        ("Layers", "panel:toggle:layers", 7),
     ]
-    procedure = next(c for c in site.children if c.label == "Procedure")
-    assert [(c.label, c.action) for c in procedure.children] == [
-        ("Procedure", "panel:toggle:procedure"),
-        ("GO", "procedure:go"),
-        ("Start over", "procedure:again"),
-    ]
-    assert carried_by("procedure:go").name == "VIEWER"
+    lighting = site.children[6]
+    assert (lighting.enabled, lighting.why) == (False, "this site has no lighting rig")
+    rigged = resolve(Context(pointing=Pointing.CANVAS), _garage(), rig=True)
+    assert walk(rigged, address_of(rigged, "panel:lighting")).enabled
     assert address_of(root, "panel:site") == "488"  # by the option's id
     assert address_of(root, "panel:problems") == "486"
     pictures = next(c for c in panels.children if c.label == "Pictures")
@@ -1203,6 +1605,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Writing", "marks:say:writing"),
         ("Unsure", "marks:say:unsure"),
         ("Nothing", "marks:say:nothing"),
+        # A whiteboard's history: its slider stepped, and the moment placed.
+        ("Earlier", "marks:earlier"),
+        ("Later", "marks:later"),
+        ("Place", "marks:place"),
     ]
     assert carried_by("marks:say:writing").name == "VIEWER"
     assert address_of(root, "panel:marks") == "4248"
@@ -1243,13 +1649,31 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
+        ("Print view", "panel:view:make", 1),
+        # The Tour, after the views: its box over the page, then its buttons.
+        ("Tour", None, 7),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
     assert address_of(root, "panel:view:family") == "493"
+    assert address_of(root, "panel:view:make") == "491"
+    tour = next(c for c in windows.children if c.label == "Tour")
+    assert [(c.label, c.action, c.cell) for c in tour.children] == [
+        ("Tour", "tour:toggle", 8),
+        ("Back", "tour:back", 6),
+        ("Works", "tour:works", 2),
+        ("Off", "tour:off", 4),
+        ("Next", "tour:next", 9),
+        ("Its page", "tour:page", 3),
+        ("Take me here", "tour:put", 1),
+        ("Who", "tour:by", 7),
+    ]
+    assert address_of(root, "tour:toggle") == "4978"
+    assert address_of(root, "tour:works") == "4972"
+    assert carried_by("tour:off").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"
-    bench = next(c for c in panels.children if c.label == "Bench")
+    bench = tools.children[0]
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
         ("Install", None, 6),
@@ -1260,8 +1684,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Cores", None, 1),
         ("Libraries", "bench:libraries", 7),
     ]
-    assert address_of(root, "panel:bench") == "438"
-    assert address_of(root, "bench:compile") == "432"
+    assert address_of(root, "panel:bench") == "4388"
+    assert address_of(root, "bench:compile") == "4382"
     # Install is a ring of the toolchain modules, from their registry: each module's
     # install, arduino-cli's among them, has an address of its own.
     install = bench.children[1]
@@ -1272,14 +1696,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         # The slicer's modules after the toolchain's, from their own registry.
         ("OrcaSlicer", "bench:install:slicer:orcaslicer", 4),
     ]
-    assert address_of(root, "bench:install:arduino") == "4368"
-    assert address_of(root, "bench:install:rust-esp32") == "4366"
-    assert address_of(root, "bench:install:stream-deck") == "4362"
-    assert address_of(root, "bench:install:slicer:orcaslicer") == "4364"
+    assert address_of(root, "bench:install:arduino") == "43868"
+    assert address_of(root, "bench:install:rust-esp32") == "43866"
+    assert address_of(root, "bench:install:stream-deck") == "43862"
+    assert address_of(root, "bench:install:slicer:orcaslicer") == "43864"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
-    assert address_of(root, "bench:core:arduino:avr") == "4318"
+    assert address_of(root, "bench:core:arduino:avr") == "43818"
     assert {o.id for o in bench.children if o.destructive} == {"bench:upload", "bench:esptool"}
     for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
@@ -1308,9 +1732,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     by_systems = re.findall(r"^ {20}([\w-]+): \{\n {24}main:", page, re.M)
     assert by_systems == ["airgap"]
     registered += [by_id(sid).main for sid in by_systems]
-    # An armed printer's control pad is Panels › Control pad's, not a toggle; and a
-    # rig's Lighting is the lighting overlay's, there while the site has a rig.
-    made = ("control", "lighting")
+    # An armed printer's control pad is Panels › Machine › Control pad's, not a toggle.
+    made = ("control",)
     assert all(pid in registered for pid in made)
     registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
@@ -1322,10 +1745,11 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
     """The header's ⚙ View menu is ring-backed by View, a cell of the canvas ring's
     own: View › Fit first, then Snap to grid, Detail (Full, Black box, Dot), Outlines,
-    Select walls, and last Settings, so no cell before it moves. At the root and inside
-    a piece alike the canvas ring holds eight or fewer, View is at 2, seated before
-    every cell that comes and goes, and Panels holds no View. The page carries them
-    all."""
+    Select walls, Settings, and after it Layers (a ring: the window first) and Depth (1
+    to 4 levels, then one less and one more), so no cell before them moves. At the root
+    and inside a piece alike the canvas ring holds eight or fewer, View is at 2, seated
+    before every cell that comes and goes, and Panels holds no View. The page carries
+    them all."""
     from apothecary.menu import carried_by
 
     for targets, view_cell in (([], "2"), (["printer_1"], "2")):
@@ -1333,7 +1757,6 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             Context(pointing=Pointing.CANVAS, targets=targets),
             _garage(),
             site_names=["apothecary", "garage"],
-            groups=["wall", "furniture"],
         )
         assert len(root.options) <= 8
         assert "fit" not in [o.id for o in root.options]
@@ -1346,6 +1769,8 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             ("Outlines", "view:outlines", 4),
             ("Select walls", "view:walls", 9),
             ("Settings", "view:settings", 3),
+            ("Layers", None, 1),
+            ("Depth", None, 7),
         ]
         assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
@@ -1357,6 +1782,17 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert address_of(root, "view:detail:box") == f"{view_cell}26"
         assert address_of(root, "view:walls") == f"{view_cell}9"
         assert address_of(root, "view:settings") == f"{view_cell}3"
+        assert address_of(root, "view:layers") == f"{view_cell}1"
+        assert address_of(root, "view:layers:window") == f"{view_cell}18"
+        assert address_of(root, "view:depth:2") == f"{view_cell}76"
+        assert [(c.label, c.action) for c in view.children[7].children] == [
+            ("1 level", "view:depth:1"),
+            ("2 levels", "view:depth:2"),
+            ("3 levels", "view:depth:3"),
+            ("4 levels", "view:depth:4"),
+            ("One less", "view:depth:less"),
+            ("One more", "view:depth:more"),
+        ]
         panels = next(o for o in root.options if o.label == "Panels")
         assert "View" not in [c.label for c in panels.children]
     for action in (
@@ -1366,8 +1802,190 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         "view:outlines",
         "view:walls",
         "view:settings",
+        "view:layers",
+        "view:depth:3",
+        "view:depth:more",
     ):
         assert carried_by(action).name == "VIEWER"
+
+
+def _layer_ring_of(ring, layer):
+    """The ring of one layer's acts, wherever it is under View › Layers."""
+    found = []
+
+    def walk(options):
+        for option in options or []:
+            if option.id == f"layer:{layer}":
+                found.append(option)
+            walk(option.children)
+
+    walk(ring.options)
+    assert len(found) == 1, (layer, len(found))
+    return found[0]
+
+
+def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own():
+    """View › Layers: Window 8, World 6, Reset 2 always; then the layers of what lies
+    beneath the level in view, as the Layers window lists them -- the garage's Systems
+    at 4 and its loose parts' Kinds at 9, and in the universe its shells at 4 and its
+    Kinds at 9 -- each a ring of its own acts, every cell wearing its layer's colour."""
+    from apothecary import sites
+    from apothecary.layer_colours import colour_of
+    from apothecary.menu import carried_by
+
+    garage = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    layers = _group(garage, "View", "Layers")
+    assert [(c.label, c.cell) for c in layers.children] == [
+        ("Window", 8),
+        ("World", 6),
+        ("Reset", 2),
+        ("Systems", 4),
+        ("Kinds", 9),
+    ]
+    assert layers.children[0].action == "view:layers"
+    assert layers.children[2].action == "layer:reset"
+    # The bed mesh last, so the cells before it keep theirs.
+    assert [(c.label, c.cell) for c in layers.children[1].children] == [
+        ("Grid", 8),
+        ("Buttons", 6),
+        ("Measure", 2),
+        ("Bed mesh", 4),
+    ]
+    assert [c.id for c in layers.children[3].children] == [
+        "layer:system:building",
+        "layer:system:furniture",
+        "layer:system:machines",
+        "layer:system:mechanical",
+        "layer:system:electrical",
+        "layer:system:plumbing",
+    ]
+    assert [c.label for c in layers.children[4].children] == [
+        "Electronics",
+        "Test pieces",
+        "Things",
+    ]
+
+    # Stepped into the printer: the one System beneath it, and no Kinds.
+    inside = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage())
+    layers = _group(inside, "View", "Layers")
+    assert [c.label for c in layers.children] == ["Window", "World", "Reset", "Systems"]
+    assert [c.label for c in layers.children[3].children] == ["Machines"]
+
+    universe = resolve(
+        Context(pointing=Pointing.CANVAS),
+        sites.store.get("apothecary"),
+        site_names=sorted(sites.store.names()),
+    )
+    layers = _group(universe, "View", "Layers")
+    assert [(c.label, c.cell) for c in layers.children] == [
+        ("Window", 8),
+        ("World", 6),
+        ("Reset", 2),
+        ("Shells", 4),
+        ("Kinds", 9),
+    ]
+    assert [c.label for c in layers.children[3].children] == ["Shell 0", "Shell 1", "Shell 2"]
+    assert address_of(universe, "layer:shown:shell:1") == "21468"
+    # Every category under its kind, nothing lost.
+    kinds = layers.children[4].children
+    assert [k.id for k in kinds] == [
+        "layer:kind:electronics",
+        "layer:kind:cameras",
+        "layer:kind:machines",
+        "layer:kind:motors",
+        "layer:kind:test-pieces",
+        "layer:kind:shop",
+        "layer:kind:housings",
+        "layer:kind:things",
+    ]
+    machines = _layer_ring_of(universe, "kind:machines")
+    assert [c.id for c in machines.children] == [
+        "layer:shown:kind:machines",
+        "layer:selectable:kind:machines",
+        "layer:category:machine",
+    ]
+    for layer in ("shell:2", "category:machine", "kind:machines", "grid", "measure", "bed-mesh"):
+        ring = _layer_ring_of(universe, layer)
+        assert ring.colour == colour_of(layer)
+        for cell in ring.children:
+            if cell.action:
+                assert cell.colour == colour_of(layer)
+                assert carried_by(cell.action).name == "VIEWER"
+
+
+def test_a_layers_ring_holds_the_acts_its_set_has():
+    """A shell's, a System's and a category's: Shown, Selectable, Only this, All. The
+    grid's and the buttons': Shown, Only this, All, a click never picking what they draw.
+    The measurement's, a mode: Shown alone. A Kind's: Shown and Selectable over all its
+    categories, then each category's ring."""
+    from apothecary import sites
+
+    universe = resolve(Context(pointing=Pointing.CANVAS), sites.store.get("apothecary"))
+    acts = {
+        layer: [(c.label, c.action, c.cell) for c in _layer_ring_of(universe, layer).children]
+        for layer in (
+            "shell:0",
+            "category:electrical",
+            "grid",
+            "machine-buttons",
+            "measure",
+            "bed-mesh",
+        )
+    }
+    assert acts["shell:0"] == [
+        ("Shown", "layer:shown:shell:0", 8),
+        ("Selectable", "layer:selectable:shell:0", 6),
+        ("Only this", "layer:only:shell:0", 2),
+        ("All", "layer:all:shell:0", 4),
+    ]
+    assert [a[0] for a in acts["category:electrical"]] == [
+        "Shown",
+        "Selectable",
+        "Only this",
+        "All",
+    ]
+    assert acts["grid"] == [
+        ("Shown", "layer:shown:grid", 8),
+        ("Only this", "layer:only:grid", 6),
+        ("All", "layer:all:grid", 2),
+    ]
+    assert [a[0] for a in acts["machine-buttons"]] == ["Shown", "Only this", "All"]
+    assert acts["bed-mesh"] == [
+        ("Shown", "layer:shown:bed-mesh", 8),
+        ("Only this", "layer:only:bed-mesh", 6),
+        ("All", "layer:all:bed-mesh", 2),
+    ]
+    assert acts["measure"] == [("Shown", "layer:shown:measure", 8)]
+    electronics = _layer_ring_of(universe, "kind:electronics")
+    assert [(c.label, c.action) for c in electronics.children] == [
+        ("Shown", "layer:shown:kind:electronics"),
+        ("Selectable", "layer:selectable:kind:electronics"),
+        ("electrical", None),
+        ("electronics", None),
+    ]
+    garage = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    assert [c.label for c in _layer_ring_of(garage, "system:building").children] == [
+        "Shown",
+        "Selectable",
+        "Only this",
+        "All",
+    ]
+    # A category's name too long for a cell is shortened, its ring's id whole.
+    motors = _layer_ring_of(universe, "kind:motors")
+    assert [(c.id, c.label) for c in motors.children[2:]] == [
+        ("layer:category:electromechanical", "electromecha")
+    ]
+
+
+def test_an_option_wears_a_colour_only_as_the_table_writes_one():
+    from pydantic import ValidationError
+
+    from apothecary.menu import Option
+
+    assert Option(id="x", label="X", action="x", colour="#3d7eff").colour == "#3d7eff"
+    for bad in ("red", "#3D7EFF", "#3d7eff; background: url(x)", "3d7eff"):
+        with pytest.raises(ValidationError):
+            Option(id="x", label="X", action="x", colour=bad)
 
 
 # --- pictures and cameras on the ring --------------------------------------------------
@@ -1553,6 +2171,86 @@ def test_part_holds_the_loop_edit_keeping_its_address():
 # Variants. A made piece and a camera have none of them.
 
 
+def test_a_part_whose_pieces_move_has_its_motion_under_view_after_fit():
+    """Told by the server that the part declares a motion (``PartSeen.motion``), its
+    ring's Part › View ends in Motion: the window, then its controls (widgets/motion.js).
+    After Fit, so no cell of View moves; a part told nothing has none."""
+    from apothecary.menu import PartSeen, PictureContext, carried_by
+
+    garage = _garage()
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    moving = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True, motion=True)))
+    still = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
+    view = next(c for c in moving.options[-1].children if c.label == "View")
+    assert [c.label for c in view.children] == [
+        "SCAD",
+        "Fullscreen",
+        "Ghost",
+        "Fit",
+        "Motion",
+        "Feedback",
+    ]
+    assert [(c.label, c.action) for c in view.children[-2].children] == [
+        ("Motion", "part:motion:open"),
+        ("Play", "part:motion:play"),
+        ("Back", "part:motion:back"),
+        ("Step", "part:motion:step"),
+        ("Reset", "part:motion:reset"),
+        ("Bought", "part:motion:bought"),
+    ]
+    assert address_of(moving, "part:fit") == address_of(still, "part:fit")
+    assert address_of(moving, "part:motion:play") == address_of(moving, "part:fit")[:-1] + "96"
+    assert "part:motion:play" not in set(every_action([still]))
+    for verb in ("open", "play", "back", "step", "reset", "bought"):
+        assert carried_by(f"part:motion:{verb}").name == "VIEWER"
+
+
+def test_a_part_that_is_made_has_its_cabinet_under_view_after_motion():
+    """Part › View › Feedback, on a part that is made: the part's cabinet in Part › Feedback,
+    then what is done to the piece chosen there. After Motion, so no cell of View moves; a
+    part's View has room for it however full its ring is. A camera, a board, a machine
+    drawn as a part, anything inside a printer, and a piece made from a picture -- no part's
+    -- have none."""
+    from apothecary.menu import PartSeen, PictureContext, carried_by
+
+    garage = _garage()
+    garage.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+
+    def on(path, part=None, **told):
+        picture = PictureContext(part=part or PartSeen(editable=True), **told)
+        return resolve(Context(pointing=Pointing.NODE, targets=[path]), garage, picture=picture)
+
+    ring = on("footpedal", printers=["printer_1"])
+    view = next(c for c in _group(ring, "Part").children if c.label == "View")
+    feedback = view.children[-1]
+    assert (feedback.label, feedback.id) == ("Feedback", "feedback")
+    assert [(c.label, c.action) for c in feedback.children] == [
+        ("Feedback", "feedback:open"),
+        ("Measure", "feedback:measure"),
+        ("Note", "feedback:note"),
+        ("Take turn", "feedback:tune-apply"),
+        ("Undo turn", "feedback:tune-undo"),
+    ]
+    assert all(carried_by(c.action).name == "VIEWER" for c in feedback.children)
+    still = on("footpedal", part=PartSeen(editable=True, motion=True))
+    assert address_of(still, "part:fit") == address_of(ring, "part:fit")
+    assert address_of(still, "feedback:open")[:-2] == address_of(ring, "feedback:open")[:-2]
+    # With no printer pinned it is there all the same: the cabinet holds what was made
+    # wherever, and Feedback is the door to it.
+    assert "feedback:open" in set(every_action([on("footpedal")]))
+    for path, told in (
+        ("printer_1", {"printers": ["printer_1"]}),
+        ("printer_1.frame_system.mainboard", {"printers": ["printer_1"]}),
+        ("footpedal", {"camera_parts": ["footpedal"]}),
+        ("cnc_router", {}),
+        ("disc_1", {"made": ["disc_1"], "words": ["disc"], "printers": ["printer_1"]}),
+    ):
+        assert "feedback:open" not in set(every_action([on(path, **told)])), path
+    assert "feedback:open" not in set(
+        every_action([on("footpedal", part=PartSeen(editable=True, board=True))])
+    )
+
+
 def test_a_part_s_ring_holds_its_scad_editor_too():
     from apothecary.menu import PartSeen, PictureContext, carried_by
 
@@ -1572,13 +2270,14 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     # A ring holds eight: SCAD and Fullscreen are under View, beside the ghost and Fit,
     # and History holds Undo and Redo.
     view, history = part.children[5:7]
-    assert [(c.label, c.action) for c in view.children] == [
+    assert [(c.label, c.action or c.id) for c in view.children] == [
         ("SCAD", "part:scad"),
         ("Fullscreen", "part:fullscreen"),
         ("Ghost", "part:ghost"),
         ("Fit", "part:fit"),
+        ("Feedback", "feedback"),
     ]
-    assert [(c.label, c.action) for c in history.children] == [
+    assert [(c.label, c.action or c.id) for c in history.children] == [
         ("Undo", "part:undo"),
         ("Redo", "part:redo"),
     ]
@@ -1666,7 +2365,65 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         "part:view",
         "part:history",
     ]
-    assert [c.action for c in untold.children[4].children] == ["part:ghost", "part:fit"]
+    assert [c.action or c.id for c in untold.children[4].children] == [
+        "part:ghost",
+        "part:fit",
+        "feedback",
+    ]
+
+
+def test_a_part_s_presets_and_an_end_s_adapter_come_after_the_rest_of_its_ring():
+    """A part with presets has Part › Presets, a cell each staging one; a part with one
+    round end has Part › Adapter, as ⇄ Adapter in Selected. Both after the rest, where
+    the ring has room, so no cell above moves."""
+    from apothecary.menu import PartSeen, PictureContext
+
+    garage = _garage()
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    told = PictureContext(part=PartSeen(editable=False, presets=["hose_40", "port_32"], end=True))
+    ring = resolve(on, garage, picture=told)
+    part = ring.options[-1]
+    assert [c.action or c.id for c in part.children] == [
+        "part:edit",
+        "part:defaults",
+        "part:apply",
+        "part:revert",
+        "part:view",
+        "part:history",
+        "part:presets",
+        "part:adapter",
+    ]
+    assert [(c.label, c.action) for c in part.children[6].children] == [
+        ("hose_40", "part:preset:hose_40"),
+        ("port_32", "part:preset:port_32"),
+    ]
+    plain = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=False)))
+    for action in ("part:edit", "part:apply", "part:undo", "part:fit"):
+        assert address_of(plain, action) == address_of(ring, action)
+    assert walk(ring, address_of(ring, "part:preset:port_32")).action == "part:preset:port_32"
+    # A ring already full -- Save and Variants -- has no room for them.
+    full = resolve(
+        on,
+        garage,
+        picture=PictureContext(
+            part=PartSeen(editable=True, variants=["x"], presets=["hose_40"], end=True)
+        ),
+    )
+    ids = [c.id for c in full.options[-1].children]
+    assert len(ids) == MOST_OPTIONS and "part:presets" not in ids and "part:adapter" not in ids
+
+
+def test_the_server_tells_the_ring_a_part_s_presets_and_whether_it_is_an_end():
+    from apothecary.routes.menu import _part_seen
+
+    port = _part_seen("apothecary", "dust_port")
+    assert (port.editable, port.presets, port.end) == (
+        False,
+        ["hose_40", "port_32", "port_25", "outlet_35"],
+        True,
+    )
+    adapter = _part_seen("apothecary", "hose_adapter")
+    assert (adapter.presets, adapter.end) == (["stepped_40_32_25", "plain_40_32"], False)
 
 
 def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
@@ -1777,7 +2534,7 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
         ("cnc_router", ()),
     ):
         labels = [o.label for o in on(path, ["printer_1"], cameras).options]
-        assert "Slice" not in labels, path
+        assert "Slice" not in labels and "Feedback" not in labels, path
     # Nor a board on the bench: a devkit running a sketch, or a board the boards
     # library draws (the server says which, as PartSeen.board), is bought, not printed.
     from apothecary.menu import PartSeen
@@ -1794,7 +2551,7 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
 
 def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
     """Workspace is under a printer's Camera, beside Add here: the page opens the
-    Working space on it (widgets/working_space.js), where the frames its cameras keep
+    Workspace on it (widgets/working_space.js), where the frames its cameras keep
     with its polls are. Only a printer a board drives has it, so no cell of the
     ring moves, whether the printer's own Device is there or its board's pin is
     below it; another host's Camera holds Add here alone."""
@@ -1813,6 +2570,7 @@ def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
         assert [(c.label, c.action) for c in camera.children] == [
             ("Add here", "camera:add-here"),
             ("Workspace", "working:open"),
+            ("Projector", "projector:open"),
         ]
         assert [o.label for o in ring.options] == [
             o.label for o in on("printer_1", [], device).options
@@ -1821,6 +2579,30 @@ def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
     for path in ("workbench", "printer_1"):
         bare = _group(on(path, []), "Camera")
         assert [c.label for c in bare.children] == ["Add here"], path
+
+
+def test_a_machine_opens_its_projector_s_page_under_its_camera():
+    """Projector is a machine's, last under its Camera: a printer a board drives, a
+    router planned or driven; the page opens the projector's page for it, and nothing is
+    changed. No other host has it, and no cell of the ring moves for it."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+
+    def camera_on(path, **told):
+        context = Context(pointing=Pointing.NODE, targets=[path])
+        return _group(resolve(context, site, picture=PictureContext(**told)), "Camera")
+
+    router = camera_on("cnc_router", routers=["cnc_router"])
+    assert [(c.label, c.action) for c in router.children] == [
+        ("Add here", "camera:add-here"),
+        ("Projector", "projector:open"),
+    ]
+    assert [c.label for c in camera_on("cnc_router").children] == ["Add here"]
+    assert [c.label for c in camera_on("workbench", routers=["cnc_router"]).children] == [
+        "Add here"
+    ]
+    assert carried_by("projector:open").name == "VIEWER"
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
@@ -1962,10 +2744,10 @@ def test_the_picture_group_offers_make_only_on_a_sized_view_and_forget_only_on_a
     assert [(c.label, c.cell) for c in picture.children] == [
         ("Add", 8),
         ("Folder", 6),
-        ("Make", 2),
-        ("Size", 4),
-        ("Unpin", 9),
-        ("Forget", 3),
+        ("Size", 2),
+        ("Unpin", 4),
+        ("Forget", 9),
+        ("Make", 3),
     ]
     # Make › Make all beside each found shape, by index.
     assert [(c.label, c.action) for c in _group(picture, "Make").children] == [
@@ -2031,7 +2813,7 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
         Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=searched
     )
     labels = [c.label for c in _group(ring, "Picture").children]
-    assert "Find shapes" not in labels and labels[-2:] == ["Unpin", "Forget"]
+    assert labels == ["Add", "Folder", "Size", "Unpin", "Forget", "Make"]
     # At the floor, the same step under Pictures › Floor › Picture.
     floor = resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=unsearched)
     assert [
@@ -2040,6 +2822,46 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
         "picture:find:plain:@floor",
         "picture:find:stated:@floor",
     ]
+
+
+def _picture_cells(views, *, floor=False) -> dict:
+    """The Picture ring's cells by label, the views given pinned here and the first
+    drawn, the plain finder the only one."""
+    told = _context(views=views, drawn=views[0].id)
+    told.finders = ["plain"]
+    if floor:
+        ring = resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=told)
+        picture = _group(ring, "Pictures", "Floor", "Picture")
+    else:
+        where = Context(pointing=Pointing.NODE, targets=["workbench"])
+        picture = _group(resolve(where, _garage(), picture=told), "Picture")
+    return {c.label: c.cell for c in picture.children}
+
+
+@pytest.mark.parametrize("floor", [False, True], ids=["at-a-host", "at-the-floor"])
+@pytest.mark.parametrize("several", [False, True], ids=["one-view", "several-views"])
+@pytest.mark.parametrize("kept", [True, False], ids=["kept", "the-folders-own"])
+def test_the_picture_rings_cells_hold_still_through_a_pictures_steps(floor, several, kept):
+    """A picture pinned, its shapes found, then its width given: Add, Folder, Size,
+    Unpin and Forget keep their cells through every step, and so does Views; Make, the
+    step after Find shapes, takes the cell Find shapes had. A second picture pinned
+    here moves none of the first five."""
+    others = [_view("view_2", kept=kept)] if several else []
+    unsearched = _view(shapes=0, sized=False, kept=kept)
+    unsearched.finder = None
+    pinned = _picture_cells([unsearched, *others], floor=floor)
+    alone = _picture_cells([unsearched], floor=floor)
+    assert {k: v for k, v in pinned.items() if k in alone and k != "Find shapes"} == {
+        k: v for k, v in alone.items() if k != "Find shapes"
+    }
+    found = _picture_cells([_view(sized=False, kept=kept), *others], floor=floor)
+    sized = _picture_cells([_view(kept=kept), *others], floor=floor)
+    steady = [c for c in ("Add", "Folder", "Size", "Unpin", "Forget", "Views") if c in pinned]
+    assert ("Forget" in steady) is kept and ("Views" in steady) is several
+    for label in steady:
+        assert pinned[label] == found[label] == sized[label], (label, pinned, found, sized)
+    assert "Make" not in pinned and "Make" not in found and "Find shapes" not in sized
+    assert sized["Make"] == pinned["Find shapes"], (pinned, sized)
 
 
 def test_a_host_and_the_floor_add_a_camera_here_and_no_ring_there_pins_one():
@@ -2204,7 +3026,6 @@ def test_the_fullest_context_holds_every_ring_to_eight_and_says_how_deep_it_goes
         Context(pointing=Pointing.CANVAS),
         _garage(),
         site_names=["apothecary", "garage", "datum_core"],
-        groups=["wall", "furniture"],
         picture=told,
     )
     for ring in (node, canvas):
@@ -2502,3 +3323,132 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400
     assert send("picture:drop", site="no_such_site").status_code == 404
+
+
+def _panels_machine(can=None) -> dict:
+    """Panels › Machine and Panels › Tools › Deck of the canvas ring on garage, told
+    ``can``: each act under them by its action, the Loops' and the Deck's rings walked."""
+    root = resolve(Context(pointing=Pointing.CANVAS), _garage(), can=can)
+    found = {}
+
+    def leaves(options):
+        for option in options:
+            if option.children:
+                leaves(option.children)
+            else:
+                found[option.action] = option
+
+    for cell in ("panels:machine", "panels:deck"):
+        leaves(walk(root, address_of(root, cell)).children)
+    return found
+
+
+def test_panels_machine_greys_the_loops_and_the_knobs_by_the_answers_the_page_is_told():
+    """Told beside the canvas ring's context what the page knows would be refused now --
+    the open Machine's port's answer for the heater loops, the deck's for the knobs -- each
+    act of Panels › Machine and Panels › Tools › Deck the answers refuse is greyed with its
+    words, as the Loops and Deck windows grey its button; told nothing, nothing is, and no
+    cell moves."""
+    nothing = "no printer's Machine is open: Loops works on the printer whose Machine is open"
+    idle = "the knobs are not started on SIMDECK0"
+    can = {
+        **{verb: _refused(nothing, "offline") for verb in ("tune.read", "tune.start", "tune.set")},
+        "tune.cancel": {"ok": True},
+        "knobs.start": {"ok": True},
+        "knobs.stop": {"ok": True},
+        "knobs.machine": _refused(idle, "idle"),
+        "knobs.step": _refused(idle, "idle"),
+        "knobs.screen": _refused(idle, "idle"),
+        "here": _refused(idle, "idle"),
+    }
+    told = _panels_machine(can)
+    for action in ("loops:read", "loops:start", "loops:set"):
+        assert (told[action].enabled, told[action].why) == (False, nothing), action
+    assert told["loops:cancel"].enabled
+    greyed = sorted(a for a, o in told.items() if a.startswith("deck:") and not o.enabled)
+    assert greyed and all(told[a].why == idle for a in greyed)
+    assert {"deck:here", "deck:step:1", "deck:screen:status"} <= set(greyed)
+    assert any(a.startswith("deck:machine:") for a in greyed)
+    # Off, the knobs' On / off is their start, which the deck would take.
+    assert told["deck:knobs"].enabled
+    # The window, the pad, the Deck window and the loops' own choices: nothing stands in
+    # their way.
+    for action in ("panel:toggle:machine", "panel:pad", "panel:toggle:deck", "panel:toggle:loops"):
+        assert told[action].enabled
+    assert all(o.enabled for a, o in told.items() if a.startswith(("loops:loop:", "loops:rule:")))
+    # Running, On / off is their stop: refused for its own reason, not the start's.
+    running = {**can, "knobs.machine": {"ok": True}, "knobs.stop": _refused("deck lost", "offline")}
+    assert _panels_machine(running)["deck:knobs"].why == "deck lost"
+    # Told nothing, nothing is greyed, and every address is as it was.
+    assert all(o.enabled for o in _panels_machine().values())
+    root = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    assert every_address(resolve(Context(pointing=Pointing.CANVAS), _garage(), can=can)) == (
+        every_address(root)
+    )
+
+
+def test_the_stream_decks_ring_opens_the_deck_window_where_a_device_would_stand():
+    """A Stream Deck + is told to its ring by the server (tagged ``streamdeck``): its Deck
+    opens the Deck window, as Open Deck in its Selected does, after every cell the piece
+    has, so none of them moves, and only where the ring has room; no other part has one."""
+    from apothecary.menu import PartSeen
+    from apothecary.routes.menu import _part_seen
+
+    assert _part_seen("garage", "stream_deck").deck is True
+    assert _part_seen("garage", "whiteboard").deck is False
+    context = Context(pointing=Pointing.NODE, targets=["stream_deck"])
+    told = PictureContext(part=PartSeen(editable=False, deck=True))
+    ring = resolve(context, _garage(), picture=told)
+    plain = resolve(context, _garage(), picture=PictureContext(part=PartSeen(editable=False)))
+    deck = ring.options[-1]
+    assert (deck.label, deck.action, deck.group) == ("Deck", "panel:toggle:deck", "Tools")
+    assert [(o.label, o.cell) for o in ring.options[:-1]] == [
+        (o.label, o.cell) for o in plain.options
+    ]
+    assert carried_by("panel:toggle:deck").name == "VIEWER"
+    # A ring already full -- the deck on the garage's floor is a host, with Camera, Picture
+    # and Slice -- takes no ninth: with a board pinned to it, Device keeps its seat.
+    full = PictureContext(part=PartSeen(editable=False, deck=True), printers=["printer_1"])
+    pinned = resolve(context, _garage(), picture=full, device=PRINTER)
+    assert len(pinned.options) <= 8 and "Device" in [o.label for o in pinned.options]
+
+
+def test_every_part_with_presets_has_a_ring_that_builds():
+    """Part › Presets on each registered part with presets, through the route the page
+    asks: each cell's label fits, the part's own label where its name is longer. A
+    preset named past a cell's label once made hose_adapter's ring a 500."""
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+    from apothecary.menu import LONGEST_LABEL
+    from apothecary.projects.parts.base import RING_LABEL
+    from apothecary.projects.parts.skeleton import ROOT
+    from apothecary.projects.registry import load_parts
+    from apothecary.site_names import UNIVERSE
+
+    assert RING_LABEL == LONGEST_LABEL
+    client = TestClient(app)
+    with_presets = [part for _item, part in load_parts(ROOT).parts if part.presets]
+    assert {"dust_port", "hose_adapter"} <= {p.name for p in with_presets}
+    for part in with_presets:
+        r = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "node", "targets": [part.name]}, "site": UNIVERSE},
+        )
+        assert r.status_code == 200, (part.name, r.text[:300])
+    from apothecary.routes.menu import _part_seen
+
+    adapter = _part_seen("apothecary", "hose_adapter")
+    assert adapter.preset_labels == {"stepped_40_32_25": "40 → 32/25", "plain_40_32": "40 → 32"}
+
+
+def test_a_preset_named_past_a_cell_s_label_is_refused_when_its_part_loads():
+    import pytest as _pytest
+
+    from apothecary.projects.parts.base import Preset
+    from apothecary.projects.parts.hose_adapter import DEFAULT as ADAPTER
+
+    with _pytest.raises(ValueError, match="give it a label that says it in 12 or fewer"):
+        ADAPTER.model_copy().model_validate(
+            {**ADAPTER.__dict__, "presets": {"stepped_40_32_25": Preset(params={})}}
+        )

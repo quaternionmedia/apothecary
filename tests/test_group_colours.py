@@ -31,7 +31,29 @@ def _coloured() -> dict[str, str]:
 
 def test_the_page_registers_the_groups_this_reads():
     """The reading itself: it finds the template's, the page's and a system's."""
-    assert {"Site", "Selected", "Pictures", "Tools", "Machine", "Family"} <= _registered()
+    assert {"Site", "Part", "Pictures", "Tools", "Machine", "Family"} <= _registered()
+
+
+def test_the_groups_are_a_ring_and_each_window_s_door_is_under_its_group_s_cell():
+    """Eight groups at most, one cell of Panels each: every panel's toggle is under the
+    cell of the group its window is registered under, so a window's door is where its
+    colour says it is."""
+    from apothecary.menu import MOST_OPTIONS, PANEL_GROUPS, PANELS, _panels
+
+    assert len(_registered()) <= MOST_OPTIONS
+    panels = _panels()
+    cells = {c.group: c for c in panels.children if c.group}
+    assert set(cells) == _registered()
+
+    def toggles(option):
+        if option.action and option.action.startswith("panel:toggle:"):
+            yield option.action.removeprefix("panel:toggle:")
+        for child in option.children or []:
+            yield from toggles(child)
+
+    under = {pid: group for group, cell in cells.items() for pid in toggles(cell)}
+    for pid, _ in PANELS:
+        assert under.get(pid) == PANEL_GROUPS[pid], pid
 
 
 def test_every_group_has_a_colour():
@@ -98,7 +120,7 @@ def test_every_ring_cell_that_wears_a_group_wears_one_with_a_colour():
             yield from groups(option.children)
 
     worn = set(groups([_panels()]))
-    assert {"Site", "Selected", "Pictures", "Machine", "Tools", "Family", "Airgap", "Part"} <= worn
+    assert {"Site", "Part", "Pictures", "Machine", "Tools", "Family", "Airgap"} <= worn
     assert worn <= set(_coloured())
     assert Option(id="x", label="X", action="x").group is None
 
@@ -113,4 +135,4 @@ def test_the_ring_and_the_worlds_badges_draw_the_group():
     assert ".world-badge[data-group]" in TEMPLATE
     marks = (ROOT / "apothecary" / "static" / "machine_marks.js").read_text(encoding="utf-8")
     pictures = (ROOT / "apothecary" / "static" / "picture_marks.js").read_text(encoding="utf-8")
-    assert 'group: "Machine"' in marks and pictures.count('group: "Pictures"') == 2
+    assert 'group: "Machine"' in marks and pictures.count('group: "Pictures"') == 3

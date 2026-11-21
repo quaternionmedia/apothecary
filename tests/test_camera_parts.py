@@ -19,7 +19,8 @@ from views_helpers import forget_cameras
 from views_helpers import pin as _pin
 from views_helpers import roots as _roots
 
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 from apothecary.vision import cameras
 from apothecary.vision import views as viewing
 
@@ -102,7 +103,7 @@ def test_add_here_stands_a_camera_above_the_place_looking_straight_down():
     assert added.json()["site"]["is_valid"], added.json()["site"]["violations"]
     # At the floor: just past the roots, 600 up; its picture lands on the floor.
     floor = _add(c, host="")
-    anchor = viewing.floor_anchor(_site_store.get("garage"), viewing.added_roots("garage"))
+    anchor = viewing.floor_anchor(sites.store.get("garage"), viewing.added_roots("garage"))
     assert floor["name"] == "camera_2"
     assert floor["position"] == pytest.approx([anchor.x + START_WIDTH / 2, anchor.y, 600.0])
     assert floor["lands"]["host"] == ""
@@ -385,8 +386,8 @@ def test_a_camera_whose_site_is_gone_is_listed_and_removed_all_the_same():
 
 def _restart():
     """The server started again: every site built afresh from its factory."""
-    for name in list(_site_store.loaded()):
-        _site_store._sites.pop(name, None)
+    for name in list(sites.store.loaded()):
+        sites.store._sites.pop(name, None)
 
 
 def test_a_camera_stands_where_it_stood_after_a_restart(world):
@@ -663,7 +664,7 @@ def test_adding_beside_other_cameras_computes_the_surfaces_once():
 
     cameras.surfaces = counted
     try:
-        cameras.add_here("garage", _site_store.get("garage"), "workbench")
+        cameras.add_here("garage", sites.store.get("garage"), "workbench")
     finally:
         cameras.surfaces = real
     assert len(calls) == 1

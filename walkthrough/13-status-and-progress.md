@@ -16,7 +16,7 @@ Each state has a mark and a colour:
 
 A Windows console on a legacy code page (cp1252, Windows's default) raises on
 a character it does not have, so every line carrying one goes through
-`_safe_echo`, and no mark carries one:
+`safe_echo`, and no mark carries one:
 
     >>> all(mark.isascii() for mark, _ in MARKS.values())
     True

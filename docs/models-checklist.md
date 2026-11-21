@@ -2,9 +2,11 @@
 
 `tests/test_vision_through_qmcp.py` holds every path below against the
 simulated qmcp, and `tests/e2e/test_models_window.py` the window's own: opened,
-a shape asked about, a person's word, a model switched off and kept so. This is
-how a person confirms the same paths in the viewer and at the command line, and
-that each one reads well. The plan is
+a shape asked about, a person's word, a model switched off and kept so, written
+as walkthrough pages [35](../walkthrough/35-the-models-window.md) and
+[36](../walkthrough/36-the-models-window-narrow-and-wide.md). This is how a person
+confirms the same paths in the viewer and at the command line, and that each one
+reads well. The plan is
 [image models through qmcp](plans/image-models-through-qmcp-2026-10-30.md).
 
 Every model here is the **simulated qmcp** (`apothecary/finders/simulated.py`):
@@ -18,8 +20,8 @@ status bar said, word for word.
 
 ## Setting up
 
-- [ ] `uv run apothecary serve --demo` (`--port` for a port of its own), and
-      open the viewer. The demo runs with the simulated qmcp unless
+- [ ] `uv run apothecary serve --simulated` (`--port` for a port of its own), and
+      open the viewer. It runs with the simulated qmcp unless
       `APOTHECARY_QMCP` names another.
 - [ ] A picture with a few things of plain colours on a light ground, a black
       disc among them (a lens cap, a puck): a photograph of the bench, or a
@@ -34,8 +36,7 @@ status bar said, word for word.
       Models**, opens a window of its own beside the world, the height of the
       page, with the world still in view. Its first line has a green dot and
       says *the simulated qmcp is answering: simulated-vlm 0*, with a sentence
-      under it saying no guess is trusted until `apothecary vision check` has
-      passed for it.
+      under it saying checking a model is not built, so none is trusted.
 - [ ] **Origins** lists `plain/colour`, the plain reader, and
       `qmcp/simulated-vlm@0`, which says what it answers and *not checked*.
       Each has its switch, ticked.
@@ -63,6 +64,10 @@ status bar said, word for word.
   - [ ] **label:** *unread: the model answered 'block'* (or *'bar'*)
         *, which is outside the words asked among*. A word outside the list
         is shown, and used for nothing.
+- [ ] Narrow the window, or open it on a page 1024 px wide: the table reads
+      down, each property and then *Read*, *Guessed* and *A person* each on
+      a line of its own, named, with nothing reached by a scroll across.
+      Widened, it is a table again.
 - [ ] **Ask** on the black disc: the reading says *black*, and the guess
       names another colour and says *disagrees* in red; the reading stays as
       read. The plain reader takes the median of the disc's box, which is the
@@ -98,15 +103,16 @@ status bar said, word for word.
 - [ ] Untick `plain/colour` and **Ask**: the line says *plain/colour is
       switched off*, and the colour row reads nothing.
 - [ ] Tick both again, reload the page: both stay ticked (the switches are kept
-      in the state folder).
-- [ ] With the demo's state folder (`APOTHECARY_STATE_DIR=.cache/demo/state`),
+      in the state folder), and Models is open again where it was, the world as
+      wide as it was.
+- [ ] With that server's state folder (`APOTHECARY_STATE_DIR=.cache/simulated/state`),
       `uv run apothecary vision off plain/colour` and `vision on plain/colour`
       switch the same origin, and Models shows it the next time it is shown.
 
 ## Each way qmcp can be missing
 
-Stop the server and serve the demo again with `APOTHECARY_QMCP` set as each
-row says (the demo starts afresh: pin the picture and find its shapes again).
+Stop the server and serve `--simulated` again with `APOTHECARY_QMCP` set as each
+row says (it starts afresh: pin the picture and find its shapes again).
 Each time, Models' first line says which, a colour is still read off the
 pixels, and nothing else in the viewer changes.
 
@@ -150,13 +156,10 @@ pixels, and nothing else in the viewer changes.
 ## What this does not cover yet
 
 - A real qmcp, over MCP: it waits on qmcp's own server speaking MCP.
-- Trust: no `apothecary vision check` yet, so every guess is *not checked*
-  and used for nothing.
+- Trust: checking a model is not built
+  ([the plan](plans/image-models-through-qmcp-2026-10-30.md#how-each-is-measured-before-anything-trusts-it)),
+  so every guess is *not checked* and used for nothing.
 - The `qmcp` finder in **Picture › Find shapes**, and asking about a rig's face.
 - A site's own words mapped onto the colour and material lists.
 - Keeping what was asked: it lasts as long as the server, and a restart forgets
   it. The switches are kept.
-- Models beside the world in a layout the browser remembers: opened again after
-  a reload, it takes room from the world each time; until windows beside the
-  world share one stack (docs/plans/ui-coordination-2026-10-31.md), the
-  layout's own Reset gives the room back.

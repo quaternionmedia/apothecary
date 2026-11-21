@@ -13,12 +13,19 @@ parts/
 ├── cameras/                a category: the library's webcam, and mounts for it
 │   ├── webcam/             webcam.scad and part.json
 │   └── webcam_desk_stand/  part.json tags it a stub, as it does the clamp arm and the ceiling mount
+├── dust/                   a category: a round end of a dust system, and the adapter between two
+│   ├── dust_port/          dust_port.scad, written from its Python: one part, its sizes its presets
+│   └── hose_adapter/       hose_adapter.scad, written from its Python, its parameters its two ends
 ├── stream_deck_plus/
 │   └── stream_deck_plus.scad   the Stream Deck + at the bench, from the maker's published size
 ├── anolex_4060_evo_ultra_2/
 │   └── anolex_4060_evo_ultra_2.scad   the router, drawn as it is
 ├── router_coupon/
 │   └── router_coupon.scad   a plate with a pocket and holes, cut on the router (its cuts in the wrapper)
+├── router_emoji/
+│   └── router_emoji.scad    a 😮 cut on the router, measured to calibrate it (its cuts in the wrapper)
+├── print_coupon/
+│   └── print_coupon.scad   a plate, blocks, pockets, a window and a fin, measured to tune a printer (its plan in the wrapper)
 ├── ender3/
 │   ├── ender3.scad         the printer, drawn as it is
 │   └── slicer.json         printer_1's slicer profile, kept with its part

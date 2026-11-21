@@ -9,8 +9,8 @@ a person does and holds what the page says. Control lapses after minutes without
 command, so a step that needs it arms it again when it has lapsed, as a person would. Under
 ``--steps`` every step runs in order on a server of the test's own: the simulated printer
 idle on ``/dev/ttyFAKE1`` pinned to printer_1's mainboard, and the simulated devkit on
-``/dev/ttyFAKE2`` flashed with the Arduino esp32_blink, as the demo's are. Given ``--step
-N`` and ``--base-url`` naming the demo, only step N runs, on the demo's walk tab, and the
+``/dev/ttyFAKE2`` flashed with the Arduino esp32_blink, as the simulated server's are. Given ``--step
+N`` and ``--base-url`` naming the simulated server, only step N runs, on the simulated server's walk tab, and the
 tab is left there (tests/e2e/stepping.py); its picture is
 ``.cache/walk/one-machine-step-N.png``::
 
@@ -42,11 +42,11 @@ WITHIN_A_POLL = 10000  # the Machine polls every 2 s; a slow page gets a few
 
 @dataclass
 class Walk:
-    """The page a step acts on, the server it is on, and whether it is the demo's tab."""
+    """The page a step acts on, the server it is on, and whether it is the simulated server's tab."""
 
     page: Page
     base: str
-    on_the_demo: bool
+    on_simulated: bool
 
     @property
     def machine(self):
@@ -77,7 +77,7 @@ class Walk:
 
 def open_(w: Walk) -> None:
     """printer_1's ring, Device › Open (⌗78): its Machine a tab beside Pictures (on the
-    demo's tab, wherever the layout remembered there keeps it); the world's ring, Panels ›
+    simulated server's tab, wherever the layout remembered there keeps it); the world's ring, Panels ›
     Windows › Machine view, lays its sections out beside it: idle, at room temperature, the
     chart filling as it is polled."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
@@ -87,7 +87,7 @@ def open_(w: Walk) -> None:
     assert _press(w.page, "Device", "Open") == "78"
     expect(w.page.locator(MACHINE)).to_be_visible(timeout=5000)
     expect(windows.tab(w.page, "machine")).to_contain_text("printer_1")
-    if not w.on_the_demo:  # the demo's tab keeps the layout its person left it in
+    if not w.on_simulated:  # the simulated server's tab keeps the layout its person left it in
         state = windows.state(w.page, "machine")
         assert state["where"] == "layout" and "pictures" in state["stack"], state
     _said(w.page, "Opened printer_1")
@@ -203,17 +203,26 @@ def print_(w: Walk) -> None:
 
 
 def disarm(w: Walk) -> None:
-    """🔒 Disarm: the pad's window gone; the ring's Control › Jog › Y+ (⌗7728) then refused,
-    said in the status bar as an error."""
+    """🔒 Disarm: the pad's window gone; the ring's Control › Jog › Y+ (⌗7728) then greyed
+    with the server's reason, and chosen anyway, refused: said in the status bar as an
+    error, the ring left where it was until Escape."""
     where("Disarm", "printer_1's Machine open", w.on("printer_1"))
     if w.machine.locator("#ctl").is_checked():
         w.pad.locator("#ctl-disarm").click()
     expect(w.pad).to_be_hidden(timeout=5000)
+    expect(w.machine.locator("#ctl-label")).not_to_have_class(re.compile(r"\barmed\b"))
     _ring_on(w.page, "printer_1")
-    assert _press(w.page, "Device", "Control", "Jog", "Y+") == "7728"
+    assert _press(w.page, "Device", "Control", "Jog") == "772"
+    why = f"{PRINTER}: control is not armed -- arm it first"
+    up = w.page.locator("#ring-overlay .wedge[data-cell='8']")
+    expect(up).to_have_class(re.compile(r"\bdisabled\b"))
+    expect(up.locator("title")).to_have_text(f"Disabled: {why}")
+    assert _press(w.page, "Y+") == "8"
     status = w.page.locator("#status")
-    expect(status).to_have_text("Y+ (⌗7728): control is not armed", timeout=5000)
+    expect(status).to_have_text(f"Y+ (⌗7728): {why}", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
+    w.page.keyboard.press("Escape")
+    expect(w.page.locator("#ring-overlay")).to_have_count(0)
 
 
 def devkit(w: Walk) -> None:
@@ -265,7 +274,7 @@ STEPS: List[Tuple[str, Callable[[Walk], None]]] = [
 
 @pytest.fixture
 def steps(request, base_url):
-    """One step on the demo's walk tab under --step; every step on a server of the
+    """One step on the simulated server's walk tab under --step; every step on a server of the
     test's own otherwise (stepping.chosen)."""
 
     def own():
@@ -276,7 +285,7 @@ def steps(request, base_url):
 
 @pytest.fixture
 def own_server(start_server):
-    """The test's own server, as the demo is: the simulated printer idle on
+    """The test's own server, as the simulated server is: the simulated printer idle on
     ``/dev/ttyFAKE1``, identified and pinned to printer_1's mainboard, and the simulated
     devkit on ``/dev/ttyFAKE2`` flashed with the Arduino esp32_blink, which binds the
     garage's esp32_blink to it."""
@@ -309,7 +318,7 @@ def own_server(start_server):
 
 @pytest.mark.e2e
 def test_one_machine_a_step_at_a_time(steps):
-    page, url, on_the_demo, numbers = steps
-    walk = Walk(page, url, on_the_demo)
+    page, url, on_simulated, numbers = steps
+    walk = Walk(page, url, on_simulated)
     for n in numbers:
         STEPS[n - 1][1](walk)

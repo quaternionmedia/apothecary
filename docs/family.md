@@ -17,6 +17,7 @@ and the coordinator, imported from `qm-hearth`, never copied.
 | `GET /family/members/<name>` | A pull member's last cue and action |
 | `GET /family/members/<name>/events` | The same, as a stream |
 | `/machine/family/*`, `/board/family/*` | A hosted member's own four routes |
+| `GET /surfaces/family` | The same as `GET /family/`, as a surface: it is told on [the stream](surfaces.md#the-stream) as a cue is fired and each delivery ends |
 | `GET /family/beside` | What each member the hub started itself is doing now: its state, pid, instance and restarts |
 | `GET /sites/<s>/procedures` | The names of the site's procedures |
 | `GET /sites/<s>/procedures/<p>` | One as it stands: each step's status, why, whether GO will fire it, and the outcome of its last fire per member |
@@ -27,7 +28,7 @@ and the coordinator, imported from `qm-hearth`, never copied.
 `hearth check` judges it from outside, by these routes alone:
 
 ```bash
-uv run apothecary serve --demo
+uv run apothecary serve --simulated
 uv run hearth check --hub http://127.0.0.1:6283
 ```
 
@@ -85,6 +86,25 @@ hearth's `from_table` reads. Each key is optional, and with no file there are no
 changed table starts a new coordinator, whose audit starts empty, and the audit is
 not kept across a restart.
 
+### The members, at the command line
+
+```text
+apothecary family members              # each member: name, address, how it is reached,
+                                       # what it can do, and whether it holds a token
+apothecary family members --json
+apothecary family add NAME URL         # names a push member at URL, on this machine, and
+                                       # makes it a token, shown once
+apothecary family token NAME           # a new token for a member, replacing its own
+apothecary family remove NAME          # out of members, pull and start; its token revoked
+```
+
+These write the state folder's `family.json` whole, as the hub reads it, and
+`family-tokens.json` beside it, which holds only each token's hash. A table that does not
+read is left as it is and the command says so. The members the hub hosts and the page's
+camera are not in the table and are not removed. The token is what the member sends to
+write to the server as itself ([a member's token](surfaces.md#a-members-token)); the
+list never shows one.
+
 ### Members it starts
 
 - **`start`** names a member beside the hub by how it is started, and the hub keeps it
@@ -131,15 +151,20 @@ folder, `procedures/<site>/<name>.json`:
   last said it.
 
 Every step waits for a person's GO, and only the step standing by fires: the one whose
-predecessor has fired, once the evidence it names is in. GO is in the **Procedure**
-window, which says how each step stands. It stands beside the world
-whenever the site has a procedure, without being asked for, and gives its room back on a site
-with none; a window a person closed stays closed, and one a person opened is the person's.
+predecessor has fired, once the evidence it names is in. Where the step before it put
+a machine or a board to work, the work must have ended too: a home still under way, or
+a cut still running, holds the next step, and work that failed holds it until its step
+is fired again. A run is done when its job is, and failed when its job was cancelled or
+failed. Work already queued for a machine behind work that failed for it is not run. GO is in the **Procedure**
+window, which says how each step stands. It opens in the column beside the world, at its foot,
+whenever the site has a procedure, without being asked for and without taking the world's
+room, and closes on a site with none; a window a person closed stays
+closed, and one a person opened is the person's.
 It is also ⊞ Windows › Procedure, in the Family group with **Members**, each member, how it is
 reached, its state where the hub started it and its door, and **Deliveries**, the hub's audit,
 newest first, each delivery's step, member, status, milliseconds and the instance that took
 it. Panels › Windows › Family view lays the three out with the world.
-`apothecary serve --demo` starts with one, `bring-up`, on the garage's simulated bench.
+`apothecary serve --simulated` starts with one, `bring-up`, on the garage's simulated bench.
 
 The window leads to where each step's work is. A step's node is a door: pressed, the
 node's window opens, a machine's or a board's Machine or a camera's Pictures, or the
@@ -156,15 +181,19 @@ new tab; a pull member leads nowhere. GO never arms a latch.
 |---|---|
 | waiting | For the step before it, or for its evidence; `why` says which |
 | standing by | GO fires it |
-| fired | Delivered, and not finished: a page has not read it, or a member beside the hub answered 202. The next step may go on |
+| fired | Delivered, and not finished: a page has not read it, a member beside the hub answered 202, or a machine or a board here is still at the work. The next step may go on in the first two cases, and waits in the third |
 | done | Every member took it, and a hosted member's work has ended well |
 | refused | A member refused it, in the words `why` holds. It may be fired again |
-| failed | A member is down, is not in the hub's table, or its work failed. It may be fired again |
+| failed | A member is down, is not in the hub's table, its work or the job it started failed, or the server restarted while it ran and how it ended was never read. It may be fired again |
 
 Each delivery's outcome is kept in the evidence log, `actions/<day>.jsonl`, each naming
-its procedure, its step and its node, so a restart leaves what each step did. What a
-member says later is read live and is not kept: a page's read of its action, or how
-work answered 202 ended, which reads as fired after a restart.
+its procedure, its step and its node, so a restart leaves what each step did. How work
+answered 202 ended is kept there too, the first time it is read after it ends, and a
+job it started is read from the job's own record. Work whose end was never read before
+a restart is not known to have ended: its step is failed, to be looked at and fired
+again. A page's read of its action is read live and is not kept. A board's flash is
+refused for a port whose board answered as a printer or a router: a step never
+replaces the firmware that runs a machine.
 
 ## What goes through it
 

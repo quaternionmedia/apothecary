@@ -34,8 +34,8 @@ names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
 the printer, which homes and does no levelling; ``stored-mesh`` and
 ``probe-each-print`` are named there by a person after the bench's levelling
 boxes, each refused where its precondition fails, and a measured first-layer
-offset is a stub. The filament is the printer's one, named in its profile;
-choosing another is a stub.
+offset is a stub. The filament is the one its profile names, or with ``choose`` the
+one loaded on the printer (``filaments.py``), said in the ``filament`` setting's note.
 
 The three are written as user profiles of the system ones they start from
 (``"from": "user"``, ``inherits``), so OrcaSlicer's own check that the process
@@ -58,6 +58,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from ... import print_faults as pf
 from ...firmware.toolchains import Tool
 from ...stays_local import subprocess_env
 from .. import compose
@@ -97,9 +98,14 @@ SHOWN: Dict[str, Tuple[str, ...]] = {
         "bottom_shell_layers",
         "sparse_infill_density",
         "enable_support",
+        "xy_contour_compensation",
+        "xy_hole_compensation",
+        "elefant_foot_compensation",
     ),
     "filament": (
         "filament_type",
+        "filament_shrink",
+        "filament_shrinkage_compensation_z",
         "nozzle_temperature_initial_layer",
         "nozzle_temperature",
         "cool_plate_temp_initial_layer",
@@ -107,8 +113,16 @@ SHOWN: Dict[str, Tuple[str, ...]] = {
     ),
 }
 
+# And every setting a fault's lever moves or reads (apothecary/print_faults.py): what a
+# look at the piece is decided from.
+for _lever in (lv for f in pf.FAULTS for lv in f.levers):
+    for _kind, _key in ((_lever.kind, _lever.key), ("machine", _lever.falls_back_to)):
+        if _key and _key not in SHOWN[_kind]:
+            SHOWN[_kind] += (_key,)
+SHOWN["filament"] += tuple(k for k in pf.NOZZLE_RANGE if k not in SHOWN["filament"])
+
 # What OrcaSlicer itself fills when a profile leaves a value out (PrintConfig.cpp).
-ORCA_DEFAULTS = {"z_offset": "0"}
+ORCA_DEFAULTS = {"z_offset": "0", "xy_contour_compensation": "0"}
 
 _SAID_ERROR = re.compile(r"\berror\b|\bfailed\b|\bcan ?not\b", re.I)
 _SAID_WARNING = re.compile(r"\bwarning\b", re.I)
@@ -388,11 +402,14 @@ class OrcaSlicerModule(SlicerModule):
                 before = configs[kind].get(key, ORCA_DEFAULTS.get(key))
                 configs[kind][key] = entry["value"]
                 agrees = before == entry["value"]
+                # A setting a printer's tuning holds (slicer/tuning.py) is its own,
+                # not its profile file's.
+                measured = entry.get("origin") == "measured"
                 origins[(kind, key)] = Setting(
                     name=key,
                     value=entry["value"],
-                    origin="printer",
-                    source=f"{profile.file}: {entry['source']}",
+                    origin="measured" if measured else "printer",
+                    source=entry["source"] if measured else f"{profile.file}: {entry['source']}",
                     note=entry.get("note")
                     or (f"{base}'s profile agrees" if agrees else f"over {base}'s {before!r}"),
                 )
@@ -416,7 +433,8 @@ class OrcaSlicerModule(SlicerModule):
                 value=[p.id for p in filament],
                 origin="printer",
                 source=f"{profile.file}: {profile.filament.source}",
-                note=f"{compose.describe(filament)}: {section.get('filament')}",
+                note=f"{compose.describe(filament)}: {section.get('filament')}"
+                + (f", {section['filament_chosen']}" if section.get("filament_chosen") else ""),
             )
         )
 
@@ -537,7 +555,12 @@ class OrcaSlicerModule(SlicerModule):
         found = sorted(out.glob("*.gcode"))
         if not found:
             return Output(gcode=None, messages=messages)
-        return Output(gcode=found[0], estimate=read_estimate(found[0]), messages=messages)
+        return Output(
+            gcode=found[0],
+            estimate=read_estimate(found[0]),
+            messages=messages,
+            config=read_config(found[0]),
+        )
 
 
 def _result_json(path: Path) -> Optional[dict]:
@@ -588,6 +611,34 @@ def _sum(text: str) -> Optional[float]:
         return round(sum(float(v) for v in text.split(",") if v.strip()), 2)
     except ValueError:
         return None
+
+
+_CONFIG_LINE = re.compile(r"^; ([a-z0-9_]+) = (.*)$")
+
+
+def read_config(gcode: Path) -> Dict[str, str]:
+    """The configuration OrcaSlicer wrote at the end of its G-code, between ;
+    CONFIG_BLOCK_START and ; CONFIG_BLOCK_END: each ; key = value line, as
+    it wrote it. Empty where it wrote none."""
+    found: Dict[str, str] = {}
+    try:
+        with open(gcode, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 1024 * 1024))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return found
+    start = tail.rfind("; CONFIG_BLOCK_START")
+    if start == -1:
+        return found
+    for line in tail[start:].splitlines()[1:]:
+        if line.startswith("; CONFIG_BLOCK_END"):
+            break
+        match = _CONFIG_LINE.match(line.strip())
+        if match:
+            found[match.group(1)] = match.group(2).strip()
+    return found
 
 
 def read_estimate(gcode: Path) -> dict:

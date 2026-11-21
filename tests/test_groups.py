@@ -52,22 +52,29 @@ def _of(name):
     [
         (["apothecary/api.py"], groups.ALL),
         (["tests/conftest.py"], groups.ALL),
-        (["tests/a_helper_no_group_names.py"], groups.ALL),
-        (["apothecary/firmware/gcode.py"], _of("machines")),
-        (["apothecary/cam/toolpath.py"], _of("making")),
-        (["tests/slicer_helpers.py"], _of("making")),
+        (["tests/a_helper_nothing_imports.py"], []),
+        (["apothecary/firmware/gcode.py"], _of("machines") + _of("borders")),
+        (["apothecary/cam/toolpath.py"], _of("making") + _of("borders")),
+        (["tests/slicer_helpers.py"], groups.ALL),
+        (["tests/ring_helpers.py"], _of("viewer")),
+        (["tests/e2e/areas.py"], _of("cli") + _of("repository")),
         (["tests/test_jobs.py"], ["tests/test_jobs.py"]),
         (["tests/test_gone.py"], []),
-        (["apothecary/family/hub.py", "docs/cnc.md"], _of("family") + _of("repository")),
+        (
+            ["apothecary/family/hub.py", "docs/cnc.md"],
+            _of("family") + _of("repository") + _of("borders"),
+        ),
         (["Cargo.toml"], []),
     ],
     ids=[
         "the-app",
         "the-conftest",
-        "a-helper-no-group-names",
+        "a-helper-nothing-imports",
         "a-board",
         "a-toolpath",
-        "a-groups-helper",
+        "a-helper-the-conftest-imports",
+        "a-helper-of-one-group",
+        "the-browser-map",
         "a-unit-file",
         "a-deleted-unit-file",
         "two-groups",
@@ -75,6 +82,61 @@ def _of(name):
     ],
 )
 def test_a_change_reaches_the_files_of_its_groups(changed, reached):
+    assert groups.reached(changed) == reached
+
+
+# A suite of its own: who imports whom, in each form an import statement takes.
+SUITE = {
+    "conftest.py": "",
+    "tests/conftest.py": "from fixtures_helper import made\n",
+    "tests/fixtures_helper.py": "import base_helper\n",
+    "tests/base_helper.py": "",
+    "tests/solo_helper.py": "",
+    "tests/test_one.py": "from solo_helper import thing\nimport gone_helper\n",
+    "tests/via_helper.py": "from . import under_helper\n",
+    "tests/under_helper.py": "",
+    "tests/test_two.py": "def test_it():\n    from tests.via_helper import thing\n",
+    "tests/unused_helper.py": "",
+    "tests/test_three.py": "SCRIPT = 'import unused_helper'\nimport shared\n",
+    "tests/e2e/conftest.py": "import browser_only\n",
+    "tests/e2e/browser_only.py": "",
+    "tests/e2e/shared.py": "",
+    "tests/test_broken.py": "import half_helper\ndef half(\n",
+}
+
+
+@pytest.mark.parametrize(
+    "changed, reached",
+    [
+        (["tests/solo_helper.py"], ["tests/test_one.py"]),
+        (["tests/under_helper.py"], ["tests/test_two.py"]),
+        (["tests/via_helper.py"], ["tests/test_two.py"]),
+        (["tests/base_helper.py"], groups.ALL),
+        (["tests/fixtures_helper.py"], groups.ALL),
+        (["tests/unused_helper.py"], []),
+        (["tests/gone_helper.py"], ["tests/test_one.py"]),
+        (["tests/e2e/browser_only.py"], _of("repository")),
+        (["tests/e2e/shared.py"], _of("repository") + ["tests/test_three.py"]),
+        (["tests/half_helper.py"], ["tests/test_broken.py"]),
+    ],
+    ids=[
+        "a-helper-one-file-imports",
+        "a-helper-imported-through-another",
+        "the-helper-between",
+        "a-helper-the-conftest-imports-through-another",
+        "a-helper-the-conftest-imports",
+        "a-helper-only-a-string-names",
+        "a-deleted-helper-still-imported",
+        "a-helper-only-the-browser-conftest-imports",
+        "a-browser-helper-a-unit-file-imports",
+        "a-file-mid-edit-that-spells-it",
+    ],
+)
+def test_a_helper_reaches_the_unit_files_that_import_it(tmp_path, monkeypatch, changed, reached):
+    for path, text in SUITE.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+    monkeypatch.setattr(groups, "ROOT", tmp_path)
     assert groups.reached(changed) == reached
 
 

@@ -4,6 +4,7 @@ Cases come from the registry, so a part described by a part.json or living in
 a nested package is checked like any other.
 """
 
+import json
 import logging
 import subprocess
 from pathlib import Path
@@ -100,6 +101,9 @@ def installed(tmp_path, monkeypatch):
         if managed:
             date = ".".join(managed.split(".")[:3])
             _fake_openscad(tools / "openscad" / date / "openscad", managed)
+            (tools / "openscad" / date / "install.json").write_text(
+                json.dumps({"method": "appimage", "executable": "openscad"})
+            )
             (tools / "openscad" / "current").write_text(date + "\n")
         if on_path:
             _fake_openscad(bin_dir / "openscad-nightly", on_path)

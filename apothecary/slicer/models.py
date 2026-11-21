@@ -8,10 +8,14 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from ..models.measures import MeasurePlan
+
 # Where a value of a slice came from: the part or piece declared it, the
 # printer's profile set it (OrcaSlicer's own, or what the profile kept with the
 # printer's part holds over it), or apothecary set it for every slice.
-Origin = Literal["declared", "printer", "apothecary"]
+# Where a value came from; "measured" is a setting a printer's tuning holds, fed back
+# from pieces it made (slicer/tuning.py).
+Origin = Literal["declared", "printer", "apothecary", "measured"]
 
 
 class SlicerTool(BaseModel):
@@ -123,6 +127,15 @@ class SliceRecord(BaseModel):
     made: Made
     printer: SlicedFor
     settings: List[Setting]
+    # The model sliced, x, y, z in mm: its STL's box, the way up it prints. A part with
+    # no plan, printed from this slice, is read by it (slicer/tuning.py).
+    size: Optional[List[float]] = None
+    # The sha256 of the STL sliced: the shape itself, whatever drew it.
+    stl_sha256: Optional[str] = None
+    # What a person reads of the part printed, as its wrapper plans it at the parameters
+    # sliced (models/measures.py); None for a part that names no plan, which is read by
+    # its box (slicer/tuning.py).
+    plan: Optional[MeasurePlan] = None
     estimate: Optional[Estimate] = None
     messages: List[SlicerMessage] = Field(default_factory=list)
     bounds: Optional[Bounds] = None

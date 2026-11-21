@@ -10,6 +10,34 @@ def test_parts_list():
     assert "parametric_star" in r.output or "solderfan" in r.output
 
 
+def test_parts_list_marks_a_part_that_does_not_load(monkeypatch):
+    """A part that will not load is listed, marked so, and pointed at what says why;
+    its JSON says it does not load and why, and every other part loads."""
+    import json
+
+    from apothecary.projects import registry
+
+    real = registry.load_part
+
+    def load(item):
+        if item.name == "calibration_cube":
+            raise registry.PartLoadError(item.name, "part.json", ValueError("refused"))
+        return real(item)
+
+    monkeypatch.setattr(registry, "load_part", load)
+    r = CliRunner().invoke(cli, ["parts", "list"])
+    assert r.exit_code == 0, r.output
+    marked = [line for line in r.output.splitlines() if "does not load" in line]
+    assert marked == [
+        "calibration_cube (wrapper=apothecary.projects.parts.calibration_cube)"
+        " -- does not load (apothecary problems --detail)"
+    ]
+    listed = json.loads(CliRunner().invoke(cli, ["parts", "list", "--json-out"]).output)
+    cube = next(p for p in listed if p["name"] == "calibration_cube")
+    assert not cube["loads"] and "refused" in cube["load_error"]
+    assert all(p["loads"] for p in listed if p["name"] != "calibration_cube")
+
+
 def test_parts_list_from_another_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     r = CliRunner().invoke(cli, ["parts", "list"])

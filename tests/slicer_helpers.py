@@ -7,7 +7,9 @@ The fake answers ``--help`` as OrcaSlicer 2.4.2 does (its version first), and a
 slice by reading the profiles it is handed -- refusing, as OrcaSlicer does, a
 process that is not for the machine's system profile -- and writing
 ``plate_1.gcode`` (a header, the start G-code's homing, a square of moves at the
-process's layer height, OrcaSlicer's estimate comments and a config block) and
+process's layer height, OrcaSlicer's estimate comments and a config block, whose
+tuned settings are the profiles' or, where they leave one out, the fake's own
+stand-in for OrcaSlicer's default -- no figure of OrcaSlicer's) and
 ``result.json``. ``FAKE_ORCA`` in its environment scripts a failure: ``outside``
 prints the error OrcaSlicer gives for a model off the bed and exits non-zero;
 ``silent`` exits zero and writes nothing; ``slow`` takes five minutes first,
@@ -82,8 +84,30 @@ FAKE_ORCASLICER = textwrap.dedent(r"""
               "; estimated printing time (normal mode) = 1h 2m 3s",
               "; estimated first layer printing time (normal mode) = 48s", "",
               "; CONFIG_BLOCK_START", f"; layer_height = {process['layer_height']}",
-              f"; wall_loops = {loops}", f"; filament_type = {filament['filament_type'][0]}",
-              "; CONFIG_BLOCK_END"]
+              f"; wall_loops = {loops}", f"; filament_type = {filament['filament_type'][0]}"]
+    # What a slice is tuned by, as the profiles it was handed set it, else the fake's
+    # own stand-in for OrcaSlicer's default: nothing moved, nothing scaled.
+    for config, key, own in ((process, "xy_contour_compensation", "0"),
+                             (process, "xy_hole_compensation", "0"),
+                             (process, "elefant_foot_compensation", "0"),
+                             (process, "initial_layer_print_height", "0.2"),
+                             (filament, "filament_shrink", "100%"),
+                             (filament, "filament_shrinkage_compensation_z", "100%")):
+        value = config.get(key, own)
+        lines.append(f"; {key} = {value[0] if isinstance(value, list) else value}")
+    # What a look at the piece steps (apothecary/print_faults.py), as the profiles set it.
+    for config, keys in ((machine, ("retraction_length",)),
+                         (process, ("travel_speed", "brim_width", "outer_wall_speed")),
+                         (filament, ("filament_retraction_length", "nozzle_temperature",
+                                     "nozzle_temperature_initial_layer", "cool_plate_temp",
+                                     "cool_plate_temp_initial_layer", "filament_flow_ratio",
+                                     "filament_max_volumetric_speed", "fan_max_speed",
+                                     "close_fan_the_first_x_layers", "slow_down_layer_time"))):
+        for key in keys:
+            if key in config:
+                value = config[key]
+                lines.append(f"; {key} = {value[0] if isinstance(value, list) else value}")
+    lines.append("; CONFIG_BLOCK_END")
     (out / "plate_1.gcode").write_text("\n".join(lines) + "\n")
     (out / "result.json").write_text(json.dumps({"return_code": 0, "error_string": "Success.",
         "sliced_plates": [{"id": 1, "warning_message": ""}]}))
@@ -103,6 +127,7 @@ CREALITY = {
             "gcode_flavor": "marlin",
             "max_layer_height": ["0.32"],
             "min_layer_height": ["0.08"],
+            "retraction_length": ["4"],
         },
         "fdm_creality_common": {
             "type": "machine",
@@ -139,6 +164,9 @@ CREALITY = {
             "bottom_shell_layers": "3",
             "sparse_infill_density": "15%",
             "enable_support": "0",
+            "travel_speed": "150",
+            "brim_width": "0",
+            "outer_wall_speed": "40",
         },
         "0.20mm Standard @Creality Ender3": {
             "type": "process",
@@ -156,17 +184,49 @@ CREALITY = {
             "type": "filament",
             "name": "fdm_filament_pla",
             "from": "system",
+            "instantiation": "false",
             "filament_type": ["PLA"],
             "nozzle_temperature": ["220"],
             "nozzle_temperature_initial_layer": ["220"],
+            "nozzle_temperature_range_low": ["190"],
+            "nozzle_temperature_range_high": ["230"],
             "cool_plate_temp": ["60"],
             "cool_plate_temp_initial_layer": ["60"],
+            "filament_flow_ratio": ["0.98"],
+            "filament_retraction_length": ["nil"],
+            "filament_max_volumetric_speed": ["12"],
+            "fan_max_speed": ["100"],
+            "close_fan_the_first_x_layers": ["1"],
+            "slow_down_layer_time": ["8"],
         },
         "Creality Generic PLA": {
             "type": "filament",
             "name": "Creality Generic PLA",
             "inherits": "fdm_filament_pla",
             "from": "system",
+            "instantiation": "true",
+            "compatible_printers": ["Creality Ender-3 0.4 nozzle"],
+        },
+        "Creality Generic PETG": {
+            "type": "filament",
+            "name": "Creality Generic PETG",
+            "inherits": "fdm_filament_pla",
+            "from": "system",
+            "instantiation": "true",
+            "filament_type": ["PETG"],
+            "nozzle_temperature": ["255"],
+            "nozzle_temperature_range_low": ["220"],
+            "nozzle_temperature_range_high": ["260"],
+            "cool_plate_temp": ["70"],
+            "compatible_printers": ["Creality Ender-3 0.4 nozzle"],
+        },
+        "Creality Generic PLA @K1": {
+            "type": "filament",
+            "name": "Creality Generic PLA @K1",
+            "inherits": "fdm_filament_pla",
+            "from": "system",
+            "instantiation": "true",
+            "compatible_printers": ["Creality K1 0.4 nozzle"],
         },
     },
 }

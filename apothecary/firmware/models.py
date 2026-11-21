@@ -6,12 +6,13 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, Dict, List, Literal, Optional
 
 from pydantic import (
     AfterValidator,
     BaseModel,
     Field,
+    SerializeAsAny,
     computed_field,
     field_validator,
     model_validator,
@@ -191,7 +192,8 @@ class ToolStatus(BaseModel):
 
 
 class ModuleStatus(BaseModel):
-    """What a toolchain module says of itself: what it builds, its tools, its problems."""
+    """What a toolchain module says of itself: what it builds, its tools, its problems.
+    A module with more to say subclasses it (Arduino's: ``ArduinoStatus``)."""
 
     id: str
     label: str
@@ -205,27 +207,44 @@ class ModuleStatus(BaseModel):
     needs_board: bool = False  # a build names a board (an Arduino FQBN)
     installable: bool = True  # whether that command can install it on this machine
 
+    def tool(self, name: str) -> ToolStatus:
+        """One of its tools, by its name."""
+        for tool in self.tools:
+            if tool.name == name:
+                return tool
+        raise KeyError(name)
+
+
+class SuggestedCore(BaseModel):
+    """A core the Bench offers a one-click install for."""
+
+    id: str
+    label: str
+
+
+class ArduinoStatus(ModuleStatus):
+    """The Arduino module's status: beside its tools, what only arduino-cli has."""
+
+    config_file: Optional[str] = None  # the managed config arduino-cli is given, once it runs
+    cores: List[CoreInfo] = Field(default_factory=list)  # what ``core list`` answers
+    suggested_cores: List[SuggestedCore] = Field(default_factory=list)
+
 
 class ToolchainStatus(BaseModel):
-    """What ``apothecary firmware validate`` and ``GET /firmware/status`` report."""
+    """What ``apothecary firmware validate`` and ``GET /firmware/status`` report: where
+    an install puts a tool, and every toolchain module's status, Arduino's first.
+    Whether a module can build, its tools and its problems are that module's own."""
 
     tools_dir: str
-    arduino_cli_path: Optional[str] = None
-    arduino_cli_version: Optional[str] = None
-    arduino_cli_ok: bool = False
-    config_file: Optional[str] = None
-    cores: List[CoreInfo] = Field(default_factory=list)
-    esptool_path: Optional[str] = None
-    esptool_version: Optional[str] = None
-    esptool_ok: bool = False
-    problems: List[str] = Field(default_factory=list)
-    # Every toolchain module, Arduino's first; the fields above are Arduino's
-    # alone.
-    toolchains: List[ModuleStatus] = Field(default_factory=list)
+    # Each in its module's own shape, and written out in it.
+    toolchains: List[SerializeAsAny[ModuleStatus]] = Field(default_factory=list)
 
-    @property
-    def ok(self) -> bool:
-        return self.arduino_cli_ok
+    def module(self, module_id: str) -> ModuleStatus:
+        """One module's status, by its id."""
+        for module in self.toolchains:
+            if module.id == module_id:
+                return module
+        raise KeyError(module_id)
 
 
 class TaskStatus(str, Enum):
@@ -310,6 +329,9 @@ class CompileRequest(BaseModel):
 
 class UploadRequest(CompileRequest):
     port: Port
+    # A port whose board answered as a printer or a router is flashed only when this
+    # asks for it: the flash replaces the firmware that runs the machine.
+    replace_machine_firmware: bool = False
 
 
 class FlashImage(BaseModel):
@@ -323,6 +345,7 @@ class EsptoolFlashRequest(BaseModel):
     baud: int = Field(460800, ge=9600, le=2000000)
     erase: bool = False
     images: List[FlashImage] = Field(min_length=1)
+    replace_machine_firmware: bool = False  # as UploadRequest's
 
     @field_validator("chip")
     @classmethod
@@ -518,6 +541,10 @@ class PrinterStatus(BaseModel):
     sd_progress: Optional[float] = None  # 0..1, from M27
     print_time_s: Optional[int] = None  # from M31
     raw: List[str] = Field(default_factory=list)  # every line the poll received, for the log
+    # A poll made while a job streams to the machine asks for temperatures and position
+    # only (``gcode.poll_printer``): the fields it did not ask for are the last full
+    # poll's, each named here with when it was read, e.g. {"endstops": <time>}.
+    held: Dict[str, datetime] = Field(default_factory=dict)
     synced: List[dict] = Field(default_factory=list)  # scene nodes this poll updated (api.py)
     job: Optional[dict] = None  # a long exchange holding the port (a bed probe): kind, stage, since
     poll: Optional[str] = None  # its id in the evidence log (apothecary/evidence), when kept there
@@ -536,6 +563,24 @@ class PrinterStatus(BaseModel):
     alarm: Optional[int] = None
     alarm_text: Optional[str] = None  # the alarm in the dialect's words
     overrides: Optional[dict] = None
+    # What the machine's state asks of a person, so it is read from the state and not
+    # from a line of the log. ``refused``: the last control line this port refused or its
+    # board objected to -- {"command", "said", "at"} -- until one goes. ``todo``: what must
+    # be done before the machine moves again, in the dialect's words (a router in alarm).
+    # ``homing``: for each axis of a router, which way a home will seek, how fast and how
+    # far, and whether its switch has been seen and the axis jogged that way (grbl.py).
+    refused: Optional[dict] = None
+    todo: List[str] = Field(default_factory=list)
+    homing: Optional[List[dict]] = None
+    # Where the tool is in the machine's own working volume, each axis counted up from
+    # its low end: what a scene places the tool by. A printer's is its position; a
+    # router's is worked out from its machine position, each axis by the way its
+    # controller says it homes and how far it travels (grbl.in_volume). ``work_origin``
+    # is where a router's work zero stands in the same volume, and ``travel`` the volume
+    # as the controller has it. None while a router's settings have not been read.
+    tool_position: Optional[dict] = None
+    work_origin: Optional[dict] = None
+    travel: Optional[dict] = None
 
     @property
     def heating(self) -> bool:
@@ -553,6 +598,21 @@ class PrinterControlArmRequest(ProbeRequest):
 
 class PrinterControlRequest(ProbeRequest):
     command: str = Field(min_length=2, max_length=80)
+
+
+class PrinterJogRequest(ProbeRequest):
+    """One relative move of one axis: so many mm (signed) at a feed in mm/min. Bounded
+    again by the port's dialect, as the lines it becomes are."""
+
+    axis: Literal["X", "Y", "Z", "x", "y", "z"]
+    mm: float = Field(ge=-600, le=600)
+    feed: int = Field(ge=10, le=12000)
+
+
+class PlateRequest(ProbeRequest):
+    """A touch plate's thickness as measured, in mm (grbl.PLATE_MAX_MM at most)."""
+
+    thickness_mm: float = Field(gt=0, le=50)
 
 
 class PrinterQueryResult(BaseModel):
@@ -590,9 +650,8 @@ class LevelingRecord(BedReading):
     port: str  # where it was taken; whose it is is ``board``
     # The board that took it, by its key (occupants.key_of), and the kind of machine
     # it drives: a reading is listed for that board alone, wherever it is plugged in.
-    # None on a reading kept before readings carried it.
-    board: Optional[str] = None
-    machine: Optional[str] = None
+    board: str = Field(min_length=1)
+    machine: str = Field(min_length=1)
     at: datetime
     firmware: Optional[str] = None
     note: Optional[str] = None
@@ -624,30 +683,8 @@ class PrintFile(BaseModel):
     uploaded_at: datetime
     problems: List[str] = Field(default_factory=list)  # why it may not be sent, if it may not
     # The kind of machine it was kept for, "printer" or "router": it is sent to that
-    # kind alone. None on a file kept before files said, and not made by a slice or a
-    # toolpath, which say (devices.print_file).
-    machine: Optional[str] = None
-
-
-class PrintRecord(BaseModel):
-    """One print streamed from the host, in the ``prints/records/`` format.
-
-    Nothing writes one; ``apothecary/jobs.py`` reads each kept under
-    ``prints/records/`` once, and carries it over as a print job.
-    """
-
-    id: str
-    port: str
-    file_id: str
-    name: str
-    at: datetime
-    finished: Optional[datetime] = None
-    outcome: str  # done | cancelled | failed
-    sent: int = 0
-    total: int = 0
-    error: Optional[str] = None
-    firmware: Optional[str] = None
-    lines: List[str] = Field(default_factory=list)  # the tail of what the firmware said
+    # kind alone.
+    machine: str = Field(min_length=1)
 
 
 # A kept print file's id: its keeping time and its name's stem, so never a dot first
@@ -739,3 +776,73 @@ class DeviceAttachRequest(BaseModel):
 
 # DeviceInfo names PrinterInfo before it is defined; finish the model now that it is.
 DeviceInfo.model_rebuild()
+
+
+# --- a heater loop's requests (firmware/loops.py) ------------------------------------------
+
+
+class LoopRequest(ProbeRequest):
+    """Which loop of the printer on ``port``: a hotend by its number, or the bed."""
+
+    heater: Literal["hotend", "bed"] = "hotend"
+    index: int = Field(0, ge=0, le=7)
+
+
+class LoopPlanRequest(LoopRequest):
+    """An experiment on a loop as a page has it so far, to ask whether it would start
+    (``can.can_tune``): its ceiling and its longest time may not be stated yet, and the
+    answer says so; every bound is ``firmware.loops.plan``'s to say."""
+
+    kind: Literal["step", "autotune", "perturbation"]
+    ceiling_c: Optional[float] = None
+    max_duration_s: Optional[float] = None
+    sample_period_s: Optional[float] = None
+    base_c: Optional[int] = None
+    step_c: Optional[int] = None
+    settle_s: Optional[float] = None
+    after_s: Optional[float] = None
+    target_c: Optional[int] = None
+    cycles: Optional[int] = None
+    centre_c: Optional[int] = None
+    amplitude_c: Optional[int] = None
+    period_s: Optional[float] = None
+    periods: Optional[int] = None
+
+
+class LoopExperimentRequest(LoopRequest):
+    """An experiment on a loop. The ceiling and the longest it may run are said by the
+    caller, every time; what each kind takes is ``firmware.loops.plan``'s."""
+
+    kind: Literal["step", "autotune", "perturbation"]
+    ceiling_c: float = Field(..., gt=0)
+    max_duration_s: float = Field(..., gt=0)
+    sample_period_s: float = Field(1.0, ge=0.5, le=10)
+    base_c: Optional[int] = None  # a step's temperature before it
+    step_c: Optional[int] = None  # and how far it steps
+    settle_s: Optional[float] = None  # the time at the first target before the step or the wave
+    after_s: Optional[float] = None  # a step's time after it
+    target_c: Optional[int] = None  # an autotune's target
+    cycles: Optional[int] = None  # an autotune's cycles
+    centre_c: Optional[int] = None  # a perturbation's middle
+    amplitude_c: Optional[int] = None  # its half swing
+    period_s: Optional[float] = None  # its period
+    periods: Optional[int] = None  # how many
+
+
+class LoopGainsRequest(LoopRequest):
+    kp: float = Field(..., ge=0)
+    ki: float = Field(..., ge=0)
+    kd: float = Field(..., ge=0)
+
+
+class LoopSaveRequest(ProbeRequest):
+    # The board's memory is written only when this says so, in these words.
+    write_board_memory: bool = False
+
+
+class LoopDocumentRequest(BaseModel):
+    experiment_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,119}$")
+    rule: Optional[str] = "simc"
+    kind: Literal["p", "pi", "pid"] = "pi"
+    closed_loop_time: Optional[float] = Field(None, gt=0)
+    read_board: bool = False  # the gains the board holds read now (M503), as on_machine

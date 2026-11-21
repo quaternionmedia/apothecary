@@ -19,6 +19,7 @@ import re
 import part_editing
 import pytest
 import rings
+import windows
 from garage import status as _status
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
@@ -61,7 +62,6 @@ def _open(page: Page, url: str) -> None:
     page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     settled(page)
 
 
@@ -124,6 +124,18 @@ def test_a_control_writes_its_line_a_typed_value_moves_it_and_undo_takes_back_ea
     assert re.match(r"size = 10;\s+// ", own), own
     box = _param(page, "size").locator(".param-number")
     slider = _param(page, "size").locator(".param-slider")
+    # Nothing done yet: Apply, Undo and Redo greyed as every control of the page is,
+    # each saying why.
+    for selector, why in (
+        ("#apply-btn", "nothing is staged against what is drawn"),
+        ("#undo-btn", "nothing to undo"),
+        ("#redo-btn", "nothing to redo"),
+    ):
+        button = page.locator(selector)
+        expect(button).to_be_disabled()
+        expect(button).to_have_attribute("aria-disabled", "true")
+        expect(button).to_have_attribute("title", re.compile(f"^Disabled: {why}"))
+        expect(button).to_have_css("opacity", "0.45")
 
     # Moved: its value rewritten in its line, its comment kept, staged and checked.
     box.fill("20")
@@ -274,7 +286,8 @@ def test_a_saved_variant_of_an_overlay_is_its_overlay_in_the_editor(page: Page, 
     page.route("**/parts/gridfinity/saved/wide", one)
     _open(page, url)
     _edit(page, "gridfinity")
-    row = page.locator(".scad-saved .saved-row[data-variant='wide']")
+    windows.show(page, "part-variants")
+    row = page.locator("#part-saved .saved-row[data-variant='wide']")
     expect(row.locator(".saved-kind")).to_have_text("overlay")
     row.locator(".saved-variant").click()
     expect(_status(page)).to_contain_text(
@@ -316,3 +329,25 @@ def test_a_generated_part_stays_one_way_its_scad_following_its_controls(page: Pa
         "(was) => window.fractalViewer.scadEditor.text() === was", arg=text, timeout=15000
     )
     assert asked == [], asked
+
+
+@pytest.mark.e2e
+def test_a_part_built_by_python_is_applied_from_its_numbers_never_its_scad(page: Page, url):
+    """Its SCAD follows what is staged, read only, and Apply sends the numbers: never
+    that text as a draft, which the server refuses for a part whose geometry is Python
+    (the dust port; the snowplow is the same)."""
+    drafts = []
+    page.on("request", lambda r: drafts.append(r.url) if "/draft/" in r.url else None)
+    _open(page, url)
+    _edit(page, "dust_port")
+    text = _text(page)
+    _param(page, "diameter").locator(".param-number").fill("25")
+    expect(_summary(page)).to_contain_text("1 change staged, valid", timeout=10000)
+    page.wait_for_function(
+        "(was) => window.fractalViewer.scadEditor.text() !== was", arg=text, timeout=15000
+    )
+    page.locator("#apply-btn").click()
+    expect(_status(page)).to_contain_text(
+        re.compile(r"dust_port (regenerated|from the cache)"), timeout=120000
+    )
+    assert drafts == [], drafts

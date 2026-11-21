@@ -197,6 +197,54 @@ this time, and the cut, run again, leaves holes of the size designed.
 
 In the page the same change is the part's editor -- Part › Edit, the hole's
 size, Apply -- then Toolpath on the variant drawn, then ▶ Cut;
-`tests/e2e/test_router_ui.py` goes round it in a browser. What this page does
-not show is the bench: the real controller has been identified and polled once, and a
-real coupon has not been measured by hand. That is the plan's next slice.
+`tests/e2e/test_router_ui.py` goes round it in a browser.
+
+## Measured by hand, fed back
+
+The simulated tool cuts exactly its diameter; a real one runs out, or bends, and
+cuts wider. The piece made to find out by how much is a 😮 (`parts/router_emoji`):
+its face cut around from outside, its eyes and its mouth bored inside, each named
+in its cuts, so its toolpath says what a person measures.
+
+    >>> router = CutFor(name="cnc_router", site="garage", path="cnc_router", port=PORT)
+    >>> emoji = service.cut_into("router_emoji", router)
+    >>> for feature in emoji.features:
+    ...     print(feature.side, "|", feature.words)
+    inside | eye: the hole across, 10 mm
+    inside | mouth: the hole across, 20 mm
+    outside | face: the disc across, 60 mm
+    >>> emoji.allowance is None
+    True
+
+A person cuts it, measures each across with calipers, and types what it
+measures -- in the page, under *measured* in the part's Feedback window, where the
+measurement is filed in the piece's drawer. The holes come out
+big and the face small by about the same: that is the tool's. What is left, the
+same way on both in proportion to their size, is the scale -- the controller's
+steps per millimetre -- which is said, and not applied.
+
+    >>> from apothecary.cam import measured
+    >>> kept = measured.measure(emoji, {"eye": 10.12, "mouth": 20.14, "face": 59.84})
+    >>> print(measured.said(kept.measurements[-1]))
+    router_emoji measured eye +0.12, mouth +0.14, face -0.16 mm against what was designed; scale -0.04%, the steps per millimetre's, not applied; tool_allowance +0.000 -> +0.136 mm
+    >>> (kept.router, kept.tool, kept.value)
+    ('cnc_router', 6.0, 0.136)
+
+It is kept for this router and its 6 mm tool, and the router's next toolpath
+takes it: every offset is made with the tool as wide as it cuts, so the face's
+path stands a little further out.
+
+    >>> again = service.cut_into("router_emoji", router)
+    >>> (again.allowance.value, again.allowance.origin)
+    (0.136, 'measured')
+    >>> (emoji.bounds.min[:2], again.bounds.min[:2])
+    ([4.0, 4.0], [3.864, 3.864])
+
+A size that is not of the piece is refused, and nothing is kept:
+
+    >>> measured.measure(again, {"face": 64})
+    Traceback (most recent call last):
+    apothecary.cam.measured.Refused: face 64 mm against 60 mm designed is more than 5% off: not this toolpath's piece, or measured across something else -- measure it again, or choose the file it was cut from
+
+What this page does not show is the bench: the real controller has been
+identified and polled once, and no real piece has been measured by hand.

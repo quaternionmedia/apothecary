@@ -15,6 +15,12 @@
  * 8 9 6 3 2 1 4 7. A wedge with nothing in it is drawn faint and cannot be
  * chosen.
  *
+ * A wedge that cannot be chosen (`enabled` false) is drawn greyed, and says why
+ * (`why`: for a machine's act, the server's own refusal, firmware/can.py): in its
+ * title, and in words under the ring while it is lit -- by the pointer, an arrow,
+ * or a digit, click or tap that chose it anyway, which does nothing, keeps the ring
+ * where it is and hands the reason to the page (`onRefused`) for its status line.
+ *
  * A digit chooses its cell from anywhere. The digits pressed to reach an
  * option through nested rings are its ADDRESS ("86" = cell 8, then cell 6),
  * and given the same context the same address always reaches the same option.
@@ -22,14 +28,17 @@
  * same digits onto the buttons it already has, so the numbering is visible
  * where the control is.
  *
- * Plain ES module, no build step; its one import is keys.js, how a key is named
- * and when a shortcut may act. The pure parts (angle to
+ * Plain ES module, no build step; it imports keys.js, how a key is named and when a
+ * shortcut may act, and can.js, how an address is told from a button's own tip. The
+ * pure parts (angle to
  * slot, nearest cell in a direction, addresses) are exported so a test can
  * compare them with the Python resolver's; the same four are on
  * window.apothecaryRing.
  */
 
 import { comboOf, matches, mayAct, typing } from "./keys.js";
+import { ADDRESS_AT_END } from "./can.js";
+import { viaRing } from "./format.js";
 
 export const PLACEMENT = [8, 6, 2, 4, 9, 3, 1, 7];
 export const COMPASS = [8, 9, 6, 3, 2, 1, 4, 7]; // compass slot (up, clockwise) -> cell
@@ -146,22 +155,28 @@ export function addressOf(ring, target) {
 }
 
 /* Write the address onto the page's own controls, where they already are.
- * `pairs` is [[element, action], ...]; an action not on the ring leaves its
- * element as it was. Ids and classes are never touched.
+ * `pairs` is [[element, action], ...]: an action, or a path of ids down to a cell
+ * that opens a ring (a menu the control opens is that ring). One not on the ring takes
+ * away an address written before, and leaves the element's own title. Ids and classes
+ * are never touched. The address goes after the title (` · ⌗932`), or is the title
+ * where there is none (`⌗77`); either is the page's, and can.js never keeps it as the
+ * button's own tip (ADDRESS_AT_END).
  */
 export function annotate(ring, pairs) {
     const map = addresses(ring);
     let count = 0;
     for (const [el, action] of pairs) {
         if (!el || !action) continue;
-        const digits = map[action];
+        const digits = Array.isArray(action) ? addressOf(ring, action) : map[action];
+        const title = (el.title || "").replace(ADDRESS_AT_END, "");
         if (!digits) {
             delete el.dataset.address;
-            if (el.title) el.title = el.title.replace(/ · ⌗\d+$/, "");
+            if (el.title !== title) {
+                if (title) el.title = title; else el.removeAttribute("title");
+            }
             continue;
         }
         el.dataset.address = digits;
-        const title = (el.title || "").replace(/ · ⌗\d+$/, "");
         el.title = title ? `${title} · ⌗${digits}` : `⌗${digits}`;
         count += 1;
     }
@@ -169,14 +184,17 @@ export function annotate(ring, pairs) {
 }
 
 /* `picture` is what the page knows about pictures and cameras where the ring
- * stands (apothecary/menu.py's PictureContext), or a promise of it. */
-export async function resolveRing({ base = "", context, site, device, picture, sketch }) {
+ * stands (apothecary/menu.py's PictureContext), or a promise of it; `can`, on the
+ * canvas ring, what it knows would be refused now of Panels › Machine's acts, or a
+ * promise of it. */
+export async function resolveRing({ base = "", context, site, device, picture, sketch, can }) {
     const body = { context };
     if (site) body.site = site;
     if (device) body.device = device;
     if (sketch) body.sketch = sketch;
-    const told = await picture;
+    const [told, answer] = await Promise.all([picture, can]);
     if (told) body.picture = told;
+    if (answer) body.can = answer;
     const r = await fetch(`${base}/menu/resolve`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -189,16 +207,26 @@ export async function resolveRing({ base = "", context, site, device, picture, s
 // Drawing
 // ---------------------------------------------------------------------------
 
-const STYLE = `
+// A greyed cell looks as a greyed button does (tokens.css: `button:disabled`): the whole
+// of it -- wedge, rim, label, digit -- at this opacity, with the not-allowed cursor. It is
+// seen over the ring's own ground, the page's background, never over what the ring is
+// opened on, so neither a window's text nor a badge's card shows through a wedge.
+export const GREYED_OPACITY = 0.45;
+
+export const STYLE = `
 .apothecary-ring { position: fixed; inset: 0; z-index: 1000; outline: none; touch-action: none; }
 .apothecary-ring svg { position: absolute; overflow: visible; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.apothecary-ring .ground { fill: var(--bg, #141614); pointer-events: none; }
 .apothecary-ring .wedge { fill: #2a2f2a; stroke: #0f120f; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring .wedge.empty { fill: #1b1e1b; opacity: 0.35; cursor: default; }
-.apothecary-ring .wedge.disabled { opacity: 0.5; cursor: not-allowed; }
+.apothecary-ring .off { opacity: ${GREYED_OPACITY}; }
+.apothecary-ring .wedge.disabled { cursor: not-allowed; }
 .apothecary-ring .wedge[data-group] { fill: color-mix(in srgb, var(--group) 26%, #2a2f2a); }
 .apothecary-ring .wedge.destructive { fill: #3a2020; }
 .apothecary-ring .wedge.hot { fill: #4c6a4c; }
 .apothecary-ring .wedge[data-group].hot { fill: color-mix(in srgb, var(--group) 50%, #2a2f2a); }
+.apothecary-ring .wedge[data-colour] { fill: color-mix(in srgb, var(--group) 26%, #2a2f2a); }
+.apothecary-ring .wedge[data-colour].hot { fill: color-mix(in srgb, var(--group) 50%, #2a2f2a); }
 .apothecary-ring .wedge.destructive.hot { fill: #7a2a2a; }
 .apothecary-ring .wedge.marked { fill: #23384a; stroke: #6fb3e8; }
 .apothecary-ring .wedge.marked.hot { fill: #33557a; }
@@ -214,6 +242,7 @@ const STYLE = `
 .apothecary-ring .hub-digit { font-size: 11px; fill: #66746a; text-anchor: middle; }
 .apothecary-ring .title { font-size: 10px; fill: #9aa89a; text-anchor: middle; }
 .apothecary-ring .address { font-size: 10px; fill: #ffcc66; text-anchor: middle; }
+.apothecary-ring .why { font-size: 11px; fill: #ffd9a0; text-anchor: middle; paint-order: stroke; stroke: #0f120f; stroke-width: 3px; stroke-linejoin: round; }
 `;
 
 function ensureStyle() {
@@ -240,6 +269,127 @@ function wedgePath(slot, r0, r1) {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// What a wedge that cannot be chosen says of itself, in the Machine's buttons' words
+// (can.js): "Disabled: <why>"; null for one that can be chosen.
+export function refusalOf(option) {
+    if (!option || option.enabled !== false) return null;
+    return option.why ? `Disabled: ${option.why}` : "Disabled";
+}
+
+// The status line's words for a greyed wedge chosen anyway, as every refusal there is
+// said (format.js viaRing): its label, its address, why.
+export function refusedWords(option, address) {
+    return `${viaRing(option.label, address)}: ${option.why || "it cannot be chosen here"}`;
+}
+
+// A reason in lines of at most `most` characters, broken at spaces, to be written under
+// the ring. A word longer than a line is a line of its own.
+const WHY_CHARS = 46, WHY_LINE_PX = 13, WHY_GAP_PX = 22;
+// How far in from the screen's edge a label of the ring is kept.
+const EDGE_PX = 4;
+export function whyLines(text, most = WHY_CHARS) {
+    const lines = [];
+    for (const word of String(text).split(/\s+/).filter(Boolean)) {
+        const last = lines.length ? lines[lines.length - 1] : null;
+        if (last !== null && last.length + 1 + word.length <= most) lines[lines.length - 1] = `${last} ${word}`;
+        else lines.push(word);
+    }
+    return lines;
+}
+
+// Where the hub's lines stand, by what it holds: its digit, the ring's title, the address
+// so far. All inside the hub, clear of the digits on its rim (cell 2's under it).
+function hubLines(title, address) {
+    if (title && address) return { digit: -12, title: 2, address: 16 };
+    if (title) return { digit: -6, title: 8, address: null };
+    if (address) return { digit: -4, title: null, address: 10 };
+    return { digit: 4, title: null, address: null };
+}
+
+/* The ring's picture, as SVG markup: its ground, its eight wedges, each with its digit and
+ * label, the hub with the title and the address so far inside it. `highlight` is the cell
+ * lit, `armed` one asked to be chosen again; a lit wedge that cannot be chosen has its
+ * reason written under the ring, or over it when `below` is false (no room under it on
+ * the screen). */
+export function ringMarkup({ ring, highlight = null, armed: armedCell = null, address = "", below = true }) {
+    const { r0, r1 } = GEOMETRY;
+    const byCell = {};
+    for (const option of ring.options) byCell[option.cell] = option;
+    // The ring's own ground: what a faint or greyed wedge is seen over.
+    const parts = [`<circle class="ground" r="${r1 + 1}"></circle>`];
+    for (let slot = 0; slot < 8; slot++) {
+        const cell = COMPASS[slot];
+        const option = byCell[cell];
+        const centre = GEOMETRY.startDeg + slot * 45;
+        // The cell's digit at the inner end of its spoke, by the hub, on a key of
+        // its own; its label further out, clear of it -- on the two level spokes
+        // begun just past the key and running outward, where a centred label would
+        // reach back over it.
+        const [dx, dy] = polar(r0 + 14, centre);
+        const level = Math.abs(Math.cos(rad(centre))) > 0.9;
+        const [lx, ly] = polar(level ? r0 + 29 : r0 + (r1 - r0) * 0.61, centre);
+        const anchor = level ? ` style="text-anchor: ${Math.cos(rad(centre)) > 0 ? "start" : "end"}"` : "";
+        const cls = ["wedge"];
+        if (!option) cls.push("empty");
+        else {
+            if (option.enabled === false) cls.push("disabled");
+            if (option.destructive) cls.push("destructive");
+            if (option.marked) cls.push("marked");  // the one chosen elsewhere (a picture chosen in Pictures)
+            if (highlight === cell) cls.push("hot");
+            if (armedCell === cell) cls.push("armed");
+        }
+        const armed = option && armedCell === cell;
+        const label = option ? (option.marked ? "• " : "") + esc(option.label) + (option.children ? " ›" : "") : "";
+        const refusal = refusalOf(option);
+        // A cell that cannot be undone, chosen once, says what choosing it again does.
+        const words = armed
+            ? `<text class="label armed"${anchor} x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
+            : `<text class="label"${anchor} x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
+        parts.push(
+            // A cell that cannot be chosen is greyed whole (GREYED_OPACITY).
+            (refusal ? `<g class="off">` : "")
+            + `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
+            + (option && option.group ? ` data-group="${esc(option.group)}"` : "")
+            + (option && option.colour ? ` data-colour="${esc(option.colour)}" style="--group: ${esc(option.colour)}"` : "")
+            + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
+            + (option && option.marked ? ' aria-current="true"' : "")
+            + `${option && !refusal ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}">`
+            // Why it cannot be chosen, where a pointer resting on it is told.
+            + (refusal ? `<title>${esc(refusal)}</title>` : "")
+            + `</path>`
+            // Whose it is: tinted with its group's colour, the colour itself along its outer edge (tokens.css).
+            + (option && option.group ? `<path class="rim" data-group="${esc(option.group)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
+            // A layer's cell: the colour the world draws that layer in (apothecary/layer_colours.py).
+            + (option && option.colour ? `<path class="rim" style="--group: ${esc(option.colour)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
+            + (option ? words : "")
+            + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
+            + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}">${cell}</text>`
+            + (refusal ? `</g>` : "")
+        );
+    }
+    const title = ring.title || "";
+    const at = hubLines(title, address);
+    parts.push(
+        `<circle class="hub" data-cell="5" r="${r0}"></circle>`
+        + `<text class="hub-digit" x="0" y="${at.digit}">5</text>`
+        + (title ? `<text class="title" x="0" y="${at.title}">${esc(title)}</text>` : "")
+        + (address ? `<text class="address" x="0" y="${at.address}">⌗${address}</text>` : "")
+    );
+    // The lit wedge's reason, in words under the ring (over it near the screen's foot):
+    // what a title cannot show a finger.
+    const lit = highlight != null ? refusalOf(byCell[highlight]) : null;
+    if (lit) {
+        const lines = whyLines(lit);
+        const y = below ? r1 + WHY_GAP_PX : -(r1 + WHY_GAP_PX) - (lines.length - 1) * WHY_LINE_PX;
+        parts.push(
+            `<text class="why" x="0" y="${y.toFixed(1)}">`
+            + lines.map((line, i) => `<tspan x="0"${i ? ` dy="${WHY_LINE_PX}"` : ""}>${esc(line)}</tspan>`).join("")
+            + `</text>`
+        );
+    }
+    return parts.join("");
+}
+
 // ---------------------------------------------------------------------------
 // The ring itself: one open at a time
 // ---------------------------------------------------------------------------
@@ -256,29 +406,54 @@ export function close() {
 
 /* Open the ring. Resolves the options from the server, draws them at `at`
  * (or the viewport's centre), and calls onIntent once when something is
- * chosen; onClose when it goes away for any reason. With `into`, the id or
+ * chosen; onRefused each time a greyed wedge is chosen anyway (with what to
+ * say: RingInstance.refuse); onClose when it goes away for any reason. With `into`, the id or
  * label of an option with children, the ring opens entered down to it, as if
- * its digits had been pressed.
+ * its digits had been pressed. `again()`, the page's, says what it knows now of what
+ * the ring was told about refusals ({ device } or { can }, or a promise of it): asked
+ * whenever the page applies a new answer while the ring is open (regreyAll).
  */
-export async function openRing({ base = "", context, site, device, picture, sketch, at = null, into = null, onIntent, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, sketch, can, again = null, at = null, into = null, onIntent, onRefused, onClose }) {
     close();
-    const ring = await resolveRing({ base, context, site, device, picture, sketch });
+    const [toldPicture, toldCan] = await Promise.all([picture, can]);
+    const ring = await resolveRing({ base, context, site, device, picture: toldPicture, sketch, can: toldCan });
     if (current) current.close(false); // somebody opened another while we fetched
-    const instance = new RingInstance({ ring, context, site, device, at, onIntent, onClose });
+    const told = { base, context, site, device, picture: toldPicture, sketch, can: toldCan };
+    const instance = new RingInstance({ ring, told, again, at, onIntent, onRefused, onClose });
     current = instance;
     instance.mount();
     if (into) instance.enter(into);
     return instance;
 }
 
+// The open ring's cells greyed again from what the page knows now: called by the page, or
+// heard from can.js each time it applies an answer (`apothecary:can`), and from a board's
+// news (`apothecary:board`). Asked at most once a frame; nothing is resolved again unless
+// what the page knows has changed.
+let regreyAsked = false;
+export function regreyAll() {
+    if (!current || regreyAsked) return;
+    regreyAsked = true;
+    const later = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (f) => setTimeout(f, 0);
+    later(() => {
+        regreyAsked = false;
+        if (current) current.regrey();
+    });
+}
+
 class RingInstance {
-    constructor({ ring, context, site, device, at, onIntent, onClose }) {
+    constructor({ ring, told, again, at, onIntent, onRefused, onClose }) {
         this.root = ring;
-        this.context = context;
-        this.site = site;
-        this.device = device;
+        this.told = told;
+        this.again = again;
+        this.regreys = 0;
+        this.asking = null; // what a regrey is resolving the ring for, until its answer lands
+        this.context = told.context;
+        this.site = told.site;
+        this.device = told.device;
         this.at = at;
         this.onIntent = onIntent;
+        this.onRefused = onRefused;
         this.onClose = onClose;
         this.stack = [{ ring, digit: "" }]; // the rings entered so far, top last
         this.address = "";
@@ -313,6 +488,7 @@ class RingInstance {
         el.id = "ring-overlay";
         el.tabIndex = -1;
         el.setAttribute("role", "menu");
+        this.size = size;
         el.innerHTML = `<svg id="ring-svg" width="${size}" height="${size}" viewBox="${-size / 2} ${-size / 2} ${size} ${size}" style="left:${this.cx - size / 2}px;top:${this.cy - size / 2}px"></svg>`;
         this.el = el;
         this.svg = el.firstElementChild;
@@ -331,59 +507,42 @@ class RingInstance {
     }
 
     draw() {
-        const { r0, r1 } = GEOMETRY;
-        const byCell = this.byCell;
-        const parts = [];
-        for (let slot = 0; slot < 8; slot++) {
-            const cell = COMPASS[slot];
-            const option = byCell[cell];
-            const centre = GEOMETRY.startDeg + slot * 45;
-            // The cell's digit at the inner end of its spoke, by the hub, on a key of
-            // its own; its label further out, clear of it -- on the two level spokes
-            // begun just past the key and running outward, where a centred label would
-            // reach back over it.
-            const [dx, dy] = polar(r0 + 14, centre);
-            const level = Math.abs(Math.cos(rad(centre))) > 0.9;
-            const [lx, ly] = polar(level ? r0 + 29 : r0 + (r1 - r0) * 0.61, centre);
-            const anchor = level ? ` style="text-anchor: ${Math.cos(rad(centre)) > 0 ? "start" : "end"}"` : "";
-            const cls = ["wedge"];
-            if (!option) cls.push("empty");
-            else {
-                if (option.enabled === false) cls.push("disabled");
-                if (option.destructive) cls.push("destructive");
-                if (option.marked) cls.push("marked");  // the one chosen elsewhere (a picture chosen in Pictures)
-                if (this.highlight === cell) cls.push("hot");
-                if (this.armed === cell) cls.push("armed");
-            }
-            const armed = option && this.armed === cell;
-            const label = option ? (option.marked ? "• " : "") + esc(option.label) + (option.children ? " ›" : "") : "";
-            // A cell that cannot be undone, chosen once, says what choosing it again does.
-            const words = armed
-                ? `<text class="label armed"${anchor} x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
-                : `<text class="label"${anchor} x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
-            parts.push(
-                `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
-                + (option && option.group ? ` data-group="${esc(option.group)}"` : "")
-                + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
-                + (option && option.marked ? ' aria-current="true"' : "")
-                + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
-                // Whose it is: tinted with its group's colour, the colour itself along its outer edge (tokens.css).
-                + (option && option.group ? `<path class="rim" data-group="${esc(option.group)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
-                + (option ? words : "")
-                + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
-                + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}">${cell}</text>`
-            );
-        }
-        const title = this.ring.title || "";
-        parts.push(
-            `<circle class="hub" data-cell="5" r="${r0}"></circle>`
-            + `<text class="hub-digit" x="0" y="${title ? -6 : 4}">5</text>`
-            + (title ? `<text class="title" x="0" y="8">${esc(title)}</text>` : "")
-            + (this.address ? `<text class="address" x="0" y="${r0 + 14}">⌗${this.address}</text>` : "")
-        );
-        this.svg.innerHTML = parts.join("");
+        // A lit wedge's reason goes under the ring, or over it where the screen ends first.
+        const below = this.cy + GEOMETRY.r1 + WHY_GAP_PX + 3 * WHY_LINE_PX <= window.innerHeight;
+        this.svg.innerHTML = ringMarkup({ ring: this.ring, highlight: this.highlight, armed: this.armed, address: this.address, below });
+        this.keepOnScreen();
         if (this.highlight != null) this.el.setAttribute("aria-activedescendant", `ring-cell-${this.highlight}`);
         else this.el.removeAttribute("aria-activedescendant");
+    }
+
+    /* Every label on the screen, whole: a ring whose labels an edge would cut is moved in
+     * from that edge, never shrunk (a label on a level spoke runs out past the wedges, and
+     * a ring of longer labels can be entered from one that fitted); a reason written under
+     * it is moved along its line. Measured as drawn, since a label's width is the font's. */
+    keepOnScreen() {
+        const w = window.innerWidth, h = window.innerHeight, m = EDGE_PX;
+        const inside = (lo, hi, size) => (lo < m ? m - lo : hi > size - m ? Math.max(m - lo, size - m - hi) : 0);
+        let box = null;
+        for (const el of this.svg.querySelectorAll(".ground, .label")) {
+            const r = el.getBoundingClientRect();
+            if (!r.width && !r.height) continue;
+            box = box
+                ? { left: Math.min(box.left, r.left), right: Math.max(box.right, r.right), top: Math.min(box.top, r.top), bottom: Math.max(box.bottom, r.bottom) }
+                : { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+        }
+        const dx = box ? inside(box.left, box.right, w) : 0, dy = box ? inside(box.top, box.bottom, h) : 0;
+        if (dx || dy) {
+            this.cx += dx;
+            this.cy += dy;
+            this.svg.style.left = `${this.cx - this.size / 2}px`;
+            this.svg.style.top = `${this.cy - this.size / 2}px`;
+        }
+        const why = this.svg.querySelector(".why");
+        if (why) {
+            const r = why.getBoundingClientRect();
+            const along = inside(r.left, r.right, w);
+            if (along) for (const line of why.querySelectorAll("tspan")) line.setAttribute("x", along.toFixed(1));
+        }
     }
 
     setHighlight(cell) {
@@ -461,7 +620,8 @@ class RingInstance {
 
     commit(cell) {
         const option = this.byCell[cell];
-        if (!option || option.enabled === false) return;
+        if (!option) return;
+        if (option.enabled === false) { this.refuse(cell, option); return; }
         // Not undoable: chosen once it asks, its wedge saying "again to ..."; chosen
         // again, it is done. Choosing any other cell lets the question go.
         if (option.twice && this.armed !== cell) {
@@ -495,6 +655,24 @@ class RingInstance {
         if (this.onIntent) this.onIntent(intent);
     }
 
+    /* A greyed wedge chosen anyway -- its digit, a click, a tap: nothing is done and the
+     * ring stays where it is, the wedge lit so its reason is written under the ring, and
+     * the reason is handed to the page (`onRefused`, and an `apothecary:refused` event)
+     * to say as a refused verb is said. */
+    refuse(cell, option) {
+        this.armed = null;
+        this.highlight = cell;
+        this.draw();
+        const address = this.address + String(cell);
+        const refusal = {
+            action: option.action, option_id: option.id, address, label: option.label,
+            why: option.why || null, said: refusedWords(option, address),
+            context: this.context, site: this.site, device: this.device,
+        };
+        window.dispatchEvent(new CustomEvent("apothecary:refused", { detail: refusal }));
+        if (this.onRefused) this.onRefused(refusal);
+    }
+
     /* Down to the option `target` names -- an id or a label, wherever it is in
      * this ring's tree -- as if its digits had been pressed from the top: the
      * ring then shows that option's children, and the address so far is theirs.
@@ -515,6 +693,49 @@ class RingInstance {
         while (this.stack.length > 1) this.back();
         for (const option of path) this.commit(option.cell);
         return true;
+    }
+
+    /* Greyed again from what the page knows now (`again`): resolved anew when that has
+     * changed since the ring was told, and the rings entered walked down again by the
+     * same digits, so the ring stays where it is -- a greyed cell keeps its seat, and an
+     * Arm that is a Disarm now is in the same cell. A ring whose cell entered is gone is
+     * left at the deepest one still there; a lit or armed cell that cannot be chosen now
+     * is let go. An answer still on its way when the page knows something newer -- the
+     * latch let go and taken again before it comes -- is dropped when it lands. */
+    async regrey() {
+        if (!this.again || this.done) return;
+        let fresh;
+        try { fresh = await this.again(); } catch (e) { return; }
+        if (!fresh || this.done) return;
+        const keys = Object.keys(fresh);
+        const said = (from) => JSON.stringify(keys.map((k) => from[k] ?? null));
+        if (this.asking && said(fresh) === said(this.asking)) return;
+        const asked = ++this.regreys;
+        this.asking = null;
+        if (said(fresh) === said(this.told)) return;
+        this.asking = fresh;
+        let root;
+        try { root = await resolveRing({ ...this.told, ...fresh }); } catch (e) {
+            if (asked === this.regreys) this.asking = null;
+            return;
+        }
+        if (this.done || asked !== this.regreys) return;
+        this.asking = null;
+        Object.assign(this.told, fresh);
+        this.device = this.told.device;
+        this.root = root;
+        const stack = [{ ring: root, digit: "" }];
+        for (const level of this.stack.slice(1)) {
+            const holder = stack[stack.length - 1].ring.options.find((o) => String(o.cell) === level.digit);
+            if (!holder || !holder.children) break;
+            stack.push({ ring: { title: holder.label, options: holder.children }, digit: level.digit });
+        }
+        this.stack = stack;
+        this.address = stack.map((level) => level.digit).join("");
+        const here = this.byCell;
+        if (this.highlight != null && !here[this.highlight]) this.highlight = null;
+        if (this.armed != null && (!here[this.armed] || here[this.armed].enabled === false)) this.armed = null;
+        this.draw();
     }
 
     // One level out; at the top, away.
@@ -571,11 +792,15 @@ const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
  * the world and on a row. Pressed elsewhere, or moved, it opens nothing. `key`
  * opens the ring on the selection and `canvasKey` the canvas ring, each a shortcut
  * as keys.js names one, matched by the key or its position, and never while the
- * focus takes the key (keys.js's mayAct). `onResolved(ring, spec)` fires after
+ * focus takes the key (keys.js's mayAct). `onRefused(refusal)` is told of a greyed
+ * wedge chosen anyway, to say why. `onResolved(ring, spec)` fires after
  * every resolve, for annotating the page. The keys and the modifier change at once
- * with `configure({ key, canvasKey, modifier })`.
+ * with `configure({ key, canvasKey, modifier })`. A spec's `again()` says what the page
+ * knows now of what the ring was told; while the ring is open, each answer the page
+ * applies (can.js's `apothecary:can`) and each board's news (`apothecary:board`) greys
+ * it again from that (RingInstance.regrey).
  */
-export function installRing({ base = "", whatFor, onIntent, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl" }) {
+export function installRing({ base = "", whatFor, onIntent, onRefused, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl" }) {
     const bound = { key, canvasKey, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
     const open = async (spec, at) => {
         if (!spec) return null;
@@ -587,9 +812,12 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
                 device: spec.device,
                 picture: spec.picture,
                 sketch: spec.sketch,
+                can: spec.can,
+                again: spec.again ?? null,
                 at: at ?? spec.at ?? null,
                 into: spec.into ?? null,
                 onIntent,
+                onRefused,
                 onClose: spec.onClose,
             });
             if (onResolved) onResolved(instance.root, spec);
@@ -601,6 +829,9 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
     };
     const middle = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
     const fromKeyboard = () => open(whatFor(null), middle());
+
+    window.addEventListener("apothecary:can", regreyAll);
+    window.addEventListener("apothecary:board", regreyAll);
 
     window.addEventListener("keydown", (e) => {
         if (isOpen() || !mayAct(e)) return;
@@ -700,6 +931,7 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
         angleToIndex,
         cellAtAngle,
         annotate,
+        regrey: regreyAll,
         resolve: (spec) => resolveRing({ base, ...spec }),
         current: () => current,
         /* Whether an arrow pressed now would make a corner with the last one. */

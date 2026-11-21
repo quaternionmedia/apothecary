@@ -23,17 +23,18 @@ the failure modes they name: a blocked event loop, stacked polls, a panel
 rebuilt under the user's cursor.
 """
 
-import json
 import re
 import time
 
 import httpx
 import pytest
+import rings
 import windows
-from boards import BOARD, PRINTER
+from boards import BOARD, PRINTER, wears
+from garage import open_garage, said
 from garage import select as _select
 from playwright.sync_api import Page, expect
-from viewer_ready import FRAMES
+from viewer_ready import FRAMES, settled
 
 UNO = "/dev/ttyFAKE0"
 POLL_MS = 2000  # the Machine's default interval
@@ -495,12 +496,16 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
 # A node's body as the world draws it, in apothecary's frame (z up), read back through the
 # viewer's own siteAt: the real geometry, centred on the node's envelope. None while the
 # placeholder box stands in for it.
+# A machine drawn as its pieces is its still piece and the moving ones hung from it.
 DRAWN_BODY = """(key) => {
     const v = window.fractalViewer, mesh = v.meshByName[key];
     if (!mesh || mesh.userData.isPlaceholder || mesh.userData.isDot) return null;
-    mesh.geometry.computeBoundingBox();
-    const b = mesh.geometry.boundingBox, p = mesh.position;
-    const [lo, hi] = [v.siteAt(b.min.clone().add(p)), v.siteAt(b.max.clone().add(p))];
+    const box = (m, at) => { m.geometry.computeBoundingBox();
+        return m.geometry.boundingBox.clone().translate(at); };
+    const b = box(mesh, mesh.position);
+    for (const piece of mesh.children.filter((c) => c.isMesh && c.name.startsWith('piece:')))
+        b.union(box(piece, mesh.position.clone().add(piece.position)));
+    const [lo, hi] = [v.siteAt(b.min.clone()), v.siteAt(b.max.clone())];
     const [x, y, z] = [0, 1, 2].map((i) => [Math.min(lo[i], hi[i]), Math.max(lo[i], hi[i])]);
     return { min: { x: x[0], y: y[0], z: z[0] }, max: { x: x[1], y: y[1], z: z[1] } };
 }"""
@@ -569,6 +574,71 @@ def test_the_printer_s_drawing_encloses_its_board_and_its_build_volume(
     # board on the floor of the electronics box (21 up, the board 5 in it).
     assert printer["max"]["x"] - printer["min"]["x"] == pytest.approx(472, abs=1)
     assert board["min"]["z"] - origin["z"] == pytest.approx(26, abs=1)
+
+
+# The wire box and the marks of one machine read at one instant, with how far its bed
+# stands along Y from where its frame's origin has it.
+ONE_FRAME = f"""(path) => ({{
+    wire: ({WIRE_VOLUME})(path),
+    marked: ({MARKED_VOLUME})(path),
+    offset: window.fractalViewer.marks[path].marks.bedOffset(),
+}})"""
+
+
+@pytest.mark.e2e
+def test_the_printer_s_wire_box_and_marks_stand_in_one_frame_wherever_the_layout_moves_it(
+    page: Page, printer_url: str
+):
+    """printer_1's wire box and the marks its board's port lays on its bed are drawn from
+    one frame: the box is the marks' volume, moved along Y by what the bed carries. Moved
+    100 mm by its Position, both stand where it now stands. Stepped into, its grid lies
+    on its bed, in lines 10 mm apart from the volume's corner, riding the bed."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['printer_1'];"
+        " return m && m.marks && m.marks.known(); }",
+        timeout=15000,
+    )
+    page.evaluate("() => window.fractalViewer.waveDone")
+
+    def one_frame():
+        seen = page.evaluate(ONE_FRAME, "printer_1")
+        wire, marked, offset = seen["wire"], seen["marked"], seen["offset"]
+        for axis in "xz":
+            for end in ("min", "max"):
+                assert wire[end][axis] == pytest.approx(marked[end][axis], abs=0.01), seen
+        for end in ("min", "max"):
+            assert wire[end]["y"] == pytest.approx(marked[end]["y"] + offset, abs=0.01), seen
+        return seen
+
+    before = one_frame()
+    _select(page, "printer_1")
+    x = page.evaluate("() => window.fractalViewer.nodeByPath('printer_1').position.x")
+    page.locator("#pos-x").fill(str(x + 100))
+    page.locator("#pos-x").dispatch_event("change")
+    expect(page.locator("#status")).to_contain_text("Layout", timeout=10000)
+    after = one_frame()
+    for name in ("wire", "marked"):
+        assert after[name]["min"]["x"] - before[name]["min"]["x"] == pytest.approx(100, abs=0.01)
+
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    grid = page.evaluate(
+        """() => {
+            const v = window.fractalViewer, g = v.gridHelper, m = v.marks['printer_1'].marks;
+            const [x, y, z] = v.siteAt(g.position), at = v.siteAt(m.group.position);
+            const lo = m.volume().min;
+            return { path: g.userData.path, pitch: g.userData.pitch, at: [x, y, z],
+                     bed: [at[0] + lo.x, at[1] + lo.y + m.bedOffset(), at[2] + lo.z] };
+        }"""
+    )
+    assert grid["path"] == "printer_1" and grid["pitch"] == 10, grid
+    assert grid["at"][0] == pytest.approx(grid["bed"][0], abs=0.01), grid
+    assert grid["at"][1] == pytest.approx(grid["bed"][1], abs=0.01), grid
+    assert grid["at"][2] == pytest.approx(grid["bed"][2] + 0.3, abs=0.01), grid
 
 
 @pytest.mark.e2e
@@ -754,7 +824,8 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     page: Page, printer_url: str
 ):
     """Armed, the control pad leaves the Machine for a window of its own beside the
-    world: its tab red and named for the printer it heats and moves, its frame loud,
+    world: its tab red and saying Control pad, as the ring names it, its tooltip naming
+    the printer it heats and moves, its frame loud,
     the world narrower with printer_1 framed in the middle of it, and still there with
     another tab in front of the Machine. Its ⇥ Put back, its tab's ✕ and the ring's
     Panels › Machine › Control pad put it back as the Machine's last child, and the world is as
@@ -777,7 +848,8 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     expect(pad.locator("#ctl-pop")).to_have_text("⇥ Put back")
     tab = windows.tab(page, "control")
     expect(tab).to_have_class(re.compile(r"\bloud\b"))
-    expect(tab).to_contain_text("printer_1")
+    expect(tab).to_have_text("🔓 Control pad")
+    expect(tab).to_have_attribute("title", re.compile(r"^printer_1's control pad"))
     expect(page.locator(".panel-window.loud", has=pad)).to_be_visible()
     # Beside the world, on its right: the world narrower, printer_1 framed in it.
     world = page.locator(windows.WORLD).bounding_box()
@@ -827,6 +899,97 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     expect(machine.locator("#control")).to_be_hidden(timeout=3000)
     expect(windows.tab(page, "control")).to_have_count(0)
     windows.world_is(page, width)
+
+
+GONE = "printer_1 disarmed, its pad gone with its Machine"
+
+
+def _armed(page: Page, url: str):
+    """printer_1's board pinned, its Machine open, control armed there: the pad out."""
+    _pin(url, BOARD)
+    _identify(url)
+    page.goto(f"{url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    _select(page, "printer_1")
+    page.locator("#selected-body .dev-open").click()
+    windows.machine_ready(page, "printer")
+    page.locator("#ctl").check()
+    expect(windows.panel(page, "control").locator("#control")).to_be_visible(timeout=5000)
+
+
+def _armed_now(url: str) -> bool:
+    r = httpx.get(f"{url}/firmware/printers/control", params={"port": PRINTER}, timeout=15.0)
+    return r.json()["armed"]
+
+
+def _disarmed(url: str):
+    for _ in range(50):
+        if not _armed_now(url):
+            return
+        time.sleep(0.1)
+    raise AssertionError("printer_1 is still armed with its Machine gone")
+
+
+@pytest.mark.e2e
+def test_another_board_s_machine_keeps_the_armed_one_open_beside_it(page: Page, printer_url: str):
+    """Another board's Machine opened, the armed one is kept open beside it, in a window of
+    its own with its pad, latch and ⏹, and stays armed: its pad never leaves the screen.
+    Its own Machine opened again is the same Machine, and leaves it armed. Closed by its
+    kept window's ✕, it goes, and its board is disarmed, said."""
+    _armed(page, printer_url)
+    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
+    expect(windows.tab(page, "control")).to_have_count(1)
+    assert _armed_now(printer_url)
+
+    page.evaluate(f"() => window.fractalViewer.openMachineFor('{UNO}')")
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(
+        f"Opened {UNO}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections"
+    )
+    expect(windows.tab(page, "kept-machine-1")).to_have_text("🔓 printer_1")
+    kept = windows.panel(page, "kept-machine-1")
+    expect(kept.locator("#ctl")).to_be_checked()
+    windows.show(page, "kept-machine-1")
+    expect(kept.locator("#control")).to_be_visible()
+    expect(kept.locator("#estop")).to_be_visible()
+    assert _armed_now(printer_url)
+
+    windows.close(page, "kept-machine-1")
+    expect(page.locator("#status")).to_have_text(GONE)
+    _disarmed(printer_url)
+
+
+@pytest.mark.e2e
+def test_the_machine_closed_by_its_cross_disarms_its_board(page: Page, printer_url: str):
+    """The Machine's ✕: its board disarmed, said alone."""
+    _armed(page, printer_url)
+    windows.close(page, "machine")
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(GONE)
+    _disarmed(printer_url)
+
+
+@pytest.mark.e2e
+def test_another_site_loaded_disarms_the_board_it_leaves(page: Page, printer_url: str):
+    """Another site loaded: the board left in the garage disarmed, said ahead of Loaded."""
+    _armed(page, printer_url)
+    page.evaluate("() => window.fractalViewer.loadSite('theatre')")
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(re.compile(f"^{GONE} · Loaded: "), timeout=15000)
+    _disarmed(printer_url)
+
+
+@pytest.mark.e2e
+def test_its_board_unpinned_disarms_it(page: Page, printer_url: str):
+    """The board leaving the site, its pin taken back in Selected: its Machine goes with
+    it, and it is disarmed, said ahead of the unpin."""
+    _armed(page, printer_url)
+    page.locator("#selected-body .dev-unpin").click()
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(
+        re.compile(f"^{GONE} · printer_1's board {BOARD}: device unpinned"), timeout=5000
+    )
+    _disarmed(printer_url)
 
 
 @pytest.mark.e2e
@@ -896,6 +1059,74 @@ def test_the_reading_shown_is_drawn_over_the_bed(page: Page, printer_url: str):
     page.wait_for_function(f"(id) => ({shown})().record_id === id", arg=read_id)
 
 
+# How many bed readings the scene draws now: three.js passes over what is hidden, and
+# over everything a hidden thing holds, as the renderer does.
+BED_MESH_DRAWN = (
+    "() => { let n = 0; window.fractalViewer.scene.traverseVisible("
+    "(o) => { if (o.userData.layer === 'bed-mesh') n += 1; }); return n; }"
+)
+# A reading the page's own event shows after the layer is hidden: the printer's.
+A_LATER_READING = {
+    "id": "20260921T090000.000-dev_ttyFAKE1",
+    "port": PRINTER,
+    "board": "FAKESERIAL1",
+    "machine": "printer",
+    "at": "2026-09-21T09:00:00.000000Z",
+    "method": "read",
+    "mesh": [[0.0, 0.2, 0.3], [0.1, 0.25, 0.4], [0.05, 0.3, 0.5]],
+    "stats": {"range": 0.5, "mean": 0.23},
+    "firmware": "Marlin made up",
+}
+
+
+@pytest.mark.e2e
+def test_the_bed_mesh_is_a_layer_hidden_and_shown_again(page: Page, printer_url: str):
+    """The reading over the printer's bed is the Bed mesh layer's: its Shown tick in the
+    Layers window takes it out of the scene, kept rather than dropped; a reading shown
+    afterwards is drawn hidden too; the choice holds over a reload, as every layer's;
+    and the ring's View › Layers › World › Bed mesh › Shown puts it back."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    read_id = _read_the_bed(printer_url)
+    open_garage(page, printer_url, settle=False)
+    wears(page, "printer_1")
+    marks = "window.fractalViewer.marks['printer_1']"
+    shown = f"() => {marks} && {marks}.marks && {marks}.marks.mesh()"
+    page.wait_for_function(
+        f"(id) => ({shown})() && ({shown})().record_id === id", arg=read_id, timeout=15000
+    )
+    assert page.evaluate(BED_MESH_DRAWN) == 1
+
+    windows.from_the_windows_menu(page, "layers")
+    tick = page.locator(
+        ".panel[data-panel='layers'] input[data-layer='bed-mesh'][data-kind='shown']"
+    )
+    expect(tick).to_be_checked()
+    tick.uncheck()
+    said(page, "Bed mesh: hidden")
+    assert page.evaluate(BED_MESH_DRAWN) == 0
+    assert page.evaluate(f"() => {marks}.marks.mesh().record_id") == read_id
+
+    page.evaluate(
+        "(reading) => window.dispatchEvent(new CustomEvent('apothecary:mesh', { detail: reading }))",
+        A_LATER_READING,
+    )
+    page.wait_for_function(f"(id) => ({shown})().record_id === id", arg=A_LATER_READING["id"])
+    assert page.evaluate(BED_MESH_DRAWN) == 0
+
+    page.reload()
+    wears(page, "printer_1")
+    page.wait_for_function(
+        f"(id) => ({shown})() && ({shown})().record_id === id", arg=read_id, timeout=15000
+    )
+    assert "bed-mesh" in page.evaluate("() => window.fractalViewer.pickScope.toJSON().hidden")
+    assert page.evaluate(BED_MESH_DRAWN) == 0
+
+    rings.on_world(page, "View", "Layers", "World", "Bed mesh", "Shown")
+    said(page, "Bed mesh: shown")
+    assert page.evaluate(BED_MESH_DRAWN) == 1
+
+
 @pytest.mark.e2e
 def test_a_corner_button_is_four_lines_to_paper_height(page: Page, printer_url: str):
     """A corner button: four absolute lines, the last one at paper height, sent armed; the
@@ -904,6 +1135,8 @@ def test_a_corner_button_is_four_lines_to_paper_height(page: Page, printer_url: 
     _identify(printer_url)
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    # None until the printer's frame has said its volume: no corner is guessed.
+    page.wait_for_function("() => window.apothecaryMachine.level.lines('BR')", timeout=10000)
     lines = page.evaluate("() => window.apothecaryMachine.level.lines('BR')")
     assert lines == ["G90", "G1 Z5 F3000", "G1 X190 Y190 F3000", "G1 Z0.2 F600"]
     page.locator("#ctl").check()
@@ -941,7 +1174,7 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
         "slow cube.gcode · 6000 lines", timeout=8000
     )
     expect(page.locator("#log .sys", has_text="kept slow cube.gcode: 6000 lines")).to_be_visible()
-    expect(page.locator("#print-start")).to_be_enabled()
+    expect(page.locator("#print-start")).to_be_visible()  # shown for a kept file; greyed below
     # A file the seam refuses is kept, said so, and never sent.
     page.locator("#print-file").set_input_files(
         {"name": "eeprom.gcode", "mimeType": "text/plain", "buffer": b"G28\nM500\n"}
@@ -951,9 +1184,11 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
         label=page.locator("#print-pick option", has_text="slow cube").text_content()
     )
 
-    # Disarmed: nothing leaves the page.
-    page.locator("#print-start").click()
-    expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
+    # Disarmed: the button is greyed and says why, so nothing leaves the page.
+    expect(page.locator("#print-start")).to_be_disabled(timeout=8000)
+    expect(page.locator("#print-start")).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first")
+    )
     assert not page.evaluate("() => window.apothecaryMachine.print.job().running")
 
 
@@ -1016,7 +1251,7 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
         "(n) => window.apothecaryMachine.print.job().sent > n + 2", arg=sent, timeout=8000
     )
     page.locator("#print-cancel").click()
-    expect(page.locator("#print-cancel")).to_have_text("Again to cancel")
+    expect(page.locator("#print-cancel")).to_have_text("Again to abort")
     page.locator("#print-cancel").click()
     expect(page.locator("#print-progress")).to_contain_text("· cancelled ·", timeout=8000)
     expect(page.locator("#print-history")).to_contain_text(
@@ -1078,45 +1313,10 @@ def test_a_print_from_the_card_is_a_job_that_names_the_part_it_makes(page: Page,
         "name": "footpedal",
         "picture": None,
         "camera": None,
+        "registered": False,
     }
     assert (newest["machine"]["port"], newest["machine"]["path"]) == (PRINTER, BOARD)
     assert newest["started_at"] and newest["finished_at"]
-
-
-@pytest.mark.e2e
-def test_the_print_records_kept_before_jobs_show_in_the_cards_history(
-    page: Page, start_server, tmp_path
-):
-    """A print record under prints/records is in the printer's history as a print job,
-    on a server that never saw it printed."""
-    records = tmp_path / "state" / "prints" / "records"
-    records.mkdir(parents=True)
-    (records / "20260920T132512.468-dev_ttyFAKE1.json").write_text(
-        json.dumps(
-            {
-                "id": "20260920T132512.468-dev_ttyFAKE1",
-                "port": PRINTER,
-                "file_id": "20260920T130000.000-old_cube",
-                "name": "old cube.gcode",
-                "at": "2026-09-20T13:25:12.468000+00:00",
-                "finished": "2026-09-20T13:55:12.468000+00:00",
-                "outcome": "done",
-                "sent": 12,
-                "total": 12,
-                "error": None,
-                "firmware": "Marlin",
-                "lines": ["ok"],
-            }
-        )
-    )
-    url = start_server({"APOTHECARY_STATE_DIR": str(tmp_path / "state")})
-    _identify(url)
-    _monitor(page, url)
-    expect(page.locator("#print-history")).to_contain_text(
-        "print · old cube.gcode · done · 12/12 lines", timeout=10000
-    )
-    log = page.locator("#print-history a").first
-    expect(log).to_have_attribute("href", re.compile(r"/jobs/20260920T132512\.468-dev_ttyFAKE1$"))
 
 
 def _printing(url: str, file_id: str, part: str | None = None) -> dict:
@@ -1260,6 +1460,75 @@ def test_the_world_wears_its_machines(page: Page, printer_url: str):
     )
     target = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
     assert target["x"] == pytest.approx(st["position"]["x"], abs=0.01)
+
+
+# Where the board's badge is drawn, where its point projects, and where the tool mark it
+# stands aside from is drawn: boxes and points in canvas pixels.
+BADGE_AND_MARK = """() => {
+    const a = window.fractalViewer.anchors;
+    return { badge: a.drawn('printer_1'), at: a.at('printer_1'), mark: a.toolMark('printer_1') };
+}"""
+
+
+# The world drawn now, and its pixel where the middle of the nozzle's cone is projected.
+CONE_SEEN = """() => {
+    const v = window.fractalViewer, a = v.anchors;
+    let mark = null;
+    for (const g of v.scene.children) if (g.userData.key === 'printer_1') g.traverse((o) => { if (!mark && o.userData.toolMark) mark = o; });
+    const cone = mark.children.find((c) => c.isMesh);
+    const at = cone.getWorldPosition(cone.position.clone()).project(v.camera);
+    const w = v.canvas.clientWidth, h = v.canvas.clientHeight, k = v.renderer.getPixelRatio();
+    const x = Math.round(((at.x + 1) / 2) * w * k), y = Math.round(((at.y + 1) / 2) * h * k);
+    v.renderer.render(v.scene, v.camera);
+    const gl = v.renderer.getContext(), pixel = new Uint8Array(4);
+    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    return { pixel: [...pixel], at: [x, y] };
+}"""
+
+
+def _meets(a: dict, b: dict) -> bool:
+    return a["l"] < b["r"] and b["l"] < a["r"] and a["t"] < b["b"] and b["t"] < a["b"]
+
+
+@pytest.mark.e2e
+def test_stepped_into_its_printer_the_boards_badge_stands_clear_of_the_tools_mark(
+    page: Page, printer_url: str
+):
+    """Mid-print, printer_1's board stands under the head's working area, so its ⚡ stood
+    over the nozzle's mark. Stepped into the printer, where the mark is drawn large, the
+    badge stands beside it at its own height; at the garage's level, where the mark is a
+    few pixels, the badge stays on its own spot. The mark is seen over the head that
+    carries it and over a bed reading's mesh, which is seen through."""
+    record_id = _read_the_bed(printer_url)
+    _wearing_its_badge(page, printer_url)
+    page.wait_for_function(
+        "(id) => { const m = window.fractalViewer.marks['printer_1'];"
+        " return !!(m && m.marks && m.marks.known() && m.marks.mesh()"
+        " && m.marks.mesh().record_id === id); }",
+        arg=record_id,
+        timeout=15000,
+    )
+    settled(page)
+    garage = page.evaluate(BADGE_AND_MARK)
+    badge, at, mark = garage["badge"], garage["at"], garage["mark"]
+    assert mark is not None, garage
+    width = badge["r"] - badge["l"]
+    assert mark["r"] - mark["l"] < width / 2, garage
+    assert abs((badge["l"] + badge["r"]) / 2 - at["x"]) < 1, garage  # on its own spot
+    page.evaluate("() => window.fractalViewer.stepIn('printer_1', 'a test')")
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    settled(page)
+    stepped = page.evaluate(BADGE_AND_MARK)
+    badge, at, mark = stepped["badge"], stepped["at"], stepped["mark"]
+    assert mark is not None and mark["r"] - mark["l"] >= width / 2, stepped
+    assert not _meets(badge, mark), stepped
+    assert abs(badge["b"] - (at["y"] - 6)) < 1, stepped  # at its own height, beside it
+    # The mark stands inside the drawn head that carries the nozzle, the bed reading's
+    # mesh drawn across it, and is seen: the world drawn, the canvas's pixel at the cone's
+    # middle is the cone's red.
+    seen = page.evaluate(CONE_SEEN)
+    red, green, blue = seen["pixel"][:3]
+    assert red > 100 and red > 1.6 * green and red > 1.6 * blue, seen
 
 
 @pytest.mark.e2e

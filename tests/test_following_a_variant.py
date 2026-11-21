@@ -18,8 +18,8 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary import api
-from apothecary.api import _site_store, app
+from apothecary import api, sites
+from apothecary.api import app
 from apothecary.meshes import write_stl
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.readiness import BOUNDS, Drawn, assess
@@ -65,9 +65,9 @@ def cached(tmp_path, monkeypatch):
 
 @pytest.fixture
 def garage():
-    _site_store.reset("garage")
-    yield _site_store.get("garage")
-    _site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 def _check(body, name):

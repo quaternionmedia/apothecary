@@ -34,7 +34,10 @@ before it is moved into place, and a source build must also have Manifold and
 render a cube with it. An install goes under the tools dir,
 `~/.apothecary/tools/openscad/<date>/` (or `$APOTHECARY_TOOLS_DIR`), with
 `install.json` saying how it was installed, and `current` names the date in
-use.
+use. A snapshot's folder with no `install.json`, or one that names no
+executable or no way it was installed, is not an install: `openscad status`
+does not list it, no render uses it, and `openscad install` of its date
+fetches the snapshot and puts a whole install in its place.
 
 | Flag | |
 |---|---|

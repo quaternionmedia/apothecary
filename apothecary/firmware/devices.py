@@ -33,6 +33,7 @@ one nothing has probed or identified.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -54,16 +55,15 @@ try:
 except ImportError:
     msvcrt = None
 
-from .. import jobs, state_folder
+from .. import jobs, state_folder, surfaces
 from ..preview import Preview, for_machine
 from ..preview import of as preview_of
 from ..preview.moves import split_comments
 from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
-from ..site_names import current as current_site
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import dialects, gcode, grbl, occupants, serial_monitor
+from . import can, dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
     USB_MAKE_RE,
@@ -292,15 +292,22 @@ class FirmwareState:
         data.setdefault("devices", {})
         data.setdefault("seen", {})
         data.setdefault("bindings", [])
-        # A pin kept under a name its site had before is that site's pin: read under
-        # the name the site has now, and written under it at the next write.
-        for binding in data["bindings"]:
-            if isinstance(binding, dict) and isinstance(binding.get("site"), str):
-                binding["site"] = current_site(binding["site"])
+        data.setdefault("plates", {})
         return data
 
     def _save(self, data: dict) -> None:
         state_folder.write_whole(self.path, json.dumps(data, indent=2, default=str))
+
+    def plate(self, board: str) -> Optional[float]:
+        """The touch plate's thickness kept for ``board``, in mm; None when none is."""
+        value = self._load()["plates"].get(board)
+        return float(value) if value is not None else None
+
+    def set_plate(self, board: str, mm: float) -> None:
+        with self._lock:
+            data = self._load()
+            data["plates"][board] = round(float(mm), 2)
+            self._save(data)
 
     def record_flash(self, record: FlashRecord) -> None:
         with self._lock:
@@ -395,7 +402,8 @@ class FirmwareState:
         self, site: str, path: str, identity: str, kind: Optional[str] = None
     ) -> ManualBinding:
         """Pin ``identity`` to the node, its board of ``kind`` when that is known;
-        replaces any earlier pin for that node."""
+        replaces any earlier pin for that node, and goes after every other pin, so
+        the pins are kept in the order they were made."""
         binding = ManualBinding(
             site=site,
             path=path,
@@ -742,17 +750,38 @@ def identify_printer(
     base = next((d for d in detected_devices(cli, state) if d.port == port), None)
     if base is None:
         raise ToolchainError(f"no board detected on {port}")
-    get_streams().close(port)
-    link = links.open(port, baud)
+    # While it is asked, no serial stream may take the port: a devkit's Machine listening
+    # reconnects its stream by itself, and the stream's open closes this link, so the
+    # board's answer -- after the reset opening the port gives it -- would reach nobody.
+    with _IDENTIFYING_LOCK:
+        _IDENTIFYING.add(port)
     try:
-        info = _identify(link, reset)
-    except ToolchainError:
-        if link.job is None:  # a job's link is the job's to let go of
-            links.close(port)
-        raise
+        get_streams().close(port)
+        link = links.open(port, baud)
+        try:
+            info = _identify(link, reset)
+        except ToolchainError:
+            if link.job is None:  # a job's link is the job's to let go of
+                links.close(port)
+            raise
+    finally:
+        with _IDENTIFYING_LOCK:
+            _IDENTIFYING.discard(port)
     device = base.model_copy(update={"printer": info})
     state.remember_device(device)
     return device
+
+
+# The ports being asked what they are (``identify_printer``), which a stream may not take.
+_IDENTIFYING: set = set()
+_IDENTIFYING_LOCK = threading.Lock()
+
+
+def identifying(port: str) -> bool:
+    """Whether ``port`` is being asked what it is now: a stream opened on it would close
+    the link the question is asked on."""
+    with _IDENTIFYING_LOCK:
+        return port in _IDENTIFYING
 
 
 def _identify(link: gcode.GcodeLink, reset: bool) -> PrinterInfo:
@@ -845,9 +874,39 @@ def query_codes(
 
 
 def _poll(
-    link: gcode.GcodeLink, dialect: Optional[str], wait: Optional[float]
+    link: gcode.GcodeLink, dialect: Optional[str], wait: Optional[float], streaming: bool = False
 ) -> gcode.PrinterStatus:
-    return dialects.by_word(dialect).poll(link, wait=wait)
+    return dialects.by_word(dialect).poll(link, wait=wait, streaming=streaming)
+
+
+# What a poll made while a job streams does not ask for (``gcode.poll_printer``,
+# ``grbl.poll_router``): a printer's card progress, a router's programmed spindle
+# speed. A printer's endstops and runout sensor are read on every poll.
+UNREAD_WHILE_STREAMING = (
+    "sd_printing",
+    "sd_progress",
+    "print_time_s",
+    "spindle.target",
+)
+
+
+def _hold_unread(status: gcode.PrinterStatus, last: Optional[gcode.PrinterStatus]) -> None:
+    """Carry the last poll's value of each field this poll did not ask for, and say when
+    it was read (``PrinterStatus.held``): the first poll after the job is a full one,
+    which asks for them all again and holds none."""
+    if last is None:
+        return
+    grbl_poll = status.dialect == grbl.DIALECT
+    for name in UNREAD_WHILE_STREAMING:
+        if name == "spindle.target":
+            if not grbl_poll or last.spindle is None or status.spindle is None:
+                continue
+            status.spindle.target = last.spindle.target
+        elif grbl_poll or last.dialect != status.dialect:
+            continue
+        else:
+            setattr(status, name, copy.deepcopy(getattr(last, name)))
+        status.held[name] = last.held.get(name, last.polled_at)
 
 
 def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[DeviceInfo]:
@@ -867,6 +926,23 @@ def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[D
         return next((d for d in detected_devices(state=state) if d.port == port), None)
     except ToolchainError:
         return None
+
+
+REPLACE_FLAG = "replace_machine_firmware"
+
+
+def not_a_machines_controller(
+    port: str, replace: bool = False, state: Optional[FirmwareState] = None
+) -> None:
+    """ValueError when the board on ``port`` answered as a printer or a router and
+    ``replace`` was not asked for: a sketch flashed to a machine's controller replaces
+    the firmware that runs the machine, and a router's is the very chip a devkit's
+    sketch is built for. Every flash from here -- a sketch uploaded, raw images
+    written, a procedure's flash -- asks first; replacing a machine's firmware is
+    asked for by name."""
+    known = (state or get_state()).cached_device(port)
+    firmware = known.printer.firmware_name if known is not None and known.printer else None
+    can.raise_for(can.controller_flash(port, machine_kind(known), firmware, replace), "kind")
 
 
 def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
@@ -917,7 +993,35 @@ def notify_status(status: gcode.PrinterStatus) -> gcode.PrinterStatus:
     _LAST_STATUS[status.port] = status
     for listener in STATUS_LISTENERS:
         status.synced.extend(listener(status) or [])
+    surfaces.changed(MACHINE_STATUS, key=status.port, body=lambda: _as_shown(status))
     return status
+
+
+# The machines' last polls, as a surface (apothecary/surfaces.py): read from what is kept,
+# and said changed at each poll, whoever made it. Nothing is polled for a reader.
+MACHINE_STATUS = "machine_status"
+
+
+def _as_shown(status: gcode.PrinterStatus) -> dict:
+    return status.model_dump(mode="json", exclude={"raw", "synced"})
+
+
+def _polls_kept(words: Dict[str, str]) -> Dict[str, dict]:
+    kept = last_statuses()
+    return {port: _as_shown(s) for port, s in kept.items() if words.get("port") in (None, port)}
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=MACHINE_STATUS,
+        frame="bed_mm",
+        about="each port's last poll, its tool where it stands in the machine's volume",
+        snapshot=_polls_kept,
+        takes=("port",),
+        tells=True,
+        owner=__name__,
+    )
+)
 
 
 def printer_status(
@@ -935,6 +1039,7 @@ def printer_status(
     state = state or get_state()
     links = links or gcode.get_printer_links()
     link = links.get(port)
+    opened = link is None
     if link is None:
         cached = state.cached_device(port)
         rate = baud or (cached.printer.baud if cached and cached.printer else 115200)
@@ -953,7 +1058,11 @@ def printer_status(
     try:
         # Between two streamed lines is where a host polls; a line the
         # firmware is slow to answer (heating) is not worth queueing behind.
-        status = _poll(link, dialect_of(port, state), wait=0.5 if job else None)
+        status = _poll(
+            link, dialect_of(port, state), wait=0.5 if job else None, streaming=bool(job)
+        )
+        if job:
+            _hold_unread(status, _LAST_STATUS.get(port))
     except gcode.LinkBusy:
         return _last_status_with(port, _live_job(port, link.job) or job)
     except ToolchainError as exc:
@@ -969,11 +1078,20 @@ def printer_status(
         status.job = job
         if status.state == "idle":
             status.state = busy_word(job["kind"])  # the card is idle; the host is not
+    if opened and status.state != "offline":
+        _end_orphans(port, link, status, state)
+    status.refused = refused(port, links)
+    if status.tool_position is None and status.dialect != grbl.DIALECT and status.position:
+        # A printer's position is in its bed's coordinates already.
+        status.tool_position = {k: status.position[k] for k in "xyz" if k in status.position}
     return notify_status(status)
 
 
 # The jobs that stream a file over the link: a print (Marlin) and a cut (GRBL).
 STREAMED = ("print", "cut")
+# The jobs whose machine is made safe when one is found running with nothing running it:
+# those streamed, and a loop's experiment (firmware/loops.py), which heats.
+MADE_SAFE = (*STREAMED, "tune")
 
 
 def busy_word(kind: str) -> str:
@@ -1000,6 +1118,7 @@ def _last_status_with(port: str, job: dict) -> gcode.PrinterStatus:
     )
     status.job = dict(job)
     status.synced = []
+    status.refused = refused(port)
     if job.get("kind") in STREAMED and status.state == "idle":
         status.state = busy_word(job["kind"])
     return status
@@ -1041,7 +1160,79 @@ def printer_reset(
     return link.reset()  # refused by the link itself while a job holds it
 
 
+def _plate_board(port: str, state: FirmwareState) -> str:
+    """What a plate's thickness is kept under: the board on ``port`` by its serial number,
+    else its bridge's make, as a pin is; the port's name for a board nothing is known of."""
+    device = known_device(port, state)
+    if device is not None and device.serial_number:
+        return device.serial_number
+    if device is not None and device.vid and device.pid:
+        return (
+            f"usb:{device.vid.lower().removeprefix('0x')}:{device.pid.lower().removeprefix('0x')}"
+        )
+    return port
+
+
+def plate(port: str, state: Optional[FirmwareState] = None) -> dict:
+    """The touch plate of the router on ``port``: its thickness as measured and kept, else
+    the maker's nominal figure, and which of the two it is."""
+    state = state or get_state()
+    kept = state.plate(_plate_board(port, state))
+    return {
+        "port": port,
+        "thickness_mm": kept if kept is not None else grbl.PLATE_NOMINAL_MM,
+        "measured": kept is not None,
+        "nominal_mm": grbl.PLATE_NOMINAL_MM,
+        "max_mm": grbl.PLATE_MAX_MM,
+        "source": "parts/anolex_4060_evo_ultra_2/manual.json, the Z probe (the maker's manual, page 27)",
+    }
+
+
+def set_plate(port: str, mm: float, state: Optional[FirmwareState] = None) -> dict:
+    """Keep the plate's measured thickness for the board on ``port``."""
+    if not 0 < mm <= grbl.PLATE_MAX_MM:
+        raise ValueError(f"a plate of {mm:g} mm: more than 0 and at most {grbl.PLATE_MAX_MM:g} mm")
+    state = state or get_state()
+    state.set_plate(_plate_board(port, state), mm)
+    return plate(port, state)
+
+
+# The last control line each port refused, or its board objected to, kept until one
+# goes: a poll carries it (``PrinterStatus.refused``), so what stopped a person is in the
+# machine's state for the page, the deck and a program alike, not only in a line of the
+# log. It is kept with the links (``PrinterLinks.refused``).
+
+
+def refused(port: str, links: Optional[gcode.PrinterLinks] = None) -> Optional[dict]:
+    """The last control line ``port`` refused, with why and when; None once one went."""
+    said = (links or gcode.get_printer_links()).refused.get(port)
+    return dict(said) if said else None
+
+
 def printer_control(
+    port: str,
+    command: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrinterQueryResult:
+    """``_control``, keeping what it refused: the latch not armed, a line out of its
+    bounds, a home not proved, a job holding the port, the board's own objection."""
+    kept = (links or gcode.get_printer_links()).refused
+    try:
+        result = _control(port, command, state, links)
+    except (ValueError, ToolchainError) as exc:
+        if not is_emergency_stop(command):
+            kept[port] = {
+                "command": " ".join(command.strip().upper().split()),
+                "said": str(exc),
+                "at": datetime.now(timezone.utc).isoformat(),
+            }
+        raise
+    kept.pop(port, None)
+    return result
+
+
+def _control(
     port: str,
     command: str,
     state: Optional[FirmwareState] = None,
@@ -1050,8 +1241,9 @@ def printer_control(
     """One allowlisted control line, only while the port's latch is armed; the stop
     always, as the stop of whatever is on the port.
 
-    Renews the latch on success. The link is opened (and the port
-    identified) on first use like a poll would.
+    Renews the latch on success. A stop disarms it first, whatever then becomes of
+    the line, so what moves the machine next is armed again by a person. The link is
+    opened (and the port identified) on first use like a poll would.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
@@ -1066,11 +1258,19 @@ def printer_control(
         if stop
         else normalise_control(port, command, state)
     )
-    if not stop and not links.control.armed(port):
-        raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
+    # What only turns something off or stops it goes with the latch down, as the
+    # stop does: a latch that lapsed is never between a person and the off switch.
+    off = not stop and turns_off(port, cmd, state)
+    if stop and links.control.armed(port):
+        links.control.disarm(port)
+        links.log_for(port).add("sys", "control disarmed by the stop", "control")
+    if not stop and not off:
+        can.raise_for(can.not_armed(port, links.control.armed(port)), "armed")
     held = links.get(port)
     if held is not None and held.job is not None:
         _job_allows(held.job, cmd)
+    if stop and links.get(port) is None:
+        _open_for_stop(port, state, links)
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
@@ -1078,15 +1278,105 @@ def printer_control(
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     dialect = dialect_for(port, state)
     cmd = dialect.stop if stop else normalise_control(port, command, state)
+    running = _PRINTS.get(port)
+    streaming = running is not None and running.finished is None
     if stop:
-        running = _PRINTS.get(port)
-        if running and running.finished is None:
+        if streaming:
             running.cancel(quiet=True)  # the board halts; nothing more is sent
-    lines = dialect.control(link, cmd)
-    links.control.renew(port)
+        reading = _LEVELING.get(port)
+        if reading is not None and reading.finished is None:
+            reading.cancel(quiet=True)
+        for tuning in _tuning():
+            if tuning.port == port:
+                tuning.cancel(quiet=True)  # the board halts, its heaters off; nothing more is sent
+    if streaming and cmd in ("HOLD", "RESUME"):
+        # A hold typed at a cut is the cut's pause, and a resume its resume: the job
+        # that streams is told, so it neither feeds a held controller nor stays
+        # paused over one that runs again.
+        running.pause() if cmd == "HOLD" else running.resume()
+        lines: List[str] = []
+    else:
+        lines = dialect.control(link, cmd)
+    if not stop and not off:
+        links.control.renew(port)
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )
+
+
+def turns_off(port: str, cmd: str, state: Optional[FirmwareState] = None) -> bool:
+    """Whether the normalised ``cmd`` only turns something off or stops it, in the
+    port's dialect (``Dialect.always``); in either's, for a port nothing has
+    identified."""
+    dialect = dialect_of(port, state)
+    asked = [dialects.by_word(dialect)] if dialect else list(dialects.BY_WORD.values())
+    return any(d.always.match(cmd) for d in asked)
+
+
+def _open_for_stop(port: str, state: FirmwareState, links: gcode.PrinterLinks) -> None:
+    """The link of a port this server knows and does not hold, opened for a stop:
+    nothing is waited for and nothing asked first, so the stop is the first line the
+    board reads. A port nothing here has identified is left to be identified."""
+    cached = state.cached_device(port)
+    if cached is None or cached.printer is None:
+        return
+    get_streams().close(port)
+    try:
+        _annotated(links.open(port, cached.printer.baud, settle=False), cached.printer.dialect)
+    except (ToolchainError, OSError):
+        pass  # the ordinary way says why it could not be opened
+
+
+def printer_jog(
+    port: str,
+    axis: str,
+    mm: float,
+    feed: int,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrinterQueryResult:
+    """One relative move of ``axis`` by ``mm`` at ``feed``, as one act on the port,
+    in its dialect; needs the latch armed, and is bounded as its lines are.
+
+    A router's is GRBL's jog, one line that changes no modal state. A printer's is
+    three lines -- relative, the move, absolute -- sent with the link held from the
+    first to the last, so no other hand's line goes between them, and the last is
+    sent whatever became of the move: a jog never leaves the printer taking the
+    next absolute move as a distance, and two jogs at once never make one's
+    distance the other's coordinate. Every caller that jogs -- the page's pad, the
+    deck's knobs -- comes through here."""
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    axis = axis.strip().upper()
+    if axis not in ("X", "Y", "Z"):
+        raise ValueError(f"a jog moves X, Y or Z, not {axis!r}")
+    distance = f"{round(float(mm), 2):g}"
+    if dialect_of(port, state) == grbl.DIALECT:
+        return printer_control(port, f"$J=G91 G21 {axis}{distance} F{int(feed)}", state, links)
+    move = normalise_control(port, f"G1 {axis}{distance} F{int(feed)}", state)  # bounded first
+    can.raise_for(can.not_armed(port, links.control.armed(port)), "armed")
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)
+    link = links.get(port)
+    if link is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    if dialect_of(port, state) == grbl.DIALECT:  # identified just now, as a router
+        return printer_control(port, f"$J=G91 G21 {axis}{distance} F{int(feed)}", state, links)
+    with link.together(wait=JOG_WAIT_S):
+        printer_control(port, "G91", state, links)
+        try:
+            result = printer_control(port, move, state, links)
+        finally:
+            # Absolute again, latch or no latch, refusal or none: sent as the
+            # dialect's own line, since it moves nothing.
+            try:
+                dialects.MARLIN.control(link, "G90")
+            except ToolchainError as exc:
+                link.log.add("sys", f"G90 after a jog was not answered: {exc}", "control")
+    return result
+
+
+JOG_WAIT_S = 2.0  # how long a jog waits for the link behind another exchange
 
 
 # What a person may still send while a job holds the port: the stop always; while a
@@ -1102,13 +1392,7 @@ def what_holds(job: dict) -> str:
 
 
 def _job_allows(job: dict, cmd: str) -> None:
-    if cmd in dialects.STOPS:
-        return
-    op = jobs.operation(job.get("kind", ""))
-    if op is not None and op.kind in STREAMED:
-        if dialects.BY_MACHINE[op.machine].job_allows.match(cmd):
-            return
-    raise PortHeld(f"{port_of(job)}: {what_holds(job)} holds the port ({job.get('stage')})")
+    can.raise_for(can.job_refusal(job, cmd), "held")
 
 
 def port_of(job: dict) -> str:
@@ -1127,7 +1411,8 @@ def leveling_dir() -> Path:
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
     """Every saved reading, newest first; given a port, the readings of the board on
-    it now (``readings_of``): a printer's bed readings, a router's table maps."""
+    it now (``readings_of``): a printer's bed readings, a router's table maps. A file
+    that does not parse, or names no board or no kind of machine, is no reading."""
     folder = leveling_dir()
     if not folder.is_dir():
         return []
@@ -1147,25 +1432,12 @@ def readings_of(
 ) -> List[LevelingRecord]:
     """The readings that are ``board``'s: those kept under its key by a board of its
     kind -- a printer's bed readings, a router's table maps; a bridge's ``usb:`` key
-    is one make's, and a printer's reading under it is never a router's -- and, for
-    a printer, one kept before readings carried a key, when it was taken on the port
-    the printer is on and names the firmware the printer answered with. Nothing for
+    is one make's, and a printer's reading under it is never a router's. Nothing for
     a board not yet identified as either kind, or one whose key another board on the
     machine shares."""
     if board is None or board.kind is None or board.shared:
         return []
-    return [
-        rec
-        for rec in records
-        if (board.owns(rec.board) and (rec.machine or "printer") == board.kind)
-        or (
-            rec.board is None
-            and board.kind == "printer"
-            and rec.port == board.port
-            and rec.firmware is not None
-            and rec.firmware == board.firmware
-        )
-    ]
+    return [rec for rec in records if board.owns(rec.board) and rec.machine == board.kind]
 
 
 def leveling_record(record_id: str) -> Optional[LevelingRecord]:
@@ -1185,16 +1457,19 @@ def _as_record(
     port: str, reading: BedReading, note: Optional[str], state: Optional[FirmwareState] = None
 ) -> LevelingRecord:
     """The reading as the board's record: whose it is (``occupants``: the board's key
-    and the kind of machine it drives), when, and what it answered as."""
+    and the kind of machine it drives), when, and what it answered as. Raises
+    ``ToolchainError`` when the port no longer holds a board with both."""
     cached = (state or get_state()).cached_device(port)
     board = occupants.on_port(port, state)
+    if board is None or not board.key or board.kind is None:
+        raise ToolchainError(f"{port}: no board with a key and a kind to keep the reading under")
     at = datetime.now(timezone.utc)
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
     return LevelingRecord(
         id=f"{stamp(at)}-{slug}",  # with -2 after it, if need be, when it is kept
         port=port,
-        board=board.key if board is not None else None,
-        machine=board.kind if board is not None else None,
+        board=board.key,
+        machine=board.kind,
         at=at,
         firmware=cached.printer.firmware_name if cached and cached.printer else None,
         note=note,
@@ -1231,6 +1506,7 @@ class LevelingJob:
         self.error: Optional[str] = None
         self.record: Optional[LevelingRecord] = None
         self.link: Optional[gcode.GcodeLink] = None
+        self._cancelled = False
         self.thread = threading.Thread(target=self._run, daemon=True, name=f"leveling-{port}")
 
     def snapshot(self) -> dict:
@@ -1248,7 +1524,30 @@ class LevelingJob:
             "running": self.finished is None,
         }
 
+    def cancel(self, quiet: bool = False) -> None:
+        """Send nothing more: the reading ends at its next step, failed. A router is
+        held and reset, which stops a probe where it is and turns the spindle off
+        (``quiet``: the stop already did). A printer's probe is its firmware's own
+        and runs out; nothing heats for it."""
+        if self.finished is not None or self._cancelled:
+            return
+        self._cancelled = True
+        link = self.links.get(self.port)
+        if link is not None:
+            link.stopped = f"{self.what} was stopped"  # until ``_run`` lets go
+        if link is None or quiet or self.dialect is not dialects.GRBL:
+            return
+        for name in ("HOLD", "RESET"):
+            try:
+                link.realtime(
+                    grbl.REALTIME[name], now=True, label=name, timeout=0.3, origin="control"
+                )
+            except ToolchainError:
+                pass
+
     def _stage(self, word: str, points: Optional[dict] = None) -> None:
+        if self._cancelled and word not in ("failed", "saved"):
+            raise ToolchainError(f"{self.port}: {self.what} was stopped")
         self.stage = word
         if points is not None:
             self.points = dict(points)
@@ -1278,6 +1577,7 @@ class LevelingJob:
         finally:
             self.finished = datetime.now(timezone.utc)
             link.job = None
+            link.stopped = None
 
 
 _LEVELING: Dict[str, LevelingJob] = {}
@@ -1306,14 +1606,29 @@ def start_leveling(
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
-    running = _LEVELING.get(port)
-    if running and running.finished is None:
-        raise PortHeld(f"{port}: {running.what} is already {running.stage}")
-    printing = _PRINTS.get(port)
-    if printing and printing.finished is None:
-        raise PortHeld(f"{port}: a print holds the port ({printing.stage})")
-    if probe and not links.control.armed(port):
-        raise gcode.ControlNotArmed(f"{port}: probing moves the machine -- arm control first")
+    with _STARTING:
+        return _start_leveling(port, probe, note, state, links, grid)
+
+
+def _start_leveling(
+    port: str,
+    probe: bool,
+    note: Optional[str],
+    state: FirmwareState,
+    links: gcode.PrinterLinks,
+    grid: Optional[TableGrid],
+) -> LevelingJob:
+    can.raise_for(
+        can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port), _tuning_on(port)),
+        "held",
+    )
+    if probe:
+        can.raise_for(
+            can.not_armed(
+                port, links.control.armed(port), "probing moves the machine -- arm control first"
+            ),
+            "armed",
+        )
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     if links.get(port) is None:
@@ -1325,6 +1640,11 @@ def start_leveling(
         raise ToolchainError(
             f"{port}: a bed reading is a printer's or a router's, and {port} holds no board "
             "known as either"
+        )
+    if not board.key:
+        raise ToolchainError(
+            f"{port}: a reading is kept under its board's key, and the board on {port} has "
+            "no key: no MAC, no serial number and no USB ids"
         )
     if board.shared:
         raise ToolchainError(
@@ -1361,14 +1681,23 @@ def _print_file_path(file_id: str) -> Path:
     return prints_dir() / f"{file_id}.gcode"
 
 
-def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> PrintFile:
+def save_print_file(name: str, data: bytes, machine: str) -> PrintFile:
     """Keep an uploaded file for a kind of machine (``machine``) and say what it holds;
-    ``problems`` says why it may not be sent."""
-    if machine is not None and machine not in dialects.BY_MACHINE:
+    ``problems`` says why it may not be sent. The same bytes under the same name for the
+    same kind are the file already kept, kept again now: a toolpath or slice written
+    twice, or a file chosen twice, is one file, the newest."""
+    if machine not in dialects.BY_MACHINE:
         raise ValueError(f"no kind of machine is called {machine!r}")
+    at = datetime.now(timezone.utc)
+    digest = hashlib.sha256(data).hexdigest()
+    shown = Path(name).name[:120]
+    for same in print_files():
+        if shown and (same.sha256, same.name, same.machine) == (digest, shown, machine):
+            same = same.model_copy(update={"uploaded_at": at})
+            state_folder.write_whole(_print_meta_path(same.id), same.model_dump_json(indent=2))
+            return same
     text = data.decode("utf-8", "replace")
     total, problems = dialects.by_machine(machine).check_file(text)
-    at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
     # Its own id, though another file of the same name was kept in the same millisecond.
@@ -1377,9 +1706,9 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
     kept.write_text(text, encoding="utf-8")
     meta = PrintFile(
         id=file_id,
-        name=Path(name).name[:120] or file_id,
+        name=shown or file_id,
         size=len(data),
-        sha256=hashlib.sha256(data).hexdigest(),
+        sha256=digest,
         lines=total,
         uploaded_at=at,
         problems=problems,
@@ -1406,7 +1735,8 @@ def print_preview(file_id: str, machine: str) -> Optional[Preview]:
 
 
 def print_files() -> List[PrintFile]:
-    """Every kept file, newest first."""
+    """Every kept file, newest first. A description that does not parse, or says no
+    kind of machine, is no kept file's."""
     folder = prints_dir()
     if not folder.is_dir():
         return []
@@ -1436,6 +1766,12 @@ def print_file(file_id: str) -> Optional[PrintFile]:
         return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return None
+
+
+def holds_print_file(file_id: str) -> bool:
+    """Whether the files' folder holds G-code under ``file_id``, a kept file's or not:
+    one whose description does not parse, or says no kind of machine, is still there."""
+    return _is_print_id(file_id) and _print_file_path(file_id).is_file()
 
 
 def delete_print_file(file_id: str) -> bool:
@@ -1500,6 +1836,7 @@ class PrintJob:
         # its flow control.
         self._room = grbl.PlannerRoom() if self.grbl else None
         self._paused_from: Optional[str] = None
+        self._pauses = 0  # pauses landed: one during a wait for room is why it gave up
         self.running_stage = self.op.busy or kind
         self.stage = "starting"
         self.sent = 0
@@ -1577,6 +1914,7 @@ class PrintJob:
         # is still running on the controller (``finishing``): it is held the same.
         if self.finished is None and self.stage in (self.running_stage, "finishing"):
             self._paused_from = self.stage
+            self._pauses += 1
             self._go.clear()
             self.stage = "paused"
             self._realtime("HOLD")  # a router stops where it is; a printer finishes its queue
@@ -1607,6 +1945,41 @@ class PrintJob:
         """Whether the job was paused or stopped: what a wait on the controller watches."""
         return self._stop.is_set() or not self._go.is_set()
 
+    def _turn_for(self, link: gcode.GcodeLink, cmd: str) -> bool:
+        """Wait until ``cmd`` may be sent: the job not paused, and on a router the
+        planner with room for it. False once the job is stopped. A pause that lands
+        while the line waits for room keeps the line, which waits out the pause and
+        asks for room again; room that never comes within a move's time is the
+        job's failure, never a line left out."""
+        while True:
+            while not self._go.wait(0.2):
+                if self._stop.is_set():
+                    return False
+            if self._stop.is_set():
+                return False
+            pauses = self._pauses
+            if self._room is None or self._room.wait(link, cmd, self._interrupted):
+                return True
+            # A pause that landed during the wait gave it up, though a resume may
+            # have followed before this line: the line waits out the pause, if any
+            # is left, and asks again.
+            if not self._interrupted() and self._pauses == pauses:
+                raise ToolchainError(
+                    f"{self.port}: the planner had no room for {cmd} within "
+                    f"{grbl.JOB_MOVE_TIMEOUT_S:.0f}s: the cut is stopped there"
+                )
+
+    def _same_boot(self, link: gcode.GcodeLink, boots: int) -> None:
+        """ToolchainError once the board has said its boot banner since the job began:
+        it restarted, cold and with no position, and the rest of the file is not for
+        the board it now is."""
+        if link.restarts != boots and not self._stop.is_set():
+            raise ToolchainError(
+                f"{self.port}: the board restarted under the {self.op.kind} (its boot "
+                f"banner arrived after line {self.sent} of {self.total}): nothing more "
+                "of the file is sent"
+            )
+
     def cancel(self, quiet: bool = False) -> None:
         """Stop feeding; ``quiet`` skips the safe-off (the board is already halted)."""
         if self.finished is None:
@@ -1615,11 +1988,22 @@ class PrintJob:
             self._stop.set()
             self._go.set()  # a paused print must wake to notice
             self._announce()
+            link = self.links.get(self.port)
+            if not quiet and not self.grbl and link is not None:
+                # A printer waiting on its bed or nozzle answers nothing until it is
+                # hot: the wait is broken at once, so the safe-off is next and not
+                # minutes behind it. Harmless to a board that is not waiting.
+                try:
+                    link.ahead("M108", origin=self.op.kind)
+                except ToolchainError:
+                    pass  # the safe-off says what the board still answers
 
     def _announce(self) -> None:
         link = self.links.get(self.port)
         if link is not None and (self.finished is None):
             link.job = self.snapshot()
+            # Told to the jobs' readers when the stage or the whole percent has changed.
+            jobs.moved(self.job.id, self.now)
 
     def _end(self, outcome: str, tail: List[str]) -> jobs.Job:
         """The job as it ended, kept; a store that cannot be written does not stop the end."""
@@ -1668,6 +2052,7 @@ class PrintJob:
             link.log.add("sys", f"{kind} started: {self.file.name} ({self.total} lines)", kind)
             self.stage = self.running_stage
             self._announce()
+            boots = link.restarts
             for raw in text.splitlines():
                 for said in split_comments(raw)[1]:
                     if OPERATION_COMMENT.match(said):
@@ -1676,18 +2061,16 @@ class PrintJob:
                 cmd = gcode.strip_gcode(raw)
                 if not cmd:
                     continue
-                while not self._go.wait(0.2):
-                    if self._stop.is_set():
-                        break
-                if self._stop.is_set():
+                if not self._turn_for(link, cmd):
                     outcome = "cancelled"
                     break
-                if self._room is not None and not self._room.wait(link, cmd, self._interrupted):
-                    continue  # paused or stopped while waiting: the loop's head decides
+                link.sweep()
+                self._same_boot(link, boots)
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
                 self.sent += 1
+                self._same_boot(link, boots)
                 if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
                     self._announce()
                 if self.sent % PRINT_LOG_EVERY == 0:
@@ -1701,37 +2084,35 @@ class PrintJob:
                     # The router is finished when its controller is idle again.
                     self.stage = "finishing"
                     self._announce()
-                    grbl.await_idle(link, self._stop.is_set)
+                    ended = grbl.await_idle(link, self._stop.is_set)
                 if self._stop.is_set():
                     outcome = "cancelled"
                 else:
+                    if self.grbl:
+                        if ended != "idle":
+                            raise ToolchainError(
+                                f"{self.port}: every line was sent and the controller is "
+                                f"{ended}: the cut did not finish"
+                            )
+                        # Idle with every line run: a file that never said M5 does not
+                        # leave the spindle turning behind a cut recorded as done.
+                        tail = (tail + ["> M5", *link.command("M5", timeout=10.0, origin=kind)])[
+                            -200:
+                        ]
                     self.stage = "done"
             if outcome == "cancelled":
                 self.stage = "cancelled"
         except (ToolchainError, ValueError, OSError) as exc:
-            outcome = "failed"
-            self.error = str(exc)
-            self.stage = "failed"
-        if outcome != "done" and not self._quiet:
-            if self.grbl:
-                # A hold stops the tool where it is; the reset empties the queue and
-                # turns the spindle off, and says so in the banner it answers with.
-                for name in ("HOLD", "RESET"):
-                    try:
-                        said = link.realtime(
-                            grbl.REALTIME[name], now=True, label=name, timeout=1.0, origin=kind
-                        )
-                        tail = (tail + [f"> {name}", *said])[-200:]
-                    except ToolchainError as exc:
-                        tail.append(f"({name} not answered: {exc})")
+            if self._stop.is_set():
+                # Stopped, and the line in flight ended with the stop: the board
+                # halted or reset under it, as it was asked to.
+                outcome, self.stage = "cancelled", "cancelled"
             else:
-                # Every line of the safe-off is tried: a hotend left on because the
-                # fan line before it timed out is the failure this exists to prevent.
-                for cmd in PRINT_SAFE_OFF:
-                    try:
-                        tail = (tail + link.command(cmd, timeout=10.0, origin=kind))[-200:]
-                    except ToolchainError as exc:
-                        tail.append(f"({cmd} not answered: {exc})")
+                outcome = "failed"
+                self.error = str(exc)
+                self.stage = "failed"
+        if outcome != "done" and not self._quiet:
+            tail = (tail + safe_off(link, self.op.machine, kind))[-200:]
         ended = self._end(outcome, tail).finished_at
         link.log.add(
             "sys",
@@ -1743,7 +2124,146 @@ class PrintJob:
         self.finished = ended  # last: a snapshot that says "not running" names the record
 
 
+def safe_off(link: gcode.GcodeLink, machine: str, origin: str) -> List[str]:
+    """What ends a job that did not end done, sent to its machine; what was said.
+    A router is held and reset: the hold stops the tool where it is, the reset
+    empties the queue and turns the spindle off, and says so in the banner it
+    answers with. A printer is sent ``PRINT_SAFE_OFF``, every line of it tried: a
+    hotend left on because the fan line before it timed out is the failure this
+    exists to prevent."""
+    said: List[str] = []
+    if machine == grbl.MACHINE:
+        for name in ("HOLD", "RESET"):
+            try:
+                heard = link.realtime(
+                    grbl.REALTIME[name], now=True, label=name, timeout=1.0, origin=origin
+                )
+                said += [f"> {name}", *heard]
+            except ToolchainError as exc:
+                said.append(f"({name} not answered: {exc})")
+    else:
+        for cmd in PRINT_SAFE_OFF:
+            try:
+                said += link.command(cmd, timeout=10.0, origin=origin)
+            except ToolchainError as exc:
+                said.append(f"({cmd} not answered: {exc})")
+    return said
+
+
 _PRINTS: Dict[str, PrintJob] = {}
+# One start at a time: whether a job holds the port is asked and answered as one act,
+# so two starts at once are one job and one refusal, never two files on one port. Every
+# kind of job takes it to start: a print or a cut, a bed reading, a loop's experiment
+# (firmware/loops.py, as ``STARTING``).
+_STARTING = threading.Lock()
+STARTING = _STARTING
+
+
+def at_work(links: Optional[gcode.PrinterLinks] = None) -> List[str]:
+    """What a machine here is doing, or is about to be asked to do, that a restart of
+    this server would cut into; empty when it would cut into nothing. A print or a
+    cut streaming, a bed reading or a table map under way, and each port whose control
+    is armed: a person armed it to move the machine, and a home or a jog sent by hand
+    is a line in flight with no job to show for it. What restarts a server for a
+    reason of its own asks this first (``GET /firmware/busy``)."""
+    links = links or gcode.get_printer_links()
+    said = [
+        f"{job.port}: a {job.op.kind} is {job.stage}"
+        for job in list(_PRINTS.values())
+        if job.finished is None
+    ]
+    said += [
+        f"{job.port}: {job.what} is {job.stage}"
+        for job in list(_LEVELING.values())
+        if job.finished is None
+    ]
+    said += [f"{job.port}: {job.what} is {job.stage}" for job in _tuning()]
+    said += [f"{port}: control is armed" for port in links.control.armed_ports()]
+    return said
+
+
+def _tuning() -> list:
+    """The loop experiments running (firmware/loops.py), which import this module."""
+    from . import loops
+
+    return loops.running()
+
+
+def _tuning_on(port: str):
+    from . import loops
+
+    return loops.tuning_job(port)
+
+
+def stop_jobs(timeout: float = 20.0) -> List[str]:
+    """Every job this process runs, ended as its own cancel ends it -- a printer's
+    heaters and fan off and its motors free, a router held and reset, its spindle
+    off -- and waited for; what was done, a line a job. For the server as it
+    stops: a job's thread dies with the process, and without this what the job
+    turned on stays on with nothing left to turn it off. A job still behind a line
+    its board has not answered when ``timeout`` runs out is sent the stop itself."""
+    said: List[str] = []
+    streaming = [job for job in list(_PRINTS.values()) if job.finished is None]
+    reading = [job for job in list(_LEVELING.values()) if job.finished is None]
+    tuning = _tuning()
+    for job in (*streaming, *reading, *tuning):
+        job.cancel()
+    end = time.monotonic() + timeout
+    for job in (*streaming, *reading, *tuning):
+        job.thread.join(max(0.0, end - time.monotonic()))
+        what = job.op.kind if isinstance(job, PrintJob) else job.what
+        if not job.thread.is_alive():
+            said.append(f"{job.port}: {what} stopped with the server, and made safe")
+            continue
+        try:
+            printer_control(job.port, emergency_stop_for(job.port))
+            said.append(f"{job.port}: {what} did not end in {timeout:.0f}s: the stop was sent")
+        except (ValueError, ToolchainError) as exc:
+            said.append(f"{job.port}: {what} did not end, and the stop was not sent: {exc}")
+    return said
+
+
+def _end_orphans(
+    port: str, link: gcode.GcodeLink, status: gcode.PrinterStatus, state: FirmwareState
+) -> None:
+    """The jobs kept as running on this machine that nothing runs (a server died under
+    them), ended as failed now that its port is open again, and the machine made
+    safe as their own end would have made it -- unless it is plainly doing something
+    else: a printer printing from its card is left alone, and a router that is not
+    idle is not reset under whatever moves it; an idle one's spindle is turned off."""
+    cached = state.cached_device(port)
+    for job in jobs.orphaned(port, cached.identity if cached is not None else None):
+        op = jobs.operation(job.kind)
+        did = "nothing was sent"
+        if op is not None and op.kind in MADE_SAFE:
+            if op.machine == grbl.MACHINE:
+                if status.state == "idle":
+                    try:
+                        link.command("M5", timeout=10.0, origin=op.kind)
+                        did = "the spindle was turned off (M5)"
+                    except ToolchainError as exc:
+                        did = f"M5 was not answered: {exc}"
+                else:
+                    did = f"the router is {status.state} and was sent nothing"
+            elif status.sd_printing:
+                did = "the printer is printing from its card and was sent nothing"
+            else:
+                safe_off(link, op.machine, op.kind)
+                did = "heaters and fan were turned off and the motors freed"
+        said = f"{jobs.STOPPED}; when its port was next opened, {did}"
+        try:
+            jobs.end(
+                job.model_copy(
+                    update={
+                        "finished_at": datetime.now(timezone.utc),
+                        "outcome": "failed",
+                        "reason": said,
+                    }
+                )
+            )
+        except (OSError, ValueError):
+            pass
+        link.log.add("sys", f"{job.kind} {job.id}: {said}", job.kind)
 
 
 def print_job(port: str) -> Optional[PrintJob]:
@@ -1755,21 +2275,7 @@ def _file_fits(file: PrintFile, port: str, kind: Optional[str]) -> None:
     """ValueError unless ``file`` was kept for the kind of machine on ``port``: a
     printer's file on a router homes it with G28 and waits out its millisecond dwells
     as seconds, and a router's on a printer cuts into the bed."""
-    if kind is None:
-        raise ValueError(
-            f"{port}: the board there has not said what kind of machine it drives -- "
-            f"{file.name} is sent to the kind it was kept for alone"
-        )
-    if file.machine is None:
-        raise ValueError(
-            f"{file.name} says no kind of machine it is for: choose it again with this "
-            f"{kind}'s Choose File, which keeps it for a {kind}"
-        )
-    if file.machine != kind:
-        raise ValueError(
-            f"{file.name} was kept for a {file.machine}, and {port} holds a {kind}: "
-            f"it is never sent to a {kind}"
-        )
+    can.raise_for(can.misfit(file, port, kind), "file")
 
 
 def _sha256_of(file: PrintFile) -> str:
@@ -1805,33 +2311,45 @@ def start_print(
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
+    with _STARTING:
+        return _start_print(port, file_id, part, state, links)
+
+
+def _start_print(
+    port: str,
+    file_id: str,
+    part: Optional[str],
+    state: FirmwareState,
+    links: gcode.PrinterLinks,
+) -> PrintJob:
     file = print_file(file_id)
-    if file is None:
-        raise ValueError(f"no such print file: {file_id}")
-    if file.problems:
-        raise ValueError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
-    if file.lines == 0:
-        raise ValueError(f"{file.name} has nothing to send")
+    can.raise_for(can.file_problem(file, file_id), "file")
     place = jobs.place_of(port)
     chosen = jobs.part_at(place, part)
-    if not links.control.armed(port):
-        raise gcode.ControlNotArmed(
-            f"{port}: a job heats, turns and moves the machine -- arm control first"
-        )
-    for running in (_PRINTS.get(port), _LEVELING.get(port)):
-        if running and running.finished is None:
-            what = running.op.kind if isinstance(running, PrintJob) else "bed reading"
-            raise PortHeld(f"{port}: a {what} already holds the port ({running.stage})")
+    can.raise_for(
+        can.not_armed(
+            port,
+            links.control.armed(port),
+            "a job heats, turns and moves the machine -- arm control first",
+        ),
+        "armed",
+    )
+    can.raise_for(
+        can.print_start_blocked(port, _PRINTS.get(port), _LEVELING.get(port), _tuning_on(port)),
+        "held",
+    )
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    last = _LAST_STATUS.get(port)
-    if last is not None and last.sd_printing:
-        raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
+    can.raise_for(can.card_printing(port, _LAST_STATUS.get(port)), "held")
     cached = state.cached_device(port)
     _file_fits(file, port, machine_kind(cached))
+    if machine_kind(cached) == grbl.MACHINE:
+        unplaced = grbl.not_placed(link)
+        if unplaced:
+            can.raise_for(f"{port}: {unplaced}", "placed")
     job = PrintJob(
         port,
         file,
@@ -1862,8 +2380,7 @@ def printer_query(
     links = links or gcode.get_printer_links()
     cmd = normalise_query(port, command, state)  # ValueError for anything that is not a report
     held = links.get(port)
-    if held is not None and held.job is not None and held.job.get("kind") not in STREAMED:
-        raise PortHeld(f"{port}: {what_holds(held.job)} holds the port ({held.job['stage']})")
+    can.raise_for(can.query_held(port, held.job if held is not None else None), "held")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)
@@ -1994,8 +2511,8 @@ def listen(
             lines.append(item)
             if not item.startswith("[apothecary:"):
                 first_line_at = first_line_at or now
-        origin = first_line_at or started
-        if now - origin >= seconds or now - started >= seconds + 5:
+        heard_for = now - first_line_at if first_line_at is not None else 0.0
+        if heard_for >= seconds or now - started >= seconds + 5:
             stop.set()
     tail = [ln for ln in lines if ln.strip()][-200:]
     return ListenResult(port=port, baud=baud, seconds=seconds, lines=tail, **classify_lines(tail))

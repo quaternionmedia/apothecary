@@ -165,6 +165,109 @@ def test_the_site_is_drawn_as_openscad_draws_it_not_mirrored(page: Page, base_ur
     assert found["axes"] == {"red": [1, 0, 0], "green": [0, 1, 0], "blue": [0, 0, 1]}, found
 
 
+# Where a node's mesh reaches up and down in the world, from three.js's own Box3 of it
+# (y up), and the node's envelope (the site's z up); and how far the largest flat face
+# of it that faces up leans from straight up: its triangles grouped by plane, their
+# areas summed.
+UP_AND_DOWN = """(key) => {
+    const v = window.fractalViewer, mesh = v.meshByName[key];
+    mesh.geometry.computeBoundingBox();
+    const box = new mesh.geometry.boundingBox.constructor().setFromObject(mesh);
+    const b = v.renderNodeByKey[key].world_bounds;
+    const at = mesh.geometry.attributes.position, planes = new Map();
+    const p = (i) => [at.getX(i), at.getY(i), at.getZ(i)];
+    for (let i = 0; i + 2 < at.count; i += 3) {
+        const [a, b2, c] = [p(i), p(i + 1), p(i + 2)];
+        const u = a.map((x, k) => b2[k] - x), w = a.map((x, k) => c[k] - x);
+        const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+        const twice = Math.hypot(...n);
+        if (!twice) continue;
+        const unit = n.map((x) => x / twice);
+        const offset = unit.reduce((s, x, k) => s + x * a[k], 0);
+        const plane = `${unit.map((x) => x.toFixed(3)).join()}|${offset.toFixed(1)}`;
+        planes.set(plane, (planes.get(plane) ?? 0) + twice / 2);
+    }
+    let up = null;
+    for (const [plane, area] of planes) {
+        const y = Number(plane.split(',')[1]);
+        if (y > 0 && (!up || area > up.area)) up = { area, y };
+    }
+    return {
+        drawn: [box.min.y, box.max.y], envelope: [b.min[2], b.max[2]],
+        face_up: Math.acos(Math.min(1, up.y)) * 180 / Math.PI,
+    };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_footpedal_stands_on_the_bench_buttons_up_within_its_envelope(
+    page: Page, base_url: str
+):
+    """The footpedal is drawn as it rests and printed as it prints: in the garage its
+    mesh is its rest pose, on its base with the button face up, tilted by theta, where
+    its STL lies on that face; centred on its envelope on the bench, it reaches neither
+    into the bench nor above the envelope's top by more than its rounded edges."""
+    from apothecary.projects.parts.footpedal import FootpedalParams
+
+    _open(page, f"{base_url}/viewer/sites/garage")
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.meshByName['footpedal'];"
+        " return m && !m.userData.isPlaceholder; }",
+        timeout=60000,
+    )
+    seen = page.evaluate(UP_AND_DOWN, "footpedal")
+    (bottom, top), (bench, lid) = seen["drawn"], seen["envelope"]
+    assert seen["face_up"] == pytest.approx(-FootpedalParams().theta, abs=1), seen
+    assert bottom >= bench - 1, f"drawn {bench - bottom:.1f} mm into the bench: {seen}"
+    assert top <= lid + 1, f"drawn {top - lid:.1f} mm above its envelope: {seen}"
+
+
+# How tall the page draws each part whose SCAD turns it to rest (three.js's Box3 of its
+# mesh, y up), and how tall its STL, what a slice and a download read, stands (z). The
+# footpedal's two are near: the garage's test above reads which way up it is drawn.
+AS_IT_RESTS_AND_PRINTS = {"fifel": (25.43, 200), "footpedal": (31, 30.35), "solderfan": (134, 12)}
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("name", sorted(AS_IT_RESTS_AND_PRINTS))
+def test_the_part_view_draws_a_part_as_it_rests_and_offers_no_print_flag(
+    page: Page, base_url: str, tmp_path, name: str
+):
+    """`/viewer/parts/<name>` draws the part as it rests -- solderfan stood on its edge,
+    fifel laid on its side -- where its STL lies the way up it prints; and its Parameters,
+    which offer its wall as each of the three has one, offer no control of which way up it
+    is, its SCAD's print flag being Hidden."""
+    from apothecary.meshes import bounds, read_mesh
+
+    rests, prints = AS_IT_RESTS_AND_PRINTS[name]
+    page.goto(f"{base_url}/viewer/parts/{name}")
+    expect(page.locator("#part-params .param").first).to_be_visible(timeout=20000)
+    page.wait_for_function(
+        "(key) => { const m = window.fractalViewer.meshByName[key];"
+        " return m && !m.userData.isPlaceholder; }",
+        arg=name,
+        timeout=60000,
+    )
+    drawn = page.evaluate(
+        """(key) => {
+            const mesh = window.fractalViewer.meshByName[key];
+            mesh.geometry.computeBoundingBox();
+            const box = new mesh.geometry.boundingBox.constructor().setFromObject(mesh);
+            return box.max.y - box.min.y;
+        }""",
+        name,
+    )
+    assert drawn == pytest.approx(rests, abs=0.1), f"{name} drawn {drawn:.2f} mm tall"
+    stl = tmp_path / f"{name}.stl"
+    stl.write_bytes(
+        httpx.get(f"{base_url}/parts/{name}/stl", timeout=60).raise_for_status().content
+    )
+    lo, hi = bounds(read_mesh(stl))
+    assert hi[2] - lo[2] == pytest.approx(prints, abs=0.1), f"{name}'s STL: {lo} .. {hi}"
+    expect(page.locator("#part-params .param[data-field='wall']")).to_have_count(1)
+    expect(page.locator("#part-params .param[data-field='print']")).to_have_count(0)
+
+
 @pytest.fixture
 def v_slot_as_it_was():
     """Apply renders a variant into the cache, but opening the part draws its own STL,
@@ -272,6 +375,16 @@ def test_the_machine_popup_stops_polling_when_it_goes(page: Page, pinned: str, l
 
     leave(page, pinned)
     expect(machine).to_have_count(0, timeout=10000)
+    if leave is _close:
+        # The site still draws printer_1, so the world follows it with a watcher of its
+        # own (followMachines); the Machine's is gone with it.
+        watchers = page.evaluate(
+            "(port) => [...window.fractalViewer.boards.board(port).watchers.keys()]"
+            ".map((who) => who.world || 'another')",
+            PRINTER,
+        )
+        assert watchers == [PRINTER], watchers
+        return
     polls = []
     page.on("request", lambda r: polls.append(r.url) if any(p in r.url for p in POLLS) else None)
     page.clock.pause_at(page.evaluate("Date.now()") + 1000)

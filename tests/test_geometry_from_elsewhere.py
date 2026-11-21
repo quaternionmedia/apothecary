@@ -219,7 +219,8 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
         assert printer.footprint.min_point == Vector3D(x=-2, y=-41, z=0)
         box = next(c for c in printer.children if c.name == "frame_system")
         board = next(c for c in box.children if c.name == "mainboard")
-        assert board.part_ref == "creality_v422" and board.category == "electrical"
+        # A board in a machine sets no word of its own: it is in its machine's System.
+        assert board.part_ref == "creality_v422" and board.category is None
         gantry = next(c for c in printer.children if c.name == "gantry_system")
         assert {a.name for a in gantry.additions} == {"left_post", "right_post", "gantry_bar"}
     by_name = {s.name: s for s in site.children}
@@ -260,7 +261,7 @@ def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
     assert box.position == anolex.CONTROL_BOX.min_point
     controller = next(c for c in box.children if c.name == "controller")
     assert controller.part_ref == "anolex_grbl_esp32" and controller.base is None
-    assert controller.category == "electrical" and "pin the router's port" in controller.comment
+    assert controller.category is None and "pin the router's port" in controller.comment
     board = part_named("anolex_grbl_esp32", ROOT)
     assert controller.footprint.max_point == board.get_bounds().max_point
     gantry = next(c for c in router.children if c.name == "gantry_system")
@@ -272,7 +273,9 @@ def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
     spindle = clamp.children[0]
     # The spindle's axis is the tool's, over the middle of the table at the
     # part's default axes, its body starting above the collet.
-    assert spindle.base.v == anolex.TOOL + Vector3D(z=anolex.COLLET) == Vector3D(x=315, y=465, z=148)
+    assert (
+        spindle.base.v == anolex.TOOL + Vector3D(z=anolex.COLLET) == Vector3D(x=315, y=465, z=148)
+    )
     assert spindle.base.children[0].r == anolex.SPINDLE_DIAMETER / 2 == 32.5
     assert validate_garage_layout(site).is_valid
     monkeypatch.setattr(hierarchy, "part_stl_path", lambda ref: f"parts/{ref}.stl")
@@ -373,3 +376,15 @@ def test_no_tracked_part_carries_a_licence_the_record_refuses():
         assert source.get("author") != "Apothecary", (
             "a notice names Quaternion Media, never the tool"
         )
+
+
+def test_the_routers_table_carries_y_and_its_envelope_follows_it():
+    """The AnoleX's table moves under a tool that stands still along Y, as the maker's
+    manual has it; at the ends of Y the table rides out of the frame, front or back."""
+    assert anolex.BED_MOVES_Y == anolex.AXES.y and anolex.DEFAULT.bed_moves_y == anolex.AXES.y
+    rest = anolex.DEFAULT.get_bounds({"y_axis": anolex.BED_MOVES_Y})
+    assert (rest.min_point.y, rest.max_point.y) == (0.0, anolex.OVERALL.y)
+    front_edge = anolex.DEFAULT.get_bounds({"y_axis": 0})  # the work's front edge under the tool
+    assert front_edge.min_point.y == 0.0 and front_edge.max_point.y > anolex.OVERALL.y
+    back_edge = anolex.DEFAULT.get_bounds({"y_axis": anolex.WORK.y})
+    assert back_edge.min_point.y < 0.0 and back_edge.max_point.y == anolex.OVERALL.y

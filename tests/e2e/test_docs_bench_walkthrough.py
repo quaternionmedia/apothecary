@@ -343,9 +343,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     story.shows(
         "Looking into a printer, the camera stays in the garage",
         "A camera is a piece of the site, drawn at the level its site is. Stepped into "
-        "the printer, the printer is its part, alone and whole, with its frame and its "
-        "gantry as Site's rows; neither the camera's badge nor its pyramid follows, and "
-        "stepping back out brings them back.",
+        "the printer, the printer is its part, whole, with its frame and its gantry "
+        "drawn inside it and listed in Site; neither the camera's badge nor its pyramid "
+        "follows, and stepping back out brings them back.",
     )
 
     # Back to the root with nothing selected: zooming out one level would select the

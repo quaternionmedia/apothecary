@@ -37,6 +37,11 @@ from the suite down is ticked again on the new head.
 
 - [ ] `uv run apothecary test all`, or `test all --workers 2` for both parts on two
       workers. It runs again whenever the tree changes.
+- [ ] The unit part of that run is one process, as `test all` runs it, because the
+      full run in one process finds what parallel runs do not: state an earlier test
+      leaves in the same process, a module imported first, a universe already built.
+      A test that passes alone and fails there is fixed in what it depends on; the
+      parallel runs of the loop (`test run`, `test changed`) are not that evidence.
 - [ ] Each failure is fixed in the level that owns it. A test that fails under load
       and passes alone is named with both runs; no bound is raised to pass it.
 - [ ] Each skip is listed with its reason, and counts for nothing. A test that needs
@@ -52,6 +57,13 @@ from the suite down is ticked again on the new head.
       text drawn a pixel over -- and every picture under the tolerance, is put back
       with `git checkout -- walkthrough/screenshots`. A change and noise often share
       one picture, which is then the page's.
+- [ ] A picture that moves by itself -- one a second run of its test rewrites, with
+      nothing of the page changed -- is made still in its test, and never committed as
+      it fell: a folder at a fixed name for a server whose state a picture names, a
+      clock the test controls, the varying words or region blanked as the other
+      captures do. Its file is run twice, and the second run rewrites no picture.
+      `tests/e2e/moves_by_itself.json` lists what stays unstill, each with its test and
+      why, and is empty when every picture is still.
 - [ ] The words a run rewrites in a walkthrough page are committed in the level whose
       test writes them.
 - [ ] The docs the levels touch are read together, against each other and against
@@ -59,6 +71,9 @@ from the suite down is ticked again on the new head.
       contradict one another once stacked; a line found wrong is fixed in the level
       that wrote it.
 - [ ] A change a user would notice has its line in `CHANGELOG.md`.
+- [ ] An edit made by pattern -- a substitution over the changelog or the docs -- is
+      checked for every line it changed, read from the diff, and not only for the
+      lines it was meant for: a pattern matches what its author did not think of.
 
 ## The gates, run here
 
@@ -70,11 +85,10 @@ from the suite down is ticked again on the new head.
 ## What only a person sees
 
 - [ ] Each row of the README's map, *What it does, and how to see it*, that the stack
-      changes is walked on the head under `apothecary serve --demo`.
+      changes is walked on the head under `apothecary serve --simulated`.
 - [ ] Each row of [the bench checklist](bench-checklist.md) or
       [the models checklist](models-checklist.md) that the stack changes is walked,
-      or named open with what it needs. The demo's machines are simulated, and show
-      none of those rows.
+      or named open with what it needs. Simulated machines show none of those rows.
 
 ## The pull requests
 

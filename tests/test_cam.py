@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary import jobs
+from apothecary import jobs, sites
 from apothecary.api import app, routers_in
 from apothecary.cam import measure, service, toolpath
 from apothecary.cam.models import CutFor, Cuts, Feeds, Hole, Outline, Pocket, Stock
@@ -34,11 +34,9 @@ def router_links(monkeypatch):
 
 @pytest.fixture
 def garage():
-    from apothecary import api as api_module
-
-    api_module._site_store.reset("garage")
-    yield api_module._site_store.get("garage")
-    api_module._site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 # --- the toolpath -----------------------------------------------------------------
@@ -130,6 +128,17 @@ def test_the_toolpath_is_kept_as_a_cut_file_and_recorded_beside_it(tmp_path, mon
         service.cut_into("calibration_cube", CutFor(name="cnc_router"))
 
 
+def test_the_same_toolpath_written_twice_is_one_file(tmp_path, monkeypatch):
+    """Toolpath pressed again writes the same file, which is the one kept: the Cut card
+    lists it once, with the newer record."""
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    first = service.cut_into("router_coupon", CutFor(name="cnc_router", site="garage", port=PORT))
+    second = service.cut_into("router_coupon", CutFor(name="cnc_router", site="garage", port=PORT))
+    assert second.file_id == first.file_id and second.at > first.at
+    assert [f.id for f in devices.print_files()] == [first.file_id]
+    assert service.records() == [second]
+
+
 def test_the_cut_route_takes_a_site_s_piece_and_refuses_a_part_without_cuts(
     tmp_path, monkeypatch, garage
 ):
@@ -153,7 +162,14 @@ def test_the_cut_route_takes_a_site_s_piece_and_refuses_a_part_without_cuts(
         r = c.post("/cam/cut", json={"part": "footpedal", "site": "garage", "port": PORT})
         assert r.status_code == 400 and "does not say how it is cut" in r.json()["detail"]
         r = c.post("/cam/cut", json={"part": "nowhere", "site": "garage", "port": PORT})
-        assert r.status_code == 404
+        assert r.status_code == 404 and "no part's name" in r.json()["detail"]
+        # A registered part that stands nowhere in the site is named by its name, as
+        # makes lists it after the site's pieces: found, and refused for what it is.
+        r = c.post("/cam/cut", json={"part": "calibration_cube", "site": "garage", "port": PORT})
+        assert (
+            r.status_code == 400
+            and "calibration_cube does not say how it is cut" in r.json()["detail"]
+        )
 
 
 def test_the_ring_offers_toolpath_on_a_part_with_cuts_when_a_router_is_pinned(garage):

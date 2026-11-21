@@ -17,7 +17,7 @@ from typing import Iterable, Optional
 
 import click
 
-from .utils import _safe_echo
+from .utils import safe_echo
 
 # state -> (mark, colour). The marks are ASCII: a Windows console defaults to
 # cp1252, which cannot print a check mark (walkthrough/13).
@@ -40,27 +40,27 @@ def mark(state: str) -> str:
 
 def line(state: str, message: str, indent: int = 2) -> None:
     """One status line: a coloured mark, then the message."""
-    _safe_echo(f"{' ' * indent}{mark(state)} {message}")
+    safe_echo(f"{' ' * indent}{mark(state)} {message}")
 
 
 def detail(message: str, indent: int = 11) -> None:
     """A dimmed continuation under a status line."""
-    _safe_echo(f"{' ' * indent}{click.style(message, dim=True)}")
+    safe_echo(f"{' ' * indent}{click.style(message, dim=True)}")
 
 
 def fix(message: str, indent: int = 11) -> None:
     """What to do about a state that is not a pass."""
-    _safe_echo(f"{' ' * indent}{click.style('-> ' + message, fg='cyan')}")
+    safe_echo(f"{' ' * indent}{click.style('-> ' + message, fg='cyan')}")
 
 
 def verdict(ok: bool, message: str, warn: bool = False) -> None:
     """The single line a reader looks at first."""
     colour = "green" if ok else ("yellow" if warn else "red")
-    _safe_echo("  " + click.style(message, fg=colour, bold=True))
+    safe_echo("  " + click.style(message, fg=colour, bold=True))
 
 
 def heading(text: str) -> None:
-    _safe_echo(click.style(text, bold=True))
+    safe_echo(click.style(text, bold=True))
 
 
 @contextmanager

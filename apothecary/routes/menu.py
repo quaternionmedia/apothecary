@@ -6,8 +6,12 @@ refused with a 400 naming it, never answered with a 200 that did nothing.
 
 **What the page knows about a board is carried beside the context, not inside
 it.** `device` on a resolve says whether the node has a board pinned, whether
-that board is a printer and whether its control latch is armed; the resolver
-offers the device and control rings from that and nothing else. The verbs on
+that board is a printer, whether its control latch is armed and what the server
+would refuse of its port now (`can`, the answer its Machine's buttons are greyed
+from); the resolver offers the device and control rings from that and nothing
+else, each act the answer refuses greyed with its reason. `can` on a canvas
+ring's resolve is the same kind of answer for Panels › Machine: the open
+Machine's port's for its heater loops, the deck's for the knobs. The verbs on
 those rings are the viewer's: the pages already have a handler for each, and
 the intent route never opens a port.
 
@@ -24,6 +28,8 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .. import sites
+from ..hierarchy import find_node_by_path
 from ..menu import (
     FLOOR_MARK,
     Carries,
@@ -32,11 +38,14 @@ from ..menu import (
     Intent,
     PartSeen,
     PictureContext,
+    Pointing,
     Ring,
     RingTooFull,
+    Verdict,
     carried_by,
     resolve,
 )
+from . import lighting
 
 router = APIRouter(prefix="/menu", tags=["menu"])
 
@@ -52,6 +61,10 @@ class ResolveRequest(BaseModel):
     # The sketch of a part of its own that no board connected runs, when the ring
     # stands on such a piece: its Flash its sketch.
     sketch: Optional[str] = None
+    # On the canvas ring, what the page knows would be refused now of Panels › Machine's
+    # acts: the open Machine's port's answer for its heater loops, the deck's for the
+    # knobs (apothecary/menu.py resolve). Told nothing, nothing there is greyed.
+    can: Optional[Dict[str, Verdict]] = None
 
 
 class Chosen(BaseModel):
@@ -85,30 +98,15 @@ class Carried(BaseModel):
 
 
 def _site(name: Optional[str]):
-    """The arrangement by name, or None.
-
-    Imported inside the function rather than at the top because
-    `apothecary/api.py` mounts this router, so importing it at module scope would
-    close a circle. The same deferred-import shape the photo shelf already uses
-    in that module.
-    """
-    if name is None:
-        return None
-    from ..api import _get_site_or_404
-
-    return _get_site_or_404(name)
+    """The arrangement by name, or None."""
+    return sites.store.get(name) if name is not None else None
 
 
 def _catalogue(name: Optional[str]) -> Dict[str, List[str]]:
-    """The lists a ring is built from, read fresh on every call: the
-    arrangements that exist now, and the groups in this one."""
-    from ..api import _site_store
-
-    groups: List[str] = []
-    site = _site(name)
-    if site is not None:
-        groups = sorted({child.category for child in site.children if child.category})
-    return {"site_names": sorted(_site_store.names()), "groups": groups}
+    """The lists a ring is built from, read fresh on every call: the arrangements that
+    exist now. What a site's pieces are grouped by the ring reads from the site itself
+    (``facets.py``)."""
+    return {"site_names": sorted(sites.store.names())}
 
 
 def _pictures_known(
@@ -153,29 +151,28 @@ def _pictures_known(
 
 def _planned(site: str, kind: str) -> List[str]:
     """The site's machines of ``kind``, by the part each is drawn from."""
-    from ..api import _site_store
     from .machines import machines_of
 
     try:
-        return [m["path"] for m in machines_of(_site_store.get(site), kind)]
+        return [m["path"] for m in machines_of(sites.store.get(site), kind)]
     except KeyError:
         return []
 
 
 def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     """The part a node of ``site`` is drawn as, when it is one from the parts folder:
-    whether its SCAD is its own to edit, its variants saved in git, and whether it
-    is a board."""
-    from ..api import _load_part_wrapper
-    from ..menu import _find
+    whether its SCAD is its own to edit, its variants saved in git, whether it is a
+    board, its presets, whether it is an end an adapter is made between, and whether it
+    is a Stream Deck +, whose ring opens the Deck window."""
+    from ..api import load_part_wrapper
     from ..projects.parts.drafts import editable
     from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
 
-    node = _find(_site(site), path) if path else None
+    node = find_node_by_path(sites.store.get(site), path) if path else None
     if node is None or not node.part_ref:
         return None
     try:
-        part = _load_part_wrapper(node.part_ref)
+        part = load_part_wrapper(node.part_ref)
     except HTTPException:
         return None
     own = editable(part)
@@ -186,13 +183,36 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
             deleted = [v.name for v in list_trash(part)]
         except (GitError, NotInGit):
             deleted = []
+    round_ends = [i for i in part.interfaces() if i.type in ("spigot", "socket")]
     return PartSeen(
         editable=own,
         variants=saved_names(part) if own else [],
         deleted=deleted,
         board="board" in part.tags,
         cuts=part.has_cuts,
+        # A part whose SCAD is its source keeps its values in its text: none offered yet.
+        presets=[] if own else list(part.presets),
+        preset_labels={} if own else {n: p.label for n, p in part.presets.items() if p.label},
+        end=len(round_ends) == 1,
+        motion=part.has_motion,
+        deck="streamdeck" in part.tags,
     )
+
+
+def _named(device: Optional[Device], context: Context) -> Optional[Device]:
+    """A ring standing on a port is told the machine its board is pinned to, as a
+    reason names it (firmware/can.py ``who``); a port nothing is pinned to keeps none."""
+    from ..firmware.can import who
+
+    if context.pointing != Pointing.DEVICE:
+        return device
+    port = device.port if device else (context.targets[0] if context.targets else "")
+    if not port:
+        return device
+    name = who(port)
+    if name == port:
+        return device
+    return (device or Device(port=port)).model_copy(update={"name": name})
 
 
 @router.post("/resolve", response_model=Ring)
@@ -208,10 +228,11 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             request.context,
             _site(request.site),
             site_names=lists["site_names"],
-            groups=lists["groups"],
-            device=request.device,
+            device=_named(request.device, request.context),
             picture=_pictures_known(request.site, request.picture, request.context),
             sketch=request.sketch,
+            can=request.can,
+            rig=request.site in lighting.RIG_LOADERS,
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so
@@ -246,12 +267,12 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     Make says ends with the steps after it, when it made something, and the piece
     it made -- Make all's first -- is ``added``, which the page selects, as it
     selects the camera Add here added: the steps it names are that piece's."""
-    from ..api import _site_payload, _site_store
+    from ..api import site_payload
     from ..vision import views as viewing
 
     action = chosen.intent.action
     name = _needs_site(chosen)
-    site = _site(name)
+    site = sites.store.get(name)
     verb, _, rest = action.partition(":")[2].partition(":")
     rest = rest.removesuffix(f":{FLOOR_MARK}")
     piece = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
@@ -306,7 +327,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
         action=action,
         carried_by=who.value,
         did=did,
-        site=_site_payload(site, _site_store.validator(name)(site)),
+        site=site_payload(site, sites.store.validator(name)(site)),
         address=chosen.intent.address,
         added=added,
     )
@@ -317,7 +338,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
     functions the camera routes call. Add here stands on a host (the ring's
     target) or, with ``@floor``, the floor; Remove names the camera by the ring's
     target. Every refusal is a 4xx naming its reason."""
-    from ..api import _site_payload, _site_store
+    from ..api import site_payload
     from ..vision import cameras
     from .views import check_host
 
@@ -346,7 +367,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
             )
         added = camera.name
     elif action == "camera:remove":
-        site = _site(name)
+        site = sites.store.get(name)
         try:
             cameras.remove(name, site, target)
         except cameras.CameraNotFound as missing:
@@ -359,7 +380,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
         action=action,
         carried_by=who.value,
         did=did,
-        site=_site_payload(site, _site_store.validator(name)(site)),
+        site=site_payload(site, sites.store.validator(name)(site)),
         address=chosen.intent.address,
         added=added,
     )
@@ -370,7 +391,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
 @router.post("/intent", response_model=Carried)
 async def carry_out(chosen: Chosen) -> Carried:
     """Carry out a chosen option, or say that the viewer does, or refuse."""
-    from ..api import _site_payload, _site_store
+    from ..api import site_payload
 
     action = chosen.intent.action
     try:
@@ -388,13 +409,12 @@ async def carry_out(chosen: Chosen) -> Carried:
 
     if action == "reset":
         name = _needs_site(chosen)
-        _site(name)  # 404s on a name that is not there, before anything is reset
-        rebuilt = _site_store.reset(name)
+        rebuilt = sites.store.reset(name)
         return Carried(
             action=action,
             carried_by=who.value,
             did=f"rebuilt {name} from its factory",
-            site=_site_payload(rebuilt, _site_store.validator(name)(rebuilt)),
+            site=site_payload(rebuilt, sites.store.validator(name)(rebuilt)),
             address=chosen.intent.address,
         )
 

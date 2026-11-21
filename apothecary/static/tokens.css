@@ -1,4 +1,4 @@
-/* The page's palette, said once: the Machine (widgets/machine.css), the Working space
+/* The page's palette, said once: the Machine (widgets/machine.css), the Workspace
  * (widgets/working_space.css) and the control pad read these; a host that sets them
  * differently recolours all of them together. The two series, a hotend and a bed, are
  * validated against --bg (dark). The Airgap keeps a palette of its own, its charts'. */
@@ -13,19 +13,60 @@
  * window's tab, the window itself, and its heading and rows in ⊞ Windows and a stack's
  * +. Each is validated against --bg and kept clear of the colours that mean a state
  * (--ok, --warn, --bad) and of a focused tab's line. A group with no rule here wears
- * --ink-3; tests/test_group_colours.py holds that every group the page registers has one. */
+ * --ink-3; tests/test_group_colours.py holds that every group the page registers has one.
+ * The groups are a ring's eight at most, each a cell of Panels (apothecary/menu.py). */
 :root {
-    --group-site: #58c4b8; --group-selected: #c3a2ec; --group-pictures: #ea96c2;
-    --group-tools: #aab4c4; --group-lighting: #e6dc8c; --group-part: #a9c868;
-    --group-machine: #f0906a; --group-airgap: #8ea2f4; --group-family: #cfa87c;
+    --group-site: #58c4b8; --group-part: #a9c868; --group-pictures: #ea96c2;
+    --group-machine: #f0906a; --group-tools: #aab4c4; --group-family: #cfa87c;
+    --group-airgap: #8ea2f4;
 }
 [data-group] { --group: var(--ink-3); }
 [data-group="Site"] { --group: var(--group-site); }
-[data-group="Selected"] { --group: var(--group-selected); }
 [data-group="Pictures"] { --group: var(--group-pictures); }
 [data-group="Tools"] { --group: var(--group-tools); }
-[data-group="Lighting"] { --group: var(--group-lighting); }
 [data-group="Part"] { --group: var(--group-part); }
 [data-group="Machine"] { --group: var(--group-machine); }
 [data-group="Airgap"] { --group: var(--group-airgap); }
 [data-group="Family"] { --group: var(--group-family); }
+
+/* A facet's colour, said once (apothecary/facets.py): a part's Kind, what it is, and a
+ * site's System, what part of the place it serves. A kind's categories are shades of its
+ * colour, made from it; a System that is a kind's same thing names the kind's token. Each
+ * is held at 3:1 against --bg and kept clear of the colours that mean a state, of the
+ * shells' and of the world's own (tests/test_facets.py). */
+:root {
+    --kind-electronics: #3a9e5c; --kind-cameras: #d47ad0; --kind-machines: #e07a5f;
+    --kind-motors: #7a8fd0; --kind-test-pieces: #b8b030; --kind-shop: #3aa0a0;
+    --kind-housings: #b85060; --kind-things: #bc9668;
+    --system-building: #9c8f7a; --system-furniture: #8a5a3c; --system-machines: var(--kind-machines);
+    --system-mechanical: #5b7a99; --system-electrical: #d8c11a; --system-plumbing: #2f8fbf;
+    --system-lighting: #e8a33a; --system-scenery: #8f7bb5;
+}
+
+/* A window's controls, said once: every button, drop-down and box in a window
+ * (section.panel, panels.js) wears the page's dark controls, the look the Machine's head
+ * and the template's panel-ui have, whichever widget drew it. Under :where(), so it
+ * weighs nothing: a widget's own rule for its controls, however light, says otherwise. */
+:where(.panel) :where(button, select, textarea, input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"])) {
+    font: inherit; font-size: 0.78rem; background: #232823; color: var(--ink);
+    border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem;
+}
+:where(.panel) :where(button, select) { cursor: pointer; }
+:where(.panel) :where(button:not(:disabled, [aria-disabled="true"]):hover) { background: #2f382f; }
+:where(.panel) :where(input[type="range"]) { accent-color: #4a9eff; }
+:where(.panel) :where(input[type="file"]) { font-size: 0.72rem; color: var(--ink-2); max-width: 100%; }
+:where(.panel) :where(input[type="file"])::file-selector-button {
+    font: inherit; background: #232823; color: var(--ink); border: 1px solid #3a443a;
+    border-radius: 4px; padding: 0.15rem 0.45rem; margin-right: 0.4rem; cursor: pointer;
+}
+
+/* A control the server would refuse (or that something else holds) is greyed, the same
+ * wherever it is: can.js's setReason and applyCan set `disabled` and `aria-disabled` and
+ * say "Disabled: <why>. <its tip>" in its title, and nothing else greys a control. A
+ * widget with a reason of its own to look otherwise says so in its own sheet. The cursor
+ * is the one thing a widget's own rule for its buttons (a hand, `cursor: pointer`, under
+ * an id or a class this rule does not outweigh) would otherwise give a greyed button
+ * too; a widget that means it says so with an !important of its own. */
+button:disabled, button[aria-disabled="true"],
+select:disabled, select[aria-disabled="true"],
+input:disabled, input[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed !important; }

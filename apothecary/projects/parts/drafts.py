@@ -101,7 +101,7 @@ def ignored_in_its_submodule(folder: Path) -> Optional[Path]:
     ``info/exclude`` (in its git directory: not a tracked file, nothing to
     commit). The exclude file written, or None (not a submodule, not in git, or
     already done). Asked once per folder."""
-    from .saved import GitError, _git, repository_of, superproject_of
+    from .saved import GitError, git, repository_of, superproject_of
 
     key = str(Path(folder).resolve())
     with _EXCLUDED_GUARD:
@@ -112,7 +112,7 @@ def ignored_in_its_submodule(folder: Path) -> Optional[Path]:
         top = repository_of(Path(folder))
         if superproject_of(top) is None:
             return None
-        named = _git(top, "rev-parse", "--git-path", "info/exclude").strip()
+        named = git(top, "rev-parse", "--git-path", "info/exclude").strip()
         exclude = Path(named) if Path(named).is_absolute() else top / named
         have = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
         if DRAFT_PATTERN in have.splitlines():

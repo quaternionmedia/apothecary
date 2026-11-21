@@ -6,7 +6,7 @@ an arrangement from it; `apothecary photo gather` does the rest from the
 command line. These routes give the world's page the same, and no more:
 
 - ``GET /photos/pictures`` lists the pictures in the one folder pictures are
-  read from (`APOTHECARY_PICTURE_ROOT`, see `_picture_root` in api.py) and
+  read from (`APOTHECARY_PICTURE_ROOT`, see `apothecary/picture_root.py`) and
   its two sub-folders the browser fills: ``captures/``, where a camera's
   frames are kept, and ``uploads/``, where the pictures a person added from
   the browser are kept. Nothing outside that folder is ever listed or read.
@@ -16,7 +16,7 @@ command line. These routes give the world's page the same, and no more:
   by its camera too, which the listing reads back as ``camera``), or, with
   ``kept=upload``, a file a person chose under ``uploads/`` (named as the
   person named it). It stays on this machine; nothing is sent anywhere. With
-  ``poll`` too, it is a frame the Working space keeps with a printer's poll:
+  ``poll`` too, it is a frame the Workspace keeps with a printer's poll:
   recorded beside that poll (``apothecary/evidence/frames.py``), and never the
   camera's view.
 - ``DELETE /photos/pictures/{path}`` forgets one kept picture and
@@ -45,8 +45,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
+from .. import sites, surfaces
 from ..gathering.looking import PICTURE_SUFFIXES
-from ..site_names import FORMER
+from ..picture_root import PictureRefused, picture_root, picture_within_root
+from ..site_store import UnknownSiteError
 from ..stamped import claim, stamp
 
 router = APIRouter(tags=["photos"])
@@ -58,12 +60,6 @@ KEPT = {"capture": CAPTURES, "upload": UPLOADS}
 CAPTURE_MAX = 16 * 1024 * 1024
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff"
-
-
-def _root() -> Path:
-    from ..api import _picture_root
-
-    return _picture_root()
 
 
 def _kept_as(path: Path, root: Path) -> Optional[str]:
@@ -118,7 +114,7 @@ def _pictures_in(folder: Path) -> List[Path]:
 @router.get("/photos/pictures")
 def list_pictures() -> List[dict]:
     """The pictures in the one folder, newest first: its own, its captures, its uploads."""
-    root = _root()
+    root = picture_root()
     found: List[Path] = []
     for folder in (root, root / CAPTURES, root / UPLOADS):
         found.extend(_pictures_in(folder))
@@ -216,7 +212,7 @@ def keep_picture(
     wall or the sky) and keeping how the camera stood. A host that cannot hold a
     view, or a camera that is not there, is refused before anything is kept.
 
-    With ``site``, ``camera`` and ``poll`` -- the Working space keeping a frame
+    With ``site``, ``camera`` and ``poll`` -- the Workspace keeping a frame
     set with a printer's poll -- it is kept and named as Take picture names it,
     recorded as evidence beside that poll, and is not the camera's view. The
     printer's kept frames past its budget are forgotten, the oldest first, and
@@ -261,7 +257,7 @@ def keep_picture(
         from .views import check_host
 
         check_host(site, host)
-    root = _root()
+    root = picture_root()
     # "--" is a camera part's mark in a frame's name (TAKEN_BY): no other picture has it.
     stem = re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem)).strip("_")[:60]
     if pinning and camera is not None and kept == "capture":
@@ -277,6 +273,7 @@ def keep_picture(
     from ..vision.views import store
 
     store().kept_again(entry["path"])
+    surfaces.changed(PICTURES, key=entry["path"], body={"kept": entry})
     if poll is not None:
         try:
             entry["evidence"] = evidence_frames.keep(
@@ -288,7 +285,7 @@ def keep_picture(
         entry["forgotten"] = _over_budget(root, site, entry["evidence"]["subjects"])
         return entry
     if pinning:
-        from .views import _answer, pin_picture, take_picture
+        from .views import pin_picture, take_picture, view_answer_in
 
         try:
             view = (
@@ -296,10 +293,10 @@ def keep_picture(
                 if camera is not None
                 else pin_picture(site, host, entry["path"])
             )
-            entry["view"] = _answer(site, view)
-        except HTTPException as refused:
+            entry["view"] = view_answer_in(site, view)
+        except (HTTPException, UnknownSiteError, PictureRefused) as refused:
             # Kept, and not pinned: the picture is the person's either way.
-            entry["view"], entry["not_pinned"] = None, refused.detail
+            entry["view"], entry["not_pinned"] = None, getattr(refused, "detail", str(refused))
     return entry
 
 
@@ -351,11 +348,11 @@ def picture_file(
 
     from fastapi.responses import FileResponse, Response
 
-    from ..api import PICTURE_TYPES, _picture_within_root
+    from ..api import PICTURE_TYPES
 
-    root = _root()
+    root = picture_root()
     asked = Path(path)
-    settled = _picture_within_root(asked if asked.is_absolute() else root / asked)
+    settled = picture_within_root(asked if asked.is_absolute() else root / asked)
     guessed, _ = mimetypes.guess_type(settled.name)
     kind = guessed if guessed in PICTURE_TYPES else None
     if kind is None or not _is_a_picture(settled):
@@ -428,7 +425,7 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
     directly in them go."""
     from ..vision.views import store
 
-    root = _root()
+    root = picture_root()
     folders = [KEPT[kept]] if kept != "all" else list(KEPT.values())
     forgotten: List[str] = []
     unpinned: List[str] = []
@@ -440,6 +437,8 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
                 continue  # gone since it was listed: another purge, or the person
             forgotten.append(f"{folder}/{path.name}")
             unpinned.extend(store().forget_picture(forgotten[-1]))
+    if forgotten:
+        surfaces.changed(PICTURES, body={"forgotten": forgotten})
     return {"forgotten": forgotten, "left": len(_pictures_in(root)), "unpinned": unpinned}
 
 
@@ -451,10 +450,11 @@ def forget_picture(path: str):
     Its views are unpinned, every site's; pieces made from it stay, marked forgotten."""
     from ..vision.views import store
 
-    root = _root()
+    root = picture_root()
     kept = _kept_picture(root, path)
     kept.unlink()
     forgotten = kept.relative_to(root).as_posix()
+    surfaces.changed(PICTURES, key=forgotten, body={"forgotten": [forgotten]})
     return {"forgotten": forgotten, "unpinned": store().forget_picture(forgotten)}
 
 
@@ -486,7 +486,6 @@ class GatherRequest(BaseModel):
 @router.post("/photos/gather")
 def gather_pictures(body: GatherRequest):
     """Which of these pictures are of the same thing, what to ask, and the arrangement."""
-    from ..api import _picture_within_root, _site_store
     from ..gathering import as_text, gather, whole_gathering
     from ..gathering.judgement import (
         CannotRead,
@@ -506,11 +505,11 @@ def gather_pictures(body: GatherRequest):
             detail=f"{len(body.pictures)} pictures at once is too many: every pair is "
             f"compared, so {GATHER_MOST} is the most. Gather them in smaller piles.",
         )
-    root = _root()
+    root = picture_root()
     paths = []
     for rel in body.pictures:
         asked = Path(rel)
-        paths.append(_picture_within_root(asked if asked.is_absolute() else root / asked))
+        paths.append(picture_within_root(asked if asked.is_absolute() else root / asked))
     try:
         finder = get_finder(body.finder)
     except KeyError:
@@ -581,7 +580,7 @@ def gather_pictures(body: GatherRequest):
                 status_code=422, detail="nothing could be read from any of these pictures"
             )
         stock = shelf()
-        if body.name in _site_store.names() and body.name not in stock:
+        if body.name in sites.store.names() and body.name not in stock:
             # The same rule as POST /photos: a gathering never covers over a
             # site that did not come from pictures (the garage, the universe).
             raise HTTPException(
@@ -589,17 +588,28 @@ def gather_pictures(body: GatherRequest):
                 detail=f"{body.name!r} is already the name of an arrangement that did not "
                 "come from a picture. Choose another name rather than covering it over.",
             )
-        if body.name in FORMER:
-            # Nor takes a name a site had before: what was kept under it is that site's.
-            raise HTTPException(
-                status_code=400,
-                detail=f"{body.name!r} is the name the site {FORMER[body.name]} had, and what "
-                "was kept under it is read as that site's; name the gathering something else.",
-            )
         together = whole_gathering(result, built, name=body.name)
         stock.put(together)
-        _site_store.add(
+        sites.store.add(
             together.site.name, stock.factory(together.site.name), stock.checker(together.site.name)
         )
         answer["site"] = together.site.name
+    gathered = {"gathered": [r.picture for r in result.readings], "site": answer["site"]}
+    surfaces.changed(PICTURES, body=gathered)
     return answer
+
+
+# The pictures, as a surface (apothecary/surfaces.py): listed as GET /photos/pictures lists
+# them, and said changed as one is kept or forgotten here and as a pile is gathered.
+PICTURES = "pictures"
+
+surfaces.register(
+    surfaces.Surface(
+        name=PICTURES,
+        frame="none",
+        about="the pictures in the picture root, newest first; kept, forgotten and gathered",
+        snapshot=lambda words: {"pictures": list_pictures()},
+        tells=True,
+        owner=__name__,
+    )
+)

@@ -16,7 +16,6 @@
 }
 .procedure-ui button { cursor: pointer; }
 .procedure-ui button:hover { border-color: var(--ink-3); }
-.procedure-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
 .procedure-ui .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; background: var(--ink-3); }
 .procedure-ui .dot.ok { background: var(--ok); }
 .procedure-ui .dot.warn { background: var(--warn); }

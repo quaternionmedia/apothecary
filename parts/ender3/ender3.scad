@@ -25,6 +25,7 @@ x_axis = 110;   // [0:1:220] Where the hotend stands along X, in bed coordinates
 y_axis = 110;   // [0:1:220] Where the bed stands along Y, in bed coordinates (mm)
 with_spool = true;   // Draw a spool on the holder
 with_lcd = true;     // Draw the LCD and its bracket
+piece = "all";  // [all, fixed, bed, gantry, hotend] What to draw: the whole printer, or one of what moves -- the bed (Y), the X gantry (Z), the hotend carriage (X and Z) -- or all that stands still
 
 /* [Hidden] */
 $fn = 24;
@@ -118,7 +119,11 @@ module ender3_gantry(z) {
     color("dimgray") for (x = [-2, frame_w - 40]) translate([x, upright_y - rail - 2, tip + 40]) cube([42, 44, 60]);
     // the X motor on the left end
     color("dimgray") translate([0, upright_y - rail - 42 + eps, tip + 49]) cube([42, 42, 42]);
-    // the hotend carriage, its fan shroud, and the nozzle
+}
+
+module ender3_hotend(z) {
+    // the hotend carriage riding the gantry, its fan shroud, and the nozzle
+    tip = bed_top_z + z;
     hx = bed_plate_x() + 7.5 + x_axis;
     color("dimgray") translate([hx - 22, upright_y - rail - 45, tip + 10]) cube([44, 45 + eps, 62]);
     color("black") translate([hx - 18, upright_y - rail - 60, tip + 6]) cube([36, 16 + eps, 40]);
@@ -184,14 +189,18 @@ module ender3_spool_holder() {
 }
 
 module ender3() {
-    ender3_base();
-    ender3_uprights();
-    ender3_bed(y_axis);
-    ender3_gantry(z_axis);
-    ender3_psu();
-    ender3_electronics_box();
-    if (with_lcd) ender3_lcd();
-    ender3_spool_holder();
+    // a scene that moves the printer draws each of what moves on its own and moves it
+    if (piece == "all" || piece == "fixed") {
+        ender3_base();
+        ender3_uprights();
+        ender3_psu();
+        ender3_electronics_box();
+        if (with_lcd) ender3_lcd();
+        ender3_spool_holder();
+    }
+    if (piece == "all" || piece == "bed") ender3_bed(y_axis);
+    if (piece == "all" || piece == "gantry") ender3_gantry(z_axis);
+    if (piece == "all" || piece == "hotend") ender3_hotend(z_axis);
 }
 
 ender3();

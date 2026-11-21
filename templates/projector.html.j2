@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Projector · {{ site }} › {{ path }}</title>
+    <style>
+        /* A projector lights what it draws: black wherever nothing is drawn, and nothing
+           on the page but the canvas it draws on. */
+        html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+        canvas { display: block; width: 100vw; height: 100vh; background: #000; cursor: none; }
+        canvas.calibrating { cursor: crosshair; }
+    </style>
+</head>
+<body>
+    <canvas id="projection" aria-label="What the projector draws on {{ path }}'s bed"></canvas>
+    <script type="module">
+        import { mountProjector } from '/static/projector.js';
+        window.apothecaryProjector = mountProjector({
+            canvas: document.getElementById('projection'),
+            base: {{ base_url | tojson }},
+            site: {{ site | tojson }},
+            path: {{ path | tojson }},
+            calibrate: new URLSearchParams(location.search).has('calibrate') || new URLSearchParams(location.search).has('upper'),
+            upper: new URLSearchParams(location.search).get('upper'),
+        });
+    </script>
+</body>
+</html>

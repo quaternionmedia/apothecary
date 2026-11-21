@@ -35,37 +35,48 @@ from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
-from . import jobs
+from . import cabinet, jobs, sites
 from .cam.api import router as cam_router
 from .core import OpenSCADObject
-from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
 from .evidence import printers as evidence_printers
-from .example_hierarchy import (
-    MACHINE_STATUSES,
-    PRINTER_STATUSES,
-    create_example_site,
-    validate_garage_layout,
-)
+from .example_hierarchy import MACHINE_STATUSES, PRINTER_STATUSES
+from .facets import SYSTEM, facet_of, facets_of, kind_and_system, layer_of
 from .family import hub as family_hub
 from .family import members as family_members
 from .firmware import deck_control
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware import grbl as firmware_grbl
-from .firmware.api import _device_view as firmware_device_view
+from .firmware.api import device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
 from .firmware.deck_api import router as firmware_deck_router
-from .firmware.models import DeviceAttachRequest, validate_port
+from .firmware.models import DeviceAttachRequest, ManualBinding, validate_port
 from .firmware.toolchains import ToolchainError
-from .hierarchy import Assembly
+from .hierarchy import Assembly, find_node_by_path
+from .layer_colours import layer_colours
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
+from .picture_root import (
+    CannotLook,
+    NoPicture,
+    NotAPictureRoot,
+    OutsideRoot,
+    PictureRefused,
+    picture_root,
+    picture_within_root,
+)
 from .primitives import Cube, Cylinder, Sphere, absolute_imports
 from .projects.parts.base import BasePart
 from .projects.parts.customizer import (
@@ -86,7 +97,17 @@ from .projects.parts.params import (
     validate_staged,
 )
 from .projects.parts.skeleton import ROOT
-from .projects.parts.stl_renderer import RUNS, build_stl, geometry_scad, part_renderer, runs_for
+from .projects.parts.stl_renderer import (
+    PRINT,
+    REST,
+    RUNS,
+    Pose,
+    build_stl,
+    geometry_scad,
+    part_renderer,
+    posed,
+    runs_for,
+)
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.variants import (
     KEY_PATTERN,
@@ -99,6 +120,7 @@ from .projects.parts.variants import (
     read_partial,
     read_variant,
     read_variant_draft,
+    rest_stl,
     variant_paths,
     variant_record,
 )
@@ -106,41 +128,49 @@ from .projects.parts.variants import wants as request_wants
 from .projects.registry import (
     PartLoadError,
     ProjectInfo,
-    _sanitize_module_name,
+    category_of,
     load_part,
+    part_names,
+    sanitize_module_name,
     scan_projects,
 )
 from .routes import lighting as lighting_routes
 from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
+from .routes.cabinet import router as cabinet_router
 from .routes.cameras import router as cameras_router
 from .routes.evidence import router as evidence_router
+from .routes.interfaces import router as interfaces_router
 from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.machines import router as machines_router
 from .routes.marks import router as marks_router
+from .routes.motion import router as motion_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.procedures import router as procedures_router
+from .routes.projector import router as projector_router
 from .routes.readme import router as readme_router
+from .routes.surfaces import router as surfaces_router
+from .routes.tour import router as tour_router
 from .routes.views import router as views_router
 from .routes.vision import router as vision_router
+from .routes.whiteboards import router as whiteboards_router
 from .routes.wiring import router as wiring_router
 from .scene import Scene
-from .site_names import FORMER, UNIVERSE
-from .site_store import SiteStore, UnknownSiteError
+from .site_names import UNIVERSE
+from .site_store import UnknownSiteError
 from .slicer import service as slicing
 from .slicer.api import router as slicer_router
 from .slicer.models import Made as SlicedMade
 from .slicer.models import SlicedFor
 from .slicer.modules import SlicerError
 from .slicer.profiles import Declared
-from .state_folder import state_dir
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
-from .theatre_site import create_theatre_site, load_theatre_rig, validate_theatre
+from .theatre_site import load_theatre_rig
 from .transforms import Translate
-from .universe import create_universe_site, real_size, validate_universe
+from .universe import real_size
 from .viewer import render_fractal_viewer_page
 from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
@@ -212,6 +242,9 @@ async def lifespan(app: FastAPI):
     deck_control.start_all()
     yield
     deck_control.stop_all()
+    # A job's thread dies with the process: what it turned on is turned off first.
+    for said in await asyncio.to_thread(firmware_devices.stop_jobs):
+        logger.warning("%s", said)
     wiring_routes.stop_following()
     family_hub.close()
     lighting_routes.stop_console_feeds()
@@ -230,7 +263,10 @@ app = FastAPI(
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer, and cam, "
-        "the router's toolpath; jobs; a site's machines and the plan each keeps before its board is connected; "
+        "the router's toolpath; jobs; each part's cabinet, a drawer for each piece made of "
+        "it and what is said of it; a site's machines and the plan each keeps before its board is connected; "
+        "a machine's projector, calibrated to its bed; the surfaces, each thing a page shows "
+        "read one way with its changes streamed, and what the family's members found; "
         "the evidence a site's printers and cameras leave, as one view of it; "
         "the airgap part's metrics document, its schema and its check; the ring's menu; "
         "the irl family's hub, on hearth's contract; "
@@ -278,6 +314,8 @@ app.mount("/static", _AskedAgain(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
 # The root README, as a page of the same kind.
 app.include_router(readme_router)
+# The tour: the journeys a stage at a time, and a person's word on each stage.
+app.include_router(tour_router)
 # Mounted before the photo routes below, so /photos/pictures and /photos/gather
 # are matched before /photos/{name} can take "pictures" for a name. The router
 # reaches back into this module only inside its handlers.
@@ -285,16 +323,25 @@ app.include_router(pictures_router)
 # Views: a picture pinned at a place in a site, and the pieces made from its shapes.
 app.include_router(views_router)
 app.include_router(marks_router)
+app.include_router(whiteboards_router)
 # Cameras: a camera part added to a site, aimed, told its device, removed.
 app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.
 app.include_router(jobs_router)
+# The cabinet: a drawer for each piece made of a part, and what is filed about it.
+app.include_router(cabinet_router)
 # The slicer: its status and install, and a part or a made piece sliced for a printer.
 app.include_router(slicer_router)
 app.include_router(cam_router)
 app.include_router(machines_router)
+# A projector aimed at a machine's bed: its calibration, and what it draws there.
+app.include_router(projector_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
+# A part's interfaces, and how two fit (docs/connections.md).
+app.include_router(interfaces_router)
+# A part's motion, sampled into the table the page plays (apothecary/motion.py).
+app.include_router(motion_router)
 app.include_router(lighting_router)
 # The Airgap panel's metrics document: its schema, and a copied document read back.
 app.include_router(airgap_router)
@@ -306,10 +353,13 @@ app.include_router(family_hub.router())
 for _hosted in family_members.routers():
     app.include_router(_hosted)
 app.include_router(procedures_router)
-# A working space seen from every kind of evidence: the log's document for a site.
+# A workspace seen from every kind of evidence: the log's document for a site.
 app.include_router(evidence_router)
 # Image models through qmcp, and the plain reader beside them: asked only when a person asks.
 app.include_router(vision_router)
+# The surfaces: what the server knows of each thing a page shows, read one way, its
+# changes relayed as the server learns them, and what the family's members found.
+app.include_router(surfaces_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -328,13 +378,13 @@ def _part_template() -> str:
     return "// {{ part.name }}\ninclude <{{ source_posix }}>"
 
 
-def _load_part_wrapper(name: str):
+def load_part_wrapper(name: str):
     # Only a registered part: a name from a URL is never turned into an import
     # path, so GET /parts/stl_renderer is a 404 and imports nothing.
     # Spellings a link may carry: the registry's name in any case of - and _
     # (datum-core), or a nested part's package path. Each resolves
     # to a registered wrapper, never to a module constructed from the URL.
-    wanted = _sanitize_module_name(name)
+    wanted = sanitize_module_name(name)
     entry = next(
         (
             p
@@ -342,7 +392,7 @@ def _load_part_wrapper(name: str):
             if p.kind == "part"
             and p.has_part
             and (
-                _sanitize_module_name(p.name) == wanted
+                sanitize_module_name(p.name) == wanted
                 or p.wrapper == f"apothecary.projects.parts.{name}"
             )
         ),
@@ -360,6 +410,7 @@ def _load_part_wrapper(name: str):
 
 
 _BOARDS: Dict[str, bool] = {}
+_BOUGHT: Dict[str, bool] = {}
 
 
 def is_board(part_ref: Optional[str]) -> bool:
@@ -369,14 +420,34 @@ def is_board(part_ref: Optional[str]) -> bool:
         return False
     if part_ref not in _BOARDS:
         try:
-            _BOARDS[part_ref] = "board" in (_load_part_wrapper(part_ref).tags or [])
+            _BOARDS[part_ref] = "board" in (load_part_wrapper(part_ref).tags or [])
         except HTTPException:
             _BOARDS[part_ref] = False
     return _BOARDS[part_ref]
 
 
+def is_bought(part_ref: Optional[str]) -> bool:
+    """Whether a part is a thing bought whole and drawn as it is -- tagged ``bought``,
+    the Stream Deck + -- never printed, so never made here. Asked once per part."""
+    if not part_ref:
+        return False
+    if part_ref not in _BOUGHT:
+        try:
+            _BOUGHT[part_ref] = "bought" in (load_part_wrapper(part_ref).tags or [])
+        except HTTPException:
+            _BOUGHT[part_ref] = False
+    return _BOUGHT[part_ref]
+
+
+def part_category(part_ref: Optional[str]) -> Optional[str]:
+    """A part's category, the word its kind holds (facets.py); None for no part, or one
+    that is not registered (``projects.registry.category_of``, kept while its part.json is
+    unchanged)."""
+    return category_of(part_ref, ROOT) if part_ref else None
+
+
 def _available_part_names() -> List[str]:
-    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part})
+    return part_names(ROOT)
 
 
 def _repo_relative_path(path: Path) -> str:
@@ -423,11 +494,26 @@ def _render_part_include(part, params_json: str) -> str:
     return renderer.render_template(template_str, ctx)
 
 
+def _motion_summary(part) -> Optional[Dict[str, Any]]:
+    """A part's motion as its metadata says it (``Motion.summary``), at its own values;
+    None for a part without one, or whose own values give none."""
+    if not part.has_motion:
+        return None
+    motion = part.motion(None)
+    return motion.summary() if motion is not None else None
+
+
 def _part_metadata(part) -> Dict[str, object]:
     metadata = {
         "name": part.name,
         "description": part.description,
         "category": part.category,
+        "kinematics": part.kinematics,
+        # How its pieces move as one of its parameters goes, at its own values: what
+        # GET /parts/{name}/motion samples; None for a part drawn as one.
+        "motion": _motion_summary(part),
+        # What it needs and does not print, at its own values (BasePart.bought).
+        "bought": [b.model_dump() for b in part.bought()],
         "tags": part.tags,
         "readme": (
             _repo_relative_path(part.readme_path)
@@ -512,14 +598,25 @@ def render_scene(scene: Scene):
 
 
 @app.get("/parts")
-def list_parts():
-    names = _available_part_names()
-    return [_part_metadata(_load_part_wrapper(name)) for name in names]
+def list_parts(response: Response):
+    """Every registered part that loads. One that does not -- a part.json refused,
+    a wrapper that raises, a SCAD that is not there -- is left out and named in
+    ``X-Parts-Not-Loaded``; ``GET /parts/{name}`` says why, as does ``apothecary
+    problems``."""
+    listed, not_loaded = [], []
+    for name in _available_part_names():
+        try:
+            listed.append(_part_metadata(load_part_wrapper(name)))
+        except HTTPException:
+            not_loaded.append(name)
+    if not_loaded:
+        response.headers["X-Parts-Not-Loaded"] = ", ".join(not_loaded)
+    return listed
 
 
 @app.get("/parts/{name}")
 def get_part(name: str, params: str | None = Query(None, alias="params")):
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     return _part_payload(part, params)
 
 
@@ -547,7 +644,7 @@ def get_part_scad(
     edited as: its overlay setting nothing, an include of the upstream file
     (``X-Part-Scad: overlay``, ``X-Part-Upstream`` naming that file, which
     ``GET /parts/{name}/upstream`` serves read only)."""
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     if variant is not None:
         return _variant_scad(name, part, variant)
     if editable(part) and not params:
@@ -591,7 +688,7 @@ def get_part_upstream(name: str):
     part in no submodule: its SCAD is ``GET /parts/{name}/scad``."""
     from .projects.parts.texts import is_overlaid
 
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     if not editable(part) or not is_overlaid(part):
         raise HTTPException(
             status_code=404,
@@ -635,17 +732,38 @@ def _variant_scad(name: str, part: BasePart, key: str) -> PlainTextResponse:
     return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "values" if values else kind})
 
 
+# Which way up a request wants a part: as it prints (the default, what is sliced and
+# downloaded) or as it rests (what the world draws). A part that declares no rest
+# pose is answered as it prints either way.
+POSE = Query(
+    PRINT,
+    description="print: the way up it prints, its STL as it is sliced; rest: as it "
+    "stands in use, for a part that declares a rest pose (the same STL for one that "
+    "does not)",
+)
+
+
+def posed_url(url: str, pose: str) -> str:
+    """``url`` asking for ``pose``: the print pose is the default, named by nothing."""
+    return f"{url}?pose={REST}" if pose == REST else url
+
+
 @app.get("/parts/{name}/stl")
-def get_part_stl(name: str):
+def get_part_stl(name: str, pose: Pose = POSE):
     """
     Download the STL file for a part.
 
     Returns 404 if the STL hasn't been generated yet.
     Use POST /parts/{name}/stl/generate to create it.
-    """
-    part = _load_part_wrapper(name)
 
-    stl_path = part.stl_file
+    ``?pose=rest`` asks for it as it rests, for a part that declares a rest
+    pose: built beside its own STL, for the parameters that holds, when it is
+    not fresh for them.
+    """
+    part = load_part_wrapper(name)
+
+    pose = posed(part, pose)
+    stl_path = rest_stl(part) if pose == REST else part.stl_file
     if stl_path is None or not stl_path.exists():
         raise HTTPException(
             status_code=404,
@@ -658,7 +776,9 @@ def get_part_stl(name: str):
             content=stl_data,
             media_type="application/sla",
             headers={
-                "Content-Disposition": f'attachment; filename="{name}.stl"',
+                "Content-Disposition": f'attachment; filename="{name}'
+                + (".rest" if pose == REST else "")
+                + '.stl"',
                 "X-Part-Name": name,
             },
         )
@@ -686,7 +806,7 @@ class StlGenerateRequest(BaseModel):
 
 
 # The render each page has in flight per part, so a newer one can stop it.
-_page_renders = PageRenders()
+page_renders = PageRenders()
 
 # What a variant's own URL is answered with: under its key its bytes never change.
 IMMUTABLE = "public, max-age=31536000, immutable"
@@ -702,6 +822,7 @@ def generate_part_stl(
         description="An id the page makes up once per load. A newer request from the "
         "same page for the same part stops this one's OpenSCAD run (409).",
     ),
+    pose: Pose = POSE,
     body: Optional[StlGenerateRequest] = None,
 ):
     """Render a part with ``params`` into the variant cache, and say what OpenSCAD said.
@@ -716,6 +837,9 @@ def generate_part_stl(
     STL. The defaults are also left as the part's own STL, unless its params
     sidecar says it holds another variant; any other variant is the cache's
     alone, so two pages applying different values never share a file.
+    ``?pose=rest``, for a part that declares a rest pose, also makes the
+    variant's rest pose, which ``stl_url`` and ``measured`` are then of
+    (``pose`` says which); the variant and its key are the print pose's.
 
     For a part whose SCAD is its source, the values are written into its own
     text (its SCAD, or a part in a submodule's overlay), and that text renders,
@@ -737,7 +861,7 @@ def generate_part_stl(
     superseded by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
     part that cannot be built on this machine, is a 503.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     with runs_for(part.name, page):
         listing = _listing(part)
     overrides = checked_overrides(part, body.params if body else None, listing)
@@ -753,16 +877,18 @@ def generate_part_stl(
 
         text = with_params(part, own_text(part), overrides)
         version = body.editor_version if body else None
-        return render_text(self_api(), name, part, text, force, page, version, values=overrides)
+        return render_text(
+            self_api(), name, part, text, force, page, version, values=overrides, pose=pose
+        )
 
-    cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
+    cancel = page_renders.begin(part.name, page, request_wants(overrides, force, pose))
     try:
         with runs_for(part.name, page):
-            made = make_variant(part, overrides, force=force, cancel=cancel)
+            made = make_variant(part, overrides, force=force, cancel=cancel, pose=pose)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
-        _page_renders.end(part.name, page, cancel)
+        page_renders.end(part.name, page, cancel)
     return made_answer(name, part, made, overrides, body.editor_version if body else None)
 
 
@@ -895,7 +1021,12 @@ def made_answer(
                 else "STL is up to date (force=true rebuilds it)"
             )
         ),
-        "stl_url": (f"/parts/{name}/variants/{made.key}/stl" if made.key else f"/parts/{name}/stl"),
+        "stl_url": posed_url(
+            f"/parts/{name}/variants/{made.key}/stl" if made.key else f"/parts/{name}/stl",
+            made.pose,
+        ),
+        # What stl_url and measured are of: print, or rest where it was asked for.
+        "pose": made.pose,
         "variant": made.key,
         "regenerated": made.rendered,
         "render_time_seconds": made.render_time_seconds,
@@ -921,13 +1052,18 @@ def made_answer(
 
 
 @app.get("/parts/{name}/variants/{variant}", response_model=VariantRecord)
-def get_part_variant(name: str, variant: str):
+def get_part_variant(name: str, variant: str, pose: Pose = POSE):
     """What made one cached variant: its parameters, OpenSCAD and backend, its
     measured bounds and what OpenSCAD said, and its ``stl_url``. A page that
     has only the key (a reloaded tab, a link) starts its editor from these.
-    404 once the cache has let it go."""
-    part = _load_part_wrapper(name)
-    record = variant_record(part, variant, url_name=name) if KEY_PATTERN.match(variant) else None
+    404 once the cache has let it go. ``?pose=rest``: its rest pose's
+    ``stl_url`` and ``measured``, and a 404 when that is not kept."""
+    part = load_part_wrapper(name)
+    record = (
+        variant_record(part, variant, url_name=name, pose=pose)
+        if KEY_PATTERN.match(variant)
+        else None
+    )
     if record is None:
         raise HTTPException(
             status_code=404,
@@ -938,22 +1074,25 @@ def get_part_variant(name: str, variant: str):
 
 
 @app.get("/parts/{name}/variants/{variant}/stl")
-def get_part_variant_stl(name: str, variant: str):
+def get_part_variant_stl(name: str, variant: str, pose: Pose = POSE):
     """One variant from the cache, by the ``variant`` key generate answered.
 
     Its bytes never change under its key, whichever page asks: what a page
     applied is what it draws, and the browser keeps it as immutable. 404 once
     the cache has let it go (it keeps the most recently served of each part);
-    generating it again puts it back.
+    generating it again puts it back. ``?pose=rest``: its rest pose, kept with
+    it once a request for the rest pose made it (generate's ``?pose=rest``).
     """
-    part = _load_part_wrapper(name)
-    if not KEY_PATTERN.match(variant) or read_variant(part, variant) is None:
+    part = load_part_wrapper(name)
+    pose = posed(part, pose)
+    if not KEY_PATTERN.match(variant) or read_variant(part, variant, pose=pose) is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No variant '{variant}' of '{name}' is cached; "
-            f"POST /parts/{name}/stl/generate makes it",
+            detail=f"No variant '{variant}' of '{name}' is cached"
+            + (" in its rest pose" if pose == REST else "")
+            + f"; POST {posed_url(f'/parts/{name}/stl/generate', pose)} makes it",
         )
-    stl, _ = variant_paths(part, variant)
+    stl, _ = variant_paths(part, variant, pose=pose)
     try:
         data = stl.read_bytes()
     except FileNotFoundError:
@@ -962,7 +1101,9 @@ def get_part_variant_stl(name: str, variant: str):
         content=data,
         media_type="application/sla",
         headers={
-            "Content-Disposition": f'attachment; filename="{name}-{variant}.stl"',
+            "Content-Disposition": f'attachment; filename="{name}-{variant}'
+            + (".rest" if pose == REST else "")
+            + '.stl"',
             # A key is everything that made it: its bytes never change under it.
             "Cache-Control": IMMUTABLE,
             "X-Part-Name": name,
@@ -977,7 +1118,7 @@ def get_part_partial_stl(name: str, variant: str):
     ``partial.stl_url`` of a 422 from generate or a draft's render. Never a
     variant and never cached by the browser (a render of the same request
     that fails again writes it again); 404 once a newer failure has let it go."""
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     path = read_partial(part, variant)
     try:
         data = path.read_bytes() if path is not None else None
@@ -1000,7 +1141,7 @@ def get_part_partial_stl(name: str, variant: str):
 
 
 @app.get("/parts/{name}/state", response_model=PartState)
-def get_part_state(name: str):
+def get_part_state(name: str, pose: Pose = POSE):
     """What the part's own STL is, from its params sidecar.
 
     The parameters it was rendered with (empty: the defaults), when, and
@@ -1009,11 +1150,12 @@ def get_part_state(name: str):
     defaults. ``apothecary parts generate-stl -p`` is what writes a variant
     there; the page's own Apply only ever leaves the defaults there.
     ``can_build`` says whether an OpenSCAD here can build the part at all, and
-    ``build_note`` why not.
+    ``build_note`` why not. ``?pose=rest``: ``stl_url`` and ``measured`` are of
+    it as it rests, as ``GET /parts/{name}/stl?pose=rest`` serves it.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     can, why = part.can_generate_stl()
-    return part_state(part, url_name=name).model_copy(
+    return part_state(part, url_name=name, pose=pose).model_copy(
         update={"can_build": can, "build_note": why or None}
     )
 
@@ -1042,7 +1184,7 @@ def get_part_params(name: str):
     (gridfinity cannot on 2021.01), and ``build_note`` why not: Apply is
     refused (a 503) where it is false.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     try:
         return buildable(part, params_spec(part))
     except NoParameters:
@@ -1097,7 +1239,7 @@ def drawn_variant(part: BasePart, key: str):
     if not measured:
         from .projects.parts.variants import measure_stl
 
-        measured = measure_stl(stl, part.display_rotation.to_list())
+        measured = measure_stl(stl)
     return Drawn(
         key=key,
         stl=stl,
@@ -1132,7 +1274,7 @@ def pinned_build_volume(site_name: str, printer: Optional[str] = None):
             f"{len(pinned)} printers are pinned in {site_name}: {', '.join(pinned)}",
             "name the one to print on (printer=<path>)",
         )
-    node = _find_node_by_path(_site_store.get(site_name), chosen)
+    node = find_node_by_path(sites.store.get(site_name), chosen)
     volume = getattr(node, "build_volume", None) if node is not None else None
     if volume is None:
         return None, (
@@ -1173,11 +1315,11 @@ def get_part_checklist(
     """
     from .projects.parts.readiness import NO_VOLUME, assess
 
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     drawn = drawn_variant(part, variant) if variant else None
     volume, source, none = _parse_build_volume(build_volume), "given", NO_VOLUME
     if volume is None and site:
-        if site not in _site_store.names():
+        if site not in sites.store.names():
             raise HTTPException(status_code=404, detail=f"Site '{site}' not found")
         found, said = pinned_build_volume(site, printer)
         if found is None:
@@ -1211,7 +1353,7 @@ def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
     nothing. A part without a model is checked against what its SCAD's
     customizer lists, where OpenSCAD lists it, else by its names alone.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     params = body.params if body else {}
     if part.params_model is not None:
         return validate_staged(part, params)
@@ -1242,9 +1384,10 @@ def validate_without_model(
 # =============================================================================
 # Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
 #
-# Backed by a process-lifetime SiteStore: edits persist across requests,
-# unlike /render's stateless Scene handling. site_store.py says what it keeps
-# across a restart and what it does not share between worker processes.
+# Backed by the process-lifetime store of apothecary/sites.py: edits persist
+# across requests, unlike /render's stateless Scene handling. site_store.py
+# says what it keeps across a restart and what it does not share between
+# worker processes.
 #
 # Routes that change a site stay `async def`: they run one at a time on the
 # event loop, which is all that serializes the store's plain dicts until it
@@ -1252,17 +1395,7 @@ def validate_without_model(
 # render work, are plain `def` and run on the threadpool.
 # =============================================================================
 
-_site_store = SiteStore(
-    {
-        # The universe: every registered part a leaf, every other site here one piece.
-        UNIVERSE: (lambda: create_universe_site(_site_store.others()), validate_universe),
-        "garage": (create_example_site, validate_garage_layout),
-        "datum_core": (create_datum_core_site, validate_datum_core),
-        # A theatre's shell with sliders, and its lighting rig: theatre_site.py.
-        "theatre": (create_theatre_site, validate_theatre),
-    },
-    universe=UNIVERSE,
-)
+# The theatre's lighting rig: theatre_site.py.
 lighting_routes.RIG_LOADERS["theatre"] = load_theatre_rig
 # The site /viewer opens on. Named rather than "whichever sorts first", so that
 # registering a new site cannot silently move the front door.
@@ -1280,29 +1413,10 @@ def _photo_shelf():
     return shelf()
 
 
-def _get_site_or_404(name: str) -> Assembly:
-    try:
-        return _site_store.get(name)
-    except UnknownSiteError:
-        raise HTTPException(status_code=404, detail=f"Site '{name}' not found") from None
-
-
-def _find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
-    """Resolve a dotted, site-rooted path (e.g. ``printer_1.gantry_system``)
-    to the Assembly node it names, walking ``children``/``additions``/
-    ``subtractions`` together -- the same three-list-as-one-tree shape
-    ``_assembly_tree`` exposes to the client, so a path the viewer displays
-    is always resolvable back here. Returns None if any segment doesn't
-    match, rather than raising, so callers can choose their own 404 wording.
-    """
-    node = site
-    for segment in path.split("."):
-        candidates = [*node.children, *node.additions, *node.subtractions]
-        found = next((c for c in candidates if c.name == segment), None)
-        if found is None:
-            return None
-        node = found
-    return node
+@app.exception_handler(UnknownSiteError)
+async def unknown_site(request: Request, missing: UnknownSiteError) -> JSONResponse:
+    """A site asked for by a name the store does not hold is a 404, whichever route asked."""
+    return JSONResponse(status_code=404, content={"detail": str(missing)})
 
 
 # Node renders kept in the cache. A key includes the node's position, so every
@@ -1520,6 +1634,8 @@ def _assembly_tree(
     node: Assembly,
     parent_world_position: Vector3D | None = None,
     parent_category: str | None = None,
+    by: str | None = None,
+    parent_part: str | None = None,
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
@@ -1549,18 +1665,21 @@ def _assembly_tree(
     ancestor set -- a viewer can color-code a whole Structure's tree from
     one tag on its root instead of needing every Substructure/Feature
     tagged individually.
+
+    ``kind`` and ``system`` are the facets the node is grouped by (``facets.py``): its
+    part's kind and its word's System, a node inside a part being of that part. ``layer``
+    is the one layer it is on beside its shell's, its System's or its category's
+    (``facets.layer_of``). ``by`` is the facet its site is grouped by, read from the site
+    at the root.
     """
+    by = by if by is not None else facet_of(node)
     parent_world_position = parent_world_position or Vector3D()
     world_position = parent_world_position + node.position
     category = node.category if node.category is not None else parent_category
-    world_bounds = (
-        BoundingBox3D(
-            min_point=node.footprint.min_point + world_position,
-            max_point=node.footprint.max_point + world_position,
-        )
-        if node.footprint is not None
-        else None
-    )
+    part = node.part_ref if node.part_ref is not None else parent_part
+    of_part = part_category(part)
+    kind, system = kind_and_system(by, category, of_part)
+    world_bounds = node.turned_bounds(world_position)
 
     # A site's piece is one piece: what it holds is how it is drawn, not a level.
     composed = (
@@ -1585,8 +1704,22 @@ def _assembly_tree(
         # A board (a printer's mainboard, a router's controller, a devkit): a node whose
         # part the boards library tags one, where a machine's Pin puts its port.
         "board": is_board(node.part_ref),
+        # A thing bought whole and drawn as it is (the Stream Deck +): never made here.
+        "bought": is_bought(node.part_ref),
         "category": category,
+        "kind": kind,
+        "system": system,
+        "layer": layer_of(by, category, of_part),
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
+        # How the node is turned about its own origin: [rx, ry, rz] degrees, OpenSCAD's
+        # rotate order, or None for a node that is not turned (the footprint is then
+        # in the world's axes). world_bounds is the box that contains the turned footprint.
+        "depth": node.depth,
+        "shell": node.shell,
+        # The parts a universe's leaf is built from, by name, each another leaf: what a
+        # viewer joins it to. None for any other node.
+        "built_from": node.built_from,
+        "turn": [node.turn.x, node.turn.y, node.turn.z] if node.turn is not None else None,
         "footprint": _bounds_dict(node.footprint),
         "world_bounds": _bounds_dict(world_bounds),
         "build_volume": (
@@ -1599,12 +1732,15 @@ def _assembly_tree(
             if node.build_origin
             else None
         ),
+        # A machine's frame, as GET /firmware/printers/where gives it without a
+        # controller's word (machine_frame); None for anything else.
+        "frame": machine_frame(node, world_position) if node.build_volume else None,
         "primitive": (
             _primitive_descriptor(node.base, world_position) if node.base is not None else None
         ),
         "children": [
             {
-                **_assembly_tree(child, world_position, category),
+                **_assembly_tree(child, world_position, category, by, part),
                 "composition": composition,
             }
             for child, composition in composed
@@ -1619,7 +1755,7 @@ def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
     its site's top-level pieces, scaled into its cell, each where it stands in the
     universe's frame. The viewer builds the boxes itself: nothing is rendered."""
     try:
-        size = real_size(_site_store.get(node.site_ref))
+        size = real_size(sites.store.get(node.site_ref))
     except KeyError:
         size = None
     return {
@@ -1628,6 +1764,8 @@ def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
             {
                 "name": box.name,
                 "category": box.category,
+                # Its layer in its own site, whose colour it wears.
+                "layer": layer_of(SYSTEM, box.category, None),
                 "bounds": _bounds_dict(
                     BoundingBox3D(
                         min_point=box.footprint.min_point + world_position + box.position,
@@ -1641,7 +1779,7 @@ def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
     }
 
 
-def _site_payload(site, report) -> Dict[str, object]:
+def site_payload(site, report) -> Dict[str, object]:
     """The site as the viewer consumes it, including its generated OpenSCAD.
 
     Every read carries ``scad``, so a site merely loaded, never dragged, shows its
@@ -1660,6 +1798,12 @@ def _site_payload(site, report) -> Dict[str, object]:
         "name": site.name,
         "structures": [_structure_summary(s) for s in site.children],
         "tree": _assembly_tree(site),
+        # The colour of each layer the site has, the one table (layer_colours.py): the
+        # page draws a layer, its ring cells and its row in it.
+        "layer_colours": layer_colours(site, part_category),
+        # What the page groups the site's pieces by, and each group's colour (facets.py):
+        # Kind in the universe, System in a site.
+        "facets": facets_of(site, part_category),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
         "scad": scad,
@@ -1686,8 +1830,6 @@ SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 # because its address is theirs -- and forgetting it would forget the kept
 # pictures instead.
 RESERVED_NAMES = frozenset({"pictures", "gather"})
-# A name a site had before (apothecary/site_names.py) is that site's still: its
-# address goes to the site, and what was kept under it is read as the site's.
 
 
 def _check_name(name: str) -> str:
@@ -1715,14 +1857,6 @@ def _check_name(name: str) -> str:
                 "name the arrangement something else."
             ),
         )
-    if name in FORMER:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"{name!r} is the name the site {FORMER[name]} had, and what was kept "
-                "under it is read as that site's; name the arrangement something else."
-            ),
-        )
     return name
 
 
@@ -1735,101 +1869,17 @@ class LookAtPicture(BaseModel):
     finder: str = "plain"
 
 
-def _picture_root() -> Path:
-    """The one folder pictures may be read from.
-
-    A server that reads any path it is handed is a server that will read
-    ``/etc/shadow`` the day somebody points it at a network it did not expect.
-    Everything here is meant to run on one machine and listen only to it, and
-    that is still not a reason to leave the door open.
-
-    Set ``APOTHECARY_PICTURE_ROOT`` to say where pictures live. Without it, the
-    folder the server was started in. Never the whole machine, and never the
-    person's home folder or anything above it: a picture root is a folder of
-    pictures, and those hold everything else of theirs.
-    """
-    named = os.environ.get("APOTHECARY_PICTURE_ROOT") or str(Path.cwd())
-    root = Path(named).resolve()
-    if not root.is_dir():
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"pictures are supposed to be read from {root}, and there is no "
-                "folder there. Set APOTHECARY_PICTURE_ROOT to one that exists."
-            ),
-        )
-    if root == Path(root.anchor):
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"pictures are supposed to be read from {root}, which is the whole "
-                "machine. That turns the restriction off rather than setting it."
-            ),
-        )
-    homes = _home_folders()
-    state = _state_folder()
-    if any(root == home or root in home.parents for home in homes) or (
-        root == state or state in root.parents
-    ):
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"pictures are supposed to be read from {root}, which holds everything "
-                "of yours, not a folder of pictures. Start the server in a folder of "
-                "pictures, or set APOTHECARY_PICTURE_ROOT to one."
-            ),
-        )
-    return root
+# What each refusal of the picture root (apothecary/picture_root.py) is answered with.
+PICTURE_REFUSALS = {NotAPictureRoot: 500, OutsideRoot: 403, CannotLook: 400, NoPicture: 404}
 
 
-def _home_folders() -> List[Path]:
-    """The person's home: by HOME, and by the account, which a variable cannot move."""
-    folders = [Path.home()]
-    try:
-        import pwd
-
-        folders.append(Path(pwd.getpwuid(os.getuid()).pw_dir))
-    except (ImportError, KeyError, AttributeError):
-        pass
-    return [f.expanduser().resolve() for f in folders]
-
-
-def _state_folder() -> Path:
-    """Where the serial numbers, camera labels and readings live: never pictures."""
-    return state_dir().expanduser().resolve()
-
-
-def _picture_within_root(where: Path) -> Path:
-    """Check a picture is inside the one folder, following any links first.
-
-    Checked every time it is used, not only when it arrives. A file that passed
-    on the way in can be swapped for a link pointing anywhere afterwards, and
-    then the door that refused it is serving it.
-    """
-    root = _picture_root()
-    try:
-        settled = Path(where).resolve()
-        settled.relative_to(root)
-    except (ValueError, OSError):
-        raise HTTPException(
-            status_code=403, detail=f"pictures are read from {root} and nowhere else"
-        ) from None
-    # `is_file` rather than `exists`: a pipe exists, and opening one waits for
-    # somebody to write to it, which is never. It also has to be guarded,
-    # because asking about an impossible path is itself an error rather than a
-    # no.
-    try:
-        real = settled.is_file()
-    except OSError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"{settled} cannot be looked at: {exc}"
-        ) from None
-    if not real:
-        raise HTTPException(
-            status_code=404,
-            detail=f"there is no picture at {settled}, or it is not an ordinary file",
-        )
-    return settled
+@app.exception_handler(PictureRefused)
+async def picture_refused(request: Request, refused: PictureRefused) -> JSONResponse:
+    """A root that is no folder of pictures, or a path that is no picture inside it,
+    answered in its own words, whichever route read the picture."""
+    return JSONResponse(
+        status_code=PICTURE_REFUSALS[type(refused)], content={"detail": str(refused)}
+    )
 
 
 @app.post("/photos")
@@ -1844,13 +1894,13 @@ def look_at_picture(request: LookAtPicture):
     from .vision import get as get_finder
     from .vision.shelf import shelf
 
-    root = _picture_root()
+    root = picture_root()
     asked = Path(request.picture)
-    where = _picture_within_root(asked if asked.is_absolute() else root / asked)
+    where = picture_within_root(asked if asked.is_absolute() else root / asked)
 
     name = _check_name(request.name or where.stem)
     stock = shelf()
-    if name in _site_store.names() and name not in stock:
+    if name in sites.store.names() and name not in stock:
         raise HTTPException(
             status_code=409,
             detail=(
@@ -1873,7 +1923,7 @@ def look_at_picture(request: LookAtPicture):
     made = build_arrangement(picture, name=name, scale=scale, picture_path=where)
 
     stock.put(made)
-    _site_store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
+    sites.store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
     return get_photo_album(made.site.name)
 
 
@@ -1934,7 +1984,7 @@ def forget_photo_site(name: str):
             ),
         )
     stock.forget(name)
-    _site_store.remove(name)
+    sites.store.remove(name)
     return {"forgotten": name}
 
 
@@ -1954,7 +2004,7 @@ def get_photo_picture(name: str):
             status_code=404,
             detail="the picture is no longer where it was when this was built",
         )
-    settled = _picture_within_root(where)
+    settled = picture_within_root(where)
 
     # The type is chosen from a short list, not built out of the file name. A
     # name can contain anything at all, including the characters that end a
@@ -1971,14 +2021,14 @@ def get_photo_picture(name: str):
 
 @app.get("/sites")
 async def list_sites():
-    return _site_store.names()
+    return sites.store.names()
 
 
 @app.get("/sites/{name}")
 def get_site(name: str):
-    site = _get_site_or_404(name)
-    validator = _site_store.validator(name)
-    return _site_payload(site, validator(site))
+    site = sites.store.get(name)
+    validator = sites.store.validator(name)
+    return site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/layout")
@@ -1991,15 +2041,15 @@ async def update_site_layout(name: str, body: LayoutRequest):
     """
     from .vision.cameras import follow
 
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     for structure in site.children:
         override = body.positions.get(structure.name)
         if override is not None:
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
     follow(name, site)
 
-    validator = _site_store.validator(name)
-    return _site_payload(site, validator(site))
+    validator = sites.store.validator(name)
+    return site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/structures/{structure_name}/status")
@@ -2015,7 +2065,7 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
             status_code=400,
             detail=f"Invalid status {body.status!r}; must be one of {PRINTER_STATUSES}",
         )
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     structure = next((s for s in site.children if s.name == structure_name), None)
     if structure is None:
         raise HTTPException(
@@ -2023,17 +2073,16 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
         )
     structure.status = body.status
 
-    validator = _site_store.validator(name)
-    return _site_payload(site, validator(site))
+    validator = sites.store.validator(name)
+    return site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/reset")
 async def reset_site_layout(name: str):
     """Discard all edits and rebuild the site fresh from its factory."""
-    _get_site_or_404(name)  # validates the name before resetting
-    site = _site_store.reset(name)
-    validator = _site_store.validator(name)
-    payload = _site_payload(site, validator(site))
+    site = sites.store.reset(name)
+    validator = sites.store.validator(name)
+    payload = site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
 
@@ -2059,9 +2108,10 @@ def get_node_stl(name: str, path: str):
 
 def _node_stl(name: str, path: str) -> tuple[bytes, Assembly]:
     """One node's STL and the node, as ``get_node_stl`` serves it -- the slicer
-    slices a made piece from it too. Raises the HTTPException that route answers."""
-    site = _get_site_or_404(name)
-    node = _find_node_by_path(site, path)
+    slices a made piece from it too. Raises what that route answers: an
+    HTTPException, or the store's own word for a site it does not hold."""
+    site = sites.store.get(name)
+    node = find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
 
@@ -2106,7 +2156,7 @@ def status_bearer_for(site: Assembly, path: str) -> Optional[str]:
     parts = path.split(".")
     for depth in range(len(parts), 0, -1):
         candidate = ".".join(parts[:depth])
-        node = _find_node_by_path(site, candidate)
+        node = find_node_by_path(site, candidate)
         if node is not None and node.status is not None:
             return candidate
     return None
@@ -2145,16 +2195,23 @@ def _base_height(printer: Assembly) -> float:
     return 0.0
 
 
-def _describe_for_view(
-    site: Assembly, path: str, n: Assembly, *, is_printer: bool
+def describe_for_view(
+    site: Assembly,
+    path: str,
+    n: Assembly,
+    *,
+    is_printer: bool,
+    controller: Optional[firmware_gcode.PrinterStatus] = None,
 ) -> Dict[str, object]:
-    """One node as the board view wants it: world position, footprint, build volume, base."""
+    """One node as the board view wants it: world position, footprint, build volume,
+    base, and its machine frame (``machine_frame``, with ``controller``'s word)."""
     pos = _world_position_of(site, path)
     fp = n.footprint
     return {
         "path": path,
         "name": n.name,
         "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+        "frame": machine_frame(n, pos, controller=controller),
         "footprint": (
             {
                 "min": [fp.min_point.x, fp.min_point.y, fp.min_point.z],
@@ -2180,6 +2237,97 @@ def _describe_for_view(
             if getattr(n, "build_origin", None)
             else (_base_height(n) if is_printer else 0.0)
         ),
+        # The part it is drawn from, and whether its bed carries Y (the part's
+        # ``bed_moves_y``): the marks move the bed, not the tool, along Y.
+        "part_ref": getattr(n, "part_ref", None),
+        "bed_moves_y": _bed_moves_y(n),
+    }
+
+
+def _part_of(n: Assembly) -> Optional[BasePart]:
+    """The registered part a node is drawn from, or None."""
+    ref = getattr(n, "part_ref", None)
+    if not ref:
+        return None
+    try:
+        return load_part_wrapper(ref)
+    except HTTPException:
+        return None
+
+
+def _bed_moves_y(n: Assembly) -> Optional[float]:
+    part = _part_of(n)
+    return part.bed_moves_y if part is not None else None
+
+
+def machine_frame(
+    n: Assembly, at: Vector3D, *, controller: Optional[firmware_gcode.PrinterStatus] = None
+) -> Optional[Dict[str, object]]:
+    """Where a machine's work happens, in the site's millimetres: what every drawing
+    of the machine -- its working volume, its bed, its tool, the grid under it --
+    is placed by. None for a node with no ``build_volume``.
+
+    ``at`` is the node's own origin in the site (``position``). ``origin`` is where
+    the volume's (0, 0, 0) stands in the node's frame, a bed that carries Y standing
+    where the work's Y under the tool is ``bed_moves_y``: the node's
+    ``build_origin`` when it says (``origin_from`` "node"), else the volume
+    centred on its footprint and standing on its base (``_base_height``,
+    "footprint"), else the node's own origin ("position"). ``bed_origin`` is the same
+    point in the site, and ``bed_z`` its height: the bed's surface.
+
+    ``volume`` is the controller's travel (``$130``-``$132``) once ``controller``, the
+    port's last poll, carries it (``volume_from`` "controller"), else the site's
+    figure (``site_volume``, "site"). ``homing`` is the way each axis homes, "min" or
+    "max", as the controller's ``$23`` says, else None: what turns a router's
+    machine position into a place in the volume (``grbl.in_volume``).
+
+    ``bed_moves_y`` and ``kinematics`` (its ``rest`` and ``range``) are the part's
+    (``BasePart``): a bed that carries Y moves under a tool standing this far into
+    the volume along Y.
+    """
+    site_volume = getattr(n, "build_volume", None)
+    if site_volume is None:
+        return None
+    travel = controller.travel if controller is not None else None
+    said = travel is not None and all(travel.get(k) is not None for k in "xyz")
+    volume = (
+        [float(travel[k]) for k in "xyz"] if said else [site_volume.x, site_volume.y, site_volume.z]
+    )
+    if getattr(n, "build_origin", None) is not None:
+        origin, origin_from = [n.build_origin.x, n.build_origin.y, n.build_origin.z], "node"
+    elif n.footprint is not None:
+        lo, hi = n.footprint.min_point, n.footprint.max_point
+        origin = [
+            lo.x + (hi.x - lo.x - volume[0]) / 2,
+            lo.y + (hi.y - lo.y - volume[1]) / 2,
+            lo.z + _base_height(n),
+        ]
+        origin_from = "footprint"
+    else:
+        origin, origin_from = [0.0, 0.0, 0.0], "position"
+    homing = controller.homing if controller is not None else None
+    part = _part_of(n)
+    kinematics = part.kinematics if part is not None else None
+    return {
+        "position": [at.x, at.y, at.z],
+        "origin": origin,
+        "origin_from": origin_from,
+        "bed_origin": [at.x + origin[0], at.y + origin[1], at.z + origin[2]],
+        "bed_z": at.z + origin[2],
+        "volume": volume,
+        "volume_from": "controller" if said else "site",
+        "site_volume": [site_volume.x, site_volume.y, site_volume.z],
+        "homing": (
+            {h["axis"].lower(): "min" if h["way"] == "-" else "max" for h in homing}
+            if homing
+            else None
+        ),
+        "bed_moves_y": part.bed_moves_y if part is not None else None,
+        "kinematics": (
+            {"rest": kinematics.get("rest"), "range": kinematics.get("range")}
+            if kinematics
+            else None
+        ),
     }
 
 
@@ -2193,57 +2341,87 @@ def printer_where(port: str):
     footprint and build volume, and the base height the build volume sits
     on -- what the viewer's marks for a printer (``machine_marks.js``) are
     made from, and what a printer's Machine sizes its corner moves by.
-    ``board`` is ``None`` when nothing is pinned.
+    ``board`` is ``None`` when nothing is pinned. Each one's ``frame`` takes the
+    controller's word from the port's last poll (``machine_frame``); none is asked
+    for here.
     """
     pinned = _pinned_at(port)
     if pinned is None:
         return {"port": port, "site": None, "board": None, "printer": None}
     name, site, path = pinned
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     bearer_path = status_bearer_for(site, path) or path
-    bearer = _find_node_by_path(site, bearer_path) or node
+    bearer = find_node_by_path(site, bearer_path) or node
+    last = firmware_devices.last_statuses().get(port)
     return {
         "port": port,
         "site": name,
-        "board": _describe_for_view(site, path, node, is_printer=False),
+        "board": describe_for_view(site, path, node, is_printer=False, controller=last),
         "printer": (
-            _describe_for_view(site, bearer_path, bearer, is_printer=True)
+            describe_for_view(site, bearer_path, bearer, is_printer=True, controller=last)
             if bearer_path != path
             else None
         ),
     }
 
 
+def machine_on_port(port: str) -> Optional[tuple[str, str]]:
+    """The machine the board on ``port`` drives: its site's name and the path of the node a
+    poll of it drives (``status_bearer_for``), by the newest pin naming the board
+    (``_pinned_at``); None for a board pinned nowhere. Reads the pins alone."""
+    pinned = _pinned_at(port)
+    if pinned is None:
+        return None
+    name, site, path = pinned
+    return name, status_bearer_for(site, path) or path
+
+
+def machine_poll(site_name: str, path: str) -> Optional[tuple[str, firmware_gcode.PrinterStatus]]:
+    """The port of the board driving the machine at ``path`` and its last poll, from the
+    polls this server has kept (``last_statuses``); None while no poll of it is kept.
+    Nothing is asked of any port."""
+    for port, status in firmware_devices.last_statuses().items():
+        if machine_on_port(port) == (site_name, path):
+            return port, status
+    return None
+
+
 def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
     """Where the board on ``port`` is pinned: its site's name, the site, and the
-    pinned node's path -- the first pin naming it whose site and node exist.
+    pinned node's path -- the newest pin naming it whose site and node exist.
+
+    A pin replaces only an earlier pin of its own node, so a board pinned to one
+    node and then to another has both pins kept; it is where it was pinned last.
+    The pins are kept in the order they were made (``FirmwareState.set_binding``).
 
     Every pin, not just the loaded sites': a link to a board's Machine is often
     the first page opened after the server starts, and a pin names its site.
     """
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
-    for binding in state.bindings():
+    for binding in reversed(state.bindings()):
         if not same_device(binding.identity, port, known, binding.kind):
             continue
-        if binding.site not in _site_store.names():
+        if binding.site not in sites.store.names():
             continue
         try:
-            site = _site_store.get(binding.site)
+            site = sites.store.get(binding.site)
         except KeyError:  # forgotten, or its picture left the shelf, since names()
             continue
-        if _find_node_by_path(site, binding.path) is None:
+        if find_node_by_path(site, binding.path) is None:
             continue
         return binding.site, site, binding.path
     return None
 
 
-def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
+def parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
     """What a job in ``site`` can name as the part it makes, by path: every node
     built from a part (named for its ``part_ref``) and every piece made from a
     picture (named for its word, with the picture and the camera it came from),
-    but nothing at or under ``leave_out`` -- the machine itself. Holes cut from a
-    piece are not things made."""
+    but nothing at or under ``leave_out`` -- the machine itself; then every
+    registered part no node has the path of, by its name, so any part of the
+    apothecary can be made wherever the machine stands. Holes cut from a piece
+    are not things made."""
     from .vision import views as viewing
 
     made = viewing.store().made_at(site_name)
@@ -2264,7 +2442,68 @@ def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPa
             visit(child, path)
 
     visit(site, "")
-    return [found[path] for path in sorted(found)]
+    registered = [
+        jobs.JobPart(path=name, name=name, registered=True)
+        for name in _available_part_names()
+        if name not in found and name != leave_out
+    ]
+    return [found[path] for path in sorted(found)] + registered
+
+
+def makers_of(here: str, piece: str) -> List[Dict[str, object]]:
+    """The machines that make ``piece``, as Make lists them from ``here``: a node of
+    ``here`` by its path first, else a registered part by its name. A part is made on
+    every site's machines of a kind that makes it (``machine_plans.kinds_that_make``);
+    a piece made from a picture is a node of its site alone, made on that site's
+    printers. Each is ``{path, kind, part_ref, site, live}``, ``live`` when the board
+    it drives is connected where it was pinned last. A part that says how it is cut
+    is made to be cut, so the routers come first, whatever else is plugged in; then
+    those whose board is connected, then ``here``'s, else the order the sites and
+    their machines are in. ``KeyError`` for neither a node nor a part."""
+    from .machine_plans import kinds_that_make
+    from .routes.machines import machines_of
+    from .vision import views as viewing
+
+    site = sites.store.get(here)
+    node = find_node_by_path(site, piece)
+    if node is not None and not node.part_ref:
+        if piece not in viewing.store().made_at(here):
+            return []
+        kinds, names = ("printer",), [here]
+    else:
+        kinds, names = (
+            kinds_that_make(node.part_ref if node is not None else piece),
+            sites.store.names(),
+        )
+    state = firmware_devices.get_state()
+    try:
+        plugged = firmware_devices.detected_devices(state=state, any_age=True)
+    except ToolchainError:
+        plugged = []
+    # Each connected board where it was pinned last (``FirmwareState.set_binding``).
+    newest: Dict[str, object] = {}
+    for binding in state.bindings():
+        newest[binding.identity] = binding
+    live = [
+        (b.site, b.path)
+        for b in newest.values()
+        if device_for_identity(b.identity, plugged, b.kind) is not None
+    ]
+    found = []
+    for name in names:
+        try:
+            machines = machines_of(sites.store.get(name))
+        except KeyError:
+            continue
+        for machine in machines:
+            if machine["kind"] not in kinds:
+                continue
+            at = machine["path"]
+            on = any(s == name and (p == at or p.startswith(at + ".")) for s, p in live)
+            found.append({**machine, "site": name, "live": on})
+    cut = "router" in kinds
+    found.sort(key=lambda m: (cut and m["kind"] != "router", not m["live"], m["site"] != here))
+    return found
 
 
 def _place_of(port: str) -> Optional[jobs.Place]:
@@ -2274,7 +2513,7 @@ def _place_of(port: str) -> Optional[jobs.Place]:
         return None
     name, site, path = pinned
     bearer = status_bearer_for(site, path) or path
-    return jobs.Place(site=name, path=path, parts=_parts_of(name, site, leave_out=bearer))
+    return jobs.Place(site=name, path=path, parts=parts_of(name, site, leave_out=bearer))
 
 
 jobs.PLACES.append(_place_of)
@@ -2290,10 +2529,10 @@ def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
     from .vision import views as viewing
 
     try:
-        site = _site_store.get(site_name)
+        site = sites.store.get(site_name)
     except KeyError:  # an UnknownSiteError, or forgotten since
         return None
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None:
         return None
     if node.part_ref:
@@ -2305,6 +2544,8 @@ def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
     def stl(log) -> bytes:
         try:
             data, _node = _node_stl(site_name, path)
+        except UnknownSiteError as exc:
+            raise SlicerError(f"the piece {node.name} could not be rendered: {exc}") from None
         except HTTPException as exc:
             raise SlicerError(
                 f"the piece {node.name} could not be rendered: {exc.detail}"
@@ -2342,14 +2583,14 @@ def _printer_to_slice_for(
         if not site_name:
             return None
         try:
-            site = _site_store.get(site_name)
+            site = sites.store.get(site_name)
         except KeyError:
             return None
         if not path:
             path = _the_printer_in(site_name, site)
             if path is None:
                 return None
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None or not node.part_ref:
         return None
     if port is None:
@@ -2418,10 +2659,10 @@ def routers_in(site_name: str) -> List[str]:
 
 
 def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
-    if site_name not in _site_store.names():
+    if site_name not in sites.store.names():
         return []
     try:
-        site = _site_store.get(site_name)
+        site = sites.store.get(site_name)
     except KeyError:
         return []
     state = firmware_devices.get_state()
@@ -2433,7 +2674,7 @@ def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
     found = set()
     for binding in state.bindings(site_name):
         bearer = status_bearer_for(site, binding.path)
-        node = _find_node_by_path(site, bearer) if bearer else None
+        node = find_node_by_path(site, bearer) if bearer else None
         if node is None or node.status not in statuses:
             continue
         on_port = device_for_identity(binding.identity, plugged, binding.kind)
@@ -2462,14 +2703,14 @@ def every_pin(fresh: bool = False):
         found = firmware_devices.detected_devices(fresh=fresh)
     except ToolchainError as exc:
         found, problem = [], str(exc)
-    names = _site_store.names()
+    names = sites.store.names()
     rows = []
     for binding in sorted(state.bindings(), key=lambda b: (b.site, b.path)):
         site_known = binding.site in names
         node_found = False
         if site_known:
             try:
-                node = _find_node_by_path(_site_store.get(binding.site), binding.path)
+                node = find_node_by_path(sites.store.get(binding.site), binding.path)
             except KeyError:  # forgotten, or its picture left the shelf, since names()
                 node = None
             node_found = node is not None
@@ -2507,25 +2748,37 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
         return out
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(status.port, state)
-    for site_name in _site_store.loaded():
-        site = _site_store.get(site_name)
-        for binding in state.bindings(site_name):
-            if not same_device(binding.identity, status.port, known, binding.kind):
-                continue
-            target = status_bearer_for(site, binding.path)
-            if target is None:
-                continue
-            node = _find_node_by_path(site, target)
-            row: Dict[str, object] = {"site": site_name, "path": target}
-            if target != binding.path:
-                row["via"] = binding.path
-            if node.status == "maintenance":
-                out.append({**row, "status": node.status, "changed": False, "held": True})
-                continue
-            changed = node.status != status.state
-            node.status = status.state
-            out.append({**row, "status": node.status, "changed": changed})
+    for site_name, binding in _pins_answering(status.port, known, state):
+        site = sites.store.get(site_name)
+        target = status_bearer_for(site, binding.path)
+        if target is None:
+            continue
+        node = find_node_by_path(site, target)
+        row: Dict[str, object] = {"site": site_name, "path": target}
+        if target != binding.path:
+            row["via"] = binding.path
+        if node.status == "maintenance":
+            out.append({**row, "status": node.status, "changed": False, "held": True})
+            continue
+        changed = node.status != status.state
+        node.status = status.state
+        out.append({**row, "status": node.status, "changed": changed})
     return out
+
+
+def _pins_answering(port: str, known, state) -> List[tuple[str, ManualBinding]]:
+    """Each pin, in the sites built so far, that answers to the board on ``port``, with
+    its site's name. The pins are read once, from the firmware state, and only a site
+    with one is fetched from the store by a poll's listeners: a fetch of the universe
+    lays it out again (``SiteStore.get``), which a poll pinned nowhere in it has no
+    need of."""
+    pins = state.bindings()
+    return [
+        (site_name, binding)
+        for site_name in sites.store.loaded()
+        for binding in pins
+        if binding.site == site_name and same_device(binding.identity, port, known, binding.kind)
+    ]
 
 
 firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
@@ -2541,14 +2794,9 @@ def _record_printer_poll(status) -> List[Dict[str, object]]:
     known = firmware_devices.known_device(status.port, state)
     identity = known.identity if known is not None else status.port
     pins: List[evidence_printers.Pin] = []
-    for site_name in _site_store.loaded():
-        site = _site_store.get(site_name)
-        for binding in state.bindings(site_name):
-            if same_device(binding.identity, status.port, known, binding.kind):
-                bearer = status_bearer_for(site, binding.path)
-                pins.append(
-                    evidence_printers.Pin(site_name, binding.path, bearer, binding.identity)
-                )
+    for site_name, binding in _pins_answering(status.port, known, state):
+        bearer = status_bearer_for(sites.store.get(site_name), binding.path)
+        pins.append(evidence_printers.Pin(site_name, binding.path, bearer, binding.identity))
     try:
         status.poll = evidence_printers.record_poll(status, pins, identity)
     except OSError as exc:
@@ -2575,11 +2823,11 @@ def _sync_job_status(job: jobs.Job) -> None:
     operation = jobs.operation(job.kind)
     if operation is None or operation.busy is None or not job.site or not job.machine.path:
         return
-    if job.site not in _site_store.loaded():
+    if job.site not in sites.store.loaded():
         return
-    site = _site_store.get(job.site)
+    site = sites.store.get(job.site)
     target = status_bearer_for(site, job.machine.path)
-    node = _find_node_by_path(site, target) if target is not None else None
+    node = find_node_by_path(site, target) if target is not None else None
     if node is None or node.status == "maintenance":
         return
     if job.running:
@@ -2589,6 +2837,9 @@ def _sync_job_status(job: jobs.Job) -> None:
 
 
 jobs.LISTENERS.append(_sync_job_status)
+# Each print or cut of a part opens its piece's drawer in the part's cabinet, and its end
+# says how it ended there (apothecary/cabinet.py).
+jobs.LISTENERS.append(cabinet.job_told)
 
 
 def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dict[str, object]:
@@ -2640,7 +2891,7 @@ def site_devices(name: str, fresh: bool = False):
     runs in the threadpool rather than blocking the event loop. ``fresh``
     bypasses the short port-scan cache (a rescan button, the auto-refresh).
     """
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     return _site_devices_payload(name, site, fresh=fresh)
 
 
@@ -2655,8 +2906,8 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
     port's name. A make another bridge on the machine shares is stored as the
     port. The row answered says what was stored.
     """
-    site = _get_site_or_404(name)
-    if _find_node_by_path(site, path) is None:
+    site = sites.store.get(name)
+    if find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     identity = firmware_devices.stable_identity(body.identity)
     known = firmware_devices.known_device(body.identity)
@@ -2669,8 +2920,8 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
 @app.delete("/sites/{name}/nodes/{path}/device")
 def detach_device(name: str, path: str):
     """Drop a pin; the node goes back to the by-sketch rule (or to nothing)."""
-    site = _get_site_or_404(name)
-    if _find_node_by_path(site, path) is None:
+    site = sites.store.get(name)
+    if find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     firmware_devices.get_state().clear_binding(name, path)
     return _binding_row(name, site, path)
@@ -2678,7 +2929,7 @@ def detach_device(name: str, path: str):
 
 def _default_site() -> str:
     """The site the viewer opens on when none is named: the garage, else the first."""
-    names = _site_store.names()
+    names = sites.store.names()
     return DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
 
 
@@ -2731,32 +2982,27 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     leaf of it (``part_ref`` set), reached by zooming down, and each other site
     a piece of it (``site_ref`` set), whose site a step into it opens. ``focus``
     is an optional dotted path (e.g. ``workbench.frame_system``) that opens the
-    viewer at that node instead of at the root. A name a site had before
-    (``parts_library``) goes to the site under the name it has now, its query kept.
+    viewer at that node instead of at the root.
     """
-    if name in FORMER and name not in _site_store.names():
-        query = f"?{request.url.query}" if request.url.query else ""
-        return RedirectResponse(
-            f"/viewer/sites/{quote(FORMER[name], safe='')}{query}", status_code=307
-        )
-    if name not in _site_store.names():
+    if name not in sites.store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
         render_fractal_viewer_page(
-            _site_store.names(),
+            sites.store.names(),
             base_url,
             default_site=name,
             focus_path=focus,
             three_is_vendored=THREE_IS_VENDORED,
-            demo=_demo_folder(),
+            simulated=_simulated_folder(),
         )
     )
 
 
-def _demo_folder() -> Optional[str]:
-    """The demo's folder as the page's banner names it, when this is the demo."""
-    from .demo import running, shown
+def _simulated_folder() -> Optional[str]:
+    """The simulated machines' folder as the page's banner names it, where the
+    server's machines are simulated."""
+    from .simulated import running, shown
 
     root = running()
     return shown(root) if root is not None else None
@@ -2770,7 +3016,7 @@ def part_view(name: str):
     viewer, focused on the part, where the parameter controls and the
     contested values live.
     """
-    part = _load_part_wrapper(name)  # 404 here rather than after a redirect
+    part = load_part_wrapper(name)  # 404 here rather than after a redirect
     # Focus on the part's own name, not on whatever spelling was typed: a link
     # may spell it `datum-core`, which the wrapper lookup accepts, and the
     # viewer lands on the part rather than on a focus string matching nothing.

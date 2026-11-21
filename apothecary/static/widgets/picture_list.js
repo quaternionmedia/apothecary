@@ -139,7 +139,7 @@ export function mountPictureList(root, { base = "", world = null, log = null, ga
         return view ? `${view.site}\u0000${view.camera}` : "";
     }
     function groupTitle(key) {
-        if (!key) return "No camera: added, and the folder's own";
+        if (!key) return "No camera: added by hand, or the folder's own";
         const [site, name] = key.split("\u0000");
         const here = world && world.siteName ? world.siteName() : "";
         return `📷 ${name}${site === here ? "" : ` · ${site}`}`;

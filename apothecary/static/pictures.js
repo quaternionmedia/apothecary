@@ -229,7 +229,11 @@ export function mountPictures({ base = "", marks, world, log }) {
     // What a view pinned is, and the step after it: Find shapes.
     function pinned(view) {
         if (view.host === null) return `${view.picture}: ${view.camera} was looking at a wall or the sky, so it lies nowhere and is drawn on the camera; aim the camera down and Take picture again`;
-        const by = view.camera ? `${view.camera}'s picture lies on ${where(view.host)}` : `${view.picture} pinned at ${where(view.host)} as a view`;
+        const by = view.camera
+            ? `${view.camera}'s picture lies on ${where(view.host)}`
+            : view.squared
+                ? `${view.shown_as} pinned at ${where(view.host)}, squared to it and laid in front of it`
+                : `${view.shown_as || view.picture} pinned at ${where(view.host)} as a view`;
         return `${by}: ${ringPath(view.host, "Picture › Find shapes")} finds what is in it`;
     }
     // The shapes that lie over something resting on the view's host: a flag, and Make
@@ -245,7 +249,7 @@ export function mountPictures({ base = "", marks, world, log }) {
     function found(view) {
         const n = view.shapes.length;
         const left = view.left_out ? ` (${view.left_out} left out)` : "";
-        if (!n) return `no shapes found in ${view.picture} at ${where(view.host)} by ${view.finder}: take or pin another picture here`;
+        if (!n) return `no shapes found in ${view.shown_as || view.picture} at ${where(view.host)} by ${view.finder}: take or pin another picture here`;
         const make = ringPath(view.host, "Picture › Make");
         const next = view.mat && view.mat.width
             ? `, ${Math.round(view.mat.width)} mm across: ${make} makes them pieces`

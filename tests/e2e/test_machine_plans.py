@@ -10,6 +10,7 @@ Nothing here opens a real port.
 from __future__ import annotations
 
 import re
+import time
 
 import httpx
 import pytest
@@ -93,6 +94,33 @@ def test_the_router_is_planned_with_no_board_connected(page: Page, url: str):
 
 
 @pytest.mark.e2e
+def test_the_view_lands_on_the_path_though_the_plan_marks_come_late(page: Page, url: str):
+    """The marks of a planned machine are made from an answer of the server's; a view
+    that lands on its path waits for them, and they wear the path told before they came."""
+    with httpx.Client(base_url=url, timeout=30.0) as http:
+        cut = http.post(
+            "/cam/cut", json={"part": "router_coupon", "site": "garage", "router": "cnc_router"}
+        ).json()
+        http.put(
+            "/sites/garage/machines/cnc_router/plan",
+            json={"part": "router_coupon", "file_id": cut["file_id"]},
+        ).raise_for_status()
+    open_garage(page, url, settle=False)
+    _machines_known(page)
+
+    def late(route):
+        time.sleep(1.5)
+        route.continue_()
+
+    page.route(re.compile(r"/sites/garage/machines/cnc_router$"), late)
+    _select(page, "cnc_router")
+    page.evaluate("() => window.fractalViewer.openView('machine')")
+    page.evaluate("() => window.fractalViewer.viewDone")
+    expect(page.locator("#status")).to_contain_text("path is drawn on cnc_router", timeout=15000)
+    page.wait_for_function(DRAWN, timeout=10000)
+
+
+@pytest.mark.e2e
 def test_the_plan_is_chosen_when_its_machine_opens_and_when_its_board_is_connected(
     page: Page, url: str
 ):
@@ -133,6 +161,10 @@ def test_the_plan_is_chosen_when_its_machine_opens_and_when_its_board_is_connect
         windows.machine_ready(page, "router")
         expect(windows.in_machine(page, "#print-pick")).to_have_value(cut["file_id"], timeout=10000)
         assert newer["id"] != cut["file_id"]
-        expect(windows.in_machine(page, "#print-start")).to_be_enabled()
+        # Its board connected, ▶ Cut is the board's: nothing stands before it but the
+        # latch, which this test does not arm, and it is greyed saying so.
+        send = windows.in_machine(page, "#print-start")
+        expect(send).to_be_visible()
+        expect(send).to_have_attribute("title", re.compile(r"^Disabled: .*arm control first"))
     finally:
         httpx.delete(f"{url}/sites/garage/nodes/{CONTROLLER}/device", timeout=15.0)

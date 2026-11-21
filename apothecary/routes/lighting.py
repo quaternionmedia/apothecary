@@ -24,6 +24,7 @@ from typing import Callable, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .. import surfaces
 from ..console_feedback import ConsoleState, OscReceiver, SacnReceiver
 from ..lighting import DMX_CHANNELS, LightingRig, fixture_color, validate_rig
 
@@ -51,7 +52,7 @@ def start_console_feeds() -> None:
     the first (SO_REUSEPORT); upgrade to one receiver routing by universe when there is one.
     """
     for name in RIG_LOADERS:
-        state = _rig_state(name)
+        state = rig_state(name)
         if state is None:
             continue
         if os.environ.get(CONSOLE_SACN_ENV):
@@ -67,19 +68,24 @@ def stop_console_feeds() -> None:
         _receivers.pop().stop()
 
 
-def _rig_state(name: str) -> Optional[ConsoleState]:
+def rig_state(name: str) -> Optional[ConsoleState]:
     with _lock:
         if name not in _states:
             loader = RIG_LOADERS.get(name)
             rig = loader() if loader else None
             if rig is None:
                 return None
-            _states[name] = ConsoleState(rig)
+            made = ConsoleState(rig)
+            # What a console's own feeds (sACN, OSC) set is said, at a bounded rate.
+            made.told = lambda: surfaces.changed(
+                LIGHTING, key=name, body=lambda: site_lighting_state(name)
+            )
+            _states[name] = made
         return _states[name]
 
 
 def _state(name: str) -> ConsoleState:
-    state = _rig_state(name)
+    state = rig_state(name)
     if state is None:
         raise HTTPException(status_code=404, detail=f"Site '{name}' has no lighting rig")
     return state
@@ -88,7 +94,7 @@ def _state(name: str) -> ConsoleState:
 @router.get("/sites/{name}/lighting")
 def site_lighting(name: str) -> dict:
     # A site with no rig answers 200 with none: the viewer asks every site, and a 404 is a console error on each.
-    state = _rig_state(name)
+    state = rig_state(name)
     if state is None:
         return {"rig": None, "universes": [], "unplaced": 0, "violations": []}
     rig = state.rig
@@ -126,7 +132,29 @@ def put_site_lighting_state(name: str, body: LevelsIn) -> dict:
                 raise ValueError(f"universe {universe}: more than {DMX_CHANNELS} slots")
             state.apply_universe(universe, slots)
     except KeyError as exc:
-        raise HTTPException(status_code=400, detail=f"channel {exc.args[0]} is not in this rig") from None
+        raise HTTPException(
+            status_code=400, detail=f"channel {exc.args[0]} is not in this rig"
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+    surfaces.changed(LIGHTING, key=name, body=lambda: site_lighting_state(name))
     return state.snapshot()
+
+
+# A site's levels, as a surface (apothecary/surfaces.py): read as GET .../lighting/state
+# answers, and said changed at each put, and at most every ``TELL_EVERY`` seconds as a
+# console's own feeds (sACN, OSC) set levels or status (apothecary/console_feedback.py).
+LIGHTING = "lighting"
+
+surfaces.register(
+    surfaces.Surface(
+        name=LIGHTING,
+        frame="none",
+        about="a site's lighting levels by channel, each fixture's colour, the console's status",
+        snapshot=lambda words: site_lighting_state(words["site"]),
+        takes=("site",),
+        needs=("site",),
+        tells=True,
+        owner=__name__,
+    )
+)

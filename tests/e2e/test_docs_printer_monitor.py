@@ -374,7 +374,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "a tab beside Pictures: the toolchain as installed with Install / Update, the "
         "suggested cores, libraries, the sketches under parts/ each with its board, Compile and "
         "Compile & upload to any detected port, raw flash with esptool, and the task log. "
-        "Each verb is a cell of the ring's Panels › Bench too",
+        "Each verb is a cell of the ring's Panels › Tools › Bench too",
         blank=(
             *CHANGING,
             *moments(".panel[data-panel='bench']"),

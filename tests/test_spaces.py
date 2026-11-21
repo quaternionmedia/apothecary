@@ -135,16 +135,16 @@ class TestWhatCannotBeReadIsReported:
     """A site or a wrapper that raises is an entry in the index, not a gap in it."""
 
     def test_a_site_that_will_not_build(self):
-        from apothecary.api import _site_store
+        from apothecary import sites
 
         def fall_over():
             raise RuntimeError("the factory fell over")
 
-        _site_store.add("exploding", fall_over, lambda site: site.validate())
+        sites.store.add("exploding", fall_over, lambda site: site.validate())
         try:
             found = [p for p in problems() if p.subject == "exploding"]
         finally:
-            _site_store.remove("exploding")
+            sites.store.remove("exploding")
         assert [(p.kind, p.owner, p.detail) for p in found] == [
             ("broken", APOTHECARY, "the factory fell over")
         ]

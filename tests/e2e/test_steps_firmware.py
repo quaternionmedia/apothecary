@@ -7,8 +7,8 @@ Each step first checks that the page is where the step before it leaves it, then
 a person does and holds what the page says. Under ``--steps`` every step runs in order on a
 server of the test's own: arduino-cli, cargo and espflash scripted in one folder, and the
 simulated devkit on ``/dev/ttyFAKE2`` that runs what was last flashed to it
-(tests/firmware_helpers.py), as the demo's are. Given ``--step N`` and ``--base-url``
-naming the demo, only step N runs, on the demo's walk tab, and the tab is left there
+(tests/firmware_helpers.py), as the simulated server's are. Given ``--step N`` and ``--base-url``
+naming the simulated server, only step N runs, on the simulated server's walk tab, and the tab is left there
 (tests/e2e/stepping.py); its picture is ``.cache/walk/firmware-step-N.png``::
 
     uv run pytest tests/e2e/test_steps_firmware.py --base-url http://127.0.0.1:6283 --step 1
@@ -38,11 +38,11 @@ RUST_ROW = "esp32_blink@rust-esp32 · esp32"
 
 @dataclass
 class Walk:
-    """The page a step acts on, the server it is on, and whether it is the demo's tab."""
+    """The page a step acts on, the server it is on, and whether it is the simulated server's tab."""
 
     page: Page
     base: str
-    on_the_demo: bool
+    on_simulated: bool
 
     @property
     def bench(self):
@@ -68,7 +68,7 @@ class Walk:
 
 
 def bench(w: Walk) -> None:
-    """Panels › Bench › Bench on the canvas ring: the Bench lists both builds of esp32_blink,
+    """Panels › Tools › Bench › Bench on the canvas ring: the Bench lists both builds of esp32_blink,
     each with its toolchain, side by side; the Arduino one chosen, its board filled in, and
     the devkit's port."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
@@ -77,7 +77,7 @@ def bench(w: Walk) -> None:
     # The cell toggles the Bench: pressed only when it is not open already, as the page
     # keeps a person's panels over a reload.
     if not w.bench.is_visible():
-        _canvas_ring(w.page, "4", "3", "8")
+        _canvas_ring(w.page, "4", "3", "8", "8")
     expect(w.bench).to_be_visible(timeout=5000)
     select = w.bench.locator(".sketch-select")
     expect(select.locator(f"option[value='{RUST}']")).to_have_count(1, timeout=10000)
@@ -105,24 +105,24 @@ def _bench_ready(w: Walk) -> bool:
 
 
 def compile_(w: Walk) -> None:
-    """Panels › Bench › Compile: built for its board, as a task in the Bench's log."""
+    """Panels › Tools › Bench › Compile: built for its board, as a task in the Bench's log."""
     where(
         "Compile", "the Bench open, the Arduino esp32_blink and the devkit chosen", _bench_ready(w)
     )
-    _canvas_ring(w.page, "4", "3", "2")
+    _canvas_ring(w.page, "4", "3", "8", "2")
     _ended(w.bench, f"Compile {ARDUINO} (esp32:esp32:esp32)")
     expect(w.bench.locator(".task-log")).to_contain_text("fake compile")
     w.bench.locator(".task-title").scroll_into_view_if_needed()
 
 
 def upload(w: Walk) -> None:
-    """Panels › Bench › Upload, after asking: built again and written to the devkit; the
+    """Panels › Tools › Bench › Upload, after asking: built again and written to the devkit; the
     garage's esp32_blink, which runs that sketch, wears the board."""
     where(
         "Upload", "the Bench open, the Arduino esp32_blink and the devkit chosen", _bench_ready(w)
     )
     asked = w.asked()
-    _canvas_ring(w.page, "4", "3", "4")
+    _canvas_ring(w.page, "4", "3", "8", "4")
     _ended(w.bench, f"Upload {ARDUINO} → {DEVKIT}")
     assert asked == [f'Compile and upload "{ARDUINO}" to {DEVKIT}?'], asked
     wears(w.page)
@@ -270,7 +270,7 @@ STEPS: List[Tuple[str, Callable[[Walk], None]]] = [
 
 @pytest.fixture
 def steps(request, base_url):
-    """One step on the demo's walk tab under --step; every step on a server of the
+    """One step on the simulated server's walk tab under --step; every step on a server of the
     test's own otherwise (stepping.chosen)."""
 
     def own():
@@ -296,7 +296,7 @@ def own_server(start_server, tmp_path_factory):
 
 @pytest.mark.e2e
 def test_firmware_a_step_at_a_time(steps):
-    page, url, on_the_demo, numbers = steps
-    walk = Walk(page, url, on_the_demo)
+    page, url, on_simulated, numbers = steps
+    walk = Walk(page, url, on_simulated)
     for n in numbers:
         STEPS[n - 1][1](walk)

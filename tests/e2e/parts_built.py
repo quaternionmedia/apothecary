@@ -51,7 +51,14 @@ def _stamp(path: Path) -> list:
 def build() -> dict:
     """Build what is missing or written by another OpenSCAD; what the pages record."""
     from apothecary.api import _registered_part
-    from apothecary.projects.parts.stl_renderer import build_stl, get_renderer, part_renderer
+    from apothecary.projects.parts.stl_renderer import (
+        PRINT,
+        REST,
+        build_stl,
+        get_renderer,
+        part_renderer,
+        posed_path,
+    )
     from apothecary.projects.registry import scan_projects
 
     default = get_renderer()
@@ -74,20 +81,23 @@ def build() -> dict:
             if item.kind != "part":
                 continue
             part = _registered_part(item)
-            stl = part.get_stl_output_path()
-            key = stl.relative_to(ROOT).as_posix() if stl.is_relative_to(ROOT) else str(stl)
             renderer = part_renderer(part)
             version = renderer.get_version() if renderer.is_available else None
-            known = stl.exists() and writers.get(key) == [*_stamp(stl), version]
-            result = build_stl(part, force=stl.exists() and not known, timeout=300)
-            if result.success and stl.exists():
-                writers[key] = [*_stamp(stl), version]
-                if version != openscad:
-                    found["elsewhere"].append(f"{part.name} ({version})")
-            elif stl.exists():
-                found["elsewhere"].append(f"{part.name} (an STL built before this run)")
-            else:
-                found["boxes"].append(part.name)
+            # The world draws a part as it rests: that STL too, for one that declares it.
+            for pose in (PRINT, REST) if part.rest else (PRINT,):
+                stl = posed_path(part.get_stl_output_path(), pose)
+                key = stl.relative_to(ROOT).as_posix() if stl.is_relative_to(ROOT) else str(stl)
+                name = part.name if pose == PRINT else f"{part.name} as it rests"
+                known = stl.exists() and writers.get(key) == [*_stamp(stl), version]
+                result = build_stl(part, force=stl.exists() and not known, timeout=300, pose=pose)
+                if result.success and stl.exists():
+                    writers[key] = [*_stamp(stl), version]
+                    if version != openscad:
+                        found["elsewhere"].append(f"{name} ({version})")
+                elif stl.exists():
+                    found["elsewhere"].append(f"{name} (an STL built before this run)")
+                else:
+                    found["boxes"].append(name)
         RECORD.write_text(json.dumps(writers, indent=1, sort_keys=True), encoding="utf-8")
     return found
 

@@ -2,13 +2,14 @@
 panel in front of the world.
 
 The Bench is a tab beside Pictures, behind it until pressed; its verbs are cells of
-the canvas ring's Panels › Bench.
+the canvas ring's Panels › Tools › Bench.
 
 Runs against a server of its own from the conftest's ``start_server``: the
 scripted ``arduino-cli`` (version 9.9.9, an Uno on ``/dev/ttyFAKE0``,
 ``/dev/ttyFAKE1`` unmatched), with the same script already installed in its
-tools dir, so Install and Update say it is there and download nothing. Nothing
-here opens a real port or reaches the network.
+tools dir, so Install and Update say it is there and download nothing, and an
+esptool that is a script saying its version. Nothing here opens a real port or
+reaches the network.
 """
 
 from __future__ import annotations
@@ -27,11 +28,15 @@ from windows import BENCH
 
 @pytest.fixture(scope="module")
 def url(start_server, tmp_path_factory):
-    """A server whose tools dir already holds the scripted arduino-cli."""
+    """A server whose tools dir already holds the scripted arduino-cli, and which
+    finds an esptool: a script that says its version, 4.8.1."""
     tools = tmp_path_factory.mktemp("tools")
     (tools / "arduino-cli").mkdir()
     write_fake_arduino_cli(tools / "arduino-cli" / "arduino-cli")
-    return start_server({"APOTHECARY_TOOLS_DIR": str(tools)})
+    esptool = tools / "esptool"
+    esptool.write_text("#!/bin/sh\necho 4.8.1\n")
+    esptool.chmod(0o755)
+    return start_server({"APOTHECARY_TOOLS_DIR": str(tools), "ESPTOOL": str(esptool)})
 
 
 @pytest.mark.e2e
@@ -68,6 +73,30 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
     expect(bench.locator(".install-btn")).to_have_text("Update arduino-cli")
     assert bench.locator(".tc-cores li").count() >= 5
     expect(bench.locator(".tc-cores li[data-id='arduino:avr']")).to_contain_text("✓ 1.8.8")
+    # The card's rows, word for word and in order: where the tools are, arduino-cli
+    # and the config it is given, esptool, and Arduino as a module. Both tools found,
+    # there is no problem under them.
+    rows = status.locator("> div").all_text_contents()
+    assert [re.sub(r"/\S+", "<path>", row) for row in rows] == [
+        "tools dir: <path>",
+        "arduino-cli: ✓ 9.9.9 <path>",
+        "config: <path>",
+        "esptool: ✓ 4.8.1 <path>",
+        "Arduino: installed · can build, upload, find ports, listen, probe with esptool",
+    ], rows
+    tools = rows[0].removeprefix("tools dir: ")
+    assert rows[2:4] == [f"config: {tools}/arduino-cli.yaml", f"esptool: ✓ 4.8.1 {tools}/esptool"]
+    # The suggested cores in the order they are offered: the installed one says its
+    # version, each other has its Install.
+    assert bench.locator(".tc-cores li").all_text_contents() == [
+        "Arduino AVR (Uno, Nano, Mega, Leonardo) arduino:avr✓ 1.8.8",
+        "Espressif ESP32 (all variants) esp32:esp32Install",
+        "Espressif ESP8266 esp8266:esp8266Install",
+        "Raspberry Pi Pico / RP2040 rp2040:rp2040Install",
+        "Arduino SAMD (Zero, MKR) arduino:samdInstall",
+    ]
+    expect(bench.locator(".core-install[data-id='esp32:esp32']")).to_be_enabled()
+    expect(bench.locator(".lib-btn")).to_be_enabled()
 
     # The sketches under parts/, each with the board its firmware.json names.
     sketch = bench.locator(".sketch-select")
@@ -81,6 +110,10 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
     # The detected ports to upload to.
     ports = bench.locator(".port-select option").all_text_contents()
     assert any("/dev/ttyFAKE0" in p for p in ports), ports
+    # Raw flash: esptool is found and a port is chosen, so it can be pressed and has
+    # nothing to say.
+    expect(bench.locator(".esp-flash-btn")).to_be_enabled()
+    expect(bench.locator(".esp-note")).to_have_text("")
 
     # Update: the scripted cli is already installed, so it is kept and nothing is fetched.
     bench.locator(".install-btn").click()
@@ -110,7 +143,7 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
 
 @pytest.mark.e2e
 def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
-    """Panels › Bench holds the panel and its verbs, and the Bench's buttons wear their
+    """Panels › Tools › Bench holds the panel and its verbs, and the Bench's buttons wear their
     addresses; Compile from the ring compiles what the Bench has chosen."""
     open_garage(page, url, settle=False)
     page.locator("#viewer-canvas").click(
@@ -119,8 +152,10 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_wedges(page)["Panels"])
     panels = _wedges(page)
-    assert panels["Windows"] == "9" and panels["Bench"] == "3", panels  # Windows keeps its cell
+    assert panels["Windows"] == "9" and panels["Tools"] == "3", panels  # Windows keeps its cell
     page.keyboard.press("3")
+    assert _wedges(page)["Bench"] == "8"
+    page.keyboard.press("8")
     bench_cells = _wedges(page)
     assert bench_cells == {
         "Bench": "8",
@@ -139,12 +174,12 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(
         1, timeout=10000
     )
-    expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "432", timeout=5000)
+    expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "4382", timeout=5000)
     # Install is a ring of the toolchain modules: arduino-cli's install and Rust for the
     # ESP32's each have a cell of their own.
-    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "4368")
+    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "43868")
     expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
-        "data-address", "4366"
+        "data-address", "43866"
     )
     # The Stream Deck + after them: a card of its own, its two tools as found, its Install
     # a cell of Install that cannot be pressed (nothing here fetches a package or hidapi).
@@ -153,34 +188,34 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(deck).to_contain_text(
         "can find decks, draw keys and strip, hear keys, knobs and touches"
     )
-    expect(deck.locator(".module-install")).to_have_attribute("data-address", "4362")
+    expect(deck.locator(".module-install")).to_have_attribute("data-address", "43862")
     expect(deck.locator(".module-install")).to_be_disabled()
     # The slicer after them: OrcaSlicer, none of the person's own found by this server,
     # its Install the last cell of Install.
     slicer = bench.locator(".tc-module[data-slicer='orcaslicer']")
     expect(slicer).to_contain_text("not installed: pinned 2.4.2")
     expect(slicer.locator(".slicer-install")).to_have_text("Install OrcaSlicer")
-    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "4364")
+    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "43864")
     expect(bench.locator(".core-install[data-id='esp8266:esp8266']")).to_have_attribute(
-        "data-address", re.compile(r"^431\d$")
+        "data-address", re.compile(r"^4381\d$")
     )
     bench.locator(".sketch-select").select_option("footpedal@arduino")
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": 30, "y": 30}
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    for digit in ("4", "3", "2"):  # Panels › Bench › Compile
+    for digit in ("4", "3", "8", "2"):  # Panels › Tools › Bench › Compile
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     _ended(bench, "Compile footpedal@arduino (arduino:avr:uno)")
-    expect(page.locator("#status")).to_contain_text("⌗432")
+    expect(page.locator("#status")).to_contain_text("⌗4382")
 
 
 @pytest.mark.e2e
 def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: str):
     """/firmware, the firmware page's address, is the viewer on the default site with
     the Bench open -- on a fresh load, as a link handed out lands -- and the toolbar
-    leads to no page of its own: Panels › Bench and a board's Machine are the way."""
+    leads to no page of its own: Panels › Tools › Bench and a board's Machine are the way."""
     page.goto(f"{url}/firmware")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?panel=bench$"))
     bench = page.locator(BENCH)
@@ -191,3 +226,29 @@ def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: s
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     for gone in ("#firmware-link", "#monitor-link", ".toolbar a.toolbar-link"):
         expect(page.locator(gone)).to_have_count(0)
+
+
+@pytest.mark.e2e
+def test_a_flash_to_a_machines_controller_is_greyed_with_the_reason(page: Page, url: str):
+    """A port that answered as a printer is a machine's controller: the server's
+    ``can.flash`` refuses it, and the Bench's upload and raw flash buttons are greyed
+    with its words (firmware/can.py); a port that is no machine's is not."""
+    import httpx
+
+    port = "/dev/ttyFAKE1"
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post("/firmware/devices/identify", json={"port": port}).raise_for_status()
+    open_garage(page, url, settle=False)
+    page.evaluate("() => window.apothecaryPanels.open('bench')")
+    bench = page.locator(BENCH)
+    expect(bench.locator(".port-select option[value='/dev/ttyFAKE0']")).to_have_count(
+        1, timeout=10000
+    )
+    bench.locator(".sketch-select").select_option("footpedal@arduino")
+    bench.locator(".port-select").select_option(port)
+    upload = bench.locator(".upload-btn")
+    expect(upload).to_be_disabled(timeout=5000)
+    expect(upload).to_have_attribute("title", re.compile(r"^Disabled: .*controller"))
+    expect(bench.locator(".esp-flash-btn")).to_be_disabled()
+    bench.locator(".port-select").select_option("/dev/ttyFAKE0")
+    expect(upload).to_be_enabled(timeout=5000)

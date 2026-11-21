@@ -4,10 +4,10 @@ Parameters, its SCAD window beside the world -- its SCAD edited there, an assert
 fails checked once typing stops and marked on its line with nothing rendered, then a
 real change rendered soon after its check passes and drawn as an applied variant, taller
 than its envelope and said so; saved from the ring (Part › Save) as a variant in git and
-listed in both places, with what it changes; the editor made fullscreen (its own button,
-then Esc). Round two in the SCAD window: a name typed, another change, saved with
-Ctrl+S; then the first variant drawn from the ring (Part › Variants › its name ›
-Draw). Round three: the name box letting go of the variant once the
+listed in the part's Variants window, with what it changes; the editor made fullscreen
+(its own button, then Esc). Round two in the SCAD window: a name typed, another change,
+saved with Ctrl+S; then the first variant drawn from the ring (Part › Variants › its
+name › Draw). Round three: the name box letting go of the variant once the
 text moves on and taking it back on Ctrl+Z, Save asking before it replaces a variant, F5
 checking and drawing at once a change that reaches under the floor; then a draft that
 does not read kept over a reload and restored, and the editor's undo kept while another
@@ -258,11 +258,12 @@ def _saved(page: Page, name: str) -> None:
     mark = page.locator(f".world-badge.variant-mark[data-part='{PART}'] .badge-words")
     expect(mark).to_have_text(f"{PART}: {name}, saved in git")
     expect(page.locator("#part-drawn")).to_have_text(f"{name}, saved in git")
-    # Listed in Variants (a tab of the Part view, in front or not), and in the editor.
-    expect(page.locator(f"#part-saved .saved-variant[data-variant='{name}']")).to_be_attached()
+    # Listed in Variants (a tab of the Part view, in front or not), not merged; the
+    # SCAD window lists nothing.
     expect(
-        page.locator(f".scad-saved .saved-row[data-variant='{name}'] .not-in-head")
+        page.locator(f"#part-saved .saved-row[data-variant='{name}'] .not-in-head")
     ).to_be_attached()
+    expect(page.locator(".scad-editor .saved-row")).to_have_count(0)
 
 
 def _laid_out(page: Page, width: int, shots, how: str) -> None:
@@ -424,21 +425,21 @@ def test_editing_a_parts_scad_twice_round(
         blank=BLANK,
     )
 
-    # Saved from the ring: a variant in git, listed in both places with what it changes.
+    # Saved from the ring: a variant in git, listed in Variants with what it changes.
     _ring(page, "Part", "Save")
     _saved(page, "variant-1")
-    diff = page.locator(".scad-saved .saved-row[data-variant='variant-1'] .variant-diff")
+    windows.show(page, "part-variants")
+    diff = page.locator("#part-saved .saved-row[data-variant='variant-1'] .variant-diff")
     diff.locator("summary").click()
     expect(diff.locator("pre")).to_contain_text(f"+{SMALL_TOP}")
-    page.locator(".scad-saved").scroll_into_view_if_needed()
     story.shows(
         "Part › Save keeps it as a variant in git",
         f"{PART}'s ring, Part › Save: the edited SCAD, its values in it, committed "
         f"to refs/apothecary/variants/{PART}/variant-1, the name the editor offered. "
         "Nothing in the checkout changes; a merge would bring it, its values with it, and "
-        "merging is yours to do. It is listed in the part's Variants and, in the editor, "
-        "with what it changes against the part's SCAD and that HEAD does not hold it. "
-        "Fullscreen is the next step.",
+        "merging is yours to do. It is listed in the part's Variants, its tab pressed to "
+        "bring it in front of Parameters, with what it changes against the part's SCAD and "
+        "that HEAD does not hold it. Fullscreen is the next step.",
         shown=_said_on_the_page(page),
         blank=BLANK,
     )
@@ -477,13 +478,13 @@ def test_editing_a_parts_scad_twice_round(
     rows = page.locator("#part-saved .saved-variant")
     expect(rows).to_have_count(2)
     assert rows.evaluate_all("(rs) => rs.map((r) => r.dataset.variant)") == ["taller", "variant-1"]
-    windows.open_window(page, "part-variants")
     story.shows(
         "Round two: a name, a change and Save",
         "In the SCAD window: a name typed, taller, and the top made as big as the cube, "
         "rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, "
-        "which saves as its Save does. Both variants are listed in Variants, brought in "
-        "front of Parameters, newest first. Drawing the first again is the next step.",
+        "which saves as its Save does. Both variants are listed in Variants, still in "
+        "front of Parameters, newest first, the list following each Save. Drawing the "
+        "first again is the next step.",
         shown=_said_on_the_page(page),
         blank=BLANK,
     )

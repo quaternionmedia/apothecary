@@ -15,12 +15,12 @@ from ..projects.parts.stl_renderer import (
     openscad_version,
 )
 from ..projects.registry import PartLoadError, load_part, scan_projects
-from .utils import _safe_echo
+from .utils import safe_echo
 
 
 def _parts():
-    """(name, part) for every registered part; part is None where its wrapper
-    does not import."""
+    """(name, part) for every registered part; for one that does not load, the
+    PartLoadError in its place."""
     found = []
     for item in scan_projects(ROOT):
         if item.kind != "part":
@@ -30,15 +30,17 @@ def _parts():
             continue
         try:
             found.append((item.name, load_part(item)))
-        except PartLoadError:
-            found.append((item.name, None))
+        except PartLoadError as exc:
+            found.append((item.name, exc))
     return sorted(found, key=lambda pair: pair[0])
 
 
 def _openscad_for(name: str, part) -> str:
     """One line: the OpenSCAD this part renders with and whether it has Manifold,
     or why it cannot be built here."""
-    if part is None:
+    if isinstance(part, PartLoadError):
+        if part.source.endswith(".json"):
+            return f"  ✗ {name}: its part.json does not load (apothecary problems --detail)"
         return f"  ✗ {name}: its wrapper does not import"
     can_build, reason = part.can_generate_stl()
     if not can_build:
@@ -65,7 +67,7 @@ def check():
 
     # Check Python version
     py_version = sys.version.split()[0]
-    _safe_echo(f"✓ Python: {py_version}")
+    safe_echo(f"✓ Python: {py_version}")
     click.echo(f"  Executable: {sys.executable}")
     click.echo("")
 
@@ -76,9 +78,9 @@ def check():
         try:
             __import__(pkg)
             version = importlib.metadata.version(pkg)
-            _safe_echo(f"  ✓ {pkg}: {version}")
+            safe_echo(f"  ✓ {pkg}: {version}")
         except ImportError:
-            _safe_echo(f"  ✗ {pkg}: NOT FOUND", fg="red")
+            safe_echo(f"  ✗ {pkg}: NOT FOUND", fg="red")
             missing.append(pkg)
     click.echo("")
 
@@ -88,9 +90,9 @@ def check():
     click.secho("3D library (three.js):", bold=True)
     three_build = ROOT / "apothecary" / "static" / "vendor" / "three" / "three.module.js"
     if three_build.is_file():
-        _safe_echo(f"  ✓ Vendored: {three_build.parent}")
+        safe_echo(f"  ✓ Vendored: {three_build.parent}")
     else:
-        _safe_echo("  ✗ three.js missing", fg="yellow")
+        safe_echo("  ✗ three.js missing", fg="yellow")
         click.echo("     The fractal viewer will render nothing. It is checked in under")
         click.echo(f"     {three_build.parent}; restore it from the repository.")
 
@@ -100,20 +102,20 @@ def check():
     click.secho("OpenSCAD:", bold=True)
     renderer = OpenSCADRenderer()
     if renderer.is_available:
-        _safe_echo(f"  ✓ Available: {renderer.openscad_path}")
+        safe_echo(f"  ✓ Available: {renderer.openscad_path}")
         version = renderer.get_version()
         if version:
-            _safe_echo(f"  ✓ Version: {version}")
+            safe_echo(f"  ✓ Version: {version}")
         if not has_manifold(renderer.openscad_path):
-            _safe_echo(
+            safe_echo(
                 "  • No Manifold: renders use CGAL (slow); "
                 "`apothecary openscad install` fetches a snapshot that has it",
                 fg="yellow",
             )
         for line in _appimage_start(renderer.openscad_path):
-            _safe_echo(line, fg="yellow")
+            safe_echo(line, fg="yellow")
     else:
-        _safe_echo("  ✗ OpenSCAD not found", fg="yellow")
+        safe_echo("  ✗ OpenSCAD not found", fg="yellow")
         click.echo("     STL rendering endpoints and commands will be unavailable")
         click.echo("     `apothecary openscad install` installs a snapshot, with Manifold")
 
@@ -121,7 +123,7 @@ def check():
 
     click.secho("OpenSCAD by part:", bold=True)
     for name, part in _parts():
-        _safe_echo(_openscad_for(name, part))
+        safe_echo(_openscad_for(name, part))
 
     click.echo("")
 
@@ -132,9 +134,9 @@ def check():
     for module in slicer_modules():
         found = module.status()
         if found.ok:
-            _safe_echo(f"  ✓ {found.label} {found.tool.version}: {found.tool.path}")
+            safe_echo(f"  ✓ {found.label} {found.tool.version}: {found.tool.path}")
         else:
-            _safe_echo(
+            safe_echo(
                 f"  • {found.label} not installed (optional: {found.install}, "
                 f"pinned {found.pinned})",
                 fg="yellow",
@@ -149,23 +151,24 @@ def check():
     # Each toolchain module: whether it is installed, and what it can do. An
     # install flag installs its own module and nothing else.
     can = {m.id: ", ".join(m.can) for m in fw.toolchains}
-    if fw.arduino_cli_ok:
-        cores = ", ".join(c.id for c in fw.cores if c.installed) or "no cores"
-        _safe_echo(f"  ✓ arduino-cli {fw.arduino_cli_version} ({cores})")
-        _safe_echo(f"    Arduino can {can.get('arduino', '')}")
+    arduino = fw.module("arduino")
+    if arduino.ok:
+        cores = ", ".join(c.id for c in arduino.cores if c.installed) or "no cores"
+        safe_echo(f"  ✓ arduino-cli {arduino.tool('arduino-cli').version} ({cores})")
+        safe_echo(f"    Arduino can {can['arduino']}")
     else:
-        _safe_echo(
+        safe_echo(
             "  • arduino-cli not installed (optional: apothecary firmware install)", fg="yellow"
         )
     for module in fw.toolchains:
         if module.id == "arduino":
             continue
         if module.ok:
-            tools = ", ".join(t.version for t in module.tools if t.ok)
-            _safe_echo(f"  ✓ {module.label} ({tools})")
-            _safe_echo(f"    {module.label} can {can[module.id]}")
+            tools = ", ".join(t.version or t.name for t in module.tools if t.ok)
+            safe_echo(f"  ✓ {module.label} ({tools})")
+            safe_echo(f"    {module.label} can {can[module.id]}")
         else:
-            _safe_echo(
+            safe_echo(
                 f"  • {module.label} not installed (optional: {module.install}); "
                 f"it would {can[module.id]}",
                 fg="yellow",
@@ -179,7 +182,7 @@ def check():
     if items:
         for item in items[:5]:
             status = "✓" if item.has_part else "•"
-            _safe_echo(f"    {status} {item.name}")
+            safe_echo(f"    {status} {item.name}")
         if len(items) > 5:
             click.echo(f"    ... and {len(items) - 5} more")
 
@@ -226,5 +229,5 @@ def _next_step(renderer: OpenSCADRenderer) -> str:
     """The line `check` ends with: the next command walkthrough page 00 gives."""
     page = "walkthrough/00-getting-started.md"
     if renderer.is_available and has_manifold(renderer.openscad_path):
-        return f"next: apothecary serve --demo ({page})"
-    return f"next: apothecary openscad install, then apothecary serve --demo ({page})"
+        return f"next: apothecary serve --simulated ({page})"
+    return f"next: apothecary openscad install, then apothecary serve --simulated ({page})"

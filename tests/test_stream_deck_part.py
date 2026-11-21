@@ -55,7 +55,8 @@ def test_the_garage_stands_it_at_the_benchs_right_end_behind_the_boards():
     bench and overlapping nothing that rests on it."""
     site = create_example_site()
     deck = next(s for s in site.children if s.name == "stream_deck")
-    assert deck.part_ref == "stream_deck_plus" and deck.category == "electrical"
+    # A part standing loose on the bench: no System, grouped by its kind.
+    assert deck.part_ref == "stream_deck_plus" and deck.category is None
     assert deck.sketch_ref is None
     assert "stream_deck" in BENCH_MOUNTED_STRUCTURES
     assert deck.position.z == BENCH_TOP_Z

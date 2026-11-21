@@ -16,22 +16,20 @@ from pydantic import ValidationError
 from ..installer import ArduinoCliInstaller, InstallSpec, env_for_arduino
 from ..models import (
     ARDUINO,
+    ArduinoStatus,
     BoardInfo,
     DisplaySpec,
-    ModuleStatus,
     SketchInfo,
-    ToolchainStatus,
+    SuggestedCore,
     ToolStatus,
 )
 from ..tasks import stream
 from ..toolchains import (
-    ArduinoCli,
-    Esptool,
+    SUGGESTED_CORES,
     ToolchainError,
     get_arduino_cli,
     get_esptool,
     reset_toolchains,
-    tools_dir,
 )
 from . import Log, Plan, ToolchainModule
 
@@ -101,76 +99,54 @@ class ArduinoModule(ToolchainModule):
 
     # -- tools --------------------------------------------------------------------
 
-    def legacy_status(
-        self, cli: Optional[ArduinoCli] = None, esptool: Optional[Esptool] = None
-    ) -> ToolchainStatus:
-        """Everything ``validate`` reports of arduino-cli and esptool, in the shape
-        of ``GET /firmware/status``'s top-level fields; never raises."""
-        cli = cli or get_arduino_cli()
-        esptool = esptool or get_esptool()
-        status = ToolchainStatus(tools_dir=str(tools_dir()))
+    def status(self) -> ArduinoStatus:
+        """arduino-cli and esptool as found, the config arduino-cli is given, its
+        cores and the cores the Bench offers. It can build once arduino-cli runs;
+        esptool is optional."""
+        out = self._base_status(ArduinoStatus)
+        out.suggested_cores = [SuggestedCore(id=cid, label=label) for cid, label in SUGGESTED_CORES]
 
+        cli = get_arduino_cli()
+        cli_status = ToolStatus(name="arduino-cli")
         if cli.is_available:
-            status.arduino_cli_path = str(cli.path)
+            cli_status.path = str(cli.path)
             try:
-                status.arduino_cli_version = cli.version()
-                status.arduino_cli_ok = bool(status.arduino_cli_version)
+                cli_status.version = cli.version()
+                cli_status.ok = bool(cli_status.version)
             except ToolchainError as exc:
-                status.problems.append(f"arduino-cli does not run: {exc}")
-            if status.arduino_cli_ok:
-                status.config_file = str(cli.config_file)
+                out.problems.append(f"arduino-cli does not run: {exc}")
+            if cli_status.ok:
+                out.config_file = str(cli.config_file)
                 try:
-                    status.cores = cli.core_list()
+                    out.cores = cli.core_list()
                 except ToolchainError as exc:
-                    status.problems.append(f"could not list cores: {exc}")
-                if not any(c.installed for c in status.cores):
-                    status.problems.append(
-                        "no board cores installed -- nothing can be compiled yet"
-                    )
+                    out.problems.append(f"could not list cores: {exc}")
+                if not any(c.installed for c in out.cores):
+                    out.problems.append("no board cores installed -- nothing can be compiled yet")
         else:
-            status.problems.append("arduino-cli not found (run `apothecary firmware install`)")
+            out.problems.append("arduino-cli not found (run `apothecary firmware install`)")
 
+        esptool = get_esptool()
+        esptool_status = ToolStatus(name="esptool")
         if esptool.is_available:
-            status.esptool_path = esptool.describe()
-            status.esptool_version = esptool.version()
-            status.esptool_ok = bool(status.esptool_version)
+            esptool_status.path = esptool.describe()
+            esptool_status.version = esptool.version()
+            esptool_status.ok = bool(esptool_status.version)
         else:
-            status.problems.append(
+            out.problems.append(
                 "esptool not found -- raw ESP binary flashing unavailable "
                 "(arduino-cli uploads to ESP32 still work once the esp32 core is installed)"
             )
-        return status
-
-    def from_legacy(self, legacy: ToolchainStatus) -> ModuleStatus:
-        out = self._base_status()
-        out.ok = legacy.arduino_cli_ok
-        out.tools = [
-            ToolStatus(
-                name="arduino-cli",
-                path=legacy.arduino_cli_path,
-                version=legacy.arduino_cli_version,
-                ok=legacy.arduino_cli_ok,
-            ),
-            ToolStatus(
-                name="esptool",
-                path=legacy.esptool_path,
-                version=legacy.esptool_version,
-                ok=legacy.esptool_ok,
-            ),
-        ]
-        out.problems = list(legacy.problems)
+        out.tools = [cli_status, esptool_status]
+        out.ok = cli_status.ok
         return out
-
-    def status(self) -> ModuleStatus:
-        return self.from_legacy(self.legacy_status())
 
     def install(
         self, log: Log, force: bool = False, spec: Optional[InstallSpec] = None
-    ) -> ModuleStatus:
-        self.install_spec(spec or InstallSpec(force=force), log)
-        return self.status()
+    ) -> ArduinoStatus:
+        return self.install_spec(spec or InstallSpec(force=force), log)
 
-    def install_spec(self, spec: InstallSpec, log: Log) -> ToolchainStatus:
+    def install_spec(self, spec: InstallSpec, log: Log) -> ArduinoStatus:
         """Install or refresh arduino-cli, then any requested cores and libraries."""
         ArduinoCliInstaller(spec, log=log).install_binary()
         reset_toolchains()
@@ -182,7 +158,7 @@ class ArduinoModule(ToolchainModule):
                 _check(stream(cli.core_install_argv(core), log, env), f"core install {core}")
         if spec.libraries:
             _check(stream(cli.lib_install_argv(spec.libraries), log, env), "lib install")
-        return self.legacy_status(cli)
+        return self.status()
 
     def env(self) -> dict:
         return env_for_arduino()

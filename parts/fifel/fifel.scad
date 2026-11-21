@@ -21,6 +21,12 @@ bore = 20;
 //how thick the walls of the fife are
 wall = 4;
 
+//everything after the next line is hidden: it is not a number to change
+/* [Hidden] */
+
+//true stands the fife on its head, the way up it prints; false lays it on its side, the way it rests (see the end of this file)
+print = true;
+
 //a module in openscad is basically a function. Let's you do a whole bunch of code all at once
 module fifel(){
 
@@ -71,7 +77,14 @@ module fifel(){
 //now we close the fifel module
 }
 
-//now we call the fifel module to generate the code
-fifel();
+//a circle in openscad is really a polygon. This is how many sides it gets for a radius r: $fn if you set one, else from $fa (the most degrees one side may turn) and $fs (the shortest a side may be)
+function sides(r) = $fn > 0 ? max($fn, 3) : ceil(max(min(360 / $fa, r * 2 * PI / $fs), 5));
+
+//how far a polygon of that many sides reaches from its middle towards +y. Its corners start on +x, so this can be a little less than r
+function reach(r) = r * max([for (i = [0 : sides(r) - 1]) sin(360 * i / sides(r))]);
+
+//now we call the fifel module to generate the code. To print it, it stands on its head. To rest, rotate lays it on its side with the lip rest up, and translate lifts it by how far the head's rim reaches below its middle, so it lies on the floor on its tube
+if (print) fifel();
+else translate([0, 0, reach((bore + wall + 1)/2)]) rotate([-90, 0, 0]) fifel();
 
 //end of fifel!

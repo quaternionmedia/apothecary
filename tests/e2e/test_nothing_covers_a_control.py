@@ -70,7 +70,7 @@ SCROLLED = """([selector, fraction]) => {
     const root = document.querySelector(selector);
     let slot = root && root.querySelector('.panel-body-slot, .cm-scroller');
     if (root && root.classList.contains('panel-body-slot')) slot = root;
-    for (const s of [slot, ...(root ? root.querySelectorAll('.panel-body-slot, .scad-saved') : [])]) {
+    for (const s of [slot, ...(root ? root.querySelectorAll('.panel-body-slot') : [])]) {
         if (s && s.scrollHeight > s.clientHeight) s.scrollTop = fraction * (s.scrollHeight - s.clientHeight);
     }
 }"""

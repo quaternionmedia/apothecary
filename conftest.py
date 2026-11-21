@@ -10,7 +10,9 @@ test connects to nothing past this machine whichever module it imports.
 
 The state folder is the run's own too: a site a test builds is given the
 cameras recorded in the state folder, and a person's own (``~/.apothecary``)
-must neither appear in a test's site nor be written by one.
+must neither appear in a test's site nor be written by one. So is the record of
+what was green, which `apothecary test changed` reads: a test's pass is not the
+checkout's.
 
 Every test has a time bound, run here or in CI: each phase of it -- its setup,
 its call, its teardown -- ends at the ceiling below, twice the longest test the
@@ -49,17 +51,59 @@ def _from_this_machine(
 _st.TestClient.__init__ = _from_this_machine
 
 
+# The folders a run keeps as its own, named by the session's fixtures below: each test's
+# teardown puts back one it left changed, and fails it (pytest_runtest_teardown).
+RUNS_OWN: dict[str, str] = {}
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _state_folder_of_the_runs_own(tmp_path_factory):
     """Pins and camera records go to a state folder of the run's own unless a test
     names another; never the person's."""
     previous = os.environ.get("APOTHECARY_STATE_DIR")
-    os.environ["APOTHECARY_STATE_DIR"] = str(tmp_path_factory.mktemp("state"))
+    os.environ["APOTHECARY_STATE_DIR"] = RUNS_OWN["APOTHECARY_STATE_DIR"] = str(
+        tmp_path_factory.mktemp("state")
+    )
     yield
     if previous is None:
         os.environ.pop("APOTHECARY_STATE_DIR", None)
     else:
         os.environ["APOTHECARY_STATE_DIR"] = previous
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _green_record_of_the_runs_own(tmp_path_factory):
+    """What `apothecary test` keeps as green (apothecary/cli/green.py) goes to a file of
+    the run's own: a test that runs the command stands its pytest in, and that pass is
+    not the checkout's."""
+    previous = os.environ.get("APOTHECARY_GREEN_RECORD")
+    os.environ["APOTHECARY_GREEN_RECORD"] = RUNS_OWN["APOTHECARY_GREEN_RECORD"] = str(
+        tmp_path_factory.mktemp("green") / "green.json"
+    )
+    yield
+    if previous is None:
+        os.environ.pop("APOTHECARY_GREEN_RECORD", None)
+    else:
+        os.environ["APOTHECARY_GREEN_RECORD"] = previous
+
+
+def _runs_own_put_back(item, nextitem) -> None:
+    """A test or page that names another state folder puts the run's own back. One
+    that leaves it unset sends every later test in the process to the person's own
+    folder (``~/.apothecary``): their jobs, prints and boards. Read once every fixture
+    of the test is torn down, monkeypatch's too; after the last test the session's
+    fixtures put theirs back."""
+    if nextitem is None:
+        return
+    moved = {n: os.environ.get(n) for n, v in RUNS_OWN.items() if os.environ.get(n) != v}
+    for name in moved:
+        os.environ[name] = RUNS_OWN[name]
+    if moved:
+        pytest.fail(
+            f"{item.nodeid} left {', '.join(f'{n}={v!r}' for n, v in moved.items())}: "
+            "put back what it was, as walkthrough page 22 does",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -151,4 +195,6 @@ def pytest_runtest_call(item):
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_teardown(item, nextitem):
     with ended_after(item.config.stash[CEILING], item.config.stash[STDERR]):
-        return (yield)
+        result = yield
+    _runs_own_put_back(item, nextitem)
+    return result

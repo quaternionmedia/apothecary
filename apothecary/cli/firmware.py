@@ -136,33 +136,36 @@ def firmware_validate(json_out: bool):
         click.echo(json.dumps(status.model_dump(), indent=2))
     else:
         _print_status(status)
-    if not status.arduino_cli_ok:
+    if not status.module("arduino").ok:
         sys.exit(1)
 
 
 def _print_status(status) -> None:
     click.secho("Firmware toolchain", bold=True)
     click.echo(f"  tools dir: {status.tools_dir}")
-    if status.arduino_cli_ok:
-        click.echo(f"  ✓ arduino-cli {status.arduino_cli_version}: {status.arduino_cli_path}")
-        if status.config_file:
-            click.echo(f"    config: {status.config_file}")
-        installed = [c for c in status.cores if c.installed]
+    # Arduino's lines are its own: arduino-cli with its config and its cores, and esptool.
+    arduino = status.module("arduino")
+    cli, esptool = arduino.tool("arduino-cli"), arduino.tool("esptool")
+    if cli.ok:
+        click.echo(f"  ✓ arduino-cli {cli.version}: {cli.path}")
+        if arduino.config_file:
+            click.echo(f"    config: {arduino.config_file}")
+        installed = [c for c in arduino.cores if c.installed]
         if installed:
             click.echo("    cores: " + ", ".join(f"{c.id}@{c.installed}" for c in installed))
     else:
         click.secho("  ✗ arduino-cli: not installed (apothecary firmware install)", fg="red")
-    if status.esptool_ok:
-        click.echo(f"  ✓ esptool {status.esptool_version}: {status.esptool_path}")
+    if esptool.ok:
+        click.echo(f"  ✓ esptool {esptool.version}: {esptool.path}")
     else:
         click.secho(
             "  • esptool: not found (optional: raw binary flashing needs it; "
             "arduino-cli uploads to an ESP32 without it)",
             fg="yellow",
         )
-    missing = [] if status.arduino_cli_path else ["arduino-cli"]
-    missing += [] if status.esptool_ok else ["esptool"]
-    for problem in _unsaid(status.problems, missing):
+    missing = [] if cli.path else ["arduino-cli"]
+    missing += [] if esptool.ok else ["esptool"]
+    for problem in _unsaid(arduino.problems, missing):
         click.secho(f"  ! {problem}", fg="yellow")
     for module in status.toolchains:
         if module.id == "arduino":
@@ -321,7 +324,13 @@ def firmware_compile(sketch: str, fqbn: Optional[str]):
     default=None,
     help="Serial port (auto-detected when exactly one board is connected)",
 )
-def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
+@click.option(
+    "--replace-machine-firmware",
+    "replace",
+    is_flag=True,
+    help="Flash a port whose board answered as a printer or a router: replaces its firmware",
+)
+def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str], replace: bool):
     """Compile and upload a sketch to a connected board (a Rust sketch: build, then espflash)."""
     s = _require_sketch(sketch)
     try:
@@ -329,6 +338,7 @@ def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
         if chosen:
             validate_fqbn(chosen)
         chosen_port = validate_port(service.resolve_port(port))
+        devices.not_a_machines_controller(chosen_port, replace)
         _run_plan(service.flash_plan(s, chosen, chosen_port))
     except (ToolchainError, ValueError) as exc:
         _die(exc)
@@ -344,7 +354,15 @@ def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
 )
 @click.option("--baud", default=460800, show_default=True, type=int)
 @click.option("--erase", is_flag=True, help="Erase flash first")
-def firmware_flash_bin(port: str, images: Tuple[str, ...], chip: str, baud: int, erase: bool):
+@click.option(
+    "--replace-machine-firmware",
+    "replace",
+    is_flag=True,
+    help="Flash a port whose board answered as a printer or a router: replaces its firmware",
+)
+def firmware_flash_bin(
+    port: str, images: Tuple[str, ...], chip: str, baud: int, erase: bool, replace: bool
+):
     """Flash raw binaries to an Espressif chip with esptool.
 
     IMAGES are OFFSET:FILE pairs, e.g. 0x1000:bootloader.bin 0x10000:firmware.bin
@@ -353,6 +371,7 @@ def firmware_flash_bin(port: str, images: Tuple[str, ...], chip: str, baud: int,
     pairs = []
     try:
         validate_port(port)
+        devices.not_a_machines_controller(port, replace)
         for item in images:
             if ":" not in item:
                 raise click.UsageError(f"image must be OFFSET:FILE, got {item!r}")

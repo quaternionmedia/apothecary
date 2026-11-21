@@ -1,0 +1,172 @@
+"""The journeys' registry (apothecary/journeys.py) and what reads it: each journey's
+view, laid out from ⊞ Windows and the ring's Panels › Windows after the systems'.
+That a view lays its windows out on the page is tests/e2e/test_journeys.py's."""
+
+from __future__ import annotations
+
+import json
+import re
+
+from apothecary.example_hierarchy import create_example_site
+from apothecary.journeys import JOURNEYS, PUTS, by_id, manifest
+from apothecary.menu import PANEL_GROUPS, VIEWS
+from apothecary.projects.parts.skeleton import ROOT
+from apothecary.simulated import DEVKIT
+from apothecary.site_names import UNIVERSE
+from apothecary.systems import SYSTEMS
+from apothecary.universe import create_universe_site
+from apothecary.viewer import render_fractal_viewer_page
+
+PAGE = ROOT / "templates" / "fractal_viewer.html.j2"
+SYSTEMS_JS = ROOT / "apothecary" / "static" / "systems.js"
+
+
+def _layout_windows(layout) -> set:
+    if isinstance(layout, str):
+        return {layout}
+    if layout.get("world"):
+        return {"world"}
+    if "stack" in layout:
+        return set(layout["stack"])
+    return set().union(*(_layout_windows(child) for child in layout.get("row") or layout["column"]))
+
+
+def _page_windows() -> set:
+    """Every window the page has: the world's, those it registers or marks, and each
+    system's, a board's Machine among them."""
+    page = PAGE.read_text(encoding="utf-8")
+    marked = set(re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page))
+    registered = set(re.findall(r"panels\.register\('([\w-]+)'", page))
+    return {"world"} | marked | registered | {w for s in SYSTEMS for w in s.windows()}
+
+
+def test_each_journey_is_named_once_and_apart_from_the_systems():
+    ids = [j.id for j in JOURNEYS]
+    assert len(ids) == len(set(ids))
+    assert not set(ids) & {s.id for s in SYSTEMS}
+    groups = set(PANEL_GROUPS.values()) | {s.group for s in SYSTEMS}
+    for journey in JOURNEYS:
+        assert re.fullmatch(r"[a-z][a-z0-9-]*", journey.id)
+        assert len(journey.cell) <= 12, journey.cell  # a ring label, where it has one
+        assert journey.group in groups, journey.group  # a colour the palette has
+        assert journey.name and journey.title, journey.id
+        # One scheme: what a person does, and to one thing. The title is the verb.
+        verb, article, thing = journey.name.partition(" a ")
+        assert verb == journey.title and article and " " not in thing, journey.name
+
+
+def test_the_page_is_taken_to_a_stage_by_verbs_it_has_on_pieces_the_simulated_server_s_site_has():
+    """What the tour does to stand on a stage is from the page's own short list, and its
+    subjects are pieces of the site each journey names -- the garage, or the universe,
+    where every part stands -- each the simulated server's, so the tour opens it from
+    any other."""
+    garage = create_example_site()  # the simulated server's garage
+    universe = create_universe_site()  # every part, and every other site, one piece each
+    sites = {garage.name.lower(): garage, UNIVERSE: universe}
+    for journey in JOURNEYS:
+        assert journey.site in sites, journey.id
+        pieces = {child.name for child in sites[journey.site].children}
+        for verb, subject in [*journey.staged_on, *(p for s in journey.steps for p in s.puts)]:
+            assert verb in PUTS, (journey.id, verb)
+            piece, _, what = subject.partition(":")
+            if verb == "pin":
+                assert what == DEVKIT  # the simulated server's devkit, which stands unpinned
+            assert piece in pieces or (verb == "working" and not piece), (journey.id, subject)
+    page = PAGE.read_text(encoding="utf-8")
+    for verb in PUTS:
+        assert f"verb === '{verb}'" in page, verb
+
+
+def test_every_window_a_journeys_view_lays_out_is_one_the_page_has():
+    known = _page_windows()
+    for journey in JOURNEYS:
+        named = _layout_windows(journey.view)
+        assert named <= known, (journey.id, named - known)
+        assert "world" in named and journey.requires in named, journey.id
+
+
+def test_the_make_view_holds_the_window_set_a_part_is_made_through():
+    """The part chosen in Site, its numbers in Parameters, the machine's window and its
+    Print window together at the column's foot, Print in front."""
+    named = _layout_windows(by_id("make").view)
+    assert {"site", "selected", "part-parameters", "machine", "machine-print"} <= named
+    column = by_id("make").view["row"][1]["column"]
+    assert column[-1]["stack"][:2] == ["machine", "machine-print"]
+    assert column[-1]["active"] == "machine-print"
+
+
+def test_the_ring_has_a_cell_for_the_first_journey_s_view_after_the_systems():
+    """Panels › Windows is full, so Print a part's view alone has a cell there; the other
+    journeys are entered from ⊞ Windows › Journeys and the tour."""
+    assert VIEWS[len(SYSTEMS) :] == (("make", "Print view"),)
+    assert [j.id for j in JOURNEYS if j.cell] == ["make"]
+
+
+def test_the_page_is_given_the_journeys_and_defines_their_views_from_them_alone():
+    html = render_fractal_viewer_page(["garage"], "http://127.0.0.1:8000")
+    given = re.search(
+        r'<script type="application/json" id="apothecary-journeys">(.*?)</script>', html, re.S
+    )
+    assert given is not None
+    assert json.loads(given.group(1)) == manifest()
+    page = PAGE.read_text(encoding="utf-8")
+    assert "defineJourneyViews(this.panels, JOURNEYS);" in page
+    module = SYSTEMS_JS.read_text(encoding="utf-8")
+    assert "export function defineJourneyViews(" in module
+    assert "panels.defineView(journey.id," in module
+
+
+def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
+    """A step's windows are its journey's: entering it brings forward windows the view
+    laid out, and a window chosen says one step at most."""
+    for journey in JOURNEYS:
+        named = _layout_windows(journey.view)
+        ids = [s.id for s in journey.steps]
+        assert journey.steps and len(ids) == len(set(ids)), journey.id
+        owned = [w for s in journey.steps for w in s.owns]
+        assert len(owned) == len(set(owned)), journey.id
+        for step in journey.steps:
+            assert re.fullmatch(r"[a-z][a-z0-9-]*", step.id)
+            assert 0 < len(step.label) <= 8, step.label  # on the rail, after its number
+            assert step.hint and step.forward, step.id
+            assert set(step.forward) | set(step.owns) <= named, (journey.id, step.id)
+
+
+def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
+    make = by_id("make")
+    assert make.name == "Print a part"
+    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Start", "Measure"]
+    assert make.steps[0].forward[0] == "site"
+    assert make.steps[2].forward == ("machine-print",)
+    assert [s.id for s in make.steps if s.draws] == ["see"]
+    assert make.steps[4].owns == ("machine", "jobs")
+    # Start names ▶ Print, a button of the Print window: that tab is the one in front,
+    # not the Machine's beside it. The stage's part is under makes wherever it is entered.
+    assert make.steps[4].forward[0] == "machine-print"
+    assert ("makes", "footpedal") in make.staged_on
+    # The piece made, read in its part's cabinet, Part › Feedback, as a turn of the
+    # printer's tuning: a file of it kept, whose plan (or box) gives the rows to read, and
+    # the cabinet opened on the part.
+    assert make.steps[-1].forward == ("part-feedback",)
+    assert make.steps[-1].owns == ("part-feedback",)
+    assert make.steps[-1].puts == (("file", "footpedal"), ("feedback", "footpedal"))
+    assert by_id("cut").steps[-1].forward == ("part-feedback",)
+    assert make.steps[-1].shown_by == (
+        "46-a-printer-tuned-from-its-prints.md",
+        "50-a-printer-tuned-from-what-it-shows.md",
+    )
+
+
+def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():
+    """Two ends, then the adapter between them, then whether it is ready: the port part
+    and the adapter are the universe's leaves, which is where the tour opens it."""
+    join = by_id("join")
+    assert (join.name, join.site) == ("Join a hose", UNIVERSE)
+    assert [s.label for s in join.steps] == ["Ends", "Adapter", "Ready"]
+    assert join.steps[0].puts == (("edit", "dust_port"),)
+    # The Adapter stage's words are "⇄ Adapter again at the other end's numbers": ⇄ Adapter
+    # is a port's button (the adapter has no round end of its own), so the port stays chosen;
+    # the adapter is chosen by pressing it, and is what Ready is about.
+    assert join.steps[1].puts == (("edit", "dust_port"),)
+    assert join.steps[2].puts == (("edit", "hose_adapter"),)
+    assert JOURNEYS[-1] is join  # last in the chain: no other journey's place moves

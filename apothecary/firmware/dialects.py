@@ -31,6 +31,7 @@ class Dialect:
     query_codes: Dict[str, str]  # the report-only queries, each with what it reports
     line_timeout: Callable[[str], float]  # how long a streamed line may take
     job_allows: Pattern[str]  # what a person may send while a streamed job holds the port
+    always: Pattern[str]  # what only turns off or stops, and goes with the latch down
     # What a file kept for its kind of machine may carry: the lines it would send, and
     # every reason it may not be sent (gcode.check_file, with the dialect's objections).
     check_file: Callable[[str], Tuple[int, List[str]]]
@@ -55,6 +56,7 @@ MARLIN = Dialect(
     query_codes=gcode.QUERY_CODES,
     line_timeout=gcode.line_timeout,
     job_allows=gcode.JOB_ALLOWS,
+    always=gcode.ALWAYS,
     check_file=gcode.check_gcode,
     explain=None,
     bed_reading=gcode.read_bed,
@@ -73,6 +75,7 @@ GRBL = Dialect(
     query_codes=grbl.QUERY_CODES,
     line_timeout=grbl.line_timeout,
     job_allows=grbl.JOB_ALLOWS,
+    always=grbl.ALWAYS,
     check_file=grbl.check_gcode,
     explain=grbl.explain,
     bed_reading=grbl.probe_table,
@@ -88,10 +91,9 @@ def by_word(word: Optional[str]) -> Dialect:
     return BY_WORD.get(word or "", MARLIN)
 
 
-def by_machine(kind: Optional[str]) -> Dialect:
-    """The dialect driving ``kind`` of machine; Marlin's for None, a file kept for no
-    kind. KeyError for a kind no dialect drives."""
-    return MARLIN if kind is None else BY_MACHINE[kind]
+def by_machine(kind: str) -> Dialect:
+    """The dialect driving ``kind`` of machine. KeyError for a kind no dialect drives."""
+    return BY_MACHINE[kind]
 
 
 def either(command: str, how: str) -> str:

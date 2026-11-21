@@ -121,7 +121,9 @@ filled in is the shape it covers. A closed stroke of a diagram drawn inside a
 shape is a cut through it: the shape carries it (`cuts`), and the piece made of
 the shape has it taken out where it was drawn, round for a circle and
 square-cornered of its two sides for anything else. What is drawn inside a cut
-is not read. A gap
+is not read. A made piece's Selected lists each cut beside its sides: its family, its
+size, and where it lies from the piece's middle. A cut keeps its place and size
+as drawn when a person changes the piece's sides in Part › Edit. A gap
 in a stroke a few pixels of the working picture wide is closed, a wider one leaves
 the stroke open. `apothecary photo check --finder` measures a finder on drawn
 pictures whose answers are known, filled in and in outline.
@@ -159,6 +161,9 @@ with writing beside their shapes.
 
 ### The Marks window
 
+[Walkthrough 37](../walkthrough/37-marks-worn-in-the-world.md) goes through it, written by
+the browser test that does it.
+
 In the page, ⊞ Windows › Marks (Panels › Pictures › Marks on the ring) lists the
 marks of a picture pinned in the site, the one drawn at the selected place first.
 Each mark has its colour, a drop-down of what it is, and why; choosing in the
@@ -168,6 +173,13 @@ number chooses it, and the ring's cells under Marks -- Diagram, Writing, Unsure,
 Nothing -- then say what the chosen mark is. Under the marks are the notes: each
 with what it is about and a box for what it says, typed and said with Enter, and
 the size it states for its line where it states one.
+
+What the window reads of a picture's marks is worn over the picture where it lies
+in the world, a heads-up layer on it: each mark's box in its kind's colour -- a
+diagram's blue, writing violet, an unsure mark amber and dashed, a mark said to be
+nothing not drawn -- and each note a ✎ badge where it is written, its card saying
+its words, or that they are still to be typed. A note's ✎ pressed opens Marks with
+its box in front.
 
 The words given in the page are kept with the views, in the server's memory, and
 go when it stops (`GET` and `PUT /sites/{site}/views/{view}/marks`,
@@ -215,6 +227,36 @@ with where the finder put the corners. A whiteboard that fills the photograph ha
 the photograph's corners, and says so; a photograph whose lightest surface is
 under a sixth of it is refused.
 
+### Pinned at a whiteboard
+
+[Walkthrough 38](../walkthrough/38-a-whiteboard-s-corners.md) nudges a corner, written by the
+browser test that does it.
+
+A photograph pinned at a whiteboard of the site -- a structure that is the part
+`whiteboard`, as the garage's on its south wall -- is squared to it as it is
+pinned: its corners are found, the photograph redrawn square on, and kept under the
+picture root in `squared/`, a folder Pictures does not list. The view's picture is
+the squared one; it is as wide as the whiteboard's writing surface, with no width
+typed, and lies flat on the floor in front of the whiteboard, its top towards the
+wall, a step out from it. Its shapes are made there, on the floor, at full size. A
+photograph with nothing light enough in it to be a whiteboard is refused.
+
+The Marks window shows such a photograph under Corners, the whiteboard's four
+corners as handles on it. A handle dragged, or nudged with the arrow keys and set
+with Enter, is a person's word: the photograph is squared again with it and, where
+the outline finder had searched it, searched again (`GET` and
+`PUT /sites/{site}/views/{view}/corners`). Corners are fixed once a piece is made
+from the picture; dropping the pieces frees them.
+
+Above the corners, under When, is the whiteboard's history: every photograph,
+word given and piece made a tick on one strip, and a slider that scrubs it. A moment
+scrubbed to is the whiteboard as it stood then -- its photograph drawn in the world
+in front of the whiteboard, and its marks and notes listed with the words given by
+then. Under the slider, what changed since the photograph before, a row each, with
+Take on every row that changes a piece or carries a note's words. Place places the
+moment at the place selected in the world. On the ring, Panels › Pictures › Marks ›
+Earlier and Later step the slider to the event before or after, and Place is Place.
+
 ## A whiteboard photographed again
 
 `apothecary photo again BEFORE AFTER` reads two pictures of one whiteboard, each
@@ -228,6 +270,41 @@ with `--width-mm`, is the earlier picture's shapes with the rows taken. A shape
 whose sides a person stated is not proposed over when the drawing resizes it: its
 row says the two disagree, and cannot be taken. `--answers FILE` keeps the rows
 and which were taken.
+
+## A whiteboard's history
+
+Every photograph pinned at a whiteboard, every word a person gives on one of its
+marks or notes, every piece made from one, and every such piece dropped, is an event
+on one timeline, kept in
+the server's memory with the views (`apothecary/vision/history.py`,
+`apothecary/routes/whiteboards.py`). A moment of it is the whiteboard as it stood
+then: the newest photograph pinned by then, with the words given by then.
+
+| Route | Is |
+|---|---|
+| `GET /sites/{site}/whiteboards` | The site's whiteboards, each with how many photographs it holds |
+| `GET /sites/{site}/whiteboards/{whiteboard}/timeline?at=` | Every event, oldest first, and the photograph the whiteboard stood as at `at` |
+| `GET /sites/{site}/views/{view}/marks?as_of=` | A photograph's marks and notes with the words given up to `as_of` |
+| `GET /sites/{site}/views/{later}/again?since={earlier}` | What a later photograph proposes of an earlier's shapes and notes |
+| `POST /sites/{site}/views/{later}/again` `{since, take}` | The rows named taken, and nothing else |
+| `POST /sites/{site}/views/{view}/place` `{host, as_of}` | A moment placed elsewhere |
+
+Between two photographs of one whiteboard, each row says what changed and by how
+much, and whether taking it changes anything. A moved or resized shape's row
+rebuilds the piece made from it out of the later shape, keeping a word a person
+gave; a new shape's row makes it; a gone shape's row drops its piece; a row of a
+shape nothing was made from changes nothing and cannot be taken. A note whose
+writing is the same carries its words when taken; writing rewritten where a note
+was, rubbed out, or new, asks for its words and is not taken.
+
+A moment placed elsewhere is its picture pinned at another place -- a structure's
+top or the floor, never another whiteboard -- as wide as it was, searched by the
+same finder, with the words given up to that moment: a drawing of last Tuesday laid
+on the bench beside today's pieces. It is named, wherever it is listed, for the
+photograph it was squared from, as a whiteboard's own photograph is.
+
+[Walkthrough 30](../walkthrough/30-a-whiteboard-round-twice-through-the-page.md) goes
+round twice through the page, a picture at each step.
 
 ## Pieces
 

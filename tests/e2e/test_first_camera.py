@@ -81,9 +81,14 @@ def test_allow_before_the_yes_is_refused_and_says_what_to_do(
     assert _labels(page) == ["Allow"]
     _press(page, "Allow")
     status = _status(page)
-    expect(status).to_contain_text(
-        "Allow: the browser refused the camera (Permission denied): answer its prompt, or "
-        f"allow the camera for this site in the address bar, then {name}'s Device again (⌗",
+    # A refusal names the cell first, its address, then why: one form on the status line.
+    expect(status).to_have_text(
+        re.compile(
+            r"^Allow \(⌗\d+\): the browser refused the camera \(Permission denied\): answer its "
+            r"prompt, or allow the camera for this site in the address bar, then "
+            + re.escape(name)
+            + r"'s Device again$"
+        ),
         timeout=10000,
     )
     expect(status).to_have_class(re.compile(r"\berror\b"))

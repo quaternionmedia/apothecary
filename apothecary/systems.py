@@ -187,16 +187,21 @@ PART = System(
         Section(
             "scad",
             "SCAD",
-            "the part's SCAD in the editor: checked as typing stops, rendered, saved as a variant",
+            "the part's SCAD in the editor: checked as typing stops, rendered, and saved "
+            "under the name beside Save, as a variant Variants lists",
             home="beside",
             verbs=("part:scad", "part:save"),
         ),
+        # Every saved variant: Part › Variants' cells, and Part › Variants › Deleted's.
         Section(
             "variants",
             "Variants",
-            "the part's saved variants, each drawn again from its row, and the compare",
+            "every saved variant of the part, with what it changes: drawn from its row, "
+            "renamed, duplicated, an earlier save restored, compared, deleted to the trash "
+            "and restored from it; and the pieces made of each, and of none, each opening "
+            "its drawer in Feedback",
             home="part-parameters",
-            verbs=("part:variant:",),
+            verbs=("part:variant:", "part:trash:"),
         ),
         Section(
             "history",
@@ -209,6 +214,18 @@ PART = System(
             "Readiness",
             "whether the part is ready to print and check against a real one",
             home="part-parameters",
+        ),
+        # The part's cabinet (apothecary/cabinet.py): filled by its own widget
+        # (widgets/feedback.js), not the editor, on the part a piece's ring or a print's
+        # end opened it on.
+        Section(
+            "feedback",
+            "Feedback",
+            "the part's cabinet: a drawer for each piece made of it, and what is said of a "
+            "piece filed there -- what calipers read, the faults it shows, a note -- with "
+            "the turn it makes taken into its printer's next slices, or undone",
+            home="part-parameters",
+            verbs=("feedback:",),
         ),
     ),  # fmt: skip
     view={
@@ -223,6 +240,7 @@ PART = System(
                             "part-variants",
                             "part-history",
                             "part-readiness",
+                            "part-feedback",
                         ],
                         "size": 62,
                         "active": "part-parameters",

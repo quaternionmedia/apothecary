@@ -193,3 +193,32 @@ def test_osc_receiver_takes_a_packet_on_a_real_socket():
     finally:
         receiver.stop()
     assert state.snapshot()["status"] == {"/eos/out/active/chan": ["1-2 [100]"]}
+
+
+def test_a_feed_s_changes_are_told_at_a_bounded_rate_and_the_last_of_a_burst_is_not_lost():
+    state = ConsoleState(_rig())
+    told, now = [], [100.0]
+    state.told = lambda: told.append(state.snapshot()["seq"])
+    state.clock = lambda: now[0]
+    receiver = SacnReceiver(state, [1])
+    for level in range(50):  # a burst inside one interval
+        receiver.handle(make_sacn(1, bytes([level]) + bytes(4) + bytes(507)))
+        now[0] += 0.001
+    assert len(told) == 1  # the first, at once: the rest wait out the interval
+    state.flush()
+    assert len(told) == 1  # the interval has not passed
+    now[0] += 0.2
+    state.flush()  # the receiver's idle look
+    assert told == [1, 50] and state.snapshot()["channels"][1]["Intens"] == 49 / 255
+    state.flush()
+    assert len(told) == 2  # nothing pending, nothing told
+    # OSC status is a feed too; a person's own set_levels is not (its route says it).
+    now[0] += 0.2
+    OscReceiver(state).handle(make_osc("/eos/out/active/cue", 1))
+    assert len(told) == 3
+    state.set_levels({1: {"Intens": 0.5}})
+    now[0] += 1
+    state.flush()
+    assert len(told) == 3
+    state.told = lambda: 1 / 0  # news that fails does not stop the feed
+    receiver.handle(make_sacn(1, bytes([9]) + bytes(4) + bytes(507)))

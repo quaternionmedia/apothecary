@@ -53,22 +53,37 @@ def test_every_scad_number_has_a_parameter(part):
     assert not missing, f"{part.name}: no control for {missing}"
 
 
+def _reaches(part, field: str) -> bool:
+    """Whether moving ``field`` changes the SCAD a part built by Python geometry
+    generates or the interfaces it declares, from its defaults or from one of its
+    presets: a move the part refuses there is no move."""
+    for at in [{}, *(part.preset(name) for name in part.presets)]:
+        here = part.params_model(**at)
+        try:
+            moved = part.validate_overrides({**at, field: _moved(getattr(here, field))})
+        except ValueError:
+            continue
+        before = part.validate_overrides(at)
+        if (geometry_scad(part, moved), part.interfaces(moved or None)) != (
+            geometry_scad(part, before),
+            part.interfaces(before or None),
+        ):
+            return True
+    return False
+
+
 @pytest.mark.parametrize("part", _parts_with_params())
 def test_no_parameter_is_dead(part):
     """A parameter that reaches nothing is reported as a success while the
     slider moves and the part does not. A part built by Python geometry must
-    generate different SCAD for each; any other must pass each as `-D` names
-    its SCAD assigns, since OpenSCAD ignores the rest."""
+    generate different SCAD, or declare different interfaces (a hose's give
+    reaches every fit, and nothing it draws), for each, from its defaults or
+    from one of its presets; any other must pass each as `-D` names its SCAD
+    assigns, since OpenSCAD ignores the rest."""
     defaults = part.params_model()
     fields = list(part.params_model.model_fields)
     if part.geometry({}) is not None:
-        at_rest = geometry_scad(part, {})
-        dead = [
-            f
-            for f in fields
-            if geometry_scad(part, part.validate_overrides({f: _moved(getattr(defaults, f))}))
-            == at_rest
-        ]
+        dead = [f for f in fields if not _reaches(part, f)]
     else:
         variables = scad_variables(part.source_file)
         emitted = {

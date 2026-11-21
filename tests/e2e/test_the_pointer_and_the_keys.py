@@ -511,18 +511,19 @@ def test_settings_survive_a_reload_and_reset_puts_them_back(page: Page, url: str
     _open(page, url)
     panel = _settings(page)
     panel.locator(".setting-choice[data-setting='ringModifier']").select_option("alt")
-    _capture(page, "zoomOutKey", "u")
+    # A key no shortcut holds: u is the projector page's Mark a plane above.
+    _capture(page, "zoomOutKey", "j")
     panel.locator(".setting-tick[data-setting='autoZoom']").uncheck()
     panel.locator(".setting-number[data-setting='dollyOut']").fill("4")
     panel.locator(".setting-number[data-setting='dollyOut']").press("Tab")
-    changed = {"ringModifier": "alt", "zoomOutKey": "u", "autoZoom": False, "dollyOut": 4}
+    changed = {"ringModifier": "alt", "zoomOutKey": "j", "autoZoom": False, "dollyOut": 4}
 
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     values = page.evaluate("() => window.apothecarySettings.values()")
     assert {k: values[k] for k in changed} == changed
     panel = _settings(page)
-    expect(panel.locator(".setting-key[data-setting='zoomOutKey']")).to_have_text("u")
+    expect(panel.locator(".setting-key[data-setting='zoomOutKey']")).to_have_text("j")
     expect(panel.locator(".setting-tick[data-setting='autoZoom']")).not_to_be_checked()
     expect(page.locator("#viewer-hint")).to_contain_text("Alt+right-click: ring")
     # Each row shows its default, and its reset is there while it differs from it.
@@ -919,9 +920,9 @@ def _canvas_ring(page: Page) -> dict:
 
 @pytest.mark.e2e
 def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page, url: str):
-    """Pieces 8, Site 6, View 2, Panels 4, Pictures 9 and Rebuild 3 at the garage's root,
-    stepped into a piece, at a leaf, and in a site with no groups; Step out and Group,
-    which come and go, after them."""
+    """Pieces 8, Site 6, View 2, Panels 4, Pictures 9, Rebuild 3, Step out 1 and the level's
+    groups 7 -- Systems in a site, Kinds in the universe -- at the garage's root, stepped
+    into a piece, in the universe, and at a leaf of it."""
     constant = {
         "Pieces": "8",
         "Site": "6",
@@ -929,22 +930,23 @@ def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page,
         "Panels": "4",
         "Pictures": "9",
         "Rebuild": "3",
+        "Step out": "1",
     }
     _open(page, url)
     root = _canvas_ring(page)
-    assert {k: root[k] for k in constant} == constant and "Step out" not in root
+    assert {k: root[k] for k in constant} == constant and root["Systems"] == "7"
     page.locator(ROW.format("printer_1")).dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
     nested = _canvas_ring(page)
-    assert {k: nested[k] for k in constant} == constant and nested["Step out"] == "1"
+    assert {k: nested[k] for k in constant} == constant and nested["Systems"] == "7"
     page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     library = _canvas_ring(page)
-    assert {k: library[k] for k in constant} == constant and "Group" not in library
+    assert {k: library[k] for k in constant} == constant and library["Kinds"] == "7"
     page.locator(ROW.format("calibration_cube")).dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     leaf = _canvas_ring(page)
-    assert {k: leaf[k] for k in constant} == constant and leaf["Step out"] == "1"
+    assert {k: leaf[k] for k in constant} == constant and leaf["Kinds"] == "7"
 
 
 @pytest.mark.e2e
@@ -1051,7 +1053,8 @@ def test_the_worlds_ring_shows_when_tab_brings_the_focus_and_not_after_a_press(
 ):
     _open(page, url)
     outline = "() => getComputedStyle(document.getElementById('viewer-canvas')).outlineStyle"
-    page.locator("#ring-open").focus()
+    # The header's last control the keyboard reaches is the Layout valid chip.
+    page.locator("#validity-indicator").focus()
     page.keyboard.press("Tab")
     assert page.evaluate("() => document.activeElement.id") == "viewer-canvas"
     assert page.evaluate(outline) == "solid"
@@ -1059,3 +1062,50 @@ def test_the_worlds_ring_shows_when_tab_brings_the_focus_and_not_after_a_press(
     page.mouse.click(empty["x"], empty["y"])
     assert page.evaluate("() => document.activeElement.id") == "viewer-canvas"
     assert page.evaluate(outline) == "none"
+
+
+# Where the keyboard's focus is, and whether a person can see it there: shown, with a size,
+# on the page, and under nothing drawn over it. Null while it is on the page's body.
+FOCUS = """() => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return null;
+    const r = el.getBoundingClientRect();
+    const onPage = r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0
+        && r.left < innerWidth && r.top < innerHeight;
+    const x = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2));
+    const y = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
+    const at = onPage ? document.elementFromPoint(x, y) : null;
+    const panel = el.closest('.panel');
+    return {
+        name: el.id || (el.getAttribute('aria-label') || el.title || el.textContent || '').trim().slice(0, 30),
+        window: panel ? panel.dataset.panel : null,
+        shown: el.checkVisibility({ visibilityProperty: true, opacityProperty: true }),
+        onPage,
+        clear: !!at && (at === el || el.contains(at) || at.contains(el)),
+    };
+}"""
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("size", [(1600, 1000), (1100, 700)], ids=["1600x1000", "1100x700"])
+def test_tab_goes_round_the_header_the_world_and_the_windows_and_each_stop_is_seen(
+    page: Page, url: str, size: tuple[int, int]
+):
+    """Tab pressed from the top of the page, again and again, goes through the header, into
+    the world and on into the windows in front, and comes round to the header: every
+    control it stops at is shown, on the page and under nothing drawn over it, at a
+    desktop's size and at 1100 by 700."""
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    _open(page, url)
+    stops = []
+    for _ in range(60):
+        page.keyboard.press("Tab")
+        stops.append(page.evaluate(FOCUS))
+    reached = [stop for stop in stops if stop]
+    names = [stop["name"] for stop in reached]
+    for control in ("universe-crumb", "validity-indicator", "viewer-canvas"):
+        assert control in names, names
+    assert any(stop["window"] for stop in reached), names
+    assert names.count("universe-crumb") >= 2, names  # round, and round again
+    unseen = [stop for stop in reached if not (stop["shown"] and stop["onPage"] and stop["clear"])]
+    assert unseen == [], unseen

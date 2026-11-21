@@ -145,6 +145,16 @@ PAGE_WINDOWS = [
 ]
 
 
+def _root(world: float = 70, heights: tuple = ()) -> dict:
+    """The page's own layout here, the world ``world`` per cent of the row and the
+    column's stacks, top first, ``heights`` per cent of it."""
+    root = json.loads(json.dumps(ROOT_LAYOUT))
+    root["content"][0]["width"], root["content"][1]["width"] = world, 100 - world
+    for stack, height in zip(root["content"][1]["content"], heights, strict=False):
+        stack["height"] = height
+    return root
+
+
 def _serve(route) -> None:
     path = urlparse(route.request.url).path
     if path in ("/", "/index.html"):
@@ -261,6 +271,52 @@ def _beside_the_world_with_room_from_the_world(page):
     page.wait_for_function("(w) => Math.abs(H.size('world') - w) < 0.5", arg=before)
 
 
+def _a_second_window_beside_the_world_is_a_tab_of_the_first(page):
+    # A page wide enough that the world could spare a second column beside it.
+    page.set_viewport_size({"width": 2000, "height": 800})
+    _mount(page)
+    _js(page, "() => { for (const id of ['x', 'y']) H.reg(id, { home: 'beside', open: false }); }")
+    _js(page, "() => P.open('x')")
+    world = _js(page, "() => H.size('world')")
+    _js(page, "() => P.open('y')")
+    y = _where(page, "y")
+    assert y["stack"] == ["x", "y"] and y["front"] == "y" and y["parent"] == "row"
+    assert _js(page, "() => H.size('world')") == pytest.approx(world, abs=0.5)
+    # Both closed, the room is the world's again.
+    _js(page, "() => { P.close('y'); P.close('x'); }")
+    page.wait_for_function("(w) => Math.abs(H.size('world') - w) < 0.5", arg=70)
+
+
+def _beside_a_world_that_cannot_spare_the_room_a_tab_next_to_it(page):
+    # The world half the row, 600 pixels: less than BESIDE_LEAST to spare above
+    # WORLD_LEAST, so a tab of the tallest stack next to it, Selected-like `sel`.
+    _mount(page, root=_root(world=50, heights=(25, 45, 30)))
+    _js(page, "() => { H.reg('x', { home: 'beside', open: false }); P.open('x'); }")
+    x = _where(page, "x")
+    assert x["stack"] == ["sel", "x"] and x["front"] == "x"
+    assert _js(page, "() => H.size('world')") == pytest.approx(50, abs=0.5)
+
+
+def _beside_the_world_it_keeps_its_least_width(page):
+    # The world three fifths of the row: what a window beside it takes leaves it about
+    # WORLD_LEAST (400) pixels wide, not BESIDE per cent narrower.
+    _mount(page, root=_root(world=60))
+    _js(page, "() => { H.reg('x', { home: 'beside', open: false }); P.open('x'); }")
+    assert _where(page, "x")["parent"] == "row"
+    width = _js(page, "() => document.getElementById('world').getBoundingClientRect().width")
+    assert width == pytest.approx(400, abs=8)
+
+
+def _opened_by_the_page_somewhere_else_for_once(page):
+    _js(page, "() => { H.reg('x', { home: 'beside', open: false }); P.open('x', { at: 'tabs' }); }")
+    x = _where(page, "x")
+    assert x["stack"] == ["t1", "t2", "x"] and x["front"] == "x"
+    assert _js(page, "() => H.size('world')") == pytest.approx(70, abs=0.5)
+    # Closed and opened by a person, it is at its home again.
+    _js(page, "() => { P.close('x'); P.open('x'); }")
+    assert _where(page, "x")["parent"] == "row"
+
+
 def _at_the_column_foot_after_nothing(page):
     _js(page, "() => { H.reg('x', { home: 'column', open: false }); P.open('x'); }")
     w = _where(page, "x")
@@ -275,6 +331,28 @@ def _a_tab_beside_the_window_it_follows_once_the_column_is_full(page):
     assert _where(page, "x")["stack"] == ["x"]  # the fourth stack
     z = _where(page, "z")
     assert z["stack"] == ["t1", "t2", "z"] and z["front"] == "z" and len(z["children"]) == 4
+
+
+def _never_a_tab_over_a_window_with_a_least_height_once_the_column_is_full(page):
+    # `m` (a Machine, its head to stay in view) the fourth stack; `p`, which follows it,
+    # a stack of its own under it all the same, `m` still in front of its own.
+    _js(page, "() => H.reg('m', { home: 'column', after: 'sel', open: false, least: 200 })")
+    _js(page, "() => H.reg('p', { home: 'column', after: 'm', open: false })")
+    _js(page, "() => { P.open('m'); P.open('p'); }")
+    m, p = _where(page, "m"), _where(page, "p")
+    assert m["stack"] == ["m"] and m["front"] == "m"
+    assert p["stack"] == ["p"] and p["at"] == m["at"] + 1 and len(p["children"]) == 5
+
+
+def _a_loud_window_is_in_front_wherever_it_is_placed(page):
+    # Registered among the tabs, as the page registers a window, and kept open as a view
+    # is laid out: in front each time, where a quiet one would stand behind.
+    _mount(page, transient=["x"])
+    _js(page, "() => H.reg('x', { home: 'tabs', loud: true })")
+    assert _where(page, "x")["front"] == "x"
+    _js(page, "() => P.applyView('default')")
+    x = _where(page, "x")
+    assert x["stack"] == ["t1", "t2", "x"] and x["front"] == "x"
 
 
 def _a_tab_at_once_in_a_column_of_three(page):
@@ -300,8 +378,14 @@ def _a_tab_at_the_foot_of_a_full_column_after_nothing(page):
         _under_the_window_it_follows,
         _with_its_siblings_under_that_window,
         _beside_the_world_with_room_from_the_world,
+        _a_second_window_beside_the_world_is_a_tab_of_the_first,
+        _beside_a_world_that_cannot_spare_the_room_a_tab_next_to_it,
+        _beside_the_world_it_keeps_its_least_width,
+        _opened_by_the_page_somewhere_else_for_once,
         _at_the_column_foot_after_nothing,
         _a_tab_beside_the_window_it_follows_once_the_column_is_full,
+        _never_a_tab_over_a_window_with_a_least_height_once_the_column_is_full,
+        _a_loud_window_is_in_front_wherever_it_is_placed,
         _a_tab_at_once_in_a_column_of_three,
         _a_tab_at_the_foot_of_a_full_column_after_nothing,
     ],
@@ -449,9 +533,16 @@ def test_a_view_that_needs_a_window_the_page_has_not_says_so_and_does_nothing(wm
     button = _js(
         wm,
         """() => { const into = document.createElement('div'); P.fillMenu(into);
-            const b = into.querySelector("[data-view='v']"); return [b.disabled, b.title]; }""",
+            const b = into.querySelector("[data-view='v']");
+            return [b.disabled, b.getAttribute('aria-disabled'), b.title]; }""",
     )
-    assert button == [True, "V lays out V's windows: open V first (its ring)"]
+    # Greyed as every control the page greys is (can.js): disabled, to assistive
+    # technology too, and "Disabled: <why>. <what it does>".
+    assert button == [
+        True,
+        "true",
+        "Disabled: V lays out V's windows: open V first (its ring). The windows laid out as V",
+    ]
     _js(wm, "() => H.reg('m', { open: false })")
     assert _js(wm, "() => P.viewMissing('v')") is None and _js(wm, "() => P.applyView('v')") is True
 
@@ -459,8 +550,9 @@ def test_a_view_that_needs_a_window_the_page_has_not_says_so_and_does_nothing(wm
 @pytest.mark.e2e
 def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_not_dead(wm: Page):
     """The page's own way with a view (fillMenu's `views`): its entry says what the page
-    says of it, greyed where the page refuses it, and a press goes to the page either
-    way -- which may open what the view needs, or say why it cannot."""
+    says of it, greyed where the page refuses it -- disabled to assistive technology,
+    "Disabled: <why>. <what it does>" -- and a press goes to the page either way, which
+    may open what the view needs, or say why it cannot."""
     _js(
         wm,
         "(v) => P.defineView('v', { title: 'V', layout: v, requires: 'm', hint: 'its ring' })",
@@ -473,17 +565,45 @@ def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_no
                 offer: (id) => (id === 'v' ? { refused: 'Nothing to open', title: null } : { refused: null, title: id === 'default' ? 'The page says' : null }),
                 press: (id) => window.pressed.push(id) } });
             const of = (id) => { const b = into.querySelector(`[data-view='${id}']`);
-                return [b.disabled, b.classList.contains('missing'), b.title]; };
+                return [b.disabled, b.getAttribute('aria-disabled'), b.title]; };
             const out = { v: of('v'), default: of('default') };
             into.querySelector("[data-view='v']").click();
             into.querySelector("[data-view='default']").click();
             return out; }""",
     )
-    assert drawn["v"] == [False, True, "Nothing to open"]
-    assert drawn["default"] == [False, False, "The page says"]
+    assert drawn["v"] == [False, "true", "Disabled: Nothing to open. The windows laid out as V"]
+    assert drawn["default"] == [False, None, "The page says"]
     # Each press went to the page, the refused one too, and nothing was laid out here.
     assert _js(wm, "() => [window.pressed, window.menuClosed]") == [["v", "default"], 2]
     assert _where(wm, "a") is not None
+
+
+@pytest.mark.e2e
+def test_a_window_with_a_least_height_is_given_it_where_it_opens_and_in_a_view(wm: Page):
+    """A window with a least height, opened in the column, is given it; a view that lays
+    it out lower gives it it too, from the stacks beside it, which keep their tabs."""
+    _js(wm, "() => H.reg('m', { home: 'column', after: 'sel', open: false, least: 360 })")
+    _js(wm, "() => P.open('m')")
+    assert _js(wm, "() => H.height('m')") >= 359
+    low = {
+        "row": [
+            {"world": True, "size": 60},
+            {
+                "column": [
+                    {"stack": ["a"], "size": 45},
+                    {"stack": ["m"], "size": 10},
+                    {"stack": ["sel"], "size": 45},
+                ]
+            },
+        ]
+    }
+    _js(wm, "(v) => P.defineView('low', { title: 'Low', layout: v })", low)
+    assert _js(wm, "() => P.applyView('low')") is True
+    assert _js(wm, "() => H.height('m')") >= 359
+    assert min(_js(wm, "() => [H.height('a'), H.height('sel')]")) >= 40
+    # A window with none is laid out as the view says.
+    _js(wm, "() => { P.unregister('m'); H.reg('m', { open: false }); P.applyView('low'); }")
+    assert _js(wm, "() => H.height('m')") < 120
 
 
 @pytest.mark.e2e
@@ -516,6 +636,23 @@ def test_a_layout_is_remembered_and_a_window_made_for_the_moment_is_not(wm: Page
     _reload(wm, transient=["m"])
     assert _js(wm, "() => P.isOpen('t2')") is False  # closed by a person, it stays closed
     assert _where(wm, "b")["front"] == "b"
+
+
+@pytest.mark.e2e
+def test_a_window_the_page_did_not_name_is_closed_by_a_reload_and_registering_it_says_so(
+    wm: Page,
+):
+    """A window registered that the page gave neither as known nor as made for the
+    moment is left out of the layout remembered, so a reload closes it: registering it
+    says so on the console. One the page named as known is open again."""
+    said = []
+    wm.on("console", lambda m: said.append(m.text) if "a reload closes it" in m.text else None)
+    mine = [["k", {"home": "beside"}], ["u", {"home": "beside"}]]
+    _mount(wm, known=["k"], register=PAGE_WINDOWS + mine)
+    assert any("window u " in s for s in said) and not any("window k " in s for s in said)
+    _reload(wm, known=["k"], register=PAGE_WINDOWS + mine)
+    assert _js(wm, "() => P.isOpen('k')") is True
+    assert _js(wm, "() => P.isOpen('u')") is False
 
 
 CHOSEN = ["gone", "y", "z", "w"]
@@ -912,6 +1049,122 @@ def test_the_world_alone_and_a_window_opened_brings_everything_back(wm: Page):
     assert _js(wm, "() => P.isShown('sel')") is False
     _js(wm, "() => P.open('sel')")
     assert _js(wm, "() => [P.isWorldAlone(), P.isShown('sel')]") == [False, True]
+
+
+BOXES = """() => {
+    const box = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+    const host = document.getElementById('host'), world = document.getElementById('world');
+    return { host: box(host), own: box(document.querySelector('.world-window')), world: box(world),
+             frame: ['left', 'top', 'right', 'bottom'].map((s) => world.style.getPropertyValue(`--frame-${s}`)),
+             wears: host.classList.contains('see-through'), opacity: host.style.getPropertyValue('--window-opacity'),
+             told: window.told };
+}"""
+
+
+def _near(a, b, by=1.0) -> bool:
+    return all(abs(x - y) <= by for x, y in zip(a, b, strict=True))
+
+
+def _within(inner, outer, by=1.0) -> bool:
+    """A box inside another, as the harness's world -- a line of text -- is inside its
+    window."""
+    return (
+        inner[0] >= outer[0] - by
+        and inner[1] >= outer[1] - by
+        and inner[0] + inner[2] <= outer[0] + outer[2] + by
+        and inner[1] + inner[3] <= outer[1] + outer[3] + by
+    )
+
+
+@pytest.mark.e2e
+def test_see_through_lays_the_world_under_the_layout_and_says_where_its_window_stands(wm: Page):
+    """See-through, the world's element is the whole layout's size, under it, and the
+    page is told where the world's window stands in it -- worn too, as --frame-* -- and
+    told again as that window grows; off, the world is its window's size again and the
+    page is told null."""
+    _js(wm, "() => { window.told = []; P.onFrame((f) => window.told.push(f)); }")
+    off = _js(wm, BOXES)
+    assert off["told"] == [None] and not off["wears"]
+    assert _within(off["world"], off["own"])
+
+    assert _js(wm, "() => P.seeThrough(true, { opacity: 0.4 })") is True
+    on = _js(wm, BOXES)
+    assert on["wears"] and on["opacity"] == "0.4"
+    assert _near(on["world"], on["host"]), on
+    x, y, w, h = (
+        on["own"][0] - on["host"][0],
+        on["own"][1] - on["host"][1],
+        on["own"][2],
+        on["own"][3],
+    )
+    told = on["told"][-1]
+    assert _near([told["x"], told["y"], told["width"], told["height"]], [x, y, w, h]), on
+    right = on["host"][2] - x - w
+    worn = [float(v.removesuffix("px")) for v in on["frame"]]
+    assert _near(worn, [x, y, right, on["host"][3] - y - h]), on
+    assert right > 100  # the column stands right of the world, over the world's element
+
+    # The world alone: its window is the whole layout, and the frame follows it.
+    assert _js(wm, "() => P.worldAlone(true)") is True
+    wm.wait_for_function(
+        "() => window.told.at(-1) && window.told.at(-1).width > 1100", timeout=5000
+    )
+    alone = _js(wm, BOXES)
+    assert _near([alone["told"][-1][k] for k in ("x", "y")], [0, 0])
+    assert _near(alone["world"], alone["host"])
+    _js(wm, "() => P.worldAlone(false)")
+    wm.wait_for_function("(w) => Math.abs(window.told.at(-1).width - w) <= 1", arg=w, timeout=5000)
+
+    # Another window maximised over the world's, which GoldenLayout lays out of sight: the
+    # view is framed on the whole layout, the world still laid under it.
+    _js(wm, "() => H.item('sel').parentItem.toggleMaximise()")
+    wm.wait_for_function(
+        "() => window.told.at(-1) && window.told.at(-1).width > 1100", timeout=5000
+    )
+    covered = _js(wm, BOXES)
+    assert _near([covered["told"][-1][k] for k in ("x", "y")], [0, 0])
+    assert _near(covered["world"], covered["host"]), covered
+    _js(wm, "() => H.item('sel').parentItem.toggleMaximise()")
+    wm.wait_for_function("(w) => Math.abs(window.told.at(-1).width - w) <= 1", arg=w, timeout=5000)
+
+    assert _js(wm, "() => P.seeThrough(false)") is False
+    back = _js(wm, BOXES)
+    assert back["told"][-1] is None and not back["wears"] and back["opacity"] == ""
+    assert _near(back["world"], off["world"]) and back["frame"] == ["", "", "", ""]
+
+
+@pytest.mark.e2e
+def test_the_windows_menu_wears_see_through_when_the_page_gives_it(wm: Page):
+    """⊞ Windows' first row, given the page's see-through: its switch says how it stands
+    and turns it, and its slider, moved, sets how opaque a window is and turns it on;
+    the slider keeps its arrows, the menu's Up and Down moving no focus from it."""
+    _js(
+        wm,
+        """() => { window.said = []; const into = document.createElement('div'); into.id = 'menu';
+            // Over the layout, as the page's ⊞ Windows is.
+            Object.assign(into.style, { position: 'fixed', zIndex: '1000', top: '40px', left: '40px', width: '20rem', background: '#252525' });
+            document.body.append(into);
+            P.fillMenu(into, { seeThrough: { on: false, opacity: 0.6, min: 10, max: 90, step: 5, key: 'o',
+                set: (c) => window.said.push(c) } });
+            into.addEventListener('keydown', (ev) => P.stepFocus(into, ev)); }""",
+    )
+    menu = wm.locator("#menu")
+    switch, level = menu.locator(".see-through-item"), menu.locator(".see-through-level")
+    expect(menu.locator(":scope > *").first).to_have_class("see-through-row")
+    expect(switch).to_have_text("○ See-through")
+    expect(switch).to_have_attribute("aria-pressed", "false")
+    expect(level).to_have_value("60")
+    expect(menu.locator(".see-through-said")).to_have_text("60%")
+    switch.click()
+    expect(switch).to_have_text("◉ See-through")
+    assert _js(wm, "() => window.said") == [{"on": True}]
+    switch.click()
+    level.focus()
+    wm.keyboard.press("ArrowUp")
+    assert _js(wm, "() => document.activeElement.className") == "see-through-level"
+    expect(level).to_have_value("65")
+    expect(switch).to_have_attribute("aria-pressed", "true")
+    assert _js(wm, "() => window.said.at(-1)") == {"on": True, "opacity": 0.65}
 
 
 @pytest.mark.e2e

@@ -75,6 +75,7 @@ fetch an object it lacks (``GIT_NO_LAZY_FETCH``), and nothing may prompt.
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -214,7 +215,7 @@ def _run(repo: Path, args: List[str], input: Optional[str] = None) -> subprocess
         raise GitError(f"git {args[0]}: {exc}") from None
 
 
-def _git(repo: Path, *args: str, input: Optional[str] = None, ok: tuple = (0,)) -> str:
+def git(repo: Path, *args: str, input: Optional[str] = None, ok: tuple = (0,)) -> str:
     done = _run(repo, list(args), input)
     out = done.stdout.decode("utf-8", errors="replace")
     if done.returncode not in ok:
@@ -225,7 +226,7 @@ def _git(repo: Path, *args: str, input: Optional[str] = None, ok: tuple = (0,)) 
 
 def _verify(repo: Path, rev: str) -> Optional[str]:
     """The object ``rev`` names, or None when it names nothing."""
-    out = _git(repo, "rev-parse", "--verify", "--quiet", rev, ok=(0, 1, 128))
+    out = git(repo, "rev-parse", "--verify", "--quiet", rev, ok=(0, 1, 128))
     return out.strip() or None
 
 
@@ -234,7 +235,7 @@ def repository_of(path: Path) -> Path:
     folder = Path(path).resolve()
     folder = folder if folder.is_dir() else folder.parent
     try:
-        top = _git(folder, "rev-parse", "--show-toplevel").strip()
+        top = git(folder, "rev-parse", "--show-toplevel").strip()
     except GitError:
         raise NotInGit(f"{path} is not in a git repository") from None
     return Path(top)
@@ -338,7 +339,7 @@ class SavedVariant(BaseModel):
     )
 
 
-class _Where(NamedTuple):
+class Where(NamedTuple):
     repo: Path  # where git runs: the checkout's repository, or APOTHECARY_VARIANTS_REPO
     scad: PurePosixPath  # the SCAD saved, from the top of the checkout
     checkout: Path  # the checkout the part is in: a submodule's superproject
@@ -358,13 +359,13 @@ class _Where(NamedTuple):
 def superproject_of(top: Path) -> Optional[Path]:
     """The checkout the repository at ``top`` is a submodule of, or None."""
     try:
-        out = _git(top, "rev-parse", "--show-superproject-working-tree").strip()
+        out = git(top, "rev-parse", "--show-superproject-working-tree").strip()
     except GitError:
         return None
     return Path(out).resolve() if out else None
 
 
-def _where(part: BasePart, repo: Optional[Path] = None) -> _Where:
+def where_saved(part: BasePart, repo: Optional[Path] = None) -> Where:
     """Where git runs for a part's variants, and the path of what is saved in
     the tree. ``repo``: the checkout holding the part, when the caller knows it.
     A part whose SCAD is in a submodule is saved in the outermost checkout, as
@@ -384,11 +385,11 @@ def _where(part: BasePart, repo: Optional[Path] = None) -> _Where:
         raise NotInGit(f"{part.name}'s SCAD is not in the repository at {outer}") from None
     scad = PurePosixPath(rel.as_posix())
     if len(chain) == 1:
-        return _Where(variants_repository() or top, scad, top)
+        return Where(variants_repository() or top, scad, top)
     # Beside the submodule of the outermost checkout that the SCAD is in.
     module = PurePosixPath(chain[-2].relative_to(outer).as_posix())
     overlay = module.parent / f"{part.source_file.stem}{OVERLAY_SUFFIX}"
-    return _Where(variants_repository() or outer, overlay, outer, KIND_OVERLAY, scad)
+    return Where(variants_repository() or outer, overlay, outer, KIND_OVERLAY, scad)
 
 
 def shown_repository(path: Path) -> str:
@@ -407,7 +408,7 @@ def shown_repository(path: Path) -> str:
 
 
 def merge_advice(
-    part: BasePart, where: _Where, ref: str, values_in: str = KEEP_DEFAULT, old: bool = False
+    part: BasePart, where: Where, ref: str, values_in: str = KEEP_DEFAULT, old: bool = False
 ) -> MergeAdvice:
     """What making the variant at ``ref`` the part's source takes, and what it
     does: where the ref lives, the commands, and that its values come with it
@@ -464,7 +465,7 @@ def _ls_tree(repo: Path, tree: Optional[str]) -> List[_Entry]:
     if tree is None:
         return []
     entries = []
-    for record in _git(repo, "ls-tree", "-z", tree).split("\0"):
+    for record in git(repo, "ls-tree", "-z", tree).split("\0"):
         if not record:
             continue
         head, name = record.split("\t", 1)
@@ -475,7 +476,7 @@ def _ls_tree(repo: Path, tree: Optional[str]) -> List[_Entry]:
 
 def _mktree(repo: Path, entries: List[_Entry]) -> str:
     text = "".join(f"{e.mode} {e.kind} {e.oid}\t{e.name}\0" for e in entries)
-    return _git(repo, "mktree", "-z", input=text).strip()
+    return git(repo, "mktree", "-z", input=text).strip()
 
 
 def _with_files(
@@ -518,7 +519,7 @@ def _first_saved(base: Optional[str]) -> str:
     return f"\n{FIRST_SAVED} {base}.\n" if base else ""
 
 
-def _message(part: BasePart, name: str, where: _Where, base: Optional[str] = None) -> str:
+def _message(part: BasePart, name: str, where: Where, base: Optional[str] = None) -> str:
     """The commit's message: what is now true, what it holds, and the commit
     the variant was first saved on top of. No trailer."""
     if where.overlay:
@@ -563,7 +564,7 @@ def save_variant(
     refuse_read_only(part)
     keeping(kept_in)
     ref = ref_for(part, name)
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     text = with_params(part, as_edited(part, scad), params)
     repo = where.repo
     old = _verify(repo, f"{ref}^{{commit}}")
@@ -577,7 +578,7 @@ def save_variant(
 def _commit_text(
     part: BasePart,
     name: str,
-    where: _Where,
+    where: Where,
     ref: str,
     text: str,
     old: Optional[str],
@@ -589,7 +590,7 @@ def _commit_text(
     from ``old``; none when the tree would not change."""
     repo = where.repo
     base = _verify(repo, f"{parent}^{{tree}}") if parent else None
-    blob = _git(repo, "hash-object", "-w", "--stdin", input=text).strip()
+    blob = git(repo, "hash-object", "-w", "--stdin", input=text).strip()
     files: Dict[str, Optional[str]] = {where.scad.name: blob}
     if old is not None and _blob(repo, old, where.params) is not None:
         files[where.params.name] = None  # its values are in its text
@@ -605,10 +606,10 @@ def _commit_text(
     args = ["commit-tree", tree, "-F", "-"]
     if parent:
         args[2:2] = ["-p", parent]
-    commit = _git(repo, *args, input=message).strip()
+    commit = git(repo, *args, input=message).strip()
     try:
         # The old value: the ref must still be where it was read, or not be at all.
-        _git(repo, "update-ref", "-m", f"apothecary: save {name}", ref, commit, old or "")
+        git(repo, "update-ref", "-m", f"apothecary: save {name}", ref, commit, old or "")
     except GitError:
         if _verify(repo, f"{ref}^{{commit}}") != old:
             raise Moved(f"{ref} was saved meanwhile: read it, and save again") from None
@@ -632,11 +633,11 @@ _FORMAT = "%00".join(
 
 
 def _blob(repo: Path, commit: str, path: PurePosixPath) -> Optional[str]:
-    out = _git(repo, "cat-file", "-p", f"{commit}:{path}", ok=(0, 128))
+    out = git(repo, "cat-file", "-p", f"{commit}:{path}", ok=(0, 128))
     return out if out else None
 
 
-def _served(part: BasePart, where: _Where, commit: str) -> tuple:
+def _served(part: BasePart, where: Where, commit: str) -> tuple:
     """A variant's text at ``commit`` as it is served, and where its commit keeps
     its values: (text, values_in, whether a file kept values it does not). A
     .variant.json variant has the parameters that file keeps written into its
@@ -670,7 +671,7 @@ def _shown_params(part: BasePart, text: str) -> Dict[str, Any]:
         return {}
 
 
-def _diff(part: BasePart, where: _Where, scad: Optional[str]) -> str:
+def _diff(part: BasePart, where: Where, scad: Optional[str]) -> str:
     """A variant's SCAD against the part's as it is on disk, as ``git diff`` shows
     one; an overlay against the file at its path, which is none until merged."""
     on_disk = where.checkout / where.scad if where.overlay else part.source_file
@@ -690,7 +691,7 @@ def _diff(part: BasePart, where: _Where, scad: Optional[str]) -> str:
 
 def _variants(
     part: BasePart,
-    where: _Where,
+    where: Where,
     pattern: str,
     with_scad: bool,
     with_diff: bool = False,
@@ -698,7 +699,7 @@ def _variants(
 ) -> List[SavedVariant]:
     repo = where.repo
     head = _verify(repo, "HEAD^{commit}")
-    lines = _git(
+    lines = git(
         repo, "for-each-ref", "--sort=-creatordate", f"--format={_FORMAT}", pattern
     ).splitlines()
     prefix = f"{root}/{_segment(part.name)}/"
@@ -745,7 +746,7 @@ def list_saved(
 ) -> List[SavedVariant]:
     """The part's saved variants, newest first, from its refs; with what each
     changes, when ``with_diff``."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     return _variants(part, where, part_refs(part) + "/", with_scad=False, with_diff=with_diff)
 
 
@@ -753,8 +754,8 @@ def saved_names(part: BasePart) -> List[str]:
     """The names of a part's saved variants, newest first: what a ring offers to
     choose from. None outside git."""
     try:
-        where = _where(part)
-        out = _git(
+        where = where_saved(part)
+        out = git(
             where.repo,
             "for-each-ref",
             "--sort=-creatordate",
@@ -771,7 +772,7 @@ def read_saved(
     part: BasePart, name: str, repo: Optional[Path] = None, with_scad: bool = True
 ) -> SavedVariant:
     """One saved variant, with its SCAD; ``NoSuchVariant`` when there is none."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     ref = ref_for(part, name)
     found = [v for v in _variants(part, where, ref, with_scad) if v.ref == ref]
     if not found:
@@ -791,12 +792,12 @@ def trash_ref_for(part: BasePart, name: str) -> str:
     return f"{trash_refs(part)}/{check_name(name)}"
 
 
-def _base_of(repo: Path, where: _Where, commit: Optional[str]) -> Optional[str]:
+def _base_of(repo: Path, where: Where, commit: Optional[str]) -> Optional[str]:
     """The commit a variant was first saved on: as the message of ``commit``
     says it, or, for a .variant.json variant, as that file keeps it."""
     if not commit:
         return None
-    said = _FIRST_SAVED.search(_git(repo, "log", "-1", "--format=%B", commit))
+    said = _FIRST_SAVED.search(git(repo, "log", "-1", "--format=%B", commit))
     if said:
         return said.group(1)
     try:
@@ -832,7 +833,7 @@ def rename_variant(part: BasePart, name: str, to: str, repo: Optional[Path] = No
     """The variant ``name`` called ``to``: its ref moved, its commits as they
     are (the name inside its record is the one it was saved under). ``Taken``
     when a variant is called ``to`` already."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     old, new = ref_for(part, name), ref_for(part, to)
     tip = _tip(where.repo, old, name, part)
     _transaction(
@@ -848,7 +849,7 @@ def duplicate_variant(
 ) -> SavedVariant:
     """A second variant ``to`` where ``name`` is: a ref of its own on the same
     commit, which then goes its own way. ``Taken`` when ``to`` is a variant."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     tip = _tip(where.repo, ref_for(part, name), name, part)
     _transaction(
         where.repo,
@@ -877,18 +878,18 @@ class VariantCommit(BaseModel):
 _LOG_FORMAT = "%x00".join(["%H", "%P", "%an", "%ae", "%aI", "%s"])
 
 
-def _own_commits(repo: Path, where: _Where, part: BasePart, tip: str) -> List[str]:
+def _own_commits(repo: Path, where: Where, part: BasePart, tip: str) -> List[str]:
     """The variant's own commits, newest first: from ``tip`` back along first
     parents to the commit it was first saved on, not included. A variant whose
     tip names no such commit (``_base_of``) is followed while its commits are
     saves of the part's variants (their subjects say so)."""
     base = _base_of(repo, where, tip)
     if base and _verify(repo, f"{base}^{{commit}}"):
-        out = _git(repo, "rev-list", "--first-parent", tip, f"^{base}")
+        out = git(repo, "rev-list", "--first-parent", tip, f"^{base}")
         return [line for line in out.splitlines() if line]
     found, current = [], tip
     while current:
-        subject = _git(repo, "log", "-1", "--format=%s", current).strip()
+        subject = git(repo, "log", "-1", "--format=%s", current).strip()
         if not subject.startswith(f"{part.name} is saved as the variant ") and not (
             subject.startswith(f"{part.name}'s variant ")
         ):
@@ -903,12 +904,12 @@ def variant_history(
 ) -> List[VariantCommit]:
     """The commits of the variant ``name`` (in the trash, with ``deleted``),
     newest first, each with the parameters it was saved with."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     ref = trash_ref_for(part, name) if deleted else ref_for(part, name)
     tip = _tip(where.repo, ref, name, part)
     history = []
     for commit in _own_commits(where.repo, where, part, tip):
-        line = _git(where.repo, "log", "-1", f"--format={_LOG_FORMAT}", commit).rstrip("\n")
+        line = git(where.repo, "log", "-1", f"--format={_LOG_FORMAT}", commit).rstrip("\n")
         sha, parents, author, email, date, subject = line.split("\0")
         text, _, _ = _served(part, where, sha)
         history.append(
@@ -934,7 +935,7 @@ def restore_variant(
     variant's are written in), so its history keeps what it was in between. Restoring
     what it holds makes no commit. ``NoSuchVariant`` for a commit that is not
     one of its own."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     ref = ref_for(part, name)
     tip = _tip(where.repo, ref, name, part)
     own = _own_commits(where.repo, where, part, tip)
@@ -949,7 +950,7 @@ def restore_variant(
     current, _, _ = _served(part, where, tip)
     if text == current and _blob(where.repo, tip, where.params) is None:
         return read_saved(part, name, repo, with_scad=False)
-    when = _git(where.repo, "log", "-1", "--format=%aI", chosen).strip()
+    when = git(where.repo, "log", "-1", "--format=%aI", chosen).strip()
     message = (
         f"{part.name}'s variant {name} is restored to {chosen[:12]}\n\n"
         f"Its SCAD, its values in it, as it was saved in {chosen[:12]} ({when}).\n"
@@ -963,7 +964,7 @@ def delete_variant(part: BasePart, name: str, repo: Optional[Path] = None) -> Sa
     its commits kept, listed with ``list_trash``, restorable. ``Taken`` while a
     deleted variant of that name is in the trash already (restore it, or empty
     the trash, first): the trash keeps each one until it is emptied."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     live, trash = ref_for(part, name), trash_ref_for(part, name)
     tip = _tip(where.repo, live, name, part)
     _transaction(
@@ -976,7 +977,7 @@ def delete_variant(part: BasePart, name: str, repo: Optional[Path] = None) -> Sa
 
 
 def _read_trash(part: BasePart, name: str, repo: Optional[Path] = None) -> SavedVariant:
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     ref = trash_ref_for(part, name)
     found = [
         v for v in _variants(part, where, ref, with_scad=False, root=TRASH_ROOT) if v.ref == ref
@@ -988,8 +989,58 @@ def _read_trash(part: BasePart, name: str, repo: Optional[Path] = None) -> Saved
 
 def list_trash(part: BasePart, repo: Optional[Path] = None) -> List[SavedVariant]:
     """The part's deleted variants, newest save first: the trash."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     return _variants(part, where, trash_refs(part) + "/", with_scad=False, root=TRASH_ROOT)
+
+
+class SaveText(NamedTuple):
+    """One save of a variant, by the sha256 of its text as it is served: what a draft
+    drawn from it and rendered records (``variants.Made.draft``)."""
+
+    name: str
+    commit: str
+    digest: str
+    params: Dict[str, Any]  # what its text sets otherwise than the part's own
+    current: bool  # the variant is this commit now
+    deleted: bool  # the variant is in the trash
+
+
+def save_texts(
+    part: BasePart, repo: Optional[Path] = None, history: bool = False
+) -> List[SaveText]:
+    """Each saved variant of the part, then each deleted one, newest first: its text as
+    it is served, by sha256, as it is now, or with ``history`` at every save of it.
+    None outside git."""
+    try:
+        where = where_saved(part, repo)
+    except GitError:
+        return []
+    found = []
+    for root, refs in ((REF_ROOT, part_refs(part)), (TRASH_ROOT, trash_refs(part))):
+        out = git(
+            where.repo,
+            "for-each-ref",
+            "--sort=-creatordate",
+            "--format=%(refname)%00%(objectname)",
+            refs + "/",
+        )
+        for line in out.splitlines():
+            ref, tip = line.split("\0")
+            name = ref[len(refs) + 1 :]
+            commits = _own_commits(where.repo, where, part, tip) if history else [tip]
+            for commit in commits or [tip]:
+                text, _, _ = _served(part, where, commit)
+                found.append(
+                    SaveText(
+                        name=name,
+                        commit=commit,
+                        digest=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                        params=_shown_params(part, text),
+                        current=commit == tip,
+                        deleted=root == TRASH_ROOT,
+                    )
+                )
+    return found
 
 
 def restore_from_trash(
@@ -997,7 +1048,7 @@ def restore_from_trash(
 ) -> SavedVariant:
     """The deleted variant ``name`` back among the part's variants, as ``to`` or
     its own name; ``Taken`` while a variant is called that."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     trash = trash_ref_for(part, name)
     tip = _verify(where.repo, f"{trash}^{{commit}}")
     if tip is None:
@@ -1017,13 +1068,13 @@ def empty_trash(
     """The trash emptied -- every deleted variant of the part, or ``name``'s --
     its refs deleted: the names emptied. What only they kept, git collects in
     its own time."""
-    where = _where(part, repo)
+    where = where_saved(part, repo)
     if name is not None:
         refs = [trash_ref_for(part, name)]
         if _verify(where.repo, f"{refs[0]}^{{commit}}") is None:
             raise NoSuchVariant(f"{part.name} has no deleted variant {name!r} in the trash")
     else:
-        out = _git(where.repo, "for-each-ref", "--format=%(refname)", trash_refs(part) + "/")
+        out = git(where.repo, "for-each-ref", "--format=%(refname)", trash_refs(part) + "/")
         refs = [line for line in out.splitlines() if line]
     if not refs:
         return []
@@ -1053,6 +1104,7 @@ __all__ = [
     "OVERLAY_SUFFIX",
     "PARAMS_SUFFIX",
     "REF_ROOT",
+    "SaveText",
     "SavedVariant",
     "TRASH_ROOT",
     "Taken",
@@ -1072,6 +1124,7 @@ __all__ = [
     "restore_variant",
     "ref_for",
     "repository_of",
+    "save_texts",
     "save_variant",
     "saved_names",
     "shown_repository",

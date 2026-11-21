@@ -3,12 +3,15 @@
 import click
 
 from .airgap import airgap
+from .cabinet import cabinet
 from .census import census
 from .docs import docs
 from .evidence import evidence
+from .family import family
 from .firmware import firmware
 from .kernels import kernel_reference
 from .lighting import lighting
+from .loop import loop
 from .openscad import openscad
 from .parts import parts
 from .photo import photo
@@ -21,7 +24,9 @@ from .slicer import slicer
 from .spaces import problems, solutions
 from .system import check
 from .testing import test
+from .tuning import tuning
 from .vision import vision
+from .watch import watch
 
 # Commands for working on this repository rather than with it: its tests, its CI
 # run here, its generated docs and its own measures. Listed after the rest.
@@ -34,7 +39,7 @@ Start here:
   1. apothecary check              what is installed here, and what is missing
   2. apothecary openscad install   an OpenSCAD with Manifold: fast renders, and the
                                    parts OpenSCAD 2021.01 is too old to build
-  3. apothecary serve --demo       the viewer at http://127.0.0.1:{DEFAULT_PORT}/viewer,
+  3. apothecary serve --simulated  the viewer at http://127.0.0.1:{DEFAULT_PORT}/viewer,
                                    with a simulated printer and board
 walkthrough/00-getting-started.md says each step, then the five loops.
 
@@ -82,6 +87,7 @@ cli.add_command(render_scene_jscad)
 cli.add_command(template_generate)
 cli.add_command(validate)
 cli.add_command(serve)
+cli.add_command(watch)
 
 # Register command groups
 cli.add_command(parts)
@@ -98,8 +104,12 @@ cli.add_command(openscad)
 cli.add_command(slicer)
 cli.add_command(lighting)
 cli.add_command(airgap)
+cli.add_command(loop)
+cli.add_command(tuning)
+cli.add_command(cabinet)
 cli.add_command(rig)
 cli.add_command(evidence)
+cli.add_command(family)
 
 
 def main():  # pragma: no cover - entry point

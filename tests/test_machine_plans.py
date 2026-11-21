@@ -33,6 +33,67 @@ def test_a_machine_is_a_node_drawn_from_a_part_that_is_one():
     ]
 
 
+def test_make_lists_every_site_s_machines_that_make_a_piece():
+    """A printer makes any part but a board or a machine, a router a part that says how
+    it is cut; from the garage, the garage's first, and every router first for the coupon.
+    Nothing is pinned here, so nothing is live."""
+    makers = lambda here, part: [  # noqa: E731
+        (m["site"], m["path"], m["live"])
+        for m in client.get(f"/sites/{here}/makers", params={"part": part}).json()
+    ]
+    assert makers("garage", "footpedal") == [
+        ("garage", "printer_1", False),
+        ("apothecary", "ender3", False),
+    ]
+    assert makers("apothecary", "calibration_cube") == [
+        ("apothecary", "ender3", False),
+        ("garage", "printer_1", False),
+    ]
+    assert makers("garage", "router_coupon") == [
+        ("garage", "cnc_router", False),
+        ("apothecary", "anolex_4060_evo_ultra_2", False),
+        ("garage", "printer_1", False),
+        ("apothecary", "ender3", False),
+    ]
+    assert makers("garage", "esp32_blink") == [] and makers("garage", "cnc_router") == []
+    # The Stream Deck + is bought whole: nothing makes it.
+    assert makers("garage", "stream_deck") == [] and makers("apothecary", "stream_deck_plus") == []
+    assert client.get("/sites/garage/makers", params={"part": "nothing_such"}).status_code == 404
+
+
+def test_a_part_that_says_how_it_is_cut_goes_to_a_router_before_a_printer_plugged_in(
+    monkeypatch,
+):
+    """printer_1's board connected and the router's not: a part to print goes to the
+    printer, whose board is there; the coupon and the router's 😮, made to be cut, go
+    to the router all the same."""
+    from types import SimpleNamespace
+
+    from apothecary import api
+
+    pinned = SimpleNamespace(
+        identity="FAKESERIAL1",
+        site="garage",
+        path="printer_1.frame_system.mainboard",
+        kind="printer",
+    )
+    state = SimpleNamespace(bindings=lambda site=None: [pinned])
+    monkeypatch.setattr(api.firmware_devices, "get_state", lambda: state)
+    monkeypatch.setattr(api.firmware_devices, "detected_devices", lambda **kw: [])
+    monkeypatch.setattr(api, "device_for_identity", lambda identity, plugged, kind: object())
+    makers = lambda part: [  # noqa: E731
+        (m["path"], m["live"])
+        for m in client.get("/sites/garage/makers", params={"part": part}).json()
+    ]
+    assert makers("footpedal")[0] == ("printer_1", True)
+    assert makers("router_coupon")[:2] == [
+        ("cnc_router", False),
+        ("anolex_4060_evo_ultra_2", False),
+    ]
+    assert makers("router_emoji")[0] == ("cnc_router", False)
+    assert ("printer_1", True) in makers("router_emoji")
+
+
 def test_a_machine_with_no_board_answers_its_choices_by_its_node():
     answer = client.get("/sites/garage/machines/cnc_router").json()
     assert answer["machine"] == {
@@ -66,6 +127,8 @@ def test_a_plan_names_a_part_of_the_site_and_a_file_of_the_machine_s_kind():
     assert client.put(plan, json={"file_id": "20260101T000000.000-nothing"}).status_code == 422
     assert client.put(plan, json={"part": "nowhere"}).status_code == 422
     assert client.put(plan, json={"part": "cnc_router"}).status_code == 422  # the machine itself
+    # A registered part standing nowhere in the site is named by its name.
+    assert client.put(plan, json={"part": "calibration_cube"}).json()["part"] == "calibration_cube"
     assert client.delete(plan).json() == {"cleared": True}
     assert client.get("/sites/garage/machines/cnc_router").json()["plan"] is None
 

@@ -110,6 +110,7 @@ INSTALL_POINTS = {
     "apothecary.rig": PACKAGE / "rig" / "__init__.py",
     "apothecary.evidence": PACKAGE / "evidence" / "__init__.py",
     "apothecary.state_folder": PACKAGE / "state_folder.py",
+    "apothecary.picture_root": PACKAGE / "picture_root.py",
 }
 ROOT_CONFTEST = ROOT / "conftest.py"
 
@@ -185,27 +186,77 @@ def test_importing_the_geometry_library_leaves_the_network_as_it_found_it():
     assert run.stdout.strip() == "left as found"
 
 
+# Each install point imported in an interpreter that has imported apothecary and nothing
+# else of the package: a fresh one, or, where there is fork, a copy of one forked for each
+# point, which is the same interpreter at the same moment without its start and the
+# package's import paid again. Each says what its import did, in a line of its own.
 GUARDS_THE_PROCESS = """
-import importlib, socket, sys
+import importlib, json, os, socket, sys
 import apothecary
 from apothecary import stays_local
 assert not stays_local.guard_installed(), "import apothecary installed the guard"
-before = id(socket.socket)  # an id: the guard rebinds every name for the class itself
-importlib.import_module(sys.argv[1])
-assert stays_local.guard_installed(), f"importing {sys.argv[1]} did not install the guard"
-assert id(socket.socket) != before
-try:
-    socket.create_connection(("203.0.113.1", 80), timeout=1)
-except stays_local.LeftTheMachine:
-    print("guarded")
+
+
+def guarded(point):
+    before = id(socket.socket)  # an id: the guard rebinds every name for the class itself
+    importlib.import_module(point)
+    if not stays_local.guard_installed():
+        return f"importing {point} did not install the guard"
+    if id(socket.socket) == before:
+        return f"importing {point} left socket.socket as it was"
+    try:
+        socket.create_connection(("203.0.113.1", 80), timeout=1)
+    except stays_local.LeftTheMachine:
+        return "guarded"
+    return "connected"
+
+
+def forked(point):
+    read, write = os.pipe()
+    child = os.fork()
+    if child == 0:
+        os.close(read)
+        try:
+            said = guarded(point)
+        except BaseException as failed:
+            said = f"{type(failed).__name__}: {failed}"
+        os.write(write, said.encode())
+        os._exit(0)
+    os.close(write)
+    with os.fdopen(read, "rb") as heard:
+        said = heard.read().decode()
+    os.waitpid(child, 0)
+    return said
+
+
+if hasattr(os, "fork"):
+    for point in sys.argv[1:]:
+        print(json.dumps([point, forked(point)]))
+else:
+    print(json.dumps([sys.argv[1], guarded(sys.argv[1])]))
 """
 
 
+@pytest.fixture(scope="module")
+def guards():
+    """What importing each install point did to a process of its own."""
+    import json
+
+    runs = (
+        [_fresh(GUARDS_THE_PROCESS, *INSTALL_POINTS)]
+        if hasattr(os, "fork")
+        else [_fresh(GUARDS_THE_PROCESS, point) for point in INSTALL_POINTS]
+    )
+    said = {}
+    for run in runs:
+        assert run.returncode == 0, run.stderr
+        said.update(json.loads(line) for line in run.stdout.splitlines())
+    return said
+
+
 @pytest.mark.parametrize("point", list(INSTALL_POINTS))
-def test_importing_an_install_point_puts_the_guard_on_the_process(point):
-    run = _fresh(GUARDS_THE_PROCESS, point)
-    assert run.returncode == 0, run.stderr
-    assert run.stdout.strip() == "guarded"
+def test_importing_an_install_point_puts_the_guard_on_the_process(guards, point):
+    assert guards[point] == "guarded"
 
 
 def test_a_test_session_is_under_the_guard_before_its_first_test_is_collected():
@@ -244,11 +295,13 @@ def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source)
 # What reads personal data, by the means the record names: the serial link, an
 # image library, the state folder and the picture root. Outside the install
 # points' packages none of it is done, but through one of them: the state folder
-# is apothecary.state_folder's to resolve and the picture root apothecary.api's,
-# so a module that calls either has imported an install point first.
+# is apothecary.state_folder's to resolve and the picture root
+# apothecary.picture_root's, so a module that calls either has imported an install
+# point first.
 GUARDED_SOURCES = (
     "api.py",
     "state_folder.py",
+    "picture_root.py",
     "cli/",
     "vision/",
     "gathering/",
@@ -259,7 +312,7 @@ GUARDED_SOURCES = (
 )
 READER_MODULES = {"serial": "the serial link", "PIL": "an image library"}
 READER_VARIABLES = {"APOTHECARY_STATE_DIR", "APOTHECARY_PICTURE_ROOT"}
-RESOLVED_BY = {"state_dir": "apothecary.state_folder", "_picture_root": "apothecary.api"}
+RESOLVED_BY = {"state_dir": "apothecary.state_folder", "picture_root": "apothecary.picture_root"}
 
 
 def _imported_from(node: ast.ImportFrom, package: str) -> str:
@@ -320,7 +373,7 @@ def _personal_data_readers(text: str, package: str) -> list:
         "import os\nos.environ.get('APOTHECARY_STATE_DIR')",
         "import os\nos.getenv('APOTHECARY_PICTURE_ROOT')",
         "import os\nos.environ['APOTHECARY_STATE_DIR']",
-        "from .scene import Scene\n_picture_root()",
+        "from .scene import Scene\npicture_root()",
     ],
 )
 def test_the_reader_scan_sees_each_way_of_reading_personal_data(code):
@@ -514,7 +567,7 @@ def test_a_tool_fetch_takes_no_proxy_and_a_version_is_three_numbers(monkeypatch)
 
     monkeypatch.setattr(installer.urllib.request, "build_opener", build_opener)
     with pytest.raises(OSError, match="not reached"):
-        installer._fetch("https://github.com/arduino/arduino-cli/releases/download/v1.2.3/x")
+        installer.fetch_url("https://github.com/arduino/arduino-cli/releases/download/v1.2.3/x")
     assert opened["url"].startswith("https://github.com/")
     assert installer.resolve_version("v1.5.1", fetch=lambda url: b"") == "1.5.1"
     for bad in ("../../other/repo/releases/download/v1", "1.5", "1.5.1/../x", "latest;rm"):
@@ -552,7 +605,7 @@ def test_a_tool_fetch_has_two_callers_the_two_installers():
         "apothecary/firmware/installer.py",
         "apothecary/openscad_installer.py",
     }
-    assert rust_installer._fetch is installer._fetch
+    assert rust_installer.fetch_url is installer.fetch_url
     assert "files.openscad.org" in stays_local.TOOL_SOURCES
     # OpenSCAD's source, for a Linux arm64 build: the tarballs GitHub serves.
     assert "codeload.github.com" in stays_local.TOOL_SOURCES
@@ -714,10 +767,10 @@ def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypa
 
     monkeypatch.setattr(openscad_installer.urllib.request, "build_opener", build_opener)
     with pytest.raises(stays_local.LeftTheMachine):
-        openscad_installer._fetch("https://evil.example/snapshots/")
+        openscad_installer.fetch_url("https://evil.example/snapshots/")
     assert opened == {}
     with pytest.raises(OSError, match="not reached"):
-        openscad_installer._fetch(openscad_installer.SNAPSHOTS)
+        openscad_installer.fetch_url(openscad_installer.SNAPSHOTS)
     assert opened["url"] == "https://files.openscad.org/snapshots/"
     assert openscad_installer.check_date("2026.09.27") == "2026.09.27"
     for bad in ("../../x", "2026.9.27", "2026.09.27/../x", "latest;rm", "2026.09"):
@@ -726,7 +779,7 @@ def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypa
     # A source build's tarball: a commit, 40 hex characters, spliced into a codeload URL.
     sha = "31f27b7522af858ebabed764e67ecc10d9e27add"
     with pytest.raises(OSError, match="not reached"):
-        openscad_installer._fetch(f"https://codeload.github.com/openscad/openscad/tar.gz/{sha}")
+        openscad_installer.fetch_url(f"https://codeload.github.com/openscad/openscad/tar.gz/{sha}")
     assert opened["url"].startswith("https://codeload.github.com/")
     assert openscad_installer.check_sha(sha) == sha
     for bad in ("../../x", sha[:7], sha + "/../x", "g" * 40, "master", sha.upper()):
@@ -858,38 +911,36 @@ def test_a_value_the_page_carries_cannot_become_script():
 def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, tmp_path):
     """The whole machine, the person's home folder and anything above it are refused as a
     picture root: a root there would serve everything of theirs to whatever asks."""
-    from fastapi import HTTPException
-
-    from apothecary import api
+    from apothecary.picture_root import NotAPictureRoot, picture_root
 
     home = tmp_path / "home" / "person"
     (home / "pictures").mkdir(parents=True)
-    monkeypatch.setattr(api.Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(home / "pictures"))
-    assert api._picture_root() == (home / "pictures").resolve()
+    assert picture_root() == (home / "pictures").resolve()
     for root in (home, home.parent, tmp_path):
         monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
-        with pytest.raises(HTTPException) as caught:
-            api._picture_root()
-        assert "everything of yours" in caught.value.detail, root
+        with pytest.raises(NotAPictureRoot) as caught:
+            picture_root()
+        assert "everything of yours" in str(caught.value), root
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(Path(tmp_path.anchor)))
-    with pytest.raises(HTTPException, match="whole"):
-        api._picture_root()
+    with pytest.raises(NotAPictureRoot, match="whole"):
+        picture_root()
     # HOME is a variable; the account's home folder is not, and the state folder
     # (serial numbers, camera labels, readings) is never a picture root either.
     import pwd
 
     real_home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
-    monkeypatch.setattr(api.Path, "home", classmethod(lambda cls: tmp_path / "elsewhere"))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "elsewhere"))
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(real_home))
-    with pytest.raises(HTTPException, match="everything of yours"):
-        api._picture_root()
+    with pytest.raises(NotAPictureRoot, match="everything of yours"):
+        picture_root()
     state = tmp_path / "state"
     state.mkdir()
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(state))
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(state))
-    with pytest.raises(HTTPException, match="everything of yours"):
-        api._picture_root()
+    with pytest.raises(NotAPictureRoot, match="everything of yours"):
+        picture_root()
     # And the file route serves a picture, judged by its bytes, and nothing else.
     pictures = tmp_path / "pics"
     pictures.mkdir()
@@ -905,6 +956,47 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     assert here.get("/photos/pictures/file", params={"path": "fake.png"}).status_code == 415
 
 
+def test_each_refusal_of_the_picture_root_has_its_status_and_says_why(monkeypatch, tmp_path):
+    """A path outside the root is a 403, one that is no ordinary file a 404, one that
+    cannot be asked about a 400, and a root that is no folder a 500: each in the words
+    the picture root (``apothecary/picture_root.py``) refused it with."""
+    root = (tmp_path / "pics").resolve()
+    root.mkdir()
+    (tmp_path / "outside.png").write_bytes(b"not read")
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
+    here = TestClient(app)
+
+    def asked(path: str):
+        answer = here.get("/photos/pictures/file", params={"path": path})
+        return answer.status_code, answer.json()["detail"]
+
+    assert asked(str(tmp_path / "outside.png")) == (
+        403,
+        f"pictures are read from {root} and nowhere else",
+    )
+    assert asked("../outside.png")[0] == 403
+    assert asked("missing.png") == (
+        404,
+        f"there is no picture at {root / 'missing.png'}, or it is not an ordinary file",
+    )
+    with monkeypatch.context() as broken:
+
+        def cannot(self):
+            raise OSError("the disk is gone")
+
+        broken.setattr(Path, "is_file", cannot)
+        assert asked("any.png") == (
+            400,
+            f"{root / 'any.png'} cannot be looked at: the disk is gone",
+        )
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(tmp_path / "nowhere"))
+    assert asked("any.png") == (
+        500,
+        f"pictures are supposed to be read from {tmp_path.resolve() / 'nowhere'}, and there "
+        "is no folder there. Set APOTHECARY_PICTURE_ROOT to one that exists.",
+    )
+
+
 def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
     monkeypatch, tmp_path
 ):
@@ -917,7 +1009,7 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
 
     from PIL import Image, ImageDraw
 
-    from apothecary.api import _site_store
+    from apothecary import sites
     from apothecary.vision import cache as cache_module
     from apothecary.vision import views as views_module
 
@@ -939,7 +1031,7 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
     before = everything()
     here = TestClient(app)
     try:
-        _site_store.reset("garage")
+        sites.store.reset("garage")
         camera = here.post("/sites/garage/cameras", json={"host": "workbench"}).json()
         here.put(
             f"/sites/garage/cameras/{camera['camera']['name']}/device",
@@ -1152,8 +1244,8 @@ def test_the_slicer_installer_fetches_through_the_openscad_installers_fetch():
     from apothecary import openscad_installer
     from apothecary.slicer import orcaslicer_installer
 
-    assert orcaslicer_installer._fetch is openscad_installer._fetch
-    assert orcaslicer_installer._fetch_to is openscad_installer._fetch_to
+    assert orcaslicer_installer.fetch_url is openscad_installer.fetch_url
+    assert orcaslicer_installer.fetch_url_to is openscad_installer.fetch_url_to
     assert set(SLICER_INSTALL_HOSTS) <= stays_local.TOOL_SOURCES
 
 

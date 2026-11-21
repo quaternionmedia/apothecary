@@ -1,4 +1,4 @@
-# 18 — The working space
+# 18 — The workspace
 
 Written by `tests/e2e/test_working_space.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
@@ -17,11 +17,11 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ---
 
-## 1. ⊞ Windows › Working space opens it on the site
+## 1. ⊞ Windows › Workspace opens it on the site
 
-The header's ⊞ Windows, Working space under Site: the window opens on the garage, maximised here by a double-click on its tab. Its first line names the next step: choose a printer. printer_1's row says what it is doing, that it is answering now and that no camera looks at it, and its button opens its hour. Under it, every subject the log has said of, named as a person names it, each value with how it is known and when.
+The header's ⊞ Windows, Workspace under Site: the window opens on the garage, maximised here by a double-click on its tab. Its first line names the next step: choose a printer. printer_1's row says what it is doing, that it is answering now and that no camera looks at it, and its button opens its hour. Under it, every subject the log has said of, named as a person names it, each value with how it is known and when.
 
-![⊞ Windows › Working space opens it on the site](screenshots/18-01-windows-working-space-opens-it-on-the-site.png)
+![⊞ Windows › Workspace opens it on the site](screenshots/18-01-windows-workspace-opens-it-on-the-site.png)
 
 ```
 Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.
@@ -34,7 +34,7 @@ Its row's button: the window is printer_1's last hour, the strip its state, prin
 ![printer_1's hour ›: its state, its heaters, and no camera yet](screenshots/18-02-printer-1-s-hour-its-state-its-heaters-and-no-came.png)
 
 ```
-printer_1's hour in the Working space: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
+printer_1's hour in the Workspace: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
 ```
 
 ## 3. Add a camera above printer_1, and two more
@@ -90,7 +90,7 @@ printer_1's frames now live under 1 GB: past it, the oldest are forgotten as the
 ![‹ garage goes back to the site](screenshots/18-08-garage-goes-back-to-the-site.png)
 
 ```
-the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.
+the Workspace of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.
 ```
 
 ## 9. Camera › Workspace on printer_1's ring, and Panels › Site › Workspace
@@ -98,8 +98,8 @@ the Working space of garage: Choose a machine to see its hour: its state, its re
 The window restored to its place by a double-click on its tab. printer_1's ring, Camera › Workspace, opens the same hour, its cameras still this browser's; the canvas ring's Panels › Site › Workspace opens the site. The status line says the window's next step whichever door opened it.
 
 ```
-printer_1's hour in the Working space: Frames from camera_1, camera_2, camera_3 are kept when printer_1's state changes and at every 5 % of a job, while this window is open. Click a frame or a dot to see what it rests on. (⌗96)
-the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on. (⌗483)
+printer_1's hour in the Workspace: Frames from camera_1, camera_2, camera_3 are kept when printer_1's state changes and at every 5 % of a job, while this window is open. Click a frame or a dot to see what it rests on. (⌗96)
+the Workspace of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on. (⌗483)
 ```
 
 ## What this page does not show

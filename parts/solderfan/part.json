@@ -7,9 +7,7 @@
     "soldering"
   ],
   "readme": "../README.md",
-  "display_rotation": [
-    90.0,
-    0.0,
-    0.0
-  ]
+  "rest": {
+    "print": false
+  }
 }

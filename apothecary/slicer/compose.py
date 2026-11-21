@@ -1,8 +1,9 @@
 """What a slice is composed from beyond the slicer's own profiles: the start of a
 print, the filament, and what a piece's word declares.
 
-The start of a print is composed from modules as they are wanted; the filament is the printer's one, and choosing another is a
-module; a word declaring print settings for the pieces made as it has the shape
+The start of a print is composed from modules as they are wanted; the filament is the
+printer's one (``printer``) or the one loaded on it (``choose``); a word declaring
+print settings for the pieces made as it has the shape
 a part's declaration has. Each is a ``Piece`` here, and each says what it does.
 
 A **stub** is a piece that exists, says what it will do, and is not chosen: a
@@ -219,9 +220,10 @@ PIECES: Tuple[Piece, ...] = (
     Piece(
         FILAMENT,
         "choose",
-        "a slice names another filament the printer has loaded, from the slicer's profiles "
-        "of its vendor, and the start heats for it",
-        stub=True,
+        "the filament loaded on the printer, chosen among the slicer's profiles of its "
+        "vendor that fit its machine (slicer/filaments.py): its temperatures heat the "
+        "start, and its own tuning is what the slice takes; the profile's own until one "
+        "is loaded",
     ),
     Piece(
         DECLARED,

@@ -85,7 +85,7 @@ def _expected_part_names():
 def test_parts_listing_contains_known_part():
     client = TestClient(app)
     r = client.get("/parts")
-    assert r.status_code == 200
+    assert r.status_code == 200 and "X-Parts-Not-Loaded" not in r.headers
     data = r.json()
     names = {item["name"] for item in data}
     # Ensure at least one known part is in the response
@@ -125,6 +125,29 @@ def test_parts_include_uses_repo_relative_include_path():
     assert "include <parts/" in include
     assert "C:/" not in include
     assert "\\\\" not in include
+
+
+def test_a_part_that_will_not_load_leaves_the_listing_and_is_named(monkeypatch):
+    """One part that will not load is left out of the listing and named in its
+    header, where it made the whole listing a 500; its own address says why."""
+    from apothecary.projects.registry import PartLoadError
+
+    real = api.load_part
+
+    def load(item):
+        if item.name == "calibration_cube":
+            raise PartLoadError(item.name, "part.json", ValueError("refused"))
+        return real(item)
+
+    monkeypatch.setattr(api, "load_part", load)
+    client = TestClient(app)
+    r = client.get("/parts")
+    assert r.status_code == 200
+    listed = {part["name"] for part in r.json()}
+    assert "calibration_cube" not in listed and "snowplow" in listed
+    assert r.headers["X-Parts-Not-Loaded"] == "calibration_cube"
+    alone = client.get("/parts/calibration_cube")
+    assert alone.status_code == 500 and "refused" in alone.json()["detail"]
 
 
 def test_every_listed_part_serves_its_scad():

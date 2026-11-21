@@ -9,62 +9,19 @@ where it was drawn on the whiteboard, and as wide.
 from __future__ import annotations
 
 import json
-import math
 
 import pytest
 from click.testing import CliRunner
 from PIL import Image, ImageDraw
+from whiteboards_helpers import HIGH, LEANING, WIDE
+from whiteboards_helpers import photograph as _photograph
 
 from apothecary.cli.main import cli
 from apothecary.vision import OutlineFinder, ScaleReference, build, whiteboard
 from apothecary.vision.models import ShapeKind
 
-WIDE, HIGH = 1600, 1200
-# The whiteboard's corners in the photograph: top-left, top-right, bottom-right,
-# bottom-left. Its right side is further away, so shorter.
-LEANING = [(180, 150), (1380, 300), (1400, 900), (160, 1050)]
 # A whiteboard 1200 mm by 900 mm.
 BOARD_MM = (1200.0, 900.0)
-
-
-def _onto(corners):
-    """The mapping from a place on the whiteboard, each way 0 to 1, to the
-    photograph: the projective one that takes the unit square to four corners."""
-    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = corners
-    dx1, dx2, sx = x1 - x2, x3 - x2, x0 - x1 + x2 - x3
-    dy1, dy2, sy = y1 - y2, y3 - y2, y0 - y1 + y2 - y3
-    below = dx1 * dy2 - dx2 * dy1
-    g = (sx * dy2 - dx2 * sy) / below
-    h = (dx1 * sy - sx * dy1) / below
-    a, b, c = x1 - x0 + g * x1, x3 - x0 + h * x3, x0
-    d, e, f = y1 - y0 + g * y1, y3 - y0 + h * y3, y0
-
-    def place(u, v):
-        w = g * u + h * v + 1
-        return ((a * u + b * v + c) / w, (d * u + e * v + f) / w)
-
-    return place
-
-
-def _photograph(path, corners=LEANING):
-    """A plate, a disc and a wedge drawn on a whiteboard seen from one side."""
-    place = _onto(corners)
-    image = Image.new("RGB", (WIDE, HIGH), (60, 60, 64))
-    pen = ImageDraw.Draw(image)
-    pen.polygon([place(u, v) for u, v in ((0, 0), (1, 0), (1, 1), (0, 1))], fill=(238, 238, 236))
-    ink = (20, 30, 120)
-    plate = [(0.15, 0.2), (0.45, 0.2), (0.45, 0.45), (0.15, 0.45)]
-    pen.polygon([place(u, v) for u, v in plate], outline=ink, width=8)
-    # A disc 240 mm across on a whiteboard 1200 by 900: 0.2 of its width, 0.2667 of its height.
-    ring = [
-        (0.7 + 0.1 * math.cos(t / 60 * math.tau), 0.35 + 0.1333 * math.sin(t / 60 * math.tau))
-        for t in range(60)
-    ]
-    pen.polygon([place(u, v) for u, v in ring], outline=ink, width=8)
-    wedge = [(0.25, 0.9), (0.45, 0.9), (0.35, 0.6)]
-    pen.polygon([place(u, v) for u, v in wedge], outline=ink, width=8)
-    image.save(path)
-    return path
 
 
 def test_the_corners_are_found_where_the_whiteboard_leans(tmp_path):

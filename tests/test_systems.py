@@ -52,7 +52,8 @@ def test_each_system_and_window_is_named_once():
 
 
 def test_the_ring_has_a_cell_for_each_systems_view_in_the_registrys_order():
-    assert VIEWS == tuple((s.id, s.cell) for s in SYSTEMS)
+    # The journeys' views follow (tests/test_journeys.py).
+    assert VIEWS[: len(SYSTEMS)] == tuple((s.id, s.cell) for s in SYSTEMS)
 
 
 def test_every_window_a_view_lays_out_is_one_the_page_has():

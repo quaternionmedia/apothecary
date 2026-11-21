@@ -174,7 +174,7 @@ class TestSitePayloadCarriesScad:
             is_valid = True
 
         monkeypatch.setattr(api, "_assembly_tree", lambda site: {})
-        payload = api._site_payload(Boom(), Report())
+        payload = api.site_payload(Boom(), Report())
         assert payload["scad"].startswith("// This site has no generated OpenSCAD")
 
 

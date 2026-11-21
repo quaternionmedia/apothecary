@@ -25,15 +25,17 @@ from contextlib import suppress
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 import hearth
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from hearth import web
 
+from .. import sites
 from ..firmware import devices, gcode
 from ..firmware.bindings import bindings_for_site, device_for_identity
 from ..firmware.models import DeviceInfo, NodeBinding, TaskStatus
 from ..firmware.sketches import find_sketch
 from ..firmware.tasks import get_task_runner
 from ..firmware.toolchains import ToolchainError
+from ..site_store import UnknownSiteError
 from ..version import __version__
 
 FAMILY = "irl"
@@ -77,14 +79,48 @@ class Hosted(hearth.Member):
         while True:
             piece, work = self._queue.get()
             ended = dict(piece)
+            dropped: List[Tuple[Dict[str, Any], Work]] = []
             try:
                 ended.update(ok=True, **(work() or {}))
             except Exception as exc:  # the member's to say, in its state
                 ended.update(ok=False, error=str(exc))
+                dropped = self._not_after(piece, str(exc))
             with self._lock:
                 self._working.remove(piece)
                 self._ended.append(ended)
+                for behind, _ in dropped:
+                    self._working.remove(behind)
+                    self._ended.append(
+                        {
+                            **behind,
+                            "ok": False,
+                            "error": f"not run: {piece['verb']} before it failed ({ended['error']})",
+                        }
+                    )
             self.changed()
+
+    def _not_after(self, failed: Dict[str, Any], why: str) -> List[Tuple[Dict[str, Any], Work]]:
+        """The work already queued for the thing ``failed`` was for -- its node, or its
+        port -- taken out of the queue: what was asked of a machine on the strength of
+        the step before it is not done once that step has failed. Work for anything
+        else keeps its place."""
+        about = failed.get("node") or failed.get("port")
+        kept, dropped = [], []
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            same = about is not None and (item[0].get("node") or item[0].get("port")) == about
+            (dropped if same else kept).append(item)
+        for item in kept:
+            self._queue.put(item)
+        return dropped
+
+    def working_on(self, cue: Dict[str, Any]) -> bool:
+        """Whether work of ``cue`` is queued or running here now."""
+        with self._lock:
+            return any(piece["cue"] == cue for piece in self._working)
 
     def state(self) -> Dict[str, Any]:
         return {
@@ -202,12 +238,10 @@ class Board(Hosted):
     @staticmethod
     def _row(node: Any, found: List[DeviceInfo]) -> NodeBinding:
         """What the site knows of ``node``, the board it names."""
-        from ..api import _get_site_or_404
-
         site_name, _, path = str(node).partition(":")
         try:
-            site = _get_site_or_404(site_name)
-        except HTTPException:
+            site = sites.store.get(site_name)
+        except UnknownSiteError:
             raise hearth.Refused(f"no site holds {hearth.shown(node)}") from None
         for row in bindings_for_site(site_name, site, devices=found):
             if row.path == path:
@@ -253,6 +287,11 @@ class Board(Hosted):
         except ValueError as exc:
             raise hearth.Refused(str(exc)) from None
         about["sketch"] = sketch.id
+        try:
+            # A step never replaces the firmware that runs a machine.
+            devices.not_a_machines_controller(device.port)
+        except ValueError as exc:
+            raise hearth.Refused(str(exc)) from None
         return self._then(verb, about, lambda: self._flash(sketch, fqbn, device.port))
 
     @staticmethod

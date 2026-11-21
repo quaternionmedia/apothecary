@@ -169,6 +169,14 @@ def test_a_kept_file_s_path_is_drawn_and_scrubbed(page: Page, url: str, kind: st
     expect(slider).to_have_attribute("max", str(len(groups)), timeout=5000)
     expect(said).to_contain_text("all of it")
     expect(said).to_contain_text(machine.expected.kinds[0])
+    # The card's key: each kind's length in the colour its moves are drawn in, a move
+    # through the air told from what makes the part.
+    key = said.locator(".move-key").evaluate_all(
+        "els => els.map((e) => [e.dataset.kind, getComputedStyle(e).color])"
+    )
+    assert [kind for kind, _ in key][0] == expected.kinds[0]
+    assert {kind for kind, _ in key} <= set(expected.kinds)
+    assert len({colour for _, colour in key}) == len(key) > 1
     drawn = _drawn(page, machine.node)
     assert drawn["process"] == expected.process
     assert drawn["segments"] == drawn["drawn"] == len(expected.kind_of)
@@ -254,6 +262,96 @@ def test_a_router_s_file_stands_at_its_work_zero_and_on_the_coupon_once_zeroed_t
     assert top == pytest.approx(ROUTER_COUPON_POSITION.z + COUPON.cuts().stock.thickness)
 
 
+# --- a router's zero, before its controller's settings are read ---------------------------
+
+# The router's polls, wherever the page reads one: its own, a scan's rows, its card.
+POLLED = re.compile(r"/(firmware/printers/(status|info)\?|sites/garage/devices)")
+FRAMED = re.compile(r"/firmware/printers/where\?port=" + re.escape(ROUTER.replace("/", "%2F")))
+
+
+def _unread(answer) -> None:
+    """``answer`` as the server gives it before a router's controller has said its
+    settings ($$): a poll places neither the tool nor the work zero in the volume, and
+    says no travel and no homing. The work offset its reports carry stays."""
+    if isinstance(answer, dict):
+        if answer.get("dialect") == "grbl":
+            for key in ("work_origin", "tool_position", "travel", "homing"):
+                answer[key] = None
+        for value in answer.values():
+            _unread(value)
+    elif isinstance(answer, list):
+        for value in answer:
+            _unread(value)
+
+
+def _settings_unread(page: Page, homing) -> None:
+    """The router's polls answered as before its settings are read, and its frame saying
+    of the way each axis homes only ``homing`` (None: nothing)."""
+
+    def polled(route):
+        response = route.fetch()
+        answer = response.json()
+        _unread(answer)
+        route.fulfill(response=response, json=answer)
+
+    def framed(route):
+        response = route.fetch()
+        answer = response.json()
+        answer["printer"]["frame"]["homing"] = homing
+        route.fulfill(response=response, json=answer)
+
+    page.route(POLLED, polled)
+    page.route(FRAMED, framed)
+
+
+@pytest.mark.e2e
+def test_a_router_s_file_stands_where_its_frame_says_each_axis_homes(page: Page, url: str):
+    """No poll has placed the work zero, and the frame says how each axis homes -- X to
+    its minimum, as the AnoleX's does, Y and Z to their maximum: the file's zero is the
+    work offset counted up from X's switch and down from Y's and Z's, not the far
+    corner of every axis."""
+    machine = MACHINES["router"]
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        wco = http.get("/firmware/printers/status", params={"port": ROUTER}).json()["work_offset"]
+        frame = http.get("/firmware/printers/where", params={"port": ROUTER}).json()["printer"][
+            "frame"
+        ]
+    _settings_unread(page, {"x": "min", "y": "max", "z": "max"})
+    body = _open(page, url, machine)
+    _slide(page, body, 1)
+    expect(body.locator("#print-preview-said")).to_contain_text("all", timeout=5000)
+    _, vy, vz = frame["volume"]
+    assert _drawn(page, machine.node)["origin"] == pytest.approx(
+        {"x": wco["x"], "y": wco["y"] + vy, "z": wco["z"] + vz}
+    )
+
+
+@pytest.mark.e2e
+def test_a_router_whose_zero_is_not_known_draws_no_path_and_says_why(page: Page, url: str):
+    """Neither a poll nor the frame has said how the router's axes home: its file's path
+    is drawn nowhere rather than a travel off, the Machine view and the card say why,
+    and the controller's word, once a poll carries it, draws it where the server says."""
+    machine = MACHINES["router"]
+    _keep_only(url, machine)
+    _settings_unread(page, None)
+    _selected(page, url, machine.node)
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-router")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    said = body.locator("#print-preview-said")
+    expect(said).to_contain_text("not drawn", timeout=10000)
+    expect(status(page)).to_contain_text(f"{machine.file}'s path is not drawn: ")
+    expect(status(page)).to_contain_text("settings")
+    expect(status(page)).to_have_class(re.compile(r"\berror\b"))
+    assert _drawn(page, machine.node) is None
+    page.unroute(POLLED)
+    page.unroute(FRAMED)
+    expect(said).to_contain_text("all of it", timeout=2 * WITHIN_A_POLL)
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        zero = http.get("/firmware/printers/status", params={"port": ROUTER}).json()["work_origin"]
+    assert _drawn(page, machine.node)["origin"] == zero
+
+
 # --- the Machine view lands on the path ---------------------------------------------------
 
 MACHINE_VIEW = ".windows-menu-body .view-item[data-view='machine']"
@@ -295,9 +393,10 @@ def _selected(page: Page, url: str, node: str | None) -> None:
 
 
 def _from_windows(page: Page) -> None:
-    """⊞ Windows › Machine, as a person presses it."""
+    """⊞ Windows › Machine, as a person presses it: greyed (aria-disabled alone, which
+    Playwright's wait for an enabled element counts as disabled) or not."""
     page.locator("#windows-menu > summary").click()
-    page.locator(MACHINE_VIEW).click(timeout=5000)
+    page.locator(MACHINE_VIEW).click(timeout=5000, force=True)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
 
 
@@ -335,12 +434,12 @@ def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path
     _selected(page, url, machine.node)
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MACHINE_VIEW)
-    expect(entry).not_to_have_class(re.compile(r"\bmissing\b"))
+    expect(entry).not_to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_attribute("title", re.compile(f"Opens {machine.node}'s Machine"))
     entry.click(timeout=5000)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
 
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     assert windows.state(page, "machine-print")["shown"] is True
@@ -376,7 +475,7 @@ def test_windows_machine_lands_on_the_path_of_the_machine_stepped_into(
     expect(status(page)).to_contain_text(f"Stepped into {machine.node}")
     assert not page.evaluate("() => window.fractalViewer.selectedName")
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
@@ -414,7 +513,7 @@ def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_univers
     _select(page, machine.node)
     assert page.evaluate("() => window.fractalViewer.machine") is None
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-router")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-router")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
@@ -463,7 +562,7 @@ def test_with_no_file_kept_the_machine_view_says_how_one_comes_to_be(
     _keep_only(url)
     _selected(page, url, machine.node)
     _from_windows(page)
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     said = status(page)
     expect(said).to_contain_text("No path is drawn: no file is kept yet", timeout=10000)
     expect(said).to_contain_text(
@@ -485,11 +584,16 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
     )
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MACHINE_VIEW)
-    expect(entry).to_have_class(re.compile(r"\bmissing\b"))
+    expect(entry).to_have_attribute("aria-disabled", "true")
+    expect(entry).to_have_attribute(
+        "title", re.compile(r"^Disabled: no Machine is open and nothing is selected")
+    )
     other = page.locator(".windows-menu-body .view-item[data-view='part']")
-    grey = "(el) => getComputedStyle(el).color"
-    assert entry.evaluate(grey) != other.evaluate(grey)
-    entry.click(timeout=5000)
+    grey = "(el) => getComputedStyle(el).opacity"
+    assert entry.evaluate(grey) == "0.45" and other.evaluate(grey) == "1"
+    # Pressed all the same, as a person can: aria-disabled alone, which Playwright's own
+    # wait for an enabled element counts as disabled.
+    entry.click(timeout=5000, force=True)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
     said = status(page)
     expect(said).to_contain_text("Machine view: no Machine is open and nothing is selected")
@@ -498,7 +602,9 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
 
     _select(page, "workbench")
     rings.on_world(page, "Panels", "Windows", "Machine view")
-    expect(said).to_contain_text("no Machine is open, and workbench has no board pinned")
+    expect(said).to_have_text(
+        re.compile(r"^Machine view \(⌗\d+\): no Machine is open, and workbench has no board pinned")
+    )
     assert page.evaluate("() => window.fractalViewer.machine") is None
     after = page.evaluate(
         "() => window.apothecaryPanels.list().filter((w) => w.open).map((w) => w.id)"
@@ -510,8 +616,8 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
 def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page, url: str):
     """The files kept are every machine's. A router's toolpath, the newest kept, is not
     what a printer's card chooses or its Machine view draws while a file of its own is
-    kept; with the toolpath alone kept, nothing is drawn and the status line says whose
-    it is."""
+    kept; with the toolpath alone kept, the card chooses none, nothing is drawn and the
+    status line says whose the file is."""
     printer = MACHINES["printer"]
     _keep_only(url, printer, cut=True)
     _selected(page, url, printer.node)
@@ -526,7 +632,88 @@ def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page
     _from_windows(page)
     said = status(page)
     expect(said).to_contain_text(
-        "No path is drawn: the file chosen, router_coupon-cnc_router.nc", timeout=10000
+        "No path is drawn: the file kept, router_coupon-cnc_router.nc, was made for a router, "
+        "and none is kept for this printer yet",
+        timeout=10000,
     )
-    expect(said).to_contain_text("was made for a router, and none is kept for this printer yet")
+    pick = windows.machine(page).locator("#print-pick")
+    expect(pick.locator("option").first).to_have_text("— none kept for a printer —")
+    expect(pick).to_have_value("")
     assert _drawn(page, printer.node) is None
+
+
+# A kept file as the server lists one, less the kind of machine it was kept for.
+A_FILE_OF_NO_KIND = {
+    "id": "20260920T132512.468-square",
+    "name": "square.gcode",
+    "size": 16,
+    "sha256": None,
+    "lines": 2,
+    "uploaded_at": "2026-09-20T13:25:12.468000Z",
+    "problems": [],
+}
+
+
+@pytest.mark.e2e
+def test_a_file_that_says_no_kind_of_machine_is_no_card_s_to_choose(page: Page, url: str):
+    """A kept file says the kind of machine it was kept for, and a card chooses a file
+    of its own kind. Told of a file that says none (the list answered as the server
+    answers none), the printer's card chooses none: its list opens on none kept for a
+    printer, and nothing is drawn."""
+    printer = MACHINES["printer"]
+    _keep_only(url)
+    page.route(
+        re.compile(r".*/firmware/printers/prints$"),
+        lambda route: route.fulfill(json=[A_FILE_OF_NO_KIND]),
+    )
+    _selected(page, url, printer.node)
+    _from_windows(page)
+    pick = windows.machine(page).locator("#print-pick")
+    expect(pick.locator("option").first).to_have_text("— none kept for a printer —", timeout=10000)
+    expect(pick.locator("option", has_text=A_FILE_OF_NO_KIND["name"])).to_be_attached()
+    expect(pick).to_have_value("")
+    assert _drawn(page, printer.node) is None
+
+
+# A bed reading as the server lists one, less the kind of machine that took it.
+A_READING_OF_NO_KIND = {
+    "id": "20260920T132512.468-dev_ttyFAKE1",
+    "port": PRINTER,
+    "board": "FAKESERIAL1",
+    "at": "2026-09-20T13:25:12.468000Z",
+    "method": "read",
+    "mesh": [[0.0, 0.4, 0.9], [0.1, 0.5, 1.2], [0.2, 0.7, 1.6]],
+    "stats": {"range": 1.6, "mean": 0.62},
+    "firmware": "Marlin made up",
+}
+
+
+@pytest.mark.e2e
+def test_a_reading_that_names_no_kind_of_machine_is_laid_over_no_bed(page: Page, url: str):
+    """The page lays a bed reading over the marks of the kind of machine the reading
+    names. One that names none, answered to the printer's marks when they ask for
+    their readings and told by the page's own event for the printer's port, is drawn
+    over no bed; the same reading naming a printer is drawn over the printer's."""
+    asked: list[str] = []
+
+    def of_no_kind(route):
+        asked.append(route.request.url)
+        route.fulfill(json=[A_READING_OF_NO_KIND])
+
+    page.route(re.compile(r".*/firmware/printers/leveling\?port=.*ttyFAKE1.*"), of_no_kind)
+    open_garage(page, url, settle=False)
+    wears(page, "printer_1")
+    marks = "window.fractalViewer.marks['printer_1']"
+    page.wait_for_function(f"() => {marks} && {marks}.marks", timeout=15000)
+    tell = (
+        "(reading) => window.dispatchEvent(new CustomEvent('apothecary:mesh', { detail: reading }))"
+    )
+    page.evaluate(
+        f"() => {{ {marks}.readingAt = 0; window.fractalViewer.refreshReading('printer_1'); }}"
+    )
+    page.evaluate(tell, A_READING_OF_NO_KIND)
+    page.wait_for_timeout(1000)
+    assert asked and page.evaluate(f"() => {marks}.kind") == "printer"
+    assert page.evaluate(f"() => {marks}.marks.mesh()") is None
+    page.evaluate(tell, {**A_READING_OF_NO_KIND, "machine": "printer"})
+    page.wait_for_function(f"() => {marks}.marks.mesh() && {marks}.marks.mesh().rows === 3")

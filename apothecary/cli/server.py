@@ -9,11 +9,12 @@ from typing import Optional
 import click
 import uvicorn
 
+from .. import state_folder
 from ..projects.parts.skeleton import ROOT
 from ..stays_local import require_loopback
 from ..wiring.carlos import CARLOS_ENV, loopback_url
 from ..wiring.carlos import SITE_ENV as CARLOS_SITE_ENV
-from .utils import _safe_echo
+from .utils import safe_echo
 
 # The viewer answers on tau, 6283: a full turn, the circles and rotations every part
 # here is built from. Each server of the estate sits on a mathematical constant of
@@ -55,7 +56,7 @@ def free_port(host: str = "127.0.0.1") -> int:
         return sock.getsockname()[1]
 
 
-def _loopback_or_die(host: str) -> str:
+def loopback_or_die(host: str) -> str:
     """Every server this CLI starts listens on this machine only; not a choice."""
     try:
         return require_loopback(host)
@@ -80,7 +81,7 @@ def port_in_use(host: str, port: int) -> bool:
     return False
 
 
-def _port_free_or_die(host: str, port: int) -> None:
+def port_free_or_die(host: str, port: int) -> None:
     """Refuse, before anything is printed or built, a port another server holds --
     `apothecary serve` and `photo view` both default to DEFAULT_PORT."""
     if port_in_use(host, port):
@@ -105,7 +106,7 @@ def run_server(
     """
     uvicorn.run(
         target,
-        host=_loopback_or_die(host),
+        host=loopback_or_die(host),
         port=port,
         reload=reload,
         # What a reload watches: the package and the templates; nothing else in the
@@ -118,16 +119,31 @@ def run_server(
     )
 
 
-DEMO_HELP = (
-    "Serve the demo: every loop of the page with nothing real. printer_1's mainboard "
+def _simulated_keeps_its_own_state(asked: bool) -> None:
+    """Refuse simulated machines on a person's own state folder. ``--simulated`` has a
+    folder of its own and a banner that says what it is; the simulated serial engine
+    named by hand has neither, so the jobs and readings of machines that do not exist
+    would be kept among the real ones, on a page that looks like the real one."""
+    engine = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower() == "simulated"
+    if engine and not asked and not state_folder.named():
+        raise click.ClickException(
+            "APOTHECARY_SERIAL_ENGINE=simulated would keep simulated machines' jobs and "
+            "readings in your own state folder, on a page that does not say they are "
+            "simulated: run `apothecary serve --simulated`, or name a state folder of its own "
+            "in APOTHECARY_STATE_DIR"
+        )
+
+
+SIMULATED_HELP = (
+    "Serve with simulated machines: every loop of the page with nothing real. printer_1's mainboard "
     "is pinned to a simulated Ender, idle; a simulated ESP32 devkit says the hello of "
     "what is flashed to it; arduino-cli, cargo and espflash are scripted. It slices "
     "with your OrcaSlicer when one is installed (else Slice says how to install it) "
     "and prints to the simulated printer. A simulated console sweeps the theatre's "
     "lighting rig. No real serial port is opened. Its state is "
-    "a folder of its own, .cache/demo in the checkout (under $APOTHECARY_CACHE_DIR when "
+    "a folder of its own, .cache/simulated in the checkout (under $APOTHECARY_CACHE_DIR when "
     "set), never ~/.apothecary or your pins; it is kept between runs, and deleting it "
-    "starts the demo afresh. Serve without --demo to leave it."
+    "starts them afresh. Serve without --simulated for the real ones."
 )
 
 
@@ -157,7 +173,7 @@ DEMO_HELP = (
     help="Also regenerate docs/generated/ in the background (a headless browser run, "
     "a minute or two). Off by default: starting a server is not a test run.",
 )
-@click.option("--demo", is_flag=True, help=DEMO_HELP)
+@click.option("--simulated", is_flag=True, help=SIMULATED_HELP)
 @click.option(
     "--console-sacn",
     is_flag=True,
@@ -183,7 +199,7 @@ def serve(
     port: int,
     reload: bool,
     refresh_docs: bool,
-    demo: bool,
+    simulated: bool,
     console_sacn: bool,
     console_osc: bool,
     carlos: Optional[str],
@@ -191,19 +207,20 @@ def serve(
     """Run the viewer's server: the viewer at /viewer, the docs at /docs, the API at
     /openapi.json. It listens on this machine only (see apothecary/stays_local.py).
 
-    With --demo, every loop goes round with a simulated printer and devkit and
+    With --simulated, every loop goes round with a simulated printer and devkit and
     scripted firmware tools, on a state folder of its own.
 
     \b
     Examples:
-      apothecary serve --demo                the first time: nothing real is touched
+      apothecary serve --simulated           the first time: nothing real is touched
       apothecary serve --reload              while changing the package's Python
       apothecary serve --port 6284           a second checkout's server beside the first
       APOTHECARY_PORT=6284 apothecary serve  the same, for every command in that shell
 
     docs/dev-loop.md is the loop: change, see, test, commit, integrate."""
-    host = _loopback_or_die(host)
-    _port_free_or_die(host, port)
+    host = loopback_or_die(host)
+    port_free_or_die(host, port)
+    _simulated_keeps_its_own_state(simulated)
     if console_sacn:
         os.environ["APOTHECARY_CONSOLE_SACN"] = "1"
     if console_osc:
@@ -213,12 +230,12 @@ def serve(
             os.environ[CARLOS_ENV] = loopback_url(carlos)
         except ValueError as exc:
             raise click.BadParameter(str(exc), param_hint="--carlos") from None
-    if refresh_docs:  # before the demo's environment is this process's
+    if refresh_docs:  # before the simulated machines' environment is this process's
         refresh_docs_in_background()
     target, factory = "apothecary.api:app", False
-    if demo:
-        target, factory = "apothecary.demo:create_app", True
-        _start_the_demo()
+    if simulated:
+        target, factory = "apothecary.simulated:create_app", True
+        _start_simulated()
     _say_where(host, port, reload)
     run_server(target, host, port, reload=reload, factory=factory)
 
@@ -239,10 +256,10 @@ def _say_where(host: str, port: int, reload: bool) -> None:
     click.echo(f"Ctrl+C stops it. A second server beside it: --port, or ${PORT_ENV}.")
 
 
-def _start_the_demo() -> None:
-    """The demo's folder made or found, its environment this process's (and a
+def _start_simulated() -> None:
+    """The simulated machines' folder made or found, its environment this process's (and a
     reload's), and what it is said in a few lines."""
-    from ..demo import BOARD, DEVKIT, PRINTER, prepare, shown
+    from ..simulated import BOARD, DEVKIT, PRINTER, prepare, shown
 
     made = prepare()
     os.environ.update(made.env)
@@ -251,13 +268,13 @@ def _start_the_demo() -> None:
         if made.orcaslicer
         else "no OrcaSlicer installed: Slice says how (apothecary slicer install)"
     )
-    _safe_echo("The demo: nothing real is touched.", fg="cyan")
+    safe_echo("Simulated machines: nothing real is touched.", fg="cyan")
     click.echo(f"  State:    {shown(made.root)} (kept between runs; delete it to start afresh)")
     click.echo(f"  Printer:  {BOARD} pinned to a simulated Ender on {PRINTER}, idle")
     click.echo(f"  Devkit:   a simulated ESP32 on {DEVKIT}; arduino-cli, cargo, espflash scripted")
     click.echo(f"  Slicer:   {slicer}")
     click.echo("  Console:  a simulated console sweeps the theatre's lighting rig")
-    click.echo("  To leave: stop it, and run apothecary serve without --demo")
+    click.echo("  The real ones: stop it, and run apothecary serve")
 
 
 def refresh_docs_in_background() -> subprocess.Popen | None:
@@ -290,7 +307,7 @@ def refresh_docs_in_background() -> subprocess.Popen | None:
         )
     except OSError as exc:
         note_refresh(finished=None, ok=False, error=f"could not start docs generate: {exc}")
-        _safe_echo(f"  (docs refresh not started: {exc})", fg="yellow")
+        safe_echo(f"  (docs refresh not started: {exc})", fg="yellow")
         return None
-    _safe_echo(f"  Docs refresh running in the background (log: {log.relative_to(ROOT)})")
+    safe_echo(f"  Docs refresh running in the background (log: {log.relative_to(ROOT)})")
     return proc

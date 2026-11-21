@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, NamedTuple, Optional, Tuple
 
 from ..booleans import Difference
 from ..hierarchy import Assembly, Site
@@ -267,7 +267,7 @@ def piece_from_shape(
     # Each closed stroke drawn inside the shape is cut through the piece, where it
     # lies from the shape's middle, as the picture has it.
     if piece.base is not None and shape.cuts:
-        across = (laid.width / shape.long_side) if laid is not None and shape.long_side else factor
+        across = cut_scale(shape, laid, factor)
         piece.base = Difference(
             children=[
                 piece.base,
@@ -327,10 +327,11 @@ def _cut_solid(cut: "Cut", shape: "FoundShape", across: float, tallness: float, 
     what one width of the picture is in the piece's units, and ``tallness`` the
     picture's height over its width."""
     through = thickness * 1.2 + 0.002
+    place = cut_place(cut, shape, across, tallness)
     if cut.kind is ShapeKind.DISC:
-        solid = Cylinder(h=through, r=cut.long_side * across / 2)
+        solid = Cylinder(h=through, r=place.long / 2)
     else:
-        wide, deep = cut.long_side * across, cut.short_side * across
+        wide, deep = place.long, place.short
         solid = Translate(
             v=Vector3D(x=-wide / 2, y=-deep / 2, z=0.0),
             children=[Cube(size=Vector3D(x=wide, y=deep, z=through))],
@@ -338,22 +339,49 @@ def _cut_solid(cut: "Cut", shape: "FoundShape", across: float, tallness: float, 
         if cut.turned_degrees:
             solid = Rotate(a=Vector3D(x=0.0, y=0.0, z=-cut.turned_degrees), children=[solid])
     return Translate(
-        v=Vector3D(
-            x=(cut.centre.x - shape.centre.x) * across,
-            # Down the picture is towards the front of a build.
-            y=(shape.centre.y - cut.centre.y) * tallness * across,
-            z=-thickness * 0.1 - 0.001,
-        ),
+        v=Vector3D(x=place.x, y=place.y, z=-thickness * 0.1 - 0.001),
         children=[solid],
     )
 
 
+class CutPlace(NamedTuple):
+    """Where a cut is taken out of a piece, in mm from the piece's middle before it is
+    turned (``x`` across the picture, ``y`` up it, which is towards the back of a
+    build), and its two sides."""
+
+    x: float
+    y: float
+    long: float
+    short: float
+
+
+def cut_scale(shape: "FoundShape", laid: Optional["Laid"], factor: float) -> float:
+    """What one width of the picture is, in the piece's units, where a shape's cuts
+    are read: its long side as laid over its long side as found, or the picture's
+    width as given."""
+    return (laid.width / shape.long_side) if laid is not None and shape.long_side else factor
+
+
+def cut_place(cut: "Cut", shape: "FoundShape", across: float, tallness: float) -> CutPlace:
+    """Where one cut lies from its shape's middle, and how big it is, as built."""
+    return CutPlace(
+        x=(cut.centre.x - shape.centre.x) * across,
+        # Down the picture is towards the front of a build.
+        y=(shape.centre.y - cut.centre.y) * tallness * across,
+        long=cut.long_side * across,
+        short=cut.short_side * across,
+    )
+
+
 __all__ = [
+    "CutPlace",
     "MIN_THICKNESS",
     "THICKNESS_GUESS",
     "ScaleUnknown",
     "build",
     "built_sides",
+    "cut_place",
+    "cut_scale",
     "picture_to_site",
     "piece_from_shape",
     "sides_as_found",

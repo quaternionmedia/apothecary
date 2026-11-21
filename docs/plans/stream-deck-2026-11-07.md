@@ -181,17 +181,17 @@ what the one beneath it adds.
    goes on past one that cannot be reached, the stop goes whatever the latch
    says.
 
-## The owner's questions, answered
+## Its questions, decided
 
-Each was asked one at a time, in order, and each answer is built.
+Each decision below is built.
 
 Decided: the fourth knob is the chosen machine's fourth quantity, the
 router's spindle speed (steps of 1000 rpm, at most `SPINDLE_MAX_RPM`, only
 while it turns) and the printer's extruder (1 mm a step); the jog step is a
 key, the top row's third, cycling 0.1, 1 and 10 mm. The printer's extruder
-takes the bounded line of slice 4, which the owner approved.
+takes the bounded line of slice 4.
 
-Two classes of stop, the owner's word: a key per machine, each sending that machine's
+Two classes of stop: a key per machine, each sending that machine's
 own stop, and one that stops every machine at once with each one's own. The everything
 key is the bottom row's last, key seven, nearest a hand resting on the knobs, bright red
 where the per-machine stops are dark; the per-machine stops are keys four and five. None
@@ -199,15 +199,15 @@ needs control armed, as the page's E-STOP does not; the everything key goes on t
 next machine when one cannot be reached. The readouts X, Y, Z and the fourth quantity
 are on the strip, since the bottom row is the stops'.
 
-Arming from the deck is two sequential long presses of the machine's key, the
-owner's word. A press held `LONG_PRESS_S` (0.8 s) chooses the machine and says on
+Arming from the deck is two sequential long presses of the machine's key. A
+press held `LONG_PRESS_S` (0.8 s) chooses the machine and says on
 the strip that a second will arm its control; a second long press of the same key
 within `ARM_WINDOW_S` (5 s) of the first being let go arms it through the page's
 `ControlLatch`, for the latch's own five minutes. One long press alone, a second
 after the window, a short press, another key or a knob between them, or a long
 press of the other machine's key arms nothing; the tests hold each.
 
-The deck stands at the bench's right end behind the boards, the owner's choice over the
+The deck stands at the bench's right end behind the boards, chosen over the
 router's stand. No question is open.
 
 ## Not built

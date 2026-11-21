@@ -1,7 +1,7 @@
 """What a newcomer meets, through the page: a printer's own Pin pinning its mainboard,
 where its Device, its Machine and Slice find it, and Slice's refusals saying which
 of "not pinned" and "pinned, not connected" it is; no Slice on a devkit's ring; the
-header's Docs and Panels › Docs opening the documentation and the walkthrough's
+header's Docs and Panels › Tools › Docs opening the documentation and the walkthrough's
 index; and the banner's site crumb keeping the address, so a reload, Back and Forward
 land where they should.
 
@@ -197,14 +197,17 @@ def test_a_devkits_ring_has_no_slice(page: Page, url: str):
 def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page: Page, url: str):
     """Docs in the header, beside the ring's button and on one row at 1024 px, opens
     /docs in a new tab, the world left as it was; its bar reaches the walkthrough's
-    index, every page of it in order. The canvas ring's Panels › Docs opens the same,
+    index, every page of it in order. The canvas ring's Panels › Tools › Docs opens the same,
     and the header's Docs wears its address."""
     page.set_viewport_size({"width": 1024, "height": 768})
     _open(page, url)
     docs = page.locator("#docs-link")
     expect(docs).to_be_visible()
-    expect(docs).to_have_attribute("data-address", "41", timeout=15000)
-    expect(docs).to_have_attribute("title", re.compile(r"Panels › Docs.* · ⌗41$"))
+    expect(docs).to_have_attribute("data-address", "434", timeout=15000)
+    # Its tip says what it opens, then the address once: no path spelled out beside it.
+    expect(docs).to_have_attribute(
+        "title", re.compile(r"^The documentation in a new tab: [^⌗›]* · ⌗434$")
+    )
     tops = page.evaluate(
         "() => [...document.querySelectorAll('.toolbar > *')]"
         ".filter((el) => el.getBoundingClientRect().width > 0)"
@@ -233,7 +236,9 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
 
     _canvas_ring(page)
     _press(page, "Panels")
-    assert _labels(page)[-2:] == ["Docs", "Airgap"], _labels(page)
+    assert _labels(page)[-3:] == ["Tools", "Family", "Airgap"], _labels(page)
+    _press(page, "Tools")
+    assert _labels(page)[-1] == "Docs", _labels(page)
     with page.context.expect_page() as opened:
         _press(page, "Docs")
     again = opened.value
@@ -283,12 +288,18 @@ def test_a_site_chosen_from_the_banner_keeps_the_address_for_a_reload_and_back(
     page.locator("#site-menu .site-item[data-site='datum_core']").click()
     page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
     expect(page.locator("#site-level")).to_have_text("datum_core")
+    # The address changes as a site starts to load, so each step waits for the site's
+    # name in the banner: the first crumb below steps out of the site in view, and
+    # selects the piece it left once the universe has loaded.
     page.go_back()
     page.wait_for_url(re.compile(r"/viewer/sites/garage\?focus=workbench"), timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("garage", timeout=20000)
     page.go_forward()
     page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("datum_core", timeout=20000)
     page.locator("#universe-crumb").click()
     page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
+    _said(page, "Stepped out of the site datum_core")
 
     # The ring's Site chooses the same way.
     _canvas_ring(page)
@@ -354,6 +365,31 @@ def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_m
     bench = page.locator(".panel[data-panel='bench']")
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=15000)
     expect(bench.locator(".port-select")).to_contain_text("(none detected)")
+    # The toolchain card's rows with neither tool, word for word and in order, each
+    # tool's problem under them; nothing that needs arduino-cli or esptool can be pressed.
+    rows = bench.locator(".tc-status > div").all_text_contents()
+    assert rows[0].startswith("tools dir: /") and rows[1:] == [
+        "arduino-cli: ✗ not installed",
+        "config: –",
+        "esptool: • not found (optional)",
+        "Arduino: not installed · can build, upload, find ports, listen, probe with esptool",
+        "! arduino-cli not found (run `apothecary firmware install`)",
+        "! esptool not found -- raw ESP binary flashing unavailable (arduino-cli uploads to "
+        "ESP32 still work once the esp32 core is installed)",
+    ], rows
+    expect(bench.locator(".install-btn")).to_have_text("Install arduino-cli")
+    assert bench.locator(".tc-cores li").all_text_contents() == [
+        "Arduino AVR (Uno, Nano, Mega, Leonardo) arduino:avrInstall",
+        "Espressif ESP32 (all variants) esp32:esp32Install",
+        "Espressif ESP8266 esp8266:esp8266Install",
+        "Raspberry Pi Pico / RP2040 rp2040:rp2040Install",
+        "Arduino SAMD (Zero, MKR) arduino:samdInstall",
+    ]
+    for cannot in (".core-install[data-id='arduino:avr']", ".lib-btn", ".esp-flash-btn"):
+        expect(bench.locator(cannot)).to_be_disabled()
+    expect(bench.locator(".esp-note")).to_have_text(
+        "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)."
+    )
     settled(page)
     assert failed == [], failed
 

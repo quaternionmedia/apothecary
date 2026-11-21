@@ -29,11 +29,13 @@ CONTROLLER = "cnc_router.frame_system.controller"
 POINTS = 9  # three by three, the grid left out
 PROBE = "G38.2 Z-77.00 F200"  # from the top of Z, the rest of the travel
 
-# A printer's bed reading under the router's port name, kept before readings named
-# their board, as one was on the bench: never the router's, however it reaches the page.
+# A printer's bed reading under the router's port name, as one was on the bench:
+# never the router's, however it reaches the page.
 A_PRINTER_S_READING = {
     "id": "20260920T132512.468-dev_ttyFAKE3",
     "port": ROUTER,
+    "board": "MADEUPENDER1",
+    "machine": "printer",
     "at": "2026-09-20T13:25:12.468000Z",
     "method": "read",
     "mesh": [[0.0, 0.4, 0.9], [0.1, 0.5, 1.2], [0.2, 0.7, 1.6]],

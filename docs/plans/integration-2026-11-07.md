@@ -51,13 +51,12 @@ head, CI follows, and its second decision names the integration checklist.
 Each stack's own session finishes its open slices on the stack, each a signed
 commit whose test fails on the code beneath it:
 
-- **family**: the Procedure beside the world (the owner: "Yes, beside the world");
-  the family as a focused system, Members and Deliveries windows of their own (the
-  owner: "Windows of their own").
-- **streamdeck**: its fixups folded into the commits they fix; the two classes of
-  stop key (the owner: "Two classes of estop. One for everything, one per machine").
-- **homing**: built off `main` as its own stack (the owner: "Please ensure each axis
-  on each machine can be homed independently").
+- **family**: the Procedure beside the world; the family as a focused system,
+  Members and Deliveries windows of their own.
+- **streamdeck**: its fixups folded into the commits they fix; two classes of stop
+  key, one for every machine at once and one per machine.
+- **homing**: built off `main` as its own stack, each axis on each machine homed
+  independently.
 - **fixes**: the integration checklist on the four branches merged together.
 - **standardize**: the checklist on its top; the wheel step's failure, which failed
   alone, compared on the base and the top.

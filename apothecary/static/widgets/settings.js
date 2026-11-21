@@ -9,7 +9,8 @@
  * stepping a level in or out -- on or off, each way on or off, how much scroll past
  * the limit it takes, and where the limit sits: how near a level's pieces the camera
  * may come (a fraction of the level's size) and how far out (a multiple of the
- * distance that frames it).
+ * distance that frames it). The windows: whether they are see-through, the world
+ * drawn under them (panels.js), and how opaque each is then; the key that turns it.
  *
  * makeSettings() is the store the page reads: values(), set(id, value), reset(id),
  * resetAll(), holder(combo) -- whose a key is -- and onChange(fn), told at once of
@@ -42,6 +43,12 @@ export const SETTINGS = [
       title: "Steps into the selected piece, or the one nearest the middle of the view" },
     { id: "zoomOutKey", kind: "key", group: "Shortcuts", label: "Step out", def: "PageUp",
       title: "Steps out to the level above" },
+    { id: "seeThroughKey", kind: "key", group: "Shortcuts", label: "See-through windows", def: "o",
+      title: "Turns see-through windows on and off: the world drawn under every window, showing through it" },
+    { id: "projectorMarkKey", kind: "key", group: "Shortcuts", label: "Projector: mark the bed", def: "c",
+      title: "On the projector page: lays the four markers over the bed, to be dragged onto its corners, and takes them off again" },
+    { id: "projectorUpperKey", kind: "key", group: "Shortcuts", label: "Projector: mark a plane above", def: "u",
+      title: "On the projector page: marks the second plane, the top of a piece of known thickness laid on the bed, and goes back to the bed's" },
     { id: "autoZoom", kind: "tick", group: "Automatic zoom", label: "Automatic zoom", def: true,
       title: "The wheel, pushed on past the limit of the dolly, steps a level in or out" },
     { id: "autoZoomIn", kind: "tick", group: "Automatic zoom", label: "Stepping in", def: true,
@@ -54,6 +61,10 @@ export const SETTINGS = [
       title: "How near the pieces of a level the camera may dolly, as a fraction of the level's size: the limit stepping in starts at" },
     { id: "dollyOut", kind: "number", group: "Automatic zoom", label: "Farthest", unit: "× its framing", def: 8, min: 1.5, max: 50, step: 0.5,
       title: "How far out of a level the camera may dolly, as a multiple of the distance that frames it: the limit stepping out starts at" },
+    { id: "seeThrough", kind: "tick", group: "Windows", label: "See-through", def: false,
+      title: "The world drawn under every window, showing through it; what the world's own window shows stays as it was" },
+    { id: "windowOpacity", kind: "number", group: "Windows", label: "Opacity", unit: "% while see-through", def: 60, min: 10, max: 90, step: 5,
+      title: "How opaque a window is while see-through: the less, the more of the world shows through it" },
 ];
 const BY_ID = Object.fromEntries(SETTINGS.map((s) => [s.id, s]));
 

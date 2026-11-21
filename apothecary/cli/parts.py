@@ -11,16 +11,22 @@ import click
 from pydantic import ValidationError
 
 from ..meshes import UNIT_SCALES, MeshError, bounds, read_mesh, transform, write_stl
-from ..projects.parts.base import BasePart
+from ..projects.parts.base import BasePart, address
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar
-from ..projects.registry import ProjectInfo, _sanitize_module_name, load_part, scan_projects
+from ..projects.registry import (
+    ProjectInfo,
+    load_part,
+    load_parts,
+    sanitize_module_name,
+    scan_projects,
+)
 from ..templates import TemplateRenderer
 from . import status
 from .utils import (
-    _load_part,
-    _parse_param_overrides,
-    _safe_echo,
+    parse_param_overrides,
+    part_or_die,
+    safe_echo,
 )
 
 
@@ -69,15 +75,23 @@ def parts_list(json_out: bool):
     A part is a folder under parts/ holding a SCAD named after it, at any depth
     of category folders (parts/boards/arduino_uno). Its description is a
     part.json beside the SCAD, or a Python wrapper module, or None; a part.json
-    tagged stub is marked as one.
+    tagged stub is marked as one, and a part that does not load as one.
     """
     items = [p for p in scan_projects(ROOT) if p.kind == "part"]
+    failed = {f.name: f.error for f in load_parts(ROOT).failed}
     if json_out:
-        click.echo(json.dumps([p.to_json() for p in items], indent=2))
+        listed = [
+            {**p.to_json(), "loads": p.name not in failed, "load_error": failed.get(p.name)}
+            for p in items
+        ]
+        click.echo(json.dumps(listed, indent=2))
         return
     for p in items:
         described_by = "part.json" if p.sidecar else f"wrapper={p.wrapper}"
-        click.echo(f"{p.name} ({described_by})" + (" -- a stub" if _is_stub(p) else ""))
+        marks = " -- a stub" if _is_stub(p) else ""
+        if p.name in failed:
+            marks += " -- does not load (apothecary problems --detail)"
+        click.echo(f"{p.name} ({described_by}){marks}")
 
 
 FIELD_OF_USE = ("-NC", "-ND", "NonCommercial", "NoDerivatives", "personal")
@@ -132,7 +146,7 @@ def parts_import(
     """
     from ..projects.parts.described import SIDECAR
 
-    part_name = _sanitize_module_name(name or file.stem)
+    part_name = sanitize_module_name(name or file.stem)
     folder = ROOT / "parts" / part_name
     if folder.exists() and not force:
         raise click.ClickException(f"{folder} exists; --force replaces it")
@@ -140,7 +154,7 @@ def parts_import(
         # The open-license record takes no field-of-use restriction. The file
         # stays on this machine either way (STLs are ignored by git); it is
         # the repository it cannot join.
-        _safe_echo(
+        safe_echo(
             f"! {license_id}: a licence with a field-of-use restriction cannot be committed "
             "to this repository (the open-license record, §1). Kept here for your own use.",
             fg="yellow",
@@ -198,7 +212,7 @@ def parts_import(
             encoding="utf-8",
         )
     size = [round(hi[i] - lo[i], 1) for i in range(3)]
-    _safe_echo(
+    safe_echo(
         f"✓ {part_name}: {len(placed)} triangles, {size[0]} x {size[1]} x {size[2]} mm", fg="green"
     )
     click.echo(f"  {folder.relative_to(ROOT)}/: {kept.name}, {part_name}.scad, {SIDECAR}")
@@ -220,7 +234,7 @@ def parts_info(name: str, json_out: bool):
     """Everything about one part: its SCAD, category, tags, description, README,
     parameters, the bounds it declares at its defaults, and the parameters its
     STL on disk was built with."""
-    part = _load_part(name)
+    part = part_or_die(name)
     # A consumer sizing an assembly around this part needs the envelope, not
     # just the file path. Parts that neither override get_bounds nor set
     # default_bounds report null rather than a guess.
@@ -236,6 +250,7 @@ def parts_info(name: str, json_out: bool):
         "params_model": list(part.params_model.model_fields.keys()) if part.params_model else [],
         "bounds": bounds.model_dump(mode="json") if bounds else None,
         "stl_params": read_params_sidecar(part.get_stl_output_path()),
+        "presets": {n: p.model_dump(mode="json") for n, p in part.presets.items()},
     }
     if json_out:
         click.echo(json.dumps(data, indent=2))
@@ -261,25 +276,48 @@ def parts_info(name: str, json_out: bool):
     show_default=True,
     help="Permitted difference per axis, in mm.",
 )
+@click.option(
+    "--interface-tolerance",
+    default=None,
+    type=float,
+    help="Permitted difference in an interface's diameter, in mm "
+    "[default: fittings.INTERFACE_TOLERANCE].",
+)
 @click.option("--timeout", default=120, help="Timeout per part in seconds")
 def parts_verify(
     name: str | None,
     verify_all: bool,
     param_pairs: tuple[str, ...],
     tolerance: float,
+    interface_tolerance: float | None,
     timeout: int,
 ):
-    """Check a part's declared bounds against the geometry OpenSCAD produces.
+    """Check a part's declared bounds and interfaces against the geometry OpenSCAD produces.
 
     A wrapper's get_bounds is hand-written Python beside hand-written
     OpenSCAD, and the two can drift apart. Anything consuming the declared
     envelope -- catalog layout, an assembly sizing itself around the part --
     is wrong by exactly the amount they differ, which this measures.
 
+    Each round interface (a spigot, a socket) is read across the render near
+    each end, about its declared axis, and fails past --interface-tolerance:
+    a fit computed from a diameter the part does not have is wrong
+    (docs/connections.md).
+
+    Each feature a part's measurement plan names is read along its jaws' line
+    on the render, and fails where either face stands further than
+    models.measures.MEASURE_TOLERANCE from the plan's: a turn of the print
+    tuning loop measured against a size the part does not have tunes the
+    printer to the plan's mistake (docs/print-tuning.md).
+
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
+    from ..fittings import INTERFACE_TOLERANCE, readings
+    from ..models.measures import MEASURE_TOLERANCE
     from ..projects.parts.stl_renderer import get_renderer, render_part
 
+    if interface_tolerance is None:
+        interface_tolerance = INTERFACE_TOLERANCE
     if not get_renderer().is_available:
         raise click.ClickException("OpenSCAD not found; cannot measure geometry.")
 
@@ -294,7 +332,7 @@ def parts_verify(
 
     for part_name in status.iterate(names, "Verifying"):
         try:
-            part = _load_part(part_name)
+            part = part_or_die(part_name)
         except click.ClickException:
             skipped.append((part_name, "no wrapper"))
             continue
@@ -303,10 +341,16 @@ def parts_verify(
             skipped.append((part_name, "no source file"))
             continue
 
-        params = _parse_param_overrides(part, param_pairs)
+        params = parse_param_overrides(part, param_pairs)
         declared = part.get_bounds(params or None)
-        if declared is None:
-            skipped.append((part_name, "declares no bounds"))
+        try:
+            interfaces = part.interfaces(params or None)
+            plan = part.measures(params or None)
+        except (ValueError, KeyError) as exc:
+            skipped.append((part_name, f"its interfaces or its plan do not read: {exc}"))
+            continue
+        if declared is None and not interfaces and plan is None:
+            skipped.append((part_name, "declares no bounds, interfaces or plan"))
             continue
 
         can_build, reason = part.can_generate_stl()
@@ -320,17 +364,56 @@ def parts_verify(
             if not result.success:
                 skipped.append((part_name, f"render failed: {result.error_message}"))
                 continue
-            box = _stl_bounds(measured_stl)
+            try:
+                triangles = read_mesh(measured_stl)
+                box = bounds(triangles)
+            except (OSError, MeshError):
+                triangles, box = [], None
 
         if box is None:
             skipped.append((part_name, "could not measure STL"))
             continue
 
-        lo, hi = box
-        actual = tuple(hi[axis] - lo[axis] for axis in range(3))
-        want = (declared.size.x, declared.size.y, declared.size.z)
-        deltas = [abs(a - w) for a, w in zip(actual, want, strict=False)]
-        ok = all(d <= tolerance for d in deltas)
+        rows, ok = [], True
+        if declared is not None:
+            lo, hi = box
+            actual = tuple(hi[axis] - lo[axis] for axis in range(3))
+            want = (declared.size.x, declared.size.y, declared.size.z)
+            deltas = [abs(a - w) for a, w in zip(actual, want, strict=False)]
+            bounds_ok = all(d <= tolerance for d in deltas)
+            ok = ok and bounds_ok
+            rows.append(f"    {'axis':<6}{'declared':>12}{'measured':>12}{'delta':>10}")
+            for axis, w, a, d in zip("xyz", want, actual, deltas, strict=False):
+                flag = "" if d <= tolerance else "   <-- drift"
+                rows.append(f"    {axis:<6}{w:>12.2f}{a:>12.2f}{d:>10.2f}{flag}")
+        read = [r for i in interfaces for r in readings(i, triangles)]
+        if read:
+            rows.append(f"    {'interface':<22}{'declared':>10}{'measured':>10}{'delta':>8}")
+            for r in read:
+                held = r.holds(interface_tolerance)
+                ok = ok and held
+                got = "nothing" if r.measured is None else f"{r.measured:.3f}"
+                delta = "" if r.drift is None else f"{r.drift:.3f}"
+                flag = "" if held else "   <-- drift"
+                where = f"{r.interface} {r.where}"
+                rows.append(f"    {where:<22}{r.declared:>10.3f}{got:>10}{delta:>8}{flag}")
+        if plan is not None:
+            rows.append(f"    {'measured feature':<22}{'declared':>10}{'measured':>10}{'delta':>8}")
+            for feature in plan.features:
+                found = feature.read_on(triangles)
+                drift = (
+                    None
+                    if found is None
+                    else max(abs(a - b) for a, b in zip(found, feature.faces, strict=True))
+                )
+                held = drift is not None and drift <= MEASURE_TOLERANCE
+                ok = ok and held
+                got = "nothing" if found is None else f"{found[1] - found[0]:.3f}"
+                delta = "" if drift is None else f"{drift:.3f}"
+                flag = "" if held else "   <-- drift"
+                rows.append(
+                    f"    {feature.name:<22}{feature.nominal:>10.3f}{got:>10}{delta:>8}{flag}"
+                )
         checked += 1
 
         if ok:
@@ -340,10 +423,8 @@ def parts_verify(
             status.line("fail", part_name, indent=0)
 
         if not ok or verify_all is False:
-            click.echo(f"    {'axis':<6}{'declared':>12}{'measured':>12}{'delta':>10}")
-            for axis, w, a, d in zip("xyz", want, actual, deltas, strict=False):
-                flag = "" if d <= tolerance else "   <-- drift"
-                click.echo(f"    {axis:<6}{w:>12.2f}{a:>12.2f}{d:>10.2f}{flag}")
+            for row in rows:
+                click.echo(row)
 
     click.echo("")
     for part_name, reason in skipped:
@@ -355,6 +436,234 @@ def parts_verify(
     )
 
     if drifted:
+        raise SystemExit(1)
+
+
+def _xyz(v) -> str:
+    return "(" + ", ".join(f"{c:g}" for c in v.to_list()) + ")"
+
+
+def _sizes(i) -> str:
+    """An interface's sizes in words."""
+    if i.type == "spigot":
+        words = f"{i.d_base:g} across at its base to {i.d_tip:g} at its tip, {i.length:g} long"
+        if i.lead:
+            words += f"; led {i.lead:g} past its tip by up to {i.lead_d:g} across"
+        return words
+    if i.type == "socket":
+        words = f"a {i.diameter:g} bore holding {i.depth:g} deep"
+        if i.floor is not None:
+            words += f", then {i.floor:g} at its narrowest"
+        if i.stretch:
+            words += f"; opens {i.stretch:.0%} when pushed"
+        return words
+    if i.type == "bolt_hole":
+        return f"{i.diameter:g} across"
+    return f"{i.width:g} wide, {i.length:g} long"
+
+
+def _named_at(spec: str):
+    """(part, its parameters, the interface named or None) for ``part[@preset][.interface]``:
+    a preset's parameters, which a person's own ``-p`` go over."""
+    name, preset, interface = address(spec)
+    part = part_or_die(name)
+    try:
+        params = dict(part.preset(preset)) if preset else {}
+    except KeyError as exc:
+        raise click.ClickException(str(exc.args[0])) from None
+    return part, params, interface
+
+
+@parts.command("interfaces", short_help="Where another part meets a part: its interfaces.")
+@click.argument("name", metavar="NAME[@PRESET]")
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="Override a part parameter first. Repeatable.",
+)
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
+def parts_interfaces(name: str, param_pairs: tuple[str, ...], json_out: bool):
+    """The places where another part meets this one (docs/connections.md): each
+    interface's type, where it is and which way it faces in the part's own frame
+    (the frame its SCAD draws it in), its sizes, where its numbers came from, and
+    the interfaces of the same part it cannot be in use with. ``NAME@PRESET`` stands
+    the part at one of its presets, which ``-p`` goes over."""
+    part, params, _ = _named_at(name)
+    params.update(parse_param_overrides(part, param_pairs))
+    found = part.interfaces(params or None)
+    if json_out:
+        click.echo(json.dumps([i.model_dump(mode="json") for i in found], indent=2))
+        return
+    if not found:
+        click.echo(f"{part.name} declares no interfaces")
+        return
+    for i in found:
+        click.echo(f"{i.name}: a {i.type.replace('_', ' ')}, {i.source}")
+        click.echo(f"    at {_xyz(i.position)}, facing {_xyz(i.normal)}")
+        click.echo(f"    {_sizes(i)}")
+        if i.excludes:
+            click.echo(f"    not in use with {', '.join(i.excludes)}")
+        if i.cite:
+            click.echo(f"    cites {i.cite}")
+        if i.notes:
+            click.echo(f"    {i.notes}")
+
+
+def _interfaces_named(spec: str):
+    """(``part[@preset]``, [interfaces]) for ``part[@preset]`` or ``part[@preset].interface``."""
+    part, params, interface = _named_at(spec)
+    shown = spec.partition(".")[0]
+    if interface:
+        try:
+            return shown, [part.interface(interface, params or None)]
+        except KeyError as exc:
+            raise click.ClickException(str(exc.args[0])) from None
+    found = part.interfaces(params or None)
+    if not found:
+        raise click.ClickException(f"{part.name} declares no interfaces")
+    return shown, found
+
+
+@parts.command("fit", short_help="How two parts' interfaces fit: whether, and how far in.")
+@click.argument("a", metavar="PART[@PRESET][.INTERFACE]")
+@click.argument("b", metavar="PART[@PRESET][.INTERFACE]")
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
+def parts_fit(a: str, b: str, json_out: bool):
+    """How an interface of one part fits an interface of another (docs/connections.md):
+    it seats, is loose, will not enter, is too shallow, or its tip is blocked; how far
+    the spigot goes in, how far its shoulder then stands from the mouth, and how much
+    wider than the bore it is there. A part named without an interface tries each of
+    its interfaces against each of the other's, those that seat first. Exits 1 when
+    nothing seats. ``PART@PRESET`` stands a part at one of its presets."""
+    from ..models.interfaces import fit
+
+    part_a, ours = _interfaces_named(a)
+    part_b, theirs = _interfaces_named(b)
+    fits = [
+        (f"{part_a}.{x.name}", f"{part_b}.{y.name}", fit(x, y))
+        for x in ours
+        for y in theirs
+    ]
+    fits.sort(key=lambda f: not f[2].seats)
+    if json_out:
+        click.echo(
+            json.dumps(
+                [{**f.model_dump(mode="json"), "a": here, "b": there} for here, there, f in fits],
+                indent=2,
+            )
+        )
+    else:
+        for here, there, f in fits:
+            click.echo(f"{here} ↔ {there}: {f.verdict}")
+            if f.seats:
+                click.echo(
+                    f"    {f.seat:g} in, its shoulder {f.gap:g} from the mouth, "
+                    f"{f.interference:g} wider than the bore there ({f.stretch:.1%})"
+                )
+            click.echo(f"    {f.reason}")
+    if not any(f.seats for _, _, f in fits):
+        raise SystemExit(1)
+
+
+def _end_named(spec: str, pairs):
+    """An end of ``part[@preset][.interface]``, a person's ``NAME=VALUE`` over its preset."""
+    from ..adapters import Refused, end
+
+    name, preset, interface = address(spec)
+    part = part_or_die(name)
+    overrides = parse_param_overrides(part, pairs)
+    try:
+        return end(part, preset, interface, overrides)
+    except KeyError as exc:
+        raise click.ClickException(str(exc.args[0])) from None
+    except Refused as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+def _pair(pair: str):
+    if "=" not in pair:
+        raise click.ClickException(f"--param expects name=value, got {pair!r}")
+    name, value = pair.split("=", 1)
+    return name.strip(), value.strip()
+
+
+def _pairs(params: dict) -> str:
+    """Parameters as the ``-p`` pairs that set them."""
+    shown = (str(v).lower() if isinstance(v, bool) else f"{v:g}" if isinstance(v, float) else v for v in params.values())
+    return " ".join(f"-p {k}={v}" for k, v in zip(params, shown, strict=True))
+
+
+@parts.command(
+    "adapter", short_help="The adapter between two round ends: its parameters, and each end's fit."
+)
+@click.argument("a", metavar="PART[@PRESET][.INTERFACE]")
+@click.argument("b", metavar="PART[@PRESET][.INTERFACE]")
+@click.option(
+    "--a-param",
+    "-a",
+    "a_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="A number of the first end's part over its preset: what was measured. Repeatable.",
+)
+@click.option(
+    "--b-param",
+    "-b",
+    "b_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="A number of the second end's part over its preset. Repeatable.",
+)
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="The adapter's own parameter over what is derived: it adjusted, and each end's "
+    "fit checked again. Repeatable.",
+)
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
+def parts_adapter(a: str, b: str, a_pairs, b_pairs, param_pairs, json_out: bool):
+    """The adapter between two round ends, generated from their interfaces
+    (docs/connections.md): its parameters, which of its ends meets which, and how
+    each fits. An end is a part at a preset, its interface named where it has more
+    than one round one: dust_port@hose_40, dust_port@port_32.end, and what a person
+    measured goes over the preset (-b diameter=31.6 -b measured=true). The rule
+    applied is said with it; no clearance is added, so the first print settles the
+    fit. Refused, saying why, for an end that is not round, two ends that meet
+    already, a wall that leaves no bore, or an adapter that would not print without
+    support. Exits 1 when an adjusted adapter does not seat on both ends."""
+    from ..adapters import Refused, between
+
+    x, y = _end_named(a, a_pairs), _end_named(b, b_pairs)
+    try:
+        made = between(x, y)
+        if param_pairs:
+            # Checked with what was derived, not alone against the defaults.
+            adjusted = dict(_pair(pair) for pair in param_pairs)
+            made = between(made.a, made.b, {**made.params, **adjusted})
+    except Refused as exc:
+        raise click.ClickException(str(exc)) from None
+    if json_out:
+        placed, _ = made.placed()
+        body = made.model_dump(mode="json")
+        body["a"]["label"], body["b"]["label"] = made.a.label, made.b.label
+        body["placed"] = [
+            {"name": c.name, "position": c.position.to_list(), "turn": c.turn.to_list() if c.turn else None}
+            for c in placed.children
+        ]
+        click.echo(json.dumps(body, indent=2))
+    else:
+        for line in made.lines():
+            click.echo(line)
+        click.echo(f"  its parameters: {_pairs(made.params)}")
+        click.echo(f"  the rule: {made.rule}")
+        click.echo(f"  slice it: apothecary slicer slice {made.part} {_pairs(made.params)}")
+    if not made.seats:
         raise SystemExit(1)
 
 
@@ -404,7 +713,7 @@ def parts_checklist(name, check_all, build_volume, tolerance):
     # Assessing renders and measures, so it is slow enough to watch.
     with status.progress(names, "Assessing") as bar:
         for part_name in bar:
-            part = _load_part(part_name)
+            part = part_or_die(part_name)
             reports.append((part_name, assess(part, build_volume=volume, tolerance=tolerance)))
 
     for part_name, report in reports:
@@ -464,7 +773,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
     another), or, for a part built by Python geometry, that geometry's SCAD at
     the parameters given. No STL is built: `apothecary parts generate-stl` builds
     one."""
-    part = _load_part(name)
+    part = part_or_die(name)
     params_data = {}
     if params_json:
         try:
@@ -570,7 +879,7 @@ def parts_generate_stl(
     if generate_all:
         to_build = [_part_of(item) for item in scan_projects(ROOT) if item.kind == "part"]
     elif name:
-        to_build = [_load_part(name)]
+        to_build = [part_or_die(name)]
     else:
         raise click.ClickException("Specify a part name or use --all")
 
@@ -578,7 +887,7 @@ def parts_generate_stl(
     built = skipped = failed = 0
     for part in status.iterate(to_build, "Rendering"):
         # Validated here, before a render: OpenSCAD accepts any -D name.
-        params = _parse_param_overrides(part, param_pairs)
+        params = parse_param_overrides(part, param_pairs)
         if params:
             click.echo(f"  {part.name} parameters: {params}")
         result = build_stl(
@@ -650,9 +959,9 @@ def parts_elephant_walk(output: Path | None, gap: int, ensure_stl: bool):
                 if result.skipped == "fresh":
                     continue
                 if result.success:
-                    _safe_echo(f"  {part.name} ✓", fg="green")
+                    safe_echo(f"  {part.name} ✓", fg="green")
                 else:
-                    _safe_echo(f"  {part.name} ✗ {result.error_message}", fg="red")
+                    safe_echo(f"  {part.name} ✗ {result.error_message}", fg="red")
 
     click.echo("Calculating bounding boxes...")
     part_data = []

@@ -395,15 +395,17 @@ class Sorting:
         return (self.diagrams_right + self.writing_right) / drawn if drawn else 1.0
 
 
-def score_sorting(cases: List[Case], thresholds=None) -> Sorting:
+def score_sorting(cases: List[Case], thresholds=None, readings=None) -> Sorting:
     """Sort each picture's marks and compare with what was drawn: each drawn shape
-    and each line of writing is looked for by its middle."""
+    and each line of writing is looked for by its middle. ``readings`` are the
+    pictures' strokes as ``read_strokes`` reads them, where they have been read."""
     from . import marks as sorter
     from .outline import read_strokes
 
     result = Sorting()
-    for case in cases:
-        found = sorter.sort(read_strokes(case.path), thresholds)
+    for number, case in enumerate(cases):
+        reading = readings[number] if readings is not None else read_strokes(case.path)
+        found = sorter.sort(reading, thresholds)
         drawn = [("diagram", shape.centre) for shape in case.truth]
         drawn += [("writing", middle) for middle in case.writing]
         for kind, (x, y) in drawn:
@@ -439,11 +441,21 @@ def score_sorting(cases: List[Case], thresholds=None) -> Sorting:
 def run_sorting(count: int = 20, thresholds=None, **drawing) -> Sorting:
     """Draw whiteboards with writing on them and score the sorter, in a scratch
     folder cleared away after."""
+    return run_sortings([thresholds], count=count, **drawing)[0]
+
+
+def run_sortings(tables, count: int = 20, **drawing) -> List[Sorting]:
+    """The sorter scored with each of ``tables`` (None: the table in use) on the same
+    drawn whiteboards: drawn once, and each picture's strokes read once, since
+    reading them is most of the work and a table changes only how they are sorted."""
     import tempfile
+
+    from .outline import read_strokes
 
     with tempfile.TemporaryDirectory(prefix="apothecary-bench-") as scratch:
         cases = draw_cases(Path(scratch), count=count, **{"stroke": 0.012, "writing": 2, **drawing})
-        return score_sorting(cases, thresholds)
+        readings = [read_strokes(case.path) for case in cases]
+        return [score_sorting(cases, table, readings) for table in tables]
 
 
 def run(

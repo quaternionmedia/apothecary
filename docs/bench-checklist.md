@@ -29,7 +29,7 @@ nothing printing from its own SD card.
       `uv run apothecary firmware install --esp32` (arduino-cli and the ESP32
       core, for the Arduino blink),
       `uv run apothecary firmware install --rust-esp32` (Rust for the ESP32).
-- [ ] `uv run apothecary serve` -- your own server and state, not `--demo` --
+- [ ] `uv run apothecary serve` -- your own server and state, not `--simulated` --
       and open `http://127.0.0.1:6283/viewer`: it lands on the garage.
 
 ## Prepared, nothing plugged in
@@ -71,10 +71,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       the free ports: choose the printer's, **Pin**. The pin goes to the
       printer's mainboard, and when nothing is printing the page asks the
       board once what it is (M115): the status line says *asked it once what
-      it is: Marlin …*, and `printer_1` wears its ⚡ badge. A pin made before
-      the universe, on the parts library's `creality_v422`, reads under the
-      universe's: Pinned lists it there; it drives no garage node until
-      `printer_1`'s mainboard is pinned.
+      it is: Marlin …*, and `printer_1` wears its ⚡ badge.
 - [ ] Open `printer_1`'s Machine: its plan's part and file are chosen.
 - [ ] **Pin the ESP32.** Select `esp32_blink`, choose the ESP32's port,
       **Query**, **Pin**: `esp32_blink` wears its ⚡ badge.
@@ -98,8 +95,7 @@ one machine on the number another held; nothing in them moves a machine.
       armed; the router's polls drive nothing onto `printer_1`.
 - [ ] Nothing of the printer's lies over the router's table, though the
       printer's readings were taken on that port number. Once the printer is back its bed wears
-      the newest reading kept for its board, or, of those kept before readings
-      named their board, the newest taken on the port it is on now.
+      the newest reading kept for its board.
 - [ ] Pin the router (section I), then plug the printer into the router's
       socket: `cnc_router` does not take the printer, whose serial number its
       pin would have named; its node says *not connected*.
@@ -202,7 +198,7 @@ one machine on the number another held; nothing in them moves a machine.
       in flight; the status line says the print started.
 - [ ] **⏸ Pause** mid-square (⌗796): the head finishes what was queued and
       stops; **Resume** (⌗798).
-- [ ] **■ Cancel**, pressed twice: `M104 S0`, `M140 S0`, `M107`, `M84` in the
+- [ ] **⏏ Abort**, pressed twice: `M104 S0`, `M140 S0`, `M107`, `M84` in the
       log; the history and Site's Jobs read *cancelled*; the status line says
       the print ended.
 - [ ] Print it again to the end: *done · 23/23*, `dry run done` on the
@@ -248,15 +244,15 @@ one machine on the number another held; nothing in them moves a machine.
 
 ## H. The ESP32: the Rust blink, and the Arduino one beside it
 
-- [ ] The **Bench** tab (or Panels › Bench › Bench, ⌗438): its toolchain card
+- [ ] The **Bench** tab (or Panels › Tools › Bench › Bench, ⌗4388): its toolchain card
       shows *Rust for the ESP32*, installed, with cargo's and espflash's
-      versions; its install cell is Panels › Bench › Install › Rust ESP32
-      (⌗4366). Choose sketch **esp32_blink@rust-esp32 · esp32** and the
+      versions; its install cell is Panels › Tools › Bench › Install › Rust ESP32
+      (⌗43866). Choose sketch **esp32_blink@rust-esp32 · esp32** and the
       ESP32's port -- check it is not the printer's.
-- [ ] **Compile** (⌗432): the log shows `cargo build --release --offline`
+- [ ] **Compile** (⌗4382): the log shows `cargo build --release --offline`
       and, last, *no build path in the image*. With the network unplugged,
       Compile again: it still builds.
-- [ ] **Compile & upload** (Bench › Upload, ⌗434) → the dialog → espflash ends
+- [ ] **Compile & upload** (Bench › Upload, ⌗4384) → the dialog → espflash ends
       *Flashing has completed!*; the LED on GPIO 2 blinks once a second.
 - [ ] `esp32_blink`'s ring › Device › Open (⌗18): the Sketch card reads
       *should run esp32_blink@rust-esp32 · esp32*. Device › Query (⌗14): the
@@ -331,6 +327,12 @@ only with the table clear and no tool in the collet until the last box.
       `Alarm` with homing required on power-up), the tool's work and machine
       positions, the spindle off, no pins on. Press each limit switch by
       hand: its pin shows within one poll and goes when let go.
+- [ ] **A home is proved first.** Before any switch is pressed, **Home Z**: refused, and
+      the status line says which way Z will seek, how fast and how far, that its switch
+      has not been seen and that it has not been jogged that way. Jog Z 1 mm that way and
+      watch: the tool rises. Press Z's switch by hand for two seconds and let go: the
+      pins show `Z`, and with `$21=1` the controller is in alarm (`ALARM:1`). **Home Z**
+      now goes. The same for X and for Y, each the way it homes.
 - [ ] **⚙ Control**: the pad, headed *cnc_router armed: it can turn and move*.
       **Home** (`$H`): the gantry seeks its switches, the state card reads
       `running (Home)` and then `idle`, the machine position reads the
@@ -352,6 +354,14 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] **XYZ zero here**, then jog away and **Go to zero**: the tool returns.
       **Z zero here** with the plate under the collet, then **Probe Z** 25 mm:
       the touch is in the log (`[PRB:…:1]`) and `$#` says where.
+- [ ] **The plate's thickness.** Measure the touch plate with calipers, put the figure in
+      **plate**: it is there after a reload. Clip the lead to the bit and touch
+      the clip to the plate by hand: **Pins on** shows *probe*. Plate on the stock under
+      the bit, **Probe Z to plate**: the bit comes down, touches, lifts 5 mm; the work Z
+      reads the thickness plus 5, and `$#` has it in G54 with G92 at zero. E-STOP, Unlock:
+      the work Z is still there. With the clip off, **Probe Z to plate** from 60 mm up
+      with a depth of 10: it touches nothing, says so, sets nothing, and the controller
+      is in alarm.
 - [ ] **▦ Probe table** in the Table map card, the probe's lead closing at
       every point of the grid (clipped to the table, or the plate under the
       whole grid): the question in the router's words, the spindle off and a
@@ -383,6 +393,13 @@ only with the table clear and no tool in the collet until the last box.
       the end: *done*.
 - [ ] With a tool and stock, the first real cut from a CAM post's file, the
       spindle at its dial's speed: watch the first pass.
+- [ ] **The 😮.** Under *makes* choose `router_emoji`, **Toolpath**, and cut it
+      from 6 mm stock with the 6 mm end mill. Measure an eye, the mouth and the
+      face across with calipers, type them under **measured** in that order,
+      **Keep**: the status line says each size's error, the scale and the tool's
+      allowance kept for `cnc_router`. **Toolpath** again: `tool_allowance` shows
+      that value, *measured*. Note the scale: past a few tenths of a percent the
+      steps per millimetre (`$100`, `$101`) want a look, which nothing here changes.
 
 ## J. The Stream Deck +
 
@@ -409,7 +426,8 @@ clear and the tool clear of stock. Start the layout with
 `POST /firmware/decks/{id}/control` `{"on": true}` (or `APOTHECARY_DECK_CONTROL=1`).
 Keep a hand on each machine's own power switch: it is faster than the deck's stop keys.
 
-- [ ] The top row shows **PRINTER**, **ROUTER**, **STEP**; the bottom row **STOP**
+- [ ] The top row shows **PRINTER**, **ROUTER**, **STEP**, **DISARM** (grey, *nothing
+      armed*); the bottom row **STOP**
       (printer_1), **STOP** (cnc_router), a dark key and a bright red **STOP ALL** last,
       under the right hand; the strip says *printer_1 · disarmed* and the printer's X, Y,
       Z. **ROUTER** turns the second key green and the strip says *cnc_router*.
@@ -420,6 +438,11 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       6 s, hold it again: still disarmed. Hold it twice within 5 s: the strip says
       *armed* with the minutes left, and the Machine's pad pops out red as ⚙ Control's
       does. A short press, **STEP** or a knob between the two holds breaks the pair.
+      The second hold counts from when it is begun: held three seconds, it still arms.
+- [ ] Armed, **DISARM** is red and says *every machine*. Press it: the strip says
+      *disarmed*, the key goes grey, the Machine's pad goes back, and a knob turned moves
+      nothing. It stops nothing: press it while a jog of 50 mm is under way and the jog
+      finishes.
 - [ ] With the router armed (from the deck or the Machine's ⚙ Control). **STEP** to 1 mm, then knob 1
       one click clockwise: X moves 1 mm toward +X and the X key shows the new position
       within a poll (on the strip); counter-clockwise, back. Knobs 2 and 3 the same on Y and Z. At
@@ -442,6 +465,38 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       loaded: one click clockwise pushes 1 mm (`M83`, `G1 E1 F200`), counter-clockwise
       pulls it back. Below Marlin's minimum, the board refuses and the log says so.
       The printer's **STOP** halts it (`M112`) and the page's E-STOP does too.
+- [ ] Swipe the strip: draw a finger from its right end to its left, then back. The
+      strip goes knobs, **Progress**, **Status** and back, one screen a swipe, and the
+      events list `drag` with `x` above `x_out` (a finger moving left) and one drag report
+      for the whole stroke, lifted at its end. A swipe is not read twice, and a tap on the
+      strip changes nothing.
+- [ ] Start a print on the printer: the strip brings **Progress** forward once with the
+      file's name, a bar and the stage; swipe to the knobs, which say the print holds the
+      port and the jogs are refused, and the strip stays there. A turn of knob 1 moves
+      nothing. Cancel the print: Progress says *cancelled* until the strip is touched.
+
+## K. The footpedal
+
+The pedal is an Arduino Uno (or a Nano, with `--fqbn
+arduino:avr:nano:cpu=atmega328old` for a CH340 clone) wired as
+[parts/footpedal/footpedal.ino](../parts/footpedal/footpedal.ino) says: six
+buttons, on pins 2, 3, 4, 5, 8 and 7, and the LED strip's data on pin 6. Its
+serial line carries MIDI for Hairless MIDI, so it says no hello and Query does
+not find it.
+
+- [ ] `uv run apothecary firmware install --avr`, then `uv run apothecary
+      firmware libraries --install FastLED@3.10.5 --install "Control
+      Surface@2.1.2"`: the versions its `firmware.json` pins.
+- [ ] The **Bench** tab: choose sketch **footpedal@arduino · arduino:avr:uno**
+      and the pedal's port -- check it is not the printer's. **Compile**
+      (⌗4382) ends with the sketch's size; **Compile & upload** (⌗4384) ends
+      without an error.
+- [ ] Release the port, and open it in Hairless MIDI at 115200 baud, its MIDI
+      out to a monitor. Press and release each button: a Note On and a Note
+      Off on channel 1, notes 1 to 6 in the pins' order above (C#-2 to F#-2
+      where C-2 is note 0).
+- [ ] Send notes 1 to 8 to the pedal from Hairless's MIDI in: each lights one
+      LED of the strip, and its Note Off puts it out.
 
 ## Results
 
@@ -461,3 +516,4 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
 | H. The ESP32 | | | |
 | I. The router | | | |
 | J. The Stream Deck + | | | |
+| K. The footpedal | | | |

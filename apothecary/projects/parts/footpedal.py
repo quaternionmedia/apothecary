@@ -10,8 +10,6 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from apothecary.models import Vector3D
-
 from .base import BasePart
 from .skeleton import ROOT
 
@@ -36,8 +34,9 @@ def create(metadata_root: Path) -> BasePart:
         params_model=FootpedalParams,
         category="electronics",
         tags=["midi", "controller", "arduino", "music", "pedal"],
-        # Rotate to lay flat (buttons facing up)
-        display_rotation=Vector3D(x=90, y=0, z=0),
+        # Its SCAD lays it on its button face, the way up it prints; print=false
+        # draws it on its base, buttons up, as it stands on the floor.
+        rest={"print": False},
     )
 
 

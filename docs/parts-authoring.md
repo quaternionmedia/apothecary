@@ -13,6 +13,7 @@ parts/
 │   ├── my_part.scad      the source
 │   ├── README.md         optional; the wrapper's readme_path
 │   ├── my_part.stl       built by generate-stl, git-ignored
+│   ├── my_part.rest.stl  as it rests, for a part that declares that; git-ignored
 │   └── my_part.params.json   the overrides it was built with, git-ignored
 └── boards/               a category: its subfolders are parts
     ├── board_common.scad a library its parts include, not a part
@@ -64,7 +65,7 @@ def create(root: Path) -> MyPart:
         description="A hollow cube",
         params_model=Params,
         category="misc",
-        tags=["demo"],
+        tags=["example"],
         readme_path=root / "parts" / "my_part" / "README.md",
         preview_color=Color.from_hex("#3366CC"),
     )
@@ -77,18 +78,122 @@ DEFAULT = create(ROOT)
 `DEFAULT` is what the CLI, the API and the viewer import. A part with no
 parameters passes no `params_model` and states its envelope as
 `default_bounds=BoundingBox3D(...)` instead of overriding `get_bounds`.
-`display_rotation`, `print_settings` and `contested` are further `BasePart`
-fields; [Geometry models](models.md) describes the types.
+`rest` ([below](#how-it-rests)), `print_settings` and `contested` are
+further `BasePart` fields; [Geometry models](models.md) describes the
+types.
+
+A part's `category` is a word one of the eight **kinds** holds
+(`apothecary/facets.py`): Electronics, Cameras, Machines, Motors, Test
+pieces, Shop, Housings and Things. Its kind is what the universe groups it
+by, and its category's colour is a shade of its kind's. A new word is added
+under the kind it belongs to; `tests/test_facets.py` refuses a part whose
+category no kind holds.
 
 ## A sidecar instead of a wrapper
 
 A folder whose SCAD has a `part.json` beside it and no Python module is a
 *described* part: the sidecar says what the wrapper would (description,
-category, tags, colour, rotation, bounds, provenance). See
+category, tags, colour, rest pose, bounds, provenance). See
 [Described parts](geometry-from-elsewhere.md#described-parts);
 `apothecary parts import` writes one for a mesh made elsewhere. A described
 part has no `Params` model, so its overrides are checked against the SCAD
 file's own top-level variables.
+
+## What a part is built from
+
+The universe lays parts out on shells by composition depth
+(`apothecary/orbitals.py`). The registry holds no part-to-part relation, so it is
+read from the SCAD's `include <...>` and `use <...>` of another registered part's
+file and from sites that hold one part inside another (`apothecary/composition.py`).
+A part that says `"parts": ["name", ...]` in its `part.json` (or `parts=[...]` in its
+wrapper) is built from exactly those, an empty list meaning none; the inference is
+then not consulted.
+
+A part says its list where its geometry draws another registered part's and the
+inference cannot see it: `matboard_cutter_mount` includes the V-slot library under
+its upstream file name, which is no file here, and subtracts `v_slot`'s `extrusion`
+profile at its `tolerance`, so its sidecar says `"parts": ["v_slot"]`. Being built
+from is not being made on or made like: stock a part is cut on (`router_coupon`,
+`router_emoji` on the router) and a part another is a variant of (`flexure_rotor`,
+`rolling_rotor` beside `airgap`) draw none of it, and say nothing.
+
+## How it rests
+
+A part's STL is the way up it prints: its SCAD's own render, never turned.
+That is what a slice and a download read. A part that stands otherwise in use
+declares its rest pose, `rest`: the `-D` definitions that make its SCAD draw it
+as it rests. `footpedal.scad` lays the wedge on its button face unless `print`
+is false, so its wrapper says `rest={"print": False}`; `fifel.py` says the
+same of the fife, which its SCAD stands on its head unless `print` is false;
+and `solderfan`, a described part, says it in its `part.json` as
+`"rest": {"print": false}`. Each SCAD assigns its `print` after
+`/* [Hidden] */`, so neither the part's controls nor OpenSCAD's customizer
+offer it, and a `-p` override or a variant's parameters that name it are
+refused: set by hand, it would change which way up a slice is. A `rest` that
+names a variable its SCAD does not assign would draw nothing, and is refused
+when the part loads.
+
+A wrapper or a `part.json` that says `display_rotation` is refused when the
+part loads, with what to do instead: lay the part in its SCAD the way up it
+prints, and declare `rest` for how it stands in use. A refused described part
+is left off the library's grid; `apothecary problems` reports it broken, and
+its `--detail` is those words; `apothecary check` says its part.json does not
+load; `GET /parts/{name}` answers 500 with the words; `apothecary parts list`
+still lists its folder.
+
+The rest pose is the same SCAD, those definitions given beside the part's
+parameters, so it follows every parameter and every edit of the SCAD: the
+footpedal stands on its base, its button face tilted by `theta`, whatever
+`theta` is, and the fife lies on the floor whatever its `bore`. It is rendered
+only when it is asked for, into a file of its own: `<name>.rest.stl` beside
+the part's STL, with its own freshness and params sidecar, and a variant's
+beside the variant in the cache, under the variant's key, kept as long as the
+variant is.
+
+The page draws a part as it rests, asking for it with `?pose=rest`:
+`GET /parts/{name}/stl` and `/parts/{name}/state`, a variant's
+`/parts/{name}/variants/{key}` and its `/stl`, and `POST
+/parts/{name}/stl/generate` and a draft's render, whose `stl_url` and
+`measured` are then of the rest pose and whose `pose` says so. With no pose,
+each answers the print pose. A part that declares no rest pose rests as it
+prints, and is answered with its STL either way. The bounds a part declares,
+`apothecary parts verify`, the readiness checklist and the slicer stay in the
+print pose.
+
+## Presets
+
+A part whose sizes people meet as a handful of named ones keeps them as
+**presets**: `presets={"port_32": Preset(params={...}, description="...")}` on
+its wrapper (`apothecary.projects.parts.base.Preset`). Each is a set of the
+part's parameters over its defaults, and what it stands for in words. A preset
+that names a parameter the part has not got, or a value its model refuses, is
+refused when the part loads, and a preset's name is letters, digits, `_` and
+`-`, since `part@preset.interface` names one. Part › Presets on the ring offers
+each by its name; a name longer than a ring cell's twelve characters needs a
+`label=` that says it in twelve or fewer (`hose_adapter`'s `stepped_40_32_25` is
+"40 → 32/25" there), or the part is refused when it loads. `dust_port` is one part for every
+round end of a dust system, a 40 mm hose's and a 32 mm port's among them, so its
+sizes are its presets (`hose_40`, `port_32`, `port_25`, `outlet_35`) and not
+parts of their own.
+
+A preset is none of the variants below. A saved variant is a SCAD edited in the
+page and committed to a ref of its own, outside the tree, and a part built by
+Python has none; a cached variant is a render at some parameters, unnamed. A
+preset ships with the part, in its description, and a person's own numbers go
+over it: a caliper's reading of the real end, typed over the preset it is
+nearest.
+
+| | |
+|---|---|
+| `part.preset(name)` | its parameters, as the model coerces them; `KeyError` naming the presets |
+| `apothecary parts info NAME` | lists them |
+| `PART@PRESET` | stands a part at one, for `apothecary parts interfaces`, `fit` and `adapter` |
+| `GET /parts/{name}/params` | carries them as `presets`, beside the fields |
+
+`tests/test_parameter_coverage.py` counts a parameter of a part built by Python
+as live where moving it changes the SCAD it generates or the interfaces it
+declares, from its defaults or from one of its presets: a hose's give reaches
+every fit and nothing drawn, and a spigot's taper is drawn only on a spigot.
 
 ## Overrides
 
@@ -273,6 +378,68 @@ such a part lives in `Params` and in the code;
 `tests/test_parameter_coverage.py` fails on one that leaves the generated
 SCAD unchanged.
 
+`interfaces(params)` is where another part meets this one: a list of
+`apothecary.models.interfaces` objects (a spigot, a socket, a bolt hole, a
+slot), each named and given in the part's own frame by a position and a normal
+pointing out of the part. A part nothing meets returns none, the default. A part
+built from a `fittings.Profile` returns the profile's, so they come from the same
+numbers as its solid; `hose_adapter` and `dust_port` are two. A described part lists them under
+`interfaces` in its `part.json`. `apothecary parts verify` reads each round one
+on the render and fails on drift, `apothecary parts interfaces NAME` lists them,
+and [connections.md](connections.md) says how two fit and how parts are placed by
+them.
+
+`bought(params)` is what the part needs and does not print: a list of
+`apothecary.models.bought.Bought`, each kind with its count, its diameter and
+length in mm (a bearing's bore too), and the interfaces it sits in, one in
+each. Nothing listed is in the STL: the SCAD cuts the hole, the list says
+what goes in it. A pocket for a round insert is drawn `INSERT_FIT` wider than
+the insert. `material` is said only where the part's geometry depends on one;
+an insert whose material is the owner's choice says none.
+`tests/test_bought.py` holds every part's list to its interfaces: each place
+named is one, and the item fits it.
+
+### A part that moves
+
+`motion(params)` says how the part's pieces move against one another as one
+of its parameters goes, for a part that is a mechanism rather than one
+solid: an `apothecary.motion.Motion`. A machine whose pieces ride its axes
+with a poll keeps `kinematics` instead. A motion names:
+
+- `param`, `lo`, `hi`, `step`, `unit`: the parameter, its range, and the
+  step the table is sampled at; `cyclic` when the end of the range is its
+  start again (an orbit), so the page goes round again, each piece's turn
+  carried on by what one cycle adds;
+- `piece_param` and `still`: the SCAD's parameter that draws one piece
+  alone, and the piece that stands still;
+- `moving`: each `Piece` that moves, drawn by the SCAD alone in its own frame
+  -- its pose's origin where the part's is, unturned -- with its `reach`
+  from that origin and any `Insert` it carries; a piece that is not `drawn`
+  is bought and carries only its inserts;
+- `pose(value)`: the wrapper's own function, where each moving piece stands,
+  a `gap_geometry.Pose`: a turn about the part's z axis and a shift across
+  it. A motion is planar;
+- `bent`: a piece drawn from the model's outlines at each sample, extruded,
+  for one that bends rather than moves (a flexure's leaves);
+- `gaps`: each `Gap` the motion follows, measured at a value as `Mark`s, the
+  least first, with the point on each body in the part's frame.
+
+`GET /parts/{name}/motion` samples it into `motion/1` (`apothecary.motion.table`),
+and Part › View › Motion plays it ([airgap.md](airgap.md#the-motion-view)).
+The SCAD needs the `piece` parameter, with `all` drawing the whole as before:
+
+```scad
+piece = "all";  // [all, stator, rotor] what to draw: both, or one alone -- the rotor in its own frame
+if (piece != "rotor") stator();
+if (piece != "stator") translate(piece == "rotor" ? [0, 0, base] : rotor_at) rotate(piece == "rotor" ? 0 : turn) rotor();
+```
+
+`tests/test_motion.py` holds every declared motion's table to its wrapper's
+pose function at the samples, the page's way between two samples to within a
+hundredth of a millimetre of it, a cycle to end where it began but for its
+turn, and each moving piece, rendered alone as the part rests, to stand on
+the axis.
+
 ## A piece made from a picture is a part
 
 A shape a finder saw in a picture and a person made into a piece
@@ -311,7 +478,7 @@ shape again only if it still stands where it was made.
 ## Checking a part
 
 ```bash
-uv run apothecary parts list                 # found, and by which module
+uv run apothecary parts list                 # found, by which module, and whether it loads
 uv run apothecary parts info my_part         # metadata, bounds, readme, stl_params
 uv run apothecary parts generate-stl my_part # build the STL the viewer serves
 uv run apothecary parts verify my_part       # declared bounds against the rendered geometry

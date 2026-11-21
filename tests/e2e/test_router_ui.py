@@ -5,7 +5,7 @@ here streamed and followed.
 
 Runs against a server of its own with the simulated router on ``/dev/ttyFAKE3``
 (``APOTHECARY_SIMULATED_ROUTER``) and the scripted arduino-cli listing it
-(``FAKE_ROUTER``), as ``apothecary serve --demo`` has it. Nothing here opens a real
+(``FAKE_ROUTER``), as ``apothecary serve --simulated`` has it. Nothing here opens a real
 port.
 """
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 
 import doc_capture
 import httpx
@@ -36,6 +37,8 @@ WITHIN_A_POLL = 3 * POLL_MS
 A_PRINTER_S_READING = {
     "id": "20260920T132512.468-dev_ttyFAKE3",
     "port": ROUTER,
+    "board": "MADEUPENDER1",
+    "machine": "printer",
     "at": "2026-09-20T13:25:12.468000Z",
     "method": "read",
     "mesh": [[0.0, 0.4, 0.9], [0.1, 0.5, 1.2], [0.2, 0.7, 1.6]],
@@ -91,9 +94,15 @@ def _log(page: Page):
 # --- walkthrough page 24: a cut from the card, as a person goes round it -----------------
 
 # What changes on every run whatever the page does: a moment, a count of lines or a
-# percentage as a cut streams, a position as the tool moves, the log and the bar.
+# percentage as a cut streams, a position as the tool moves, the time an armed latch has
+# left, the log and the bar.
 STREAMED = r"\d+/\d+ lines|\(\d+(?:\.\d+)?%\)|\b\d+%|\bG\d+(?: [A-Z][\d.-]+)*"
 POSITION = r"-?\d+\.\d+"
+# The world drawn black in the pictures where the tool is wherever the cut was when it was
+# pictured: the stream is live, and a cancel lands on whichever line it reaches.
+WORLD = "#viewer-canvas"
+# ... and the line and bar of its progress, which name the line it was at.
+LIVE = (WORLD, "#print-progress-row", "#print-bar")
 CHANGING = (
     *moments(windows.MACHINE_WINDOWS, "#status", ".world-badge", "#selected-body .device-section"),
     *(
@@ -107,7 +116,13 @@ CHANGING = (
         )
     ),
     *((f"{windows.MACHINE_WINDOWS} {part}", POSITION) for part in ("#c-pos", "#c-pos-s")),
+    *(
+        (where, doc_capture.TIME_LEFT)
+        for where in (windows.MACHINE_WINDOWS, "#control", ".world-badge", "#contents-list")
+    ),
     f"{windows.MACHINE_WINDOWS} #log",
+    # The badge over the router is redrawn at every poll: its words, its time left among them.
+    ".world-badge",
     f"{windows.MACHINE_WINDOWS} #b-print",
 )
 
@@ -211,7 +226,12 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     )
     for now in ("#print-pick", "#print-delete", "#print-preview-row", "#print-start"):
         expect(card.locator(now)).to_be_visible()
-    expect(card.locator("#print-start")).to_be_enabled()
+    # Control is not armed yet (step 5 arms it): the server would refuse the cut, so ▶ Cut
+    # is greyed with its words.
+    expect(card.locator("#print-start")).to_be_disabled()
+    expect(card.locator("#print-start")).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first")
+    )
     # The Machine view pressed again lands on the file: its path drawn, all of it, and
     # the world framed on it.
     windows.machine_ready(page, "router", by_hand=True)
@@ -220,7 +240,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "Toolpath writes the coupon's cut: kept, chosen, said, and drawn on the table",
         "Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps "
         "it and chooses it: the file's row, its ✕, the preview and ▶ Cut are there now, "
-        "and the card says each operation with its passes and what it bored to the tool. "
+        "▶ Cut greyed until control is armed, and the card says each operation with its passes and what it bored to the tool. "
         "The Machine view, pressed again, lands on the file: all of its path drawn on the "
         "table from the router's work zero, and the world framed on it.",
         blank=CHANGING,
@@ -242,6 +262,13 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     # 5. Armed: the pad, the probe offered, and the work zeroed where the tool stands.
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
+    # A hold interrupts and goes with the latch down; a resume moves the machine again,
+    # so the server answers for it as for any line that needs the latch (can.js
+    # verbOfLine).
+    hold, resume = (page.locator(f"#control button[data-cmd='{c}']") for c in ("HOLD", "RESUME"))
+    expect(hold).to_have_attribute("data-can", "interrupt")
+    expect(resume).to_have_attribute("data-can", "resume")
+    expect(resume).to_be_enabled(timeout=WITHIN_A_POLL)
     expect(machine.locator("#level-probe")).to_be_visible()
     # The tool over where a stock's corner is touched off, from wherever it stood: the
     # cut's depth under it and the safe height over it, within the travel.
@@ -275,17 +302,19 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     card.locator("#print-start").click()
     progress = card.locator("#print-progress")
     expect(progress).to_contain_text(re.compile(r"op \d/4 pass \d/\d: "), timeout=10000)
-    expect(card.locator("#print-pause")).to_be_visible()
-    expect(card.locator("#print-cancel")).to_be_visible()
+    # Pause and Cancel at once, before any poll has said the cut runs: the page knows it.
+    expect(card.locator("#print-pause")).to_be_enabled(timeout=1000)
+    expect(card.locator("#print-cancel")).to_be_enabled(timeout=1000)
     expect(card.locator("#print-resume")).to_be_hidden()
     expect(card.locator("#print-start")).to_be_disabled()
+    expect(machine.locator("#c-state")).to_have_text("running", timeout=WITHIN_A_POLL)
     story.shows(
         "▶ Cut streams it: Pause and Cancel while it runs, the operation named",
         "▶ Cut asks first, then streams the file one line per ok. The progress line names "
         "the operation and the pass the cut is in, the badge in the world says the cut, "
         "and Pause and Cancel are there while it runs; ▶ Cut waits, disabled, until it "
         "ends.",
-        blank=CHANGING,
+        blank=(*CHANGING, *LIVE),
     )
 
     # 7. Pause: a feed hold, and Resume in Pause's place.
@@ -298,7 +327,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "Pause holds the controller: Resume takes Pause's place",
         "Pause is GRBL's feed hold: the controller stops where it is and nothing more is "
         "fed, the state card says Hold, and Resume stands where Pause did.",
-        blank=CHANGING,
+        blank=(*CHANGING, *LIVE),
     )
 
     # 8. Resume, then Cancel pressed twice: the cut ends, and the card is at rest.
@@ -306,7 +335,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     expect(progress).to_contain_text("running", timeout=10000)
     expect(card.locator("#print-pause")).to_be_visible()
     card.locator("#print-cancel").click()
-    expect(page.locator("#status")).to_contain_text("press again to cancel the cut", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("press again to abort the cut", timeout=5000)
     card.locator("#print-cancel").click()
     expect(progress).to_contain_text("cancelled", timeout=20000)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
@@ -320,7 +349,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "empties and the spindle is off. The progress line says cancelled, the job is in "
         "the card's history and in Site's Jobs, and ▶ Cut is offered again, the file "
         "still chosen.",
-        blank=CHANGING,
+        blank=(*CHANGING, *LIVE),
     )
     assert errors == []
 
@@ -335,7 +364,8 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
     """The badge says the router's state; its Machine is a router's: $I, the controller's
     word, both positions, the spindle, the pins, and no hotend, bed or Slice. Armed, the
     pad has the router's groups; Home sends $H, a jog $J=, the spindle M3 S; E-STOP is the
-    soft reset, which answers with the banner; a printer's line typed is refused."""
+    soft reset, which answers with the banner and disarms the router, its pad gone; a
+    printer's line typed is refused."""
     open_garage(page, url, settle=False)
     wears(page, "cnc_router")
     badge = page.locator(".world-badge[data-path='cnc_router']")
@@ -398,7 +428,40 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
     machine.locator("#estop").click()
     expect(_log(page)).to_contain_text("> RESET", timeout=5000)
     expect(_log(page)).to_contain_text("Grbl 1.3a ['$' for help]")
+    expect(_log(page)).to_contain_text("control disarmed by the stop")
+    expect(pad).to_be_hidden(timeout=5000)
+    expect(windows.tab(page, "control")).to_have_count(0)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
+
+
+@pytest.mark.e2e
+def test_a_router_armed_with_no_machine_open_says_so_on_its_badge_and_its_row(page: Page, url: str):
+    """Armed with its Machine not open -- by the deck's two long presses, or here the
+    latch's own route, which they arm -- the router's badge in the world and its row in
+    Site say it is armed and the time it has left; disarmed, they say it no more."""
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    badge = page.locator(".world-badge[data-path='cnc_router']")
+    row = page.locator("#contents-list .contents-item[data-path='cnc_router'] .dev-badge")
+    expect(badge).to_contain_text("idle", timeout=WITHIN_A_POLL)
+    expect(badge).not_to_contain_text("armed")
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
+    ).raise_for_status()
+    expect(badge).to_contain_text(re.compile(r"🔓 armed [45]:\d\d"), timeout=5000)
+    expect(badge).to_have_class(re.compile(r"\barmed\b"))
+    expect(row).to_have_text(re.compile(r"^🪚 🔓 armed [45]:\d\d$"))
+    expect(row).to_have_class(re.compile(r"\barmed\b"))
+    # The time left counts down between the asks.
+    left = re.search(r"armed (\d:\d\d)", row.inner_text()).group(1)
+    expect(row).not_to_have_text(re.compile(f"armed {left}$"), timeout=3000)
+    expect(windows.tab(page, "machine")).to_have_count(0)
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": False}, timeout=15.0
+    ).raise_for_status()
+    expect(badge).not_to_contain_text("armed", timeout=5000)
+    expect(badge).not_to_have_class(re.compile(r"\barmed\b"))
+    expect(row).not_to_have_class(re.compile(r"\barmed\b"))
 
 
 @pytest.mark.e2e
@@ -584,7 +647,7 @@ def test_toolpath_writes_the_coupon_s_cut_and_the_cut_names_its_operation(page: 
         re.compile(r"op 4/4 pass \d/6: outline 120 x 80 at 10,10 to z -"), timeout=30000
     )
     machine.locator("#print-cancel").click()  # pressed twice: the first press asks
-    expect(page.locator("#status")).to_contain_text("press again to cancel the cut", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("press again to abort the cut", timeout=5000)
     machine.locator("#print-cancel").click()
     expect(machine.locator("#print-progress")).to_contain_text("cancelled", timeout=20000)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
@@ -628,7 +691,7 @@ def test_a_part_changed_in_its_editor_gets_its_toolpath_from_the_variant_drawn(
 def test_the_page_says_a_router_in_a_router_s_words(page: Page, url: str):
     """What a printer's words would get wrong, on a router: its row and its badge say its
     state once, its facts call its volume its working area, a negative position never
-    breaks inside a number, and its hour in the Working space names the states it was in
+    breaks inside a number, and its hour in the Workspace names the states it was in
     and the spindle, with no printer's words among them."""
     open_garage(page, url, settle=False)
     wears(page, "cnc_router")
@@ -696,3 +759,253 @@ def test_a_printer_s_reading_under_the_router_s_port_is_never_laid_over_its_tabl
     # A router's marks ask, for the router's own table maps (test_router_table_map.py);
     # what they are answered here is a printer's, and is not theirs.
     assert asked and all("ttyFAKE3" in url for url in asked)
+
+
+def _poll_at_rest(url: str) -> dict:
+    """Polls until the router's moves are done and it reports itself idle."""
+    for _ in range(60):
+        st = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0)
+        if st.json().get("machine_state") == "Idle":
+            return st.json()
+        time.sleep(0.25)
+    raise AssertionError("the router never came to rest")
+
+
+@pytest.mark.e2e
+def test_the_router_is_drawn_as_its_pieces_and_they_ride_its_axes_as_it_moves(page: Page, url: str):
+    """The router is drawn as what stands still and what moves -- the table, the X
+    carriage, the Z slide -- and as its tool's mark moves toward each poll, each piece
+    moves with it: the table along Y by what the work's Y under the tool is, the carriage
+    along X, the Z slide along X and Z. The gantry never moves. A click on a moving piece
+    is a click on the machine."""
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    page.wait_for_function(
+        "() => { const v = window.fractalViewer, m = v.meshByName['cnc_router'];"
+        " return m && m.userData.kinematics && v.marks['cnc_router'] && v.marks['cnc_router'].marks; }",
+        timeout=60000,
+    )
+    pieces = page.evaluate(
+        "() => window.fractalViewer.meshByName['cnc_router'].children"
+        ".filter((c) => c.name.startsWith('piece:')).map((c) => c.name)"
+    )
+    assert pieces == ["piece:table", "piece:x", "piece:z"], pieces
+    # Its Machine open, polling: the world follows a machine through the page's polls.
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
+    ).raise_for_status()
+    start = _poll_at_rest(url)["tool_position"]  # wherever the tests before left it
+    read = (
+        "() => { const v = window.fractalViewer, m = v.meshByName['cnc_router'];"
+        " const at = (n) => { const p = m.getObjectByName(n).position; return [p.x, p.y, p.z]; };"
+        " return { table: at('piece:table'), x: at('piece:x'), z: at('piece:z'),"
+        " mark: v.marks['cnc_router'].marks.position() }; }"
+    )
+    page.wait_for_function(
+        "(s) => { const p = window.fractalViewer.marks['cnc_router'].marks.position();"
+        " return Math.abs(p.x - s.x) < 0.01 && Math.abs(p.y - s.y) < 0.01; }",
+        arg=start,
+        timeout=WITHIN_A_POLL,
+    )
+    before = page.evaluate(read)
+    dx, dy = (-10, -25) if start["x"] >= 10 and start["y"] >= 25 else (10, 25)
+    for line in (f"$J=G91 G21 X{dx} F1000", f"$J=G91 G21 Y{dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+    page.wait_for_function(
+        "([x, y]) => { const p = window.fractalViewer.marks['cnc_router'].marks.position();"
+        " return Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01; }",
+        arg=[start["x"] + dx, start["y"] + dy],
+        timeout=WITHIN_A_POLL,
+    )
+    after = page.evaluate(read)
+    moved = {
+        k: [round(a - b, 2) for a, b in zip(after[k], before[k], strict=True)]
+        for k in ("table", "x", "z")
+    }
+    # In the scene, X is X and the part's Y is -Z: the table moved along the part's Y by
+    # minus the jog, the carriage and the slide along X by the jog, and nothing else.
+    clamp = lambda v, lo, hi: min(hi, max(lo, v))  # noqa: E731 -- the part's range
+    want_x = clamp(start["x"] + dx, 0, 400) - clamp(start["x"], 0, 400)
+    want_y = clamp(start["y"] + dy, 0, 600) - clamp(start["y"], 0, 600)
+    assert moved["table"] == pytest.approx([0, 0, want_y], abs=0.05), moved
+    assert moved["x"] == pytest.approx([want_x, 0, 0], abs=0.05), moved
+    assert moved["z"] == pytest.approx([want_x, 0, 0], abs=0.05), moved
+    for line in (f"$J=G91 G21 X{-dx} F1000", f"$J=G91 G21 Y{-dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+
+
+def _command(url: str, line: str) -> None:
+    httpx.post(
+        f"{url}/firmware/printers/command", json={"port": ROUTER, "command": line}, timeout=15.0
+    ).raise_for_status()
+
+
+# Where the world draws the router now: its tool's mark, its table piece, and its wire
+# box's middle in the site's frame, with the frame its marks stand in.
+ROUTER_NOW = """() => {
+    const v = window.fractalViewer, m = v.marks['cnc_router'], mesh = v.meshByName['cnc_router'];
+    const box = v.buildVolumeMeshByName['cnc_router'], t = mesh.getObjectByName('piece:table').position;
+    return { mark: m.marks.position(), known: m.marks.known(), frame: m.marks.frame,
+             table: [t.x, t.y, t.z], box: v.siteAt(box.position), size: [box.scale.x, box.scale.y, box.scale.z] };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_world_follows_the_router_with_no_machine_open(page: Page, url: str):
+    """No Machine open: the world polls the router it draws by a watcher of its own, so a
+    jog sent from elsewhere moves the tool's mark, and the table with what rides it --
+    its piece and the wire box of the working volume, by the same amount along Y. The box
+    is the volume the controller says (its $130-$132), and the grid of the router stepped
+    into lies on its table."""
+    _poll_at_rest(url)  # a poll holds the link: the world opens none
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    page.wait_for_function(
+        "() => { const v = window.fractalViewer, m = v.marks['cnc_router'];"
+        " return m && m.marks && m.marks.known() && m.marks.frame.volume_from === 'controller'"
+        " && v.meshByName['cnc_router'].userData.kinematics; }",
+        timeout=60000,
+    )
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+    watchers = page.evaluate(
+        "(port) => [...window.fractalViewer.boards.board(port).watchers.keys()]"
+        ".map((who) => who.world || 'another')",
+        ROUTER,
+    )
+    assert watchers == [ROUTER], watchers
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
+    ).raise_for_status()
+    start = _poll_at_rest(url)["tool_position"]
+    at = "(s) => { const p = window.fractalViewer.marks['cnc_router'].marks.position();"
+    at += " return Math.abs(p.x - s.x) < 0.01 && Math.abs(p.y - s.y) < 0.01; }"
+    page.wait_for_function(at, arg=start, timeout=WITHIN_A_POLL)
+    before = page.evaluate(ROUTER_NOW)
+    vx, vy, vz = before["frame"]["volume"]
+    assert before["size"] == pytest.approx([vx, vz, vy]), before  # three.js's y is the site's z
+    dx, dy = (-10, -25) if start["x"] >= 10 and start["y"] >= 25 else (10, 25)
+    for line in (f"$J=G91 G21 X{dx} F1000", f"$J=G91 G21 Y{dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+    page.wait_for_function(
+        at, arg={"x": start["x"] + dx, "y": start["y"] + dy}, timeout=WITHIN_A_POLL
+    )
+    after = page.evaluate(ROUTER_NOW)
+    # The table carries Y: its piece and the box move together, minus the jog along the
+    # site's Y (three.js's -z for the piece); along X neither moves.
+    table_moved_y = -(after["table"][2] - before["table"][2])
+    box_moved = [a - b for a, b in zip(after["box"], before["box"], strict=True)]
+    assert box_moved == pytest.approx([0, table_moved_y, 0], abs=0.05), (before, after)
+    assert table_moved_y == pytest.approx(-dy, abs=0.05), (before, after)
+
+    page.evaluate("() => window.fractalViewer.zoomIn('cnc_router')")
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'cnc_router'")
+    grid = page.evaluate(
+        "() => { const v = window.fractalViewer, g = v.gridHelper, f = v.marks['cnc_router'].marks.frame;"
+        " return { path: g.userData.path, pitch: g.userData.pitch, z: v.siteAt(g.position)[2], bed: f.bed_z }; }"
+    )
+    assert grid["path"] == "cnc_router" and grid["pitch"] == 10, grid
+    assert grid["z"] == pytest.approx(grid["bed"] + 0.3, abs=0.01), grid
+    for line in (f"$J=G91 G21 X{-dx} F1000", f"$J=G91 G21 Y{-dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+
+
+@pytest.mark.e2e
+def test_no_tool_is_drawn_while_a_poll_does_not_say_where_it_is_in_the_volume(page: Page, url: str):
+    """A router's machine position is a place in its volume only by the way each axis
+    homes, which the server reads from its controller's settings. A poll without that
+    word (no tool_position) draws no tool, rather than one counted as if every axis homed
+    to its maximum; the next poll that says it draws it again."""
+    _poll_at_rest(url)  # a poll holds the link: the world opens none
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    known = "() => { const m = window.fractalViewer.marks['cnc_router']; return m && m.marks && m.marks.known(); }"
+    page.wait_for_function(known, timeout=60000)
+
+    def without_its_place(route):
+        answer = route.fetch()
+        body = answer.json()
+        body["tool_position"] = None
+        route.fulfill(response=answer, json=body)
+
+    page.route(re.compile(r".*/firmware/printers/status\?port=.*ttyFAKE3.*"), without_its_place)
+    page.wait_for_function(f"() => !({known})()", timeout=WITHIN_A_POLL)
+    assert not page.evaluate(
+        "() => window.fractalViewer.marks['cnc_router'].marks.group.children[1].visible"
+    )
+    page.unroute(re.compile(r".*/firmware/printers/status\?port=.*ttyFAKE3.*"))
+    page.wait_for_function(known, timeout=WITHIN_A_POLL)
+
+
+# Last in the file: the allowance it keeps stays in this module's state folder, and every
+# toolpath written for cnc_router after it takes it.
+@pytest.mark.e2e
+def test_the_emoji_cut_and_measured_is_fed_back_into_the_router_s_toolpaths(page: Page, url: str):
+    """The router's calibration piece, a 😮, its toolpath written in the Cut window, which
+    measures nothing. In Part › Feedback, opened from ⊞ Windows, the emoji's toolpath is
+    a piece made elsewhere, among every part's: chosen, under measured it names what to
+    measure, an eye, the mouth and the face, as designed. Its sizes typed and kept, the
+    piece's drawer is opened and the measurement filed there, the tool's allowance kept for
+    cnc_router, and its next toolpath takes it, saying so; that one measured too is filed
+    in a drawer of its own."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    machine = windows.machine(page)
+    machine.locator("#print-part").select_option("router_emoji")
+    machine.locator("#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=10000)
+    assert machine.locator("#print-measure").count() == 0
+    first = machine.locator("#print-pick").input_value()
+    windows.from_the_windows_menu(page, "part-feedback")
+    feedback = windows.panel(page, "part-feedback")
+    piece = feedback.locator("#feedback-piece")
+    expect(piece.locator(f"option[value='file:{first}']")).to_have_count(1, timeout=10000)
+    piece.select_option(f"file:{first}")
+    expect(feedback.locator("#feedback-title")).to_have_text("Feedback · router_emoji")
+    field, said = feedback.locator("#feedback-measure"), feedback.locator("#feedback-measure-said")
+    expect(said).to_have_text("of eye 10 × mouth 20 × face 60 mm designed", timeout=10000)
+    expect(field).to_have_attribute("placeholder", "eye × mouth × face mm")
+    field.fill("10.12 × 20.14 × 59.84")
+    feedback.locator("#feedback-measure-keep").click()
+    expect(page.locator("#status")).to_contain_text(
+        "scale -0.04%, the steps per millimetre's, not applied; "
+        "tool_allowance +0.000 -> +0.136 mm: filed in router_emoji's drawer, and kept for "
+        "cnc_router",
+        timeout=10000,
+    )
+    expect(said).to_contain_text("cnc_router's tool +0.136 mm")
+    expect(feedback.locator("#feedback-filed li")).to_contain_text("measured (tool_allowance)")
+    # The next toolpath makes its offsets with it, and says where it came from.
+    machine.locator("#print-slice").click()
+    expect(machine.locator("#print-slice-said")).to_contain_text(
+        "tool_allowance +0.136 measured", timeout=10000
+    )
+    # Measured again from that one, the eye alone: a piece of its own, in a drawer of its own.
+    second = machine.locator("#print-pick").input_value()
+    assert second != first
+    expect(piece.locator(f"option[value='file:{second}']")).to_have_count(1, timeout=10000)
+    piece.select_option(f"file:{second}")
+    field.fill("10.02")
+    feedback.locator("#feedback-measure-keep").click()
+    expect(page.locator("#status")).to_contain_text(
+        "tool_allowance +0.136 -> +0.156 mm: filed in router_emoji's drawer", timeout=10000
+    )
+    expect(said).to_contain_text("cnc_router's tool +0.156 mm")
+    kept = httpx.get(
+        f"{url}/cam/corrections", params={"site": "garage", "router": "cnc_router"}, timeout=15.0
+    ).json()["correction"]
+    assert kept["value"] == 0.156 and len(kept["measurements"]) == 2
+    drawers = httpx.get(f"{url}/cabinet/router_emoji", timeout=15.0).json()["drawers"]
+    assert sorted(d["file"]["file_id"] for d in drawers) == sorted([first, second])
+    assert errors == [], errors

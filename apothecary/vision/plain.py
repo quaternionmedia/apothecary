@@ -108,13 +108,15 @@ class PlainFinder:
                 (max(1, round(grey.width * scale)), max(1, round(grey.height * scale)))
             )
             width, height = grey.size
-            cut = _split_point(grey.histogram())
+            cut = split_point(grey.histogram())
             dark = grey.point([1 if value <= cut else 0 for value in range(256)]).tobytes()
 
         mask = _foreground(dark, width, height)
-        blobs = _blobs(mask, width, height, MIN_BLOB_PIXELS)
+        blobs = blobs_in(mask, width, height, MIN_BLOB_PIXELS)
 
-        shapes = [shape for blob in blobs if (shape := _describe(blob, width, height)) is not None]
+        shapes = [
+            shape for blob in blobs if (shape := describe_blob(blob, width, height)) is not None
+        ]
         return Picture(
             name=image.stem,
             pixel_width=full_width,
@@ -124,7 +126,7 @@ class PlainFinder:
         )
 
 
-def _split_point(counts: List[int]) -> int:
+def split_point(counts: List[int]) -> int:
     """Otsu's method: the brightness that best separates the picture in two.
 
     ``counts`` is how many pixels have each brightness. Tries every cut and keeps
@@ -153,7 +155,7 @@ def _split_point(counts: List[int]) -> int:
 
 
 # Swaps the 0 and 1 of a mask in one pass.
-_FLIP = bytes([1, 0]) + bytes(254)
+FLIP = bytes([1, 0]) + bytes(254)
 
 
 def _foreground(dark: bytes, width: int, height: int) -> bytes:
@@ -171,13 +173,13 @@ def _foreground(dark: bytes, width: int, height: int) -> bytes:
         + dark[width - 1 :: width].count(1)
     )
     background_is_dark = on_border * 2 > 2 * (width + height)
-    return dark.translate(_FLIP) if background_is_dark else dark
+    return dark.translate(FLIP) if background_is_dark else dark
 
 
 _RUN = re.compile(b"\x01+")
 
 
-def _blobs(mask: bytes, width: int, height: int, min_area: int) -> List[List[int]]:
+def blobs_in(mask: bytes, width: int, height: int, min_area: int) -> List[List[int]]:
     """Gather touching marked pixels into groups, biggest first.
 
     Finds each row's runs of marked pixels and joins every run to the runs it
@@ -224,7 +226,7 @@ def _blobs(mask: bytes, width: int, height: int, min_area: int) -> List[List[int
     return found
 
 
-def _describe(blob: List[int], width: int, height: int) -> Optional[FoundShape]:
+def describe_blob(blob: List[int], width: int, height: int) -> Optional[FoundShape]:
     """Turn one blob into a shape.
 
     The family is guessed from how much of its *tightest* box the blob fills —

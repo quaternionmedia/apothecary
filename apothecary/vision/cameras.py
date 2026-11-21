@@ -51,7 +51,6 @@ from ..hierarchy import Assembly
 from ..models.bounds import BoundingBox3D
 from ..models.vectors import Vector3D
 from ..primitives import Cube, Cylinder
-from ..site_names import current as current_site
 from ..state_folder import state_dir, write_whole
 from ..transforms import Rotate, Translate
 from .projection import Box, Hit, first_surface, looking
@@ -138,11 +137,9 @@ def _load() -> List[Camera]:
     kept: List[Camera] = []
     for row in rows if isinstance(rows, list) else []:
         try:
-            camera = Camera.model_validate(row)
+            kept.append(Camera.model_validate(row))
         except ValidationError:
             continue
-        # A camera kept under a name its site had before stands in that site still.
-        kept.append(camera.model_copy(update={"site": current_site(camera.site)}))
     return kept
 
 

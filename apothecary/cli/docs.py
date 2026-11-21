@@ -37,7 +37,7 @@ from pathlib import Path
 import click
 
 from ..projects.parts.skeleton import ROOT
-from .server import _loopback_or_die, free_port
+from .server import free_port, loopback_or_die
 
 GENERATED_DOCS_ROOT = ROOT / "docs" / "generated"
 
@@ -107,7 +107,7 @@ def generate(host: str, port: int | None, keep_raw_video: bool, real_devices: bo
     state in a temp dir, so the screenshots are the same on every machine
     and never depend on -- or touch -- a real board.
     """
-    host = _loopback_or_die(host)
+    host = loopback_or_die(host)
     # A fixed port could be held by another server, whose /health would then
     # answer for this one: the tests would drive the wrong server.
     port = port or free_port(host)
@@ -200,7 +200,7 @@ def _simulated_device_env(env: dict) -> dict:
     """Point the doc server at scripted ports and the simulated printer.
 
     The scripted ``arduino-cli`` is the package's (apothecary/firmware/scripted.py),
-    which the unit tests and ``apothecary serve --demo`` run too: an installed
+    which the unit tests and ``apothecary serve --simulated`` run too: an installed
     package has no tests/ to borrow it from.
     """
     from ..firmware.scripted import write_fake_arduino_cli

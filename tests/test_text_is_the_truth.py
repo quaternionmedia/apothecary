@@ -49,9 +49,9 @@ def openscad(tmp_path, monkeypatch):
 
 def _served(monkeypatch, part: BasePart, stl: Path) -> BasePart:
     monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: stl)
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == part.name else real(name)
+        api, "load_part_wrapper", lambda name: part if name == part.name else real(name)
     )
     return part
 

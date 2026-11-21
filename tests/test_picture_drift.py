@@ -100,3 +100,35 @@ def test_sheets_draw_each_named_picture_beside_its_commit_with_its_change_marked
     assert drawn.getpixel((0, 0)) == (60, 60, 60)  # the committed one, unmarked
     assert drawn.getpixel((100, 0)) == picture_drift.MARK  # a changed pixel, marked
     assert drawn.getpixel((150, 50)) == (60, 60, 60)  # an unchanged one, as it was
+
+
+def _listed(root: Path, entries: list[dict]) -> None:
+    import json
+
+    (root / picture_drift.MOVES_BY_ITSELF).parent.mkdir(parents=True, exist_ok=True)
+    (root / picture_drift.MOVES_BY_ITSELF).write_text(json.dumps(entries), encoding="utf-8")
+
+
+def test_a_picture_that_moves_by_itself_is_reported_apart(checkout):
+    shots = checkout / picture_drift.PICTURES
+    _listed(
+        checkout,
+        [{"picture": "03-01-a.png", "test": "tests/e2e/test_a.py", "reason": "a clock"}],
+    )
+    _picture(shots / "03-01-a.png", dots=300)
+    _picture(shots / "03-02-b.png", dots=300)
+    said = picture_drift.warnings(checkout)
+    assert [line.split(" ")[0] for line in said] == [
+        "::notice",
+        "::warning",
+    ]
+    assert "a clock" in said[0] and "tests/e2e/test_a.py" in said[0]
+
+
+def test_what_moves_by_itself_names_a_picture_and_a_test_that_exist():
+    root = Path(__file__).resolve().parents[1]
+    assert (root / picture_drift.MOVES_BY_ITSELF).is_file()
+    for name, entry in picture_drift.moves_by_itself(root).items():
+        assert (root / name).is_file(), f"{name} is not a walkthrough picture"
+        assert (root / entry["test"]).is_file(), f"{entry['test']} is not a test"
+        assert entry["reason"].strip(), f"{name} has no reason"

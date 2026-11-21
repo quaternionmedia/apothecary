@@ -23,15 +23,6 @@ own thread (``begin``'s ``live``), so its progress costs no writes. A job
 written as running that no thread of this process holds was running when the
 server stopped: it reads as failed and says so, and its file is left as it is.
 
-**Print records** (``prints/records/*.json``, a format nothing writes) are
-carried over on the first read after they appear: each becomes a print job with
-the record's id -- its port, its file's name and kept id, when it started and
-finished, its outcome, its error as the reason, the lines sent of the total as
-its progress, the firmware and the tail of what the firmware said. The file's
-size comes from the kept file's description when that is there; a record holds
-no site, part or hash, so those stay empty. The records are left where they
-are.
-
 **Listeners** (``LISTENERS``) hear each job as it begins and as it ends; the
 site layer registers one that marks the machine's node busy while a job runs
 on it, so a running job, not a hand-typed one, is what makes a printer busy.
@@ -53,7 +44,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
-from .site_names import current as current_site
+from . import surfaces
 from .stamped import claim, stamp
 from .state_folder import private_folder, state_dir, write_whole
 
@@ -89,14 +80,16 @@ class JobInput(BaseModel):
 
 
 class JobPart(BaseModel):
-    """The part or piece a job makes: a node of the job's site. A piece made from a
-    picture also carries the picture and the camera that took it, as they were
-    when the job began: kept in the job's record, not shown in its row."""
+    """The part or piece a job makes: a node of the job's site, or a registered part
+    that stands nowhere in it, named by its name. A piece made from a picture also
+    carries the picture and the camera that took it, as they were when the job
+    began: kept in the job's record, not shown in its row."""
 
     path: str
     name: str  # the part it is built from, or the piece's own name
     picture: Optional[str] = None  # a made piece's picture, under the picture root
     camera: Optional[str] = None  # the camera that took that picture, when one did
+    registered: bool = False  # a registered part, not a node of the site: its path is its name
 
 
 class JobFacts(BaseModel):
@@ -195,6 +188,10 @@ CUT = register(
         busy="running",
     )
 )
+# A printer's heater loop is experimented on (firmware/loops.py): a tune holds the port as
+# a print does and takes no file. It registers here with the others, so what a printer
+# offers does not depend on which module was imported first.
+TUNE = register(Operation(kind="tune", machine="printer", label="Tune"))
 
 
 # --- where a machine stands ------------------------------------------------------------------
@@ -233,7 +230,7 @@ def part_at(place: Optional[Place], path: Optional[str]) -> Optional[JobPart]:
         raise ValueError("this machine is pinned in no site, so no part of one can be named")
     found = next((p for p in place.parts if p.path == path), None)
     if found is None:
-        raise ValueError(f"{path!r} is not a part or piece of {place.site}")
+        raise ValueError(f"{path!r} is not a part or piece of {place.site}, nor a part's name")
     return found
 
 
@@ -258,6 +255,60 @@ def _write(job: Job) -> None:
 def _tell(job: Job) -> None:
     for listener in LISTENERS:
         listener(job)
+    surfaces.changed(JOBS, key=job.id, body=lambda: job.model_dump(mode="json", exclude={"log"}))
+
+
+# What each running job's change was last told as, (its stage, its whole percent): a job
+# says it has moved (``moved``) at every line it sends, and only a change of stage or of a
+# whole percent is a change to a reader. No timer is kept; the job's own thread is the clock.
+_TOLD: Dict[str, Tuple[Any, int]] = {}
+
+
+def _where(job: Job) -> Tuple[Any, int]:
+    return job.detail.get("stage"), int(job.progress * 100)
+
+
+def moved(job_id: str, now: Callable[[], Job]) -> Optional[Dict[str, Any]]:
+    """The running job ``job_id`` says it has moved: ``now`` is the job as it stands.
+    Told to the readers of ``jobs`` when its stage has changed since it was last told, or
+    its progress has passed another whole percent -- and only while a reader follows,
+    when ``now`` is not called at all. The event sent, or None. It asks nothing of the
+    machine: ``now`` is what the job's own thread already holds."""
+    if job_id not in _LIVE or not surfaces.listening(JOBS):
+        return None
+    try:
+        job = now()
+        if not job.running or _TOLD.get(job_id) == _where(job):
+            return None
+        _TOLD[job_id] = _where(job)
+        return surfaces.changed(
+            JOBS, key=job_id, body=lambda: job.model_dump(mode="json", exclude={"log"})
+        )
+    except Exception:  # the job's own thread says it; relaying it is not worth its failure
+        return None
+
+
+# The jobs, as a surface (apothecary/surfaces.py): read from the store, said changed as each
+# begins and ends, and as a running one's stage changes or its progress passes a whole percent.
+JOBS = "jobs"
+
+
+def _jobs_kept(words: Dict[str, str]) -> Dict[str, Any]:
+    found = list_jobs(site=words.get("site"), machine=words.get("port"))
+    return {"jobs": [job.model_dump(mode="json", exclude={"log"}) for job in found]}
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=JOBS,
+        frame="none",
+        about="what the machines ran and run, running first, then the newest",
+        snapshot=_jobs_kept,
+        takes=("site", "port"),
+        tells=True,
+        owner=__name__,
+    )
+)
 
 
 def begin(job: Job, live: Callable[[], Job]) -> Job:
@@ -282,6 +333,7 @@ def begin(job: Job, live: Callable[[], Job]) -> Job:
             kept.unlink(missing_ok=True)
             raise
         _LIVE[job.id] = live
+        _TOLD[job.id] = _where(job)
     _tell(job)
     return job
 
@@ -293,6 +345,7 @@ def end(job: Job) -> Job:
     with _LOCK:
         _write(job)
         _LIVE.pop(job.id, None)
+        _TOLD.pop(job.id, None)
     _tell(job)
     return job
 
@@ -310,20 +363,15 @@ def _as_read(job: Job) -> Job:
 
 def _read(path: Path) -> Optional[Job]:
     try:
-        job = Job(**json.loads(path.read_text(encoding="utf-8")))
+        return Job(**json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, TypeError):
         return None
-    # A job kept under a name its site had before is that site's job.
-    if job.site is not None:
-        job.site = current_site(job.site)
-    return job
 
 
 def get(job_id: str) -> Optional[Job]:
     """One job, with what its machine said, or ``None``."""
     if not JOB_ID_RE.match(job_id or ""):
         return None
-    _carry_over_print_records()
     job = _read(jobs_dir() / f"{job_id}.json")
     return _as_read(job) if job is not None else None
 
@@ -343,7 +391,6 @@ def list_jobs(
 ) -> List[Job]:
     """Jobs, running ones first, then the newest first: of a site, of the machine on a
     port (``identity`` is the board's own, when known), of a kind."""
-    _carry_over_print_records()
     folder = jobs_dir()
     found: List[Job] = []
     if folder.is_dir():
@@ -364,54 +411,18 @@ def list_jobs(
     return found
 
 
-# --- print records, carried over as print jobs ---------------------------------------------
-
-
-def _carry_over_print_records() -> None:
-    """Each print record not yet a job becomes one (see the module's docstring)."""
-    records = state_dir() / "prints" / "records"
-    if not records.is_dir():
-        return
-    for path in records.glob("*.json"):
-        if (jobs_dir() / path.name).is_file():
-            continue
-        job = _from_print_record(path)
-        if job is not None:
-            with _LOCK:
-                if not (jobs_dir() / path.name).is_file():
-                    _write(job)
-
-
-def _from_print_record(path: Path) -> Optional[Job]:
-    from .firmware.models import PrintRecord
-
-    try:
-        record = PrintRecord(**json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError, TypeError):
-        return None
-    if record.id != path.stem or not JOB_ID_RE.match(record.id):
-        return None
-    size = None
-    kept = state_dir() / "prints" / f"{record.file_id}.json"
-    if JOB_ID_RE.match(record.file_id) and kept.is_file():
-        try:
-            size = int(json.loads(kept.read_text(encoding="utf-8"))["size"])
-        except (OSError, ValueError, TypeError, KeyError):
-            size = None
-    outcome = record.outcome if record.outcome in ("done", "cancelled", "failed") else "failed"
-    detail: Dict[str, Any] = {"sent": record.sent, "total": record.total}
-    if record.firmware:
-        detail["firmware"] = record.firmware
-    return Job(
-        id=record.id,
-        kind=PRINT.kind,
-        machine=JobMachine(kind=PRINT.machine, port=record.port),
-        input=JobInput(name=record.name, size=size, file_id=record.file_id),
-        started_at=record.at,
-        finished_at=record.finished or record.at,
-        outcome=outcome,
-        reason=record.error,
-        progress=(record.sent / record.total) if record.total else 0.0,
-        detail=detail,
-        log=record.lines,
-    )
+def orphaned(machine: str, identity: Optional[str] = None) -> List[Job]:
+    """The jobs of the machine on a port that are kept as running and that no thread
+    here runs: a server stopped under them, and what ends a job -- a printer's heaters
+    off, a router's spindle off -- was never sent. As kept, still running, for the
+    one that opens the port next to end."""
+    folder = jobs_dir()
+    found: List[Job] = []
+    if folder.is_dir():
+        for path in sorted(folder.glob("*.json")):
+            job = _read(path)
+            if job is None or not job.running or job.id in _LIVE:
+                continue
+            if _same_machine(job, machine, identity):
+                found.append(job)
+    return found

@@ -7,13 +7,16 @@
  * nothing here fetches, listens or keeps state (boards.js does that).
  */
 
+import { heater, xyz } from "/static/format.js";
 import { KINDS, STATE_CLS, kindOf } from "/static/machine_words.js";
+
+export { xyz };
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // One heater: what it reads over what it is set to; "—" when there is none.
 export function heaterText(h) {
-    return h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : "—";
+    return h ? heater(h.actual, h.target) : "—";
 }
 
 // The two readings, rounded, as a badge carries them: "210°/60°".
@@ -45,8 +48,7 @@ export function tempsText(st) {
     return `T ${heaterText(st.hotends[0])}${st.bed ? " · B " + heaterText(st.bed) : ""}`;
 }
 
-// A position as the page writes one, wherever it writes one.
-export const xyz = (p) => `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}`;
+// A position as the page writes one, wherever it writes one: format.js's.
 // The same as markup, for a card that may wrap it: between its axes, never inside a
 // number, where a minus sign would otherwise end a line and the number start the next.
 export const xyzHtml = (p) => xyz(p).split(" ").map((axis) => `<span class="nb">${axis}</span>`).join(" ");
@@ -70,7 +72,7 @@ export function printerLine(st) {
     if (!st) return "not polled yet";
     if (st.state === "offline") return `offline${st.raw && st.raw[0] ? " " + st.raw[0] : ""}`;
     let line = `${stateWord(st)} · ${tempsText(st)}`;
-    if (st.position) line += ` · X${st.position.x.toFixed(0)} Y${st.position.y.toFixed(0)} Z${st.position.z.toFixed(1)}`;
+    if (st.position) line += ` · ${xyz(st.position)}`;
     if (st.sd_printing && st.sd_progress != null) line += ` · ${(st.sd_progress * 100).toFixed(1)}%`;
     if (st.filament_present === false) line += " · filament out";
     return line;
@@ -105,9 +107,10 @@ export function spindleText(st) {
 
 // One board, summed up for the drawers that show it small: the badges and
 // Selected's line. `board` is boards.js's board (device, status, expected,
-// observed). Answers { kind, icon, state, short, line, cls, title }: for a G-code
-// machine, the kind's icon, its state word, one reading (a printer's temperatures,
-// a router's spindle), the job's progress, and the class the state word wears.
+// observed, armedUntil). Answers { kind, icon, state, armed, short, line, cls, title }:
+// for a G-code machine, the kind's icon, its state word, the time its arm has left
+// ("4:32") or null, one reading (a printer's temperatures, a router's spindle), the
+// job's progress, and the class the state word wears.
 export function boardSummary(board) {
     const d = board && board.device;
     if (!d) return { kind: "none", icon: "⌁", state: "off", short: "not connected", line: "not connected", cls: "off", title: "not connected" };
@@ -121,15 +124,18 @@ export function boardSummary(board) {
         if (kind === "printer" && st && st.sd_printing && st.sd_progress != null) parts.push(`${(st.sd_progress * 100).toFixed(0)}%`);
         if (st && st.job) parts.push(st.job.kind === words.job ? `${st.job.kind} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`);
         const line = kind === "router" ? routerLine(st) : printerLine(st);
+        // Armed from anywhere, the time its arm has left (boards.js follows it).
+        const left = board.armedUntil ? Math.max(0, Math.round((board.armedUntil - Date.now()) / 1000)) : 0;
+        const armed = left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : null;
         return {
-            kind, icon: words.icon, state: word || "not polled",
+            kind, icon: words.icon, state: word || "not polled", armed,
             readings: st && !offline ? (kind === "router" ? spindleText(st) : readingsText(st)) : null,
             temps: kind === "printer" && st && !offline ? tempsText(st) : null,
             extra: parts, job: !!(st && st.job),
             short: st ? (offline ? "offline" : word) : "not polled yet",
             line,
             cls: STATE_CLS[word] || "",
-            title: `${label} on ${d.port} — ${line}`,
+            title: `${label} on ${d.port} — ${line}${armed ? ` — armed, ${armed} left: it can heat and move` : ""}`,
         };
     }
     const words = sketchWords(board.expected, board.observed);

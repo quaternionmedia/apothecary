@@ -31,7 +31,7 @@ def walk_paths(site: Assembly) -> Iterator[Tuple[str, Assembly]]:
 
     Same traversal order as the API's ``_assembly_tree`` (children, then
     additions, then subtractions), so every path yielded here is one the
-    viewer displays and ``_find_node_by_path`` resolves.
+    viewer displays and ``find_node_by_path`` resolves.
     """
 
     def visit(node: Assembly, prefix: str) -> Iterator[Tuple[str, Assembly]]:

@@ -458,7 +458,7 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     """At 1024 px wide the header is one row, at the top of the site and deep in it: the
     view banner (the universe, the site and its ▾, the trail), ⚙ View, ⊞ (Windows, its
     sign alone), the ring and the problems' count. No pill says prototype: the banner's
-    first crumb says it in its tooltip."""
+    first crumb says it in its tooltip, before the address of the ring's cell it is."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
     for gone in ("#load-btn", "#zoom-out-btn"):
@@ -466,7 +466,7 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     for gone in (".toolbar .badge", "#site-select"):
         expect(page.locator(gone)).to_have_count(0)
     expect(page.locator("#universe-crumb")).to_have_attribute(
-        "title", re.compile("FRACTAL VIEWER — unratified prototype$")
+        "title", re.compile(r"FRACTAL VIEWER — unratified prototype · ⌗\d+$")
     )
     row = page.evaluate(ONE_ROW)
     assert row["spread"] < 4 and row["height"] < 60, row
@@ -551,6 +551,34 @@ def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: s
 
 
 @pytest.mark.e2e
+def test_every_window_from_the_windows_menu_wears_the_pages_own_controls(page: Page, bench: str):
+    """Each window ⊞ Windows lists, opened from it, is in front and shows its buttons,
+    drop-downs and boxes in the page's dark look, whichever widget drew them, never the
+    browser's own light ones; a window with nothing of its subject to show is held to it
+    too. None is passed over: a window that cannot be seen once chosen is one whose
+    controls nobody looked at."""
+    _open(page, bench)
+    page.locator("#windows-menu > summary").click()
+    listed = page.locator(".windows-menu-body .window-item[data-window]").evaluate_all(
+        "(items) => items.map((item) => item.dataset.window)"
+    )
+    page.locator("#windows-menu > summary").click()
+    expect(page.locator(".windows-menu-body")).to_be_hidden()
+    assert len(listed) >= 10, listed
+    unseen, light = [], {}
+    for pid in listed:
+        windows.from_the_windows_menu(page, pid)
+        try:
+            expect(windows.panel(page, pid)).to_be_visible(timeout=5000)
+        except AssertionError:
+            unseen.append(pid)
+            continue
+        if found := windows.light_controls(page, pid):
+            light[pid] = found
+    assert not unseen and not light, {"unseen": unseen, "light": light}
+
+
+@pytest.mark.e2e
 def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page: Page, bench: str
 ):
@@ -564,6 +592,11 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page.locator("#view-menu > summary").click()
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_visible()
+    # Opaque, as ⊞ Windows is: nothing of the windows under it shows through its items.
+    for menu in ("#view-menu", "#windows-menu"):
+        body = page.locator(f"{menu} > .view-menu-body")
+        assert body.evaluate("(e) => getComputedStyle(e).opacity") == "1", menu
+        assert body.evaluate("(e) => getComputedStyle(e).backgroundColor") == "rgb(37, 37, 37)"
     label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
     expect(label("#snap-toggle")).to_have_attribute("data-address", "26", timeout=5000)
     expect(label("#detail-mode")).to_have_attribute("data-address", "228")

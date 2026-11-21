@@ -1,0 +1,42 @@
+/* The tour (widgets/tour_popover.js): the journeys' stages in a box above the windows,
+ * which no view or journey lays out or covers. */
+.tour-pop { position: fixed; inset: auto; margin: 0; width: 22rem; max-width: calc(100vw - 1rem); padding: 0; border: 1px solid #4a9eff; border-radius: 8px; background: #16191d; color: #ddd; font-size: 13px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+.tour-pop-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; background: #1d2732; border-radius: 8px 8px 0 0; cursor: grab; user-select: none; touch-action: none; }
+.tour-pop-head:active { cursor: grabbing; }
+.tour-pop-title { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tour-pop-name { color: #aab; font-size: 12px; white-space: nowrap; }
+.tour-pop button { cursor: pointer; padding: 0.2rem 0.5rem; font-size: 12px; background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; }
+.tour-pop button:hover { background: #484848; }
+.tour-pop-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.4rem 0.5rem 0.5rem; }
+.tour-pop.folded .tour-pop-body { display: none; }
+.tour-pop.folded .tour-pop-head { border-radius: 8px; }
+.tour-pop-stages { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0; padding: 0; list-style: none; }
+.tour-pop-stages button { padding: 0.15rem 0.4rem; }
+.tour-pop-stages button[aria-current="step"] { background: #2e6b4a; color: #fff; border-color: #2e6b4a; }
+.tour-pop-stages .works::after { content: " ✓"; color: #7fd49b; }
+.tour-pop-stages .off::after { content: " ✗"; color: #ff8d7a; }
+.tour-pop-stages .earlier::after { opacity: 0.45; }
+.tour-pop-who { display: flex; align-items: center; gap: 0.3rem; color: #aab; font-size: 12px; }
+.tour-pop-by { flex: 1; min-width: 0; box-sizing: border-box; background: #0f1113; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 0.15rem 0.4rem; font-size: 12px; }
+.tour-pop-words, .tour-pop-feedback { margin: 0; line-height: 1.45; }
+.tour-pop-words { display: flex; align-items: flex-start; gap: 0.3rem; }
+.tour-pop-said { flex: 1; }
+.tour-pop-feedback:empty { display: none; }
+.tour-pop-more > summary { cursor: pointer; color: #aab; }
+.tour-pop-more[open] > summary { margin-bottom: 0.3rem; }
+.tour-pop-more > ul + ul { margin-top: 0.3rem; }
+.tour-pop-did { margin: 0; padding: 0.35rem 0.5rem 0.35rem 1.4rem; background: #1a201a; border-left: 3px solid #2e6b4a; line-height: 1.45; }
+.tour-pop-did:empty { display: none; }
+.tour-pop-needs { margin: 0.3rem 0 0; padding: 0.35rem 0.5rem; background: #241a1a; border-left: 3px solid #b5534a; line-height: 1.45; }
+.tour-pop-needs:empty { display: none; }
+.tour-pop-note { flex: 1; min-width: 0; box-sizing: border-box; background: #0f1113; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 0.25rem 0.4rem; }
+.tour-pop-row { display: flex; align-items: center; gap: 0.3rem; }
+.tour-pop-row button { white-space: nowrap; }
+.tour-pop .tour-pop-put { padding: 0 0.3rem; background: none; border-color: transparent; color: #4a9eff; }
+.toolbar #tour-pop-open[aria-pressed="true"] { background: #24507a; color: #fff; }
+.tour-pop-journeys { width: 100%; background: #0f1113; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 0.2rem; }
+.tour-pop-tries { margin: 0; padding-left: 1.2rem; max-height: 7.5rem; overflow: auto; line-height: 1.45; color: #bbc; }
+.tour-pop-tries:empty { display: none; }
+.tour-pop a { color: #4a9eff; }
+.tour-pop [hidden] { display: none; }
+.tour-pop-tries li.whole { list-style: square; }

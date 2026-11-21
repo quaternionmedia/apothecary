@@ -4,16 +4,17 @@ A parametric model built from published dimensions (see
 ``parts/anolex_4060_evo_ultra_2/anolex_4060_evo_ultra_2.scad`` for which
 numbers are specifications and which are taken from the maker's listed
 footprint or chosen): the base of two side beams carrying the Y rails, the
-fixed T-slot table between them, the gantry riding the Y rails with the X
-carriage on its cross beam and the Z plate on that, the trim router in its
-clamp, the control box at the back. The axes are parameters, so a site can
-draw the machine with its tool where the last poll said it was.
+T-slot table riding them, the gantry standing on the beams with the X carriage
+on its cross beam and the Z plate on that, the trim router in its clamp, the
+control box at the back. The table carries the work along Y under a tool that
+stands still along Y (``BED_MOVES_Y``). The axes are parameters, so a site can
+draw the machine with its table and tool where the last poll said they were.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +51,10 @@ between the side beams, standing on the floor."""
 AXES = Vector3D(x=200.0, y=300.0, z=40.0)  # where the axes stand by default, in work coordinates
 TOOL = WORK_ORIGIN + AXES
 """Where the tool's tip stands in the model's frame at the default axes."""
+BED_MOVES_Y = AXES.y
+"""The table carries Y: the tool stands still along Y this far into the working
+area (as the frame has it, the middle of the table's travel), and the table is
+moved so that the work's Y under the tool is the Y axis's."""
 BEAM = Vector3D(x=40.0, y=FRAME.y, z=80.0)  # a side beam of the base, carrying a Y rail
 BLOCK_HEIGHT = 28.0  # an HGH15 carriage block, over its rail's base
 LEG = Vector3D(x=20.0, y=140.0, z=230.0)  # a gantry leg: a plate standing on its Y block
@@ -71,19 +76,49 @@ LEG_Z = BEAM.z + BLOCK_HEIGHT  # a leg's foot: on its block, on the rail on the 
 GANTRY_Z = LEG_Z + LEG.z - CROSS_BEAM.z  # the cross beam's underside
 
 
+KINEMATICS = {
+    "param": "piece",
+    "fixed": "fixed",
+    "rest": {"x": AXES.x, "y": AXES.y, "z": AXES.z},
+    # Where the model's axes can stand (``Params``): a piece is moved no further.
+    "range": {"x": [0.0, WORK.x], "y": [0.0, WORK.y], "z": [0.0, WORK.z]},
+    "pieces": [
+        # The table carries the work along Y: the work's Y under the tool grows as it
+        # moves toward the front.
+        {"piece": "table", "follows": {"y": -1.0}},
+        {"piece": "x", "follows": {"x": 1.0}},
+        {"piece": "z", "follows": {"x": 1.0, "z": 1.0}},
+    ],
+}
+"""What moves with which axis, as the SCAD's ``piece`` draws them (``BasePart.kinematics``)."""
+
+
 class Params(BaseModel):
     """Where the axes stand, and whether the router is in its clamp."""
 
     x_axis: float = Field(200.0, ge=0, le=400, description="Tool X, in work coordinates (mm)")
-    y_axis: float = Field(300.0, ge=0, le=600, description="Gantry Y, in work coordinates (mm)")
+    y_axis: float = Field(
+        300.0, ge=0, le=600, description="Table Y: the work's Y under the tool (mm)"
+    )
     z_axis: float = Field(40.0, ge=0, le=80, description="Tool tip height above the table (mm)")
     with_router: bool = Field(True, description="The trim router in its clamp")
+    piece: Literal["all", "fixed", "table", "x", "z"] = Field(
+        "all",
+        description="The whole machine, or one piece of it: what stands still, the table "
+        "(Y), the X carriage and the Z motor (X), the Z slide with the clamp and the router "
+        "(X and Z)",
+    )
 
 
 class Anolex4060EvoUltra2Part(BasePart):
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
-        Params(**(params or {}))  # the axes move the tool within the frame; the envelope stays
-        return BoundingBox3D(min_point=Vector3D(x=0.0, y=0.0, z=0.0), max_point=OVERALL)
+        p = Params(**(params or {}))
+        # The table rides out of the frame's front, or past its back, at the ends of Y.
+        table_front = (FRAME.y - TABLE.y) / 2 + BED_MOVES_Y - p.y_axis
+        return BoundingBox3D(
+            min_point=Vector3D(x=0.0, y=min(0.0, table_front), z=0.0),
+            max_point=Vector3D(x=OVERALL.x, y=max(OVERALL.y, table_front + TABLE.y), z=OVERALL.z),
+        )
 
 
 def create(root: Path) -> BasePart:
@@ -97,6 +132,8 @@ def create(root: Path) -> BasePart:
         params_model=Params,
         category="machine",
         machine="router",
+        bed_moves_y=BED_MOVES_Y,
+        kinematics=KINEMATICS,
         tags=["router", "cnc", "anolex", "grbl"],
         readme_path=root / "parts" / "anolex_4060_evo_ultra_2" / "README.md",
         preview_color=Color(r=0.72, g=0.74, b=0.78),

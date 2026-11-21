@@ -101,6 +101,9 @@ FLOOR_MARGIN_MM = 200.0
 
 FLOOR = ""
 
+# How far in front of a whiteboard the near edge of a picture of it is laid, mm.
+IN_FRONT_GAP_MM = 300.0
+
 # The reason recorded when a person, not the table, chose a shape's word.
 STATED_REASON = "a person said so"
 
@@ -146,6 +149,18 @@ class Taken(BaseModel):
     fov: float
 
 
+class Squared(BaseModel):
+    """A photograph of a whiteboard squared to it: the photograph it was squared
+    from, under the picture root, and the whiteboard's corners in it as fractions
+    of it -- top-left, top-right, bottom-right, bottom-left -- with who placed them
+    and, where a person moved them, where the finder had put them."""
+
+    source: str
+    corners: List[Tuple[float, float]]
+    by: str = "finder"
+    guess: Optional[List[Tuple[float, float]]] = None
+
+
 class View(BaseModel):
     """One picture lying on one place, and what a finder saw in it, once one has.
 
@@ -176,6 +191,20 @@ class View(BaseModel):
     # it fits there clear of what rests on the top (free_space.fit).
     offset: Optional[Tuple[float, float]] = None
     fit_width: Optional[float] = None
+    # A photograph of a whiteboard: squared to it (its picture is the squared one),
+    # sized by its surface's width, and laid flat on the floor in front of it.
+    squared: Optional[Squared] = None
+    in_front: bool = False
+    # A moment of a whiteboard placed here: the photograph it was squared from, by
+    # name, under the picture root.
+    placed_from: Optional[str] = None
+
+    @property
+    def shown_as(self) -> str:
+        """The picture's name as a person knows it: a squared photograph's own."""
+        if self.squared is not None:
+            return self.squared.source
+        return self.placed_from or self.picture
 
     @property
     def tallness(self) -> float:
@@ -242,6 +271,9 @@ class Made(BaseModel):
     # re-scale, in the site's frame: a piece still standing there was not moved
     # by a person, so a re-scale may lay it on its shape again.
     placed_at: Vector3D = Field(default_factory=Vector3D)
+    # When it was made, and when it was dropped, ISO 8601.
+    made_at: Optional[str] = None
+    dropped_at: Optional[str] = None
 
     @property
     def tallness(self) -> float:
@@ -251,6 +283,29 @@ class Made(BaseModel):
 def laid_of(record: Made) -> Optional[Laid]:
     """Where a made piece's shape lies, read through the mapping its record keeps."""
     return lay(as_matrix(record.homography), record.shape, record.tallness)
+
+
+def cuts_of(record: Made) -> List[Dict[str, object]]:
+    """A made piece's cuts as built: each one's family, its two sides, and where it
+    lies from the piece's middle before the piece is turned, in mm (``x`` across the
+    picture, ``y`` towards the back). A cut keeps its place and size as drawn when a
+    person changes the piece's sides."""
+    from .compose import cut_place, cut_scale
+
+    across = cut_scale(record.shape, laid_of(record), record.mm_across)
+    held = []
+    for cut in record.shape.cuts:
+        place = cut_place(cut, record.shape, across, record.tallness)
+        held.append(
+            {
+                "kind": cut.kind.value,
+                "long": round(place.long, 1),
+                "short": round(place.short, 1),
+                "x": round(place.x, 1),
+                "y": round(place.y, 1),
+            }
+        )
+    return held
 
 
 def found_size(record: Made) -> Dict[str, float]:
@@ -403,7 +458,22 @@ def frame_origin(view: View, site: Assembly) -> Optional[Vector3D]:
     node = next((c for c in site.children if c.name == view.host), None)
     if node is None or node.world_bounds() is None:
         return None
+    if view.in_front:
+        return in_front_of(node, mat_depth(view) or 0.0)
     return top_centre(node)
+
+
+def in_front_of(node: Assembly, depth: float) -> Vector3D:
+    """Where the middle of a picture ``depth`` deep lies on the floor in front of a
+    whiteboard: across its middle, its near edge ``IN_FRONT_GAP_MM`` out from the
+    whiteboard's front, which faces the room at its least Y."""
+    b = node.world_bounds()
+    assert b is not None
+    return Vector3D(
+        x=(b.min_point.x + b.max_point.x) / 2,
+        y=b.min_point.y - IN_FRONT_GAP_MM - depth / 2,
+        z=0.0,
+    )
 
 
 def in_site(view: View, site: Assembly) -> Optional[Matrix]:
@@ -452,7 +522,7 @@ def overlaps_of(view: View, site: Assembly) -> Dict[int, List[str]]:
     a made piece is the pictures', and a shape already made says so. Empty for a
     view with no width, at the floor, or whose host is gone."""
     matrix = in_site(view, site)
-    if matrix is None or view.at_floor:
+    if matrix is None or view.at_floor or view.in_front:
         return {}
     standing = resting_on(site, view.host, added_roots(view.site))
     flagged: Dict[int, List[str]] = {}
@@ -562,6 +632,12 @@ def keep_the_most_sure(shapes: List[FoundShape]) -> Tuple[List[FoundShape], int]
     return [shapes[i] for i in kept], len(shapes) - VIEW_SHAPES_MOST
 
 
+def _now() -> datetime:
+    from datetime import timezone
+
+    return datetime.now(timezone.utc)
+
+
 def new_view_id(at: datetime) -> str:
     return f"view_{at:%Y%m%dT%H%M%S%f}Z"
 
@@ -575,6 +651,8 @@ class Views:
     def __init__(self) -> None:
         self._views: Dict[str, View] = {}
         self._made: Dict[Tuple[str, str], Made] = {}
+        # The pieces dropped, each with when: what a whiteboard's history keeps of them.
+        self._dropped: List[Made] = []
         self._forgotten: Set[str] = set()
         self._lock = threading.Lock()
 
@@ -711,6 +789,44 @@ class Views:
             self._views[new_id] = another
             return another.model_copy(deep=True)
 
+    def placed_from(self, site: str, view_id: str, name: str) -> View:
+        """A view a whiteboard's moment was placed as: named for its photograph."""
+        with self._lock:
+            view = self._views.get(view_id)
+            if view is None or view.site != site:
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            view.placed_from = name
+            return view.model_copy(deep=True)
+
+    def resquared(
+        self,
+        site: str,
+        view_id: str,
+        *,
+        picture: str,
+        pixel_width: int,
+        pixel_height: int,
+        squared: Squared,
+    ) -> View:
+        """A whiteboard's view squared again from its photograph with other corners:
+        its picture is the new squared one, with no shapes until it is searched again.
+        Refused (``CannotMake``) once a piece is made from it."""
+        with self._lock:
+            view = self._views.get(view_id)
+            if view is None or view.site != site:
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            if view.made:
+                raise CannotMake(
+                    f"{len(view.made)} piece(s) are made from this picture as it was squared: "
+                    "drop them first, and then move its corners"
+                )
+            view.picture = picture
+            view.pixel_width, view.pixel_height = pixel_width, pixel_height
+            view.squared = squared
+            view.finder, view.found_at, view.shapes, view.left_out = None, None, [], 0
+            view.words = {}
+            return view.model_copy(deep=True)
+
     def read_again(
         self, site: str, view_id: str, *, shapes: List[FoundShape], left_out: int, at: datetime
     ) -> View:
@@ -787,7 +903,13 @@ class Views:
             view = self._views.get(record.view)
             if view is not None and view.made.get(record.shape_index) == piece:
                 del view.made[record.shape_index]
+            self._dropped.append(record.model_copy(update={"dropped_at": _now().isoformat()}))
             return record
+
+    def dropped_at(self, site: str) -> List[Made]:
+        """The pieces dropped from a site since it was last reset, oldest first."""
+        with self._lock:
+            return [record.model_copy() for record in self._dropped if record.site == site]
 
     def forget_made(self, site: str) -> List[str]:
         """Every made piece of a site is gone (a reset): its records and its views' marks."""
@@ -795,6 +917,7 @@ class Views:
             gone = [piece for (s, piece) in self._made if s == site]
             for piece in gone:
                 del self._made[(site, piece)]
+            self._dropped = [record for record in self._dropped if record.site != site]
             for view in self._views.values():
                 if view.site == site:
                     view.made.clear()
@@ -979,6 +1102,7 @@ def make(site_name: str, site: Assembly, view_id: str, shape: Optional[int] = No
             homography=as_lists(matrix),
             parameters=_sides(laid),
             placed_at=piece.position.model_copy(),
+            made_at=_now().isoformat(),
         )
         if views.record_made(record):
             site.children.append(piece)

@@ -6,8 +6,13 @@ The work zero is the stock's front-left top corner; the tool travels at
 ``safe_z`` between cuts and plunges straight down into each. A pocket is cleared
 in raster lines inset from its walls by the tool's radius, then its walls are
 taken in one lap. A hole wider than the tool is bored in a circle; one the tool's
-size, or smaller, is plunged, and the smaller one is said. An outline is cut
-around from outside, the tool's radius beyond its edge.
+size, or smaller, is plunged, and the smaller one is said. An outline, or a disc,
+is cut around from outside, the tool's radius beyond its edge.
+
+Every offset is the tool's radius as the router cuts with it: its diameter plus the
+``allowance`` the router's measured correction gives (``measured.py``), none unless
+one is given. A circle is written as chords, enough of them that none falls more
+than ``SAG`` inside it, so a hole or a disc measures its size across.
 """
 
 from __future__ import annotations
@@ -16,11 +21,24 @@ import math
 from typing import List, Optional, Tuple
 
 from ..firmware import grbl
-from .models import Bounds, Cuts, Hole, OperationSaid, Outline, Pocket, Toolpath
+from .models import (
+    Bounds,
+    Cuts,
+    Disc,
+    Feature,
+    Hole,
+    Operation,
+    OperationSaid,
+    Outline,
+    Pocket,
+    Toolpath,
+)
 
 # The router's rapid, the maker's figure, is the feed's bound (grbl.FEED_MAX).
 RAPID = float(grbl.FEED_MAX)
 CIRCLE_SEGMENTS = 36
+# Millimetres: the most a circle's chord falls inside it, so it measures its size.
+SAG = 0.01
 SPIN_UP_S = 2.0
 EPS = 1e-6
 
@@ -41,11 +59,29 @@ def passes(depth: float, step_down: float) -> List[float]:
     return out
 
 
+def circle(x: float, y: float, radius: float) -> List[Tuple[float, float]]:
+    """A circle of ``radius`` about (x, y) as the points of its chords, the first again
+    at the end: ``CIRCLE_SEGMENTS`` of them, or more where those would fall further
+    than ``SAG`` inside it."""
+    n = CIRCLE_SEGMENTS
+    if radius > SAG:
+        n = max(n, math.ceil(math.pi / math.acos(1 - SAG / radius)))
+    return [
+        (
+            round(x + radius * math.cos(2 * math.pi * k / n), 3),
+            round(y + radius * math.sin(2 * math.pi * k / n), 3),
+        )
+        for k in range(n + 1)
+    ]
+
+
 class _Writer:
     """Lines as they are written, and what they add up to."""
 
-    def __init__(self, cuts: Cuts):
+    def __init__(self, cuts: Cuts, allowance: float = 0.0):
         self.cuts = cuts
+        # The diameter every offset is made with: the tool's, and the router's allowance.
+        self.d = cuts.tool.diameter + allowance
         self.lines: List[str] = []
         # Where the tool is taken to be before the first line: at the work zero, so
         # the first line lifts it to the safe height whatever it stood at.
@@ -84,7 +120,7 @@ class _Writer:
         else:
             self.cut_mm += dist
             self.time_s += dist / feed * 60.0
-            r = self.cuts.tool.diameter / 2
+            r = self.d / 2
             for px, py, pz in ((self.at[0], self.at[1], self.at[2]), (nx, ny, nz)):
                 point = [px - r, py - r, pz]
                 top = [px + r, py + r, pz]
@@ -114,13 +150,13 @@ class _Writer:
 
 
 def _pocket(w: _Writer, op: Pocket, label: str, messages: List[str]) -> Tuple[int, bool]:
-    d = w.cuts.tool.diameter
+    d = w.d
     r = d / 2
     x0, x1, y0, y1 = op.x + r, op.x + op.w - r, op.y + r, op.y + op.h - r
     if x1 - x0 < -EPS or y1 - y0 < -EPS:
         messages.append(
             f"pocket {fmt(op.w)} x {fmt(op.h)} at {fmt(op.x)},{fmt(op.y)} is narrower than "
-            f"the {fmt(d)} mm tool: not cut"
+            f"the {fmt(w.cuts.tool.diameter)} mm tool: not cut"
         )
         return 0, False
     zs = passes(op.depth, w.cuts.step_down)
@@ -147,11 +183,16 @@ def _pocket(w: _Writer, op: Pocket, label: str, messages: List[str]) -> Tuple[in
     return len(zs), True
 
 
+def _bored(w: _Writer, op: Hole) -> bool:
+    """Whether a hole is bored in a circle, wider than the tool as it cuts; else plunged."""
+    return op.diameter > w.cuts.tool.diameter + EPS and op.diameter - w.d > 2 * EPS
+
+
 def _hole(w: _Writer, op: Hole, label: str, messages: List[str]) -> Tuple[int, bool]:
     d = w.cuts.tool.diameter
     zs = passes(op.depth, w.cuts.step_down)
     where = f"hole {fmt(op.diameter)} mm at {fmt(op.x)},{fmt(op.y)}"
-    if op.diameter <= d + EPS:
+    if not _bored(w, op):
         if op.diameter < d - EPS:
             messages.append(f"{where} is smaller than the {fmt(d)} mm tool: bored to the tool")
         w.up()
@@ -161,14 +202,7 @@ def _hole(w: _Writer, op: Hole, label: str, messages: List[str]) -> Tuple[int, b
             w.plunge(z)
         w.up()
         return len(zs), True
-    rc = (op.diameter - d) / 2
-    ring = [
-        (
-            round(op.x + rc * math.cos(2 * math.pi * k / CIRCLE_SEGMENTS), 3),
-            round(op.y + rc * math.sin(2 * math.pi * k / CIRCLE_SEGMENTS), 3),
-        )
-        for k in range(CIRCLE_SEGMENTS + 1)
-    ]
+    ring = circle(op.x, op.y, (op.diameter - w.d) / 2)
     w.up()
     w.rapid(x=ring[0][0], y=ring[0][1])
     for n, z in enumerate(zs, 1):
@@ -180,17 +214,22 @@ def _hole(w: _Writer, op: Hole, label: str, messages: List[str]) -> Tuple[int, b
     return len(zs), True
 
 
-def _outline(w: _Writer, op: Outline, label: str, messages: List[str]) -> Tuple[int, bool]:
-    r = w.cuts.tool.diameter / 2
-    depth = op.depth
+def _through(w: _Writer, kind: str, depth: float, messages: List[str]) -> List[float]:
+    """The passes of a cut around the part, to ``depth`` or a millimetre into the
+    spoilboard, whichever is less, and said where it is the spoilboard."""
     floor = w.cuts.stock.thickness + 1.0  # a millimetre into the spoilboard, and no more
     if depth > floor + EPS:
         messages.append(
-            f"outline depth {fmt(op.depth)} is below the stock's {fmt(w.cuts.stock.thickness)} mm: "
+            f"{kind} depth {fmt(depth)} is below the stock's {fmt(w.cuts.stock.thickness)} mm: "
             f"cut to {fmt(floor)}, a millimetre into the spoilboard"
         )
         depth = floor
-    zs = passes(depth, w.cuts.step_down)
+    return passes(depth, w.cuts.step_down)
+
+
+def _outline(w: _Writer, op: Outline, label: str, messages: List[str]) -> Tuple[int, bool]:
+    r = w.d / 2
+    zs = _through(w, "outline", op.depth, messages)
     corners = [
         (op.x - r, op.y - r),
         (op.x + op.w + r, op.y - r),
@@ -211,15 +250,55 @@ def _outline(w: _Writer, op: Outline, label: str, messages: List[str]) -> Tuple[
     return len(zs), True
 
 
-def write(cuts: Cuts, name: str = "part") -> Toolpath:
+def _disc(w: _Writer, op: Disc, label: str, messages: List[str]) -> Tuple[int, bool]:
+    zs = _through(w, "disc", op.depth, messages)
+    ring = circle(op.x, op.y, (op.diameter + w.d) / 2)
+    w.up()
+    w.rapid(x=ring[0][0], y=ring[0][1])
+    for n, z in enumerate(zs, 1):
+        w.comment(
+            f"{label} pass {n}/{len(zs)}: disc {fmt(op.diameter)} mm at {fmt(op.x)},{fmt(op.y)} to z {fmt(z)}"
+        )
+        w.plunge(z)
+        for px, py in ring[1:]:
+            w.feed(x=px, y=py)
+    w.up()
+    return len(zs), True
+
+
+def feature(w: _Writer, op: Operation) -> Optional[Feature]:
+    """What a person measures of a named operation once it is cut: a hole bored or a
+    disc across, a pocket or an outline along X. None for one with no name, or a hole
+    plunged, which is the tool's size whatever the router's allowance."""
+    if op.name is None:
+        return None
+    if isinstance(op, Hole):
+        if not _bored(w, op):
+            return None
+        side, size, how = "inside", op.diameter, "the hole across"
+    elif isinstance(op, Disc):
+        side, size, how = "outside", op.diameter, "the disc across"
+    elif isinstance(op, Pocket):
+        side, size, how = "inside", op.w, "the pocket along X"
+    else:
+        side, size, how = "outside", op.w, "the outline along X"
+    return Feature(name=op.name, side=side, size=size, words=f"{op.name}: {how}, {fmt(size)} mm")
+
+
+def write(cuts: Cuts, name: str = "part", allowance: float = 0.0) -> Toolpath:
     """The toolpath for ``cuts``: GRBL's dialect, one line per move, each operation
-    announced in a comment the streaming cut reads (``op i/n pass p/m: ...``)."""
-    w = _Writer(cuts)
+    announced in a comment the streaming cut reads (``op i/n pass p/m: ...``). Every
+    offset is made with the tool's diameter and ``allowance`` (mm), the router's
+    measured correction, which the header says where it is not none."""
+    w = _Writer(cuts, allowance)
+    features: List[Feature] = []
     messages: List[str] = []
     said: List[OperationSaid] = []
     t, s, f = cuts.tool, cuts.stock, cuts.feeds
     w.comment(f"apothecary toolpath: {name}")
     w.comment(f"tool: {t.label}, {fmt(t.diameter)} mm, {t.flutes} flutes")
+    if abs(allowance) > EPS:
+        w.comment(f"allowance: {allowance:+.3f} mm on the tool's diameter, measured")
     w.comment(
         f"stock: {fmt(s.x)} x {fmt(s.y)} x {fmt(s.thickness)} mm, zero at its front-left top corner"
     )
@@ -243,9 +322,15 @@ def write(cuts: Cuts, name: str = "part") -> Toolpath:
         elif isinstance(op, Hole):
             n, cut = _hole(w, op, label, messages)
             words = f"hole {fmt(op.diameter)} mm at {fmt(op.x)},{fmt(op.y)}, {fmt(op.depth)} deep"
+        elif isinstance(op, Disc):
+            n, cut = _disc(w, op, label, messages)
+            words = f"disc {fmt(op.diameter)} mm at {fmt(op.x)},{fmt(op.y)}, {fmt(op.depth)} deep"
         else:
             n, cut = _outline(w, op, label, messages)
             words = f"outline {fmt(op.w)} x {fmt(op.h)} at {fmt(op.x)},{fmt(op.y)}, {fmt(op.depth)} deep"
+        found = feature(w, op) if cut else None
+        if found is not None and all(f.name != found.name for f in features):
+            features.append(found)
         said.append(
             OperationSaid(
                 index=i, kind=op.kind, words=words, passes=n, lines=len(w.lines) - before, cut=cut
@@ -268,6 +353,7 @@ def write(cuts: Cuts, name: str = "part") -> Toolpath:
         time_s=round(w.time_s, 1),
         bounds=bounds,
         messages=messages,
+        features=features,
     )
 
 

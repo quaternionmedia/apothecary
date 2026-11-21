@@ -1,28 +1,16 @@
 # A whiteboard to a model, and round again: a plan
 
-*A plan, dated. Built: slice 1, the `outline` finder
-([pictures.md](../pictures.md#finders),
-[walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md)), and of
-slice 2 the sorter, a person's word from the command line, the examples and
-the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); of slice 3 the
-corners found, a person's word on one and the photograph squared
-([pictures.md](../pictures.md#a-whiteboard-squared)); slice 4, a cut read and
-taken out of the piece; slice 5, notes with a person's words, a size offered
-and the way out ([pictures.md](../pictures.md#a-whiteboards-notes)); slice 6,
-two readings compared and the rows a person takes applied
-([pictures.md](../pictures.md#a-whiteboard-photographed-again)). Not built of
-those: the corners dragged, a cut listed in Part › Edit and the rows of a
-second photograph in the page, a note's changed writing asked for again, and
-a picture standing on the whiteboard's own face, a view lying flat on its
-place's top. Built in the page: the whiteboard as a part on the garage's wall,
-and the Marks window, where a picture's marks and notes are listed and a
-person's word on one is read back by the picture's shapes
-([pictures.md](../pictures.md#the-marks-window)). Of slice 7, the loop by its
-commands is [walkthrough 29](../../walkthrough/29-a-whiteboard-round-twice.md);
-page 00 names it the fifth loop, and the demo has a drawn whiteboard among its
-pictures; a page that walks it round twice through the browser is not built. Each slice
-is one branch of a short stack, built in the order listed once the owner says
-yes to it.*
+*A plan, dated. Built: every slice, at the command line and in the page --
+the `outline` finder ([walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md)),
+marks sorted with a person's word kept and fitted to, the whiteboard as a part,
+a photograph pinned at it squared and laid in front with its corners moved in
+the Marks window, cuts, notes and the way out, round again, the whiteboard's
+history scrubbed and a moment placed elsewhere, the marks and notes worn over
+the picture in the world, and the fifth loop's page,
+[walkthrough 30](../../walkthrough/30-a-whiteboard-round-twice-through-the-page.md),
+with [walkthrough 29](../../walkthrough/29-a-whiteboard-round-twice.md) by the
+commands ([pictures.md](../pictures.md#a-whiteboards-marks)). What is not built
+is under* What it leaves.
 
 ## What this plans
 
@@ -162,6 +150,20 @@ outline --width-mm`, and `photo view` for the result.
   round twice.
 - **Pictures in the repository are drawn to order.** A real photograph is read
   on the machine of the person who took it, and its examples stay there.
+- **A photograph of a whiteboard is laid in front of it**: squared to it, as
+  wide as its surface, flat on the floor a step out, where its pieces are made
+  at full size.
+- **The loop is a heads-up layer and a precursor to designing for making**: a
+  picture's marks and notes are worn over it in the world, and every step leads
+  towards pieces a machine can make.
+- **Navigable by time, on one scrubbed timeline**: a whiteboard's photographs,
+  the words given on them and the pieces made and dropped are one history, and
+  a moment of it is the whiteboard as it stood then.
+- **Navigable by space**: a moment of a whiteboard can be pulled and placed
+  elsewhere, its picture at another place with its words by then.
+- **A whiteboard's corners are moved on its photograph**, in the Marks window.
+- **Kept in the server's memory**, as views are, until the draft record
+  *Personal data stays on the device* says where else.
 
 ## The featureset
 
@@ -323,7 +325,8 @@ goes round twice.
 | 1 | 28, *A whiteboard to a model*, hermetic: a drawn whiteboard read, named, placed and sized | its own doctests |
 | 2 | 28 gains writing beside the diagram, the marks sorted, a correction and its example | the same |
 | 4 | 28 gains a piece with a cut | the same |
-| 3, 5 to 7 | a runtime-bound page beside it: the photograph brought to the whiteboard, sorted, squared, found, noted, made, adjusted, and round again | a browser test, its pictures recorded and never compared |
+| 6 | 29, *A whiteboard, round twice*, hermetic: the loop by its commands | its own doctests |
+| 3, 5 to 7 | 30, *A whiteboard, round twice through the page*: the photograph pinned at the whiteboard, found, its writing typed, made, a second photograph, a change taken, Earlier, and a moment placed on the bench | `tests/e2e/test_whiteboard_round_twice.py`, its pictures recorded and never compared |
 
 ## Questions the owner decides
 
@@ -336,6 +339,17 @@ Asked one at a time:
    share of darkness that makes a stroke.
 
 ## What it leaves
+
+- **A marker's colour leant on.** Each mark's colour is read, kept with its
+  example and shown; the sorter does not yet lean on it, and no fit moves a lean.
+- **A camera aimed at the whiteboard.** A camera's picture lands on an upward
+  surface; one aimed at a wall lands nowhere, so a whiteboard's photograph comes
+  in by a drop, a paste or the picture folder.
+- **A note's writing read freely.** qmcp's vision contract answers a label among
+  words it is given; reading a note's words needs a property of that contract,
+  which is qmcp's to add.
+- **Kept across a restart.** A whiteboard's photographs, words, corners and
+  history go when the server stops.
 
 - **Handwriting read here.** No plain reader reads handwriting, and none is
   planned in apothecary: a note is read by a person, or by qmcp on a person's

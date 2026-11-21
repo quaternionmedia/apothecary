@@ -8,7 +8,7 @@ from ..projects.parts.skeleton import ROOT
 from ..projects.registry import PartLoadError, load_part, resolve_wrapper_module, scan_projects
 
 
-def _safe_echo(message: str, **style):
+def safe_echo(message: str, **style):
     """Echo message with safe encoding handling for Windows.
 
     Accepts the same styling keywords as ``click.secho``; with none it behaves
@@ -25,7 +25,7 @@ def _safe_echo(message: str, **style):
         click.secho(message, **style)
 
 
-def _load_part(name: str):
+def part_or_die(name: str):
     """A registered part by part name (stem), from its part.json or its wrapper."""
     for item in scan_projects(ROOT):
         if item.kind == "part" and item.name == name and item.has_part:
@@ -59,7 +59,7 @@ def _coerce_scalar(text: str):
     return text
 
 
-def _parse_param_overrides(part, pairs) -> dict:
+def parse_param_overrides(part, pairs) -> dict:
     """Turn ``name=value`` strings into validated parameter overrides.
 
     Validation happens against the part's own ``params_model``, so a misspelled

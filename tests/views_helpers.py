@@ -62,13 +62,13 @@ def png(size=(WIDE, HIGH), shapes="rt") -> bytes:
 def forget_cameras():
     """Every camera a test added taken away, and every site built fresh: a Reset alone
     stands a site's cameras back in it, and the next test's state folder has none."""
-    from apothecary.api import _site_store
+    from apothecary import sites
     from apothecary.vision import cameras
 
     for camera in cameras.records():
         cameras.remove(camera.site, None, camera.name)
-    for name in _site_store.loaded():
-        _site_store.reset(name)
+    for name in sites.store.loaded():
+        sites.store.reset(name)
 
 
 def pin(c, *, site="garage", host="workbench", picture="bench_top.png", finder="stated", **more):

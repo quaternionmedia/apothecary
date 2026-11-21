@@ -49,13 +49,22 @@ def pytest_addoption(parser):
         "entries; the others are kept.",
     )
     parser.addoption(
+        "--gpu",
+        action="store_true",
+        default=False,
+        help="Browser tests only: the browser draws with this machine's GPU in place of "
+        "its software renderer, which is most of a browser test's time. The quick local "
+        "run: a GPU's pixels are its own, so no walkthrough picture is rewritten, and the "
+        "run before a pull request is the software one, as CI's is.",
+    )
+    parser.addoption(
         "--step",
         action="store",
         type=int,
         default=None,
         metavar="N",
         help="A step-through browser test (tests/e2e/test_steps_*.py): run only its step N, "
-        "on the running demo in the visible browser's tab named apothecary-walk, and leave "
+        "on the running simulated server in the visible browser's tab named apothecary-walk, and leave "
         "it there.",
     )
     parser.addoption(
@@ -308,11 +317,11 @@ def served():
 
 @pytest.fixture
 def family_bench(fake_arduino_cli, monkeypatch):
-    """The demo's bench under the family's hub: the Ender and the router simulated and
+    """The simulated server's bench under the family's hub: the Ender and the router simulated and
     pinned, the devkit scripted; yields the machines' links."""
-    from apothecary.demo import BOARD, CONTROLLER, PRINTER, ROUTER, SITE
     from apothecary.family import hub
     from apothecary.firmware import devices, gcode, tasks
+    from apothecary.simulated import BOARD, CONTROLLER, PRINTER, ROUTER, SITE
 
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
     monkeypatch.setenv("APOTHECARY_SIMULATED_ROUTER", ROUTER)
@@ -325,7 +334,7 @@ def family_bench(fake_arduino_cli, monkeypatch):
     hub.close()
     for port, path in ((PRINTER, BOARD), (ROUTER, CONTROLLER)):
         devices.identify_printer(port)
-        # Pinned as a Pin pins and the demo does: by the board's own identity.
+        # Pinned as a Pin pins and the simulated server does: by the board's own identity.
         devices.get_state().set_binding(SITE, path, devices.stable_identity(port))
     yield links
     links.stop_all()
@@ -373,7 +382,7 @@ def world(tmp_path, monkeypatch):
 
     from views_helpers import HIGH, SHAPES, WIDE, forget_cameras, png
 
-    from apothecary.api import _site_store
+    from apothecary import sites
     from apothecary.firmware import devices
     from apothecary.vision import cache as cache_module
     from apothecary.vision import views as views_module
@@ -393,8 +402,8 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(devices, "_STATE", None)  # the boards pinned in this state folder
     monkeypatch.setattr(views_module, "_store", views_module.Views())
     monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
-    for name in _site_store.names():
-        _site_store.reset(name)
+    for name in sites.store.names():
+        sites.store.reset(name)
     yield root
     forget_cameras()
 
