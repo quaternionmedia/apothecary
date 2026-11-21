@@ -45,7 +45,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
-from . import jobs, sites
+from . import cabinet, jobs, sites
 from .cam.api import router as cam_router
 from .core import OpenSCADObject
 from .docs_site import router as docs_router
@@ -137,6 +137,7 @@ from .projects.registry import (
 from .routes import lighting as lighting_routes
 from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
+from .routes.cabinet import router as cabinet_router
 from .routes.cameras import router as cameras_router
 from .routes.evidence import router as evidence_router
 from .routes.interfaces import router as interfaces_router
@@ -262,7 +263,8 @@ app = FastAPI(
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer, and cam, "
-        "the router's toolpath; jobs; a site's machines and the plan each keeps before its board is connected; "
+        "the router's toolpath; jobs; each part's cabinet, a drawer for each piece made of "
+        "it and what is said of it; a site's machines and the plan each keeps before its board is connected; "
         "a machine's projector, calibrated to its bed; the surfaces, each thing a page shows "
         "read one way with its changes streamed, and what the family's members found; "
         "the evidence a site's printers and cameras leave, as one view of it; "
@@ -326,6 +328,8 @@ app.include_router(whiteboards_router)
 app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.
 app.include_router(jobs_router)
+# The cabinet: a drawer for each piece made of a part, and what is filed about it.
+app.include_router(cabinet_router)
 # The slicer: its status and install, and a part or a made piece sliced for a printer.
 app.include_router(slicer_router)
 app.include_router(cam_router)
@@ -2833,6 +2837,9 @@ def _sync_job_status(job: jobs.Job) -> None:
 
 
 jobs.LISTENERS.append(_sync_job_status)
+# Each print or cut of a part opens its piece's drawer in the part's cabinet, and its end
+# says how it ended there (apothecary/cabinet.py).
+jobs.LISTENERS.append(cabinet.job_told)
 
 
 def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dict[str, object]:

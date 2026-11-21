@@ -55,15 +55,8 @@
  * it keeps is chosen in the card's files, so ▶ Print follows Slice; then the
  * card says what the slice used, each value with where it came from, the
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
- * made says what it was sliced from and for which printer. Its piece, printed, is
- * read under measured, a row for each feature its slice's plan names (or its box):
- * Keep checks each against its nominal and keeps the next turn of the printer's
- * tuning, saying what it implies; Apply takes that turn's changes into the printer's
- * next slices, Undo turn drops it, and the turns and each setting's trend are listed
- * below (slicer/tuning.py, static/tuning.js). A router's is the same row under a
- * toolpath that names what to measure (the 😮 of parts/router_emoji: its eye, its
- * mouth, its face): Keep checks each against what was designed and keeps the tool's
- * allowance for the router's next toolpaths (cam/measured.py).
+ * made says what it was sliced from and for which printer. What the piece made of it
+ * measures and shows is said in its part's Feedback, not here (widgets/feedback.js).
  * `host` is "world": the world's page, a window of its layout, one board and
  * everything inline in one column; /firmware/monitor opens the world's page with
  * this Machine.
@@ -98,7 +91,6 @@ import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
 import { applyCan, NEEDS_THE_LATCH, refreshDisabled, setReason, setTip, verbOfLine, withLatch } from "/static/can.js";
-import * as tuning from "/static/tuning.js";
 import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
 const MAX_HISTORY = 300;
@@ -211,20 +203,6 @@ const CARDS = `
             <button type="button" id="print-plan" title="Keep what it makes and the file chosen as this machine's plan: chosen again whenever its Machine opens, with its board connected or not. Nothing is sent">Keep as plan</button>
             <span class="s" id="print-plan-said"></span>
         </div>
-        <div class="row" id="print-measure-row" hidden><label for="print-measure">measured</label>
-            <input id="print-measure" size="16" spellcheck="false" placeholder="eye × mouth × face mm" title="What the piece this file cut measures, in millimetres, each feature its toolpath names in order, any left out as -">
-            <button type="button" id="print-measure-keep" title="Check what was read against what was made and keep it: a printer's next turn of its tuning, said and not applied; a router's tool allowance. Nothing is sent to the machine">Keep</button>
-            <button type="button" id="print-tune-apply" title="Take the last turn's changes into this printer's next slices">Take turn</button>
-            <button type="button" id="print-tune-undo" title="Drop the last turn, and what it applied">Undo turn</button>
-            <span class="s" id="print-measure-said"></span>
-        </div>
-        <div class="row" id="print-measure-plan" hidden></div>
-        <div class="row" id="print-seen-row" hidden><label for="print-seen-keep">seen</label>
-            <span id="print-seen-faults" class="seen-faults"></span>
-            <button type="button" id="print-seen-keep" title="Keep what the piece shows as the printer's next look: the one setting's change it implies is said, and Take turn takes it into the next slices. Nothing is sent to the machine">Keep look</button>
-            <span class="s" id="print-seen-said"></span>
-        </div>
-        <div class="row s" id="print-tune-history" style="white-space: pre-line" hidden></div>
         <div class="row" id="print-verbs">
             <button type="button" id="print-start" data-can="print.start" class="warm">▶ Send</button>
             <button type="button" id="print-pause" data-can="print.pause">⏸ Pause</button>
@@ -1493,6 +1471,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return { x: 0, y: 0, z: Math.max(0, -Math.min(0, ...lows)) };
     };
     const inMetres = (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)} m` : mmText(v));
+    const signed = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
     function previewUpto() {
         const groups = pv.data ? pv.data.groups : [], at = Number($("print-preview").value);
         if (!at || !groups.length) return 0;
@@ -1606,189 +1585,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         else found.refused = refusals > before ? lastRefusal : !d ? "its path could not be read" : !d.groups.length ? "this file moves nothing" : ZERO_UNKNOWN;
         return found;
     }
-    // --- a part measured, fed back ---------------------------------------------------
-    // Under the chosen file: a printer's piece read feature by feature, as its slice's
-    // plan names them (or its box), each turn kept in the printer's tuning, which says
-    // what the readings imply, Apply takes into its next slices and Undo turn drops
-    // (slicer/tuning.py, docs/print-tuning.md); a router's piece by the features its
-    // toolpath names, kept as the router's tool allowance (cam/measured.py).
-    const ms = { shown: null, kept: {} };
-    const signed = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
-    // What the chosen file's piece is measured as: a printer's slice by its plan's
-    // features, a router's toolpath by the features it names; null where it is neither.
-    function measuring() {
-        const id = $("print-pick").value || null, r = id && prt.slices[id];
-        if (!r) return null;
-        if (state.kind === "printer" && !r.toolpath && (r.plan || r.size)) {
-            const at = r.printer, features = tuning.planOf(r);
-            return { id, r, at, features, names: features.map((f) => f.name), applies: tuning.appliesOf(r),
-                read: `/slicer/tuning?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.path)}` };
-        }
-        if (state.kind === "router" && r.toolpath && r.features && r.features.length) {
-            const at = r.router;
-            return { id, r, at, names: r.features.map((f) => f.name),
-                read: `/cam/corrections?site=${encodeURIComponent(at.site)}&router=${encodeURIComponent(at.path)}`,
-                said: (kept) => `of ${r.features.map((f) => `${f.name} ${mmText(f.size).replace(" mm", "")}`).join(" × ")} mm designed` + (kept ? ` · ${kept.router}'s tool ${signed(kept.value)} mm` : "") };
-        }
-        return null;
-    }
-    // The printer's tuning for the slice's filament and process, as the server last said it.
-    const tuned = (m) => tuning.documentFor(ms.kept[`printer:${m.at.site}:${m.at.path}`], m.applies);
-    // A row for each feature the plan names: its name, what to read with which jaws, its
-    // nominal, and a field for what it reads, repeats a space apart.
-    function planRows(m) {
-        const box = $("print-measure-plan");
-        const shown = box.dataset.for === m.id;
-        box.hidden = false;
-        if (shown) return;
-        box.dataset.for = m.id;
-        box.innerHTML = m.features.map((f) => `<label class="measure-row" title="${esc(f.words)}: ${f.jaw} jaws">${esc(f.name)} <span class="s">${mmText(f.nominal)}</span>
-            <input class="measure-read" data-feature="${esc(f.name)}" size="9" spellcheck="false" placeholder="${f.nominal}" title="What ${esc(f.name)} reads, mm: ${esc(f.words)}, ${f.jaw} jaws; repeats a space apart"></label>`).join(" ");
-        // The rows are new elements: the ring writes its address on them again.
-        if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
-    }
-    function renderTuning(m) {
-        const entry = tuned(m);
-        const apply = tuning.canApply(entry), undo = tuning.canUndo(entry);
-        setReason($("print-tune-apply"), apply.ok ? null : apply.why, apply.ok ? `${apply.why}` : "Take the last turn's changes into this printer's next slices");
-        setReason($("print-tune-undo"), undo.ok ? null : undo.why, undo.ok ? `${undo.why}` : "Drop the last turn, and what it applied");
-        const lines = tuning.historyLines(entry), history = $("print-tune-history");
-        history.hidden = !lines.length;
-        history.textContent = lines.join("\n");
-        const held = entry ? Object.entries(entry.document.settings) : [];
-        $("print-measure-said").textContent = `of ${m.features.length} features ${m.r.plan ? "its plan names" : "of its box"}`
-            + (held.length ? ` · ${m.at.path} holds ${held.map(([k, h]) => `${k} ${h.unit === "%" ? `${h.value}%` : signed(h.value)}`).join(", ")}` : "");
-    }
-    function renderMeasure() {
-        renderFilament();
-        const m = measuring(), row = $("print-measure-row"), printer = state.kind === "printer";
-        row.hidden = !m;
-        renderSeen(m);
-        $("print-measure-plan").hidden = !m || !printer;
-        $("print-tune-history").hidden = !m || !printer;
-        $("print-measure").hidden = printer;
-        $("print-tune-apply").hidden = $("print-tune-undo").hidden = !printer;
-        if (!m) return;
-        const key = `${state.kind}:${m.at.site}:${m.at.path}`;
-        if (printer) {
-            planRows(m);
-            renderTuning(m);
-        }
-        else {
-            $("print-measure").placeholder = `${m.names.join(" × ")} mm`;
-            $("print-measure").title = `What the piece this file cut measures, in millimetres: ${m.r.features.map((f) => f.words).join("; ")}, in that order, any left out as -. Checked against what was designed; the tool's allowance it makes is kept for this router's next toolpaths`;
-            $("print-measure-said").textContent = m.said(ms.kept[key]);
-        }
-        if (ms.shown === key || !m.at.site || !m.at.path) return;
-        ms.shown = key;
-        api(m.read)
-            .then((answer) => { ms.kept[key] = printer ? answer.documents : answer.correction; renderMeasure(); })
-            .catch(() => { ms.shown = null; });
-    }
-    // "10.12 × 10.08 × 9.98": a size for each of `count` names in order, any as - where it
-    // was not measured.
-    function measuredSizes(text, count = 3) {
-        const words = String(text || "").trim().split(/\s*(?:×|x|\*|,|\s)\s*/i).filter(Boolean);
-        if (!words.length || words.length > count) return null;
-        const sizes = words.map((w) => (w === "-" ? null : Number(w)));
-        if (sizes.some((v) => v !== null && !(Number.isFinite(v) && v > 0))) return null;
-        while (sizes.length < count) sizes.push(null);
-        return sizes;
-    }
-    // What the plan's rows read: each feature's sizes; null, with the row, where one is not sizes.
-    function planReads() {
-        const out = {};
-        for (const field of $("print-measure-plan").querySelectorAll("input.measure-read")) {
-            const read = tuning.parseReads(field.value);
-            if (read === null) return { bad: field.dataset.feature };
-            if (read.length) out[field.dataset.feature] = read;
-        }
-        return { readings: out };
-    }
-    const typedSomething = () => state.kind === "printer"
-        ? [...$("print-measure-plan").querySelectorAll("input.measure-read")].some((f) => f.value.trim())
-        : !!$("print-measure").value.trim();
-    // Keep: what was read checked against what was made and kept -- a printer's next turn,
-    // a router's allowance -- and what it implies said.
-    async function keepMeasured() {
-        const m = measuring();
-        const what = state.kind === "router" ? "the file the piece was cut from, a toolpath that names what to measure" : "the file the part was printed from, a slice that says its size";
-        if (!m) { refuse(`measure: choose ${what}`); return false; }
-        const router = state.kind === "router";
-        let answer;
-        if (router) {
-            const sizes = measuredSizes($("print-measure").value, m.names.length);
-            if (!sizes) { refuse(`measure: type what the piece measures, ${m.names.join(" × ")} in mm (- for one not measured)`); return false; }
-            try { answer = await post(`/cam/cuts/${encodeURIComponent(m.id)}/measured`, { sizes: Object.fromEntries(m.names.map((n, i) => [n, sizes[i]])) }); }
-            catch (e) { refuse(`measure: ${e.message}`); return false; }
-            ms.kept[`router:${m.at.site}:${m.at.path}`] = answer.correction;
-            $("print-measure").value = "";
-            renderMeasure();
-            tell(`${answer.said}: kept for ${answer.correction.router}, whose next toolpaths take it`);
-            return true;
-        }
-        const read = planReads();
-        if (read.bad) { refuse(`measure: ${read.bad} is not sizes in mm, a space apart`); return false; }
-        if (!Object.keys(read.readings).length) { refuse(`measure: read one of ${m.names.join(", ")}, in mm`); return false; }
-        try { answer = await post(`/slicer/slices/${encodeURIComponent(m.id)}/measured`, { readings: read.readings }); }
-        catch (e) { refuse(`measure: ${e.message}`); return false; }
-        await reloadTuning(m);
-        for (const field of $("print-measure-plan").querySelectorAll("input.measure-read")) field.value = "";
-        tell(`${answer.turn} kept for ${m.at.path}: ${answer.said}`);
-        return true;
-    }
-    async function reloadTuning(m) {
-        const key = `printer:${m.at.site}:${m.at.path}`;
-        try { ms.kept[key] = (await api(m.read)).documents; }
-        catch { ms.shown = null; }
-        renderMeasure();
-    }
-    // Apply and Undo turn: the printer's tuning for the chosen slice's filament and process.
-    async function tuneVerb(verb) {
-        const m = measuring();
-        const said = verb === "apply" ? "Take turn" : "Undo turn";
-        if (!m || state.kind !== "printer" || !m.applies) { refuse(`${said}: choose a file a slice made for this printer`); return false; }
-        const can = verb === "apply" ? tuning.canApply(tuned(m)) : tuning.canUndo(tuned(m));
-        if (!can.ok) { refuse(`${said}: ${can.why}`); return false; }
-        let answer;
-        try { answer = await post(`/slicer/tuning/${verb}`, { site: m.at.site, printer: m.at.path, ...m.applies }); }
-        catch (e) { refuse(`${said}: ${e.message}`); return false; }
-        await reloadTuning(m);
-        tell(verb === "apply"
-            ? `Taken for ${m.at.path}'s next slices: ${answer.applied.map((c) => `${c.setting} ${tuning.settingText(c.after, c.unit)}`).join(", ")}`
-            : `${answer.undone} undone: ${m.at.path}'s next slices take what the turns before it applied`);
-        return true;
-    }
-    // Print › Measure, or a router's Cut › Measure: what is read kept, as Keep does; a
-    // fault chosen under seen and nothing read, the look kept, as Keep look does; with
-    // neither, the first field.
-    const seenSomething = () => state.kind === "printer"
-        && [...$("print-seen-faults").querySelectorAll("select.seen-read")].some((el) => el.value !== "0");
-    function measureVerb() {
-        if (typedSomething()) return keepMeasured();
-        if (seenSomething()) return keepSeen();
-        const m = measuring();
-        if (!m) { refuse(`measure: choose ${state.kind === "router" ? "the file the piece was cut from, a toolpath that names what to measure" : "the file the part was printed from, a slice that says its size"}`); return false; }
-        const first = state.kind === "printer" ? $("print-measure-plan").querySelector("input.measure-read") : $("print-measure");
-        if (first) first.focus();
-        $("print-card").scrollIntoView({ block: "nearest" });
-        tell(state.kind === "printer"
-            ? `read the piece: ${m.names.join(", ")}, each in mm in its row, then Keep`
-            : `type what the piece measures, ${m.names.join(" × ")} in mm, then Keep`);
-        return true;
-    }
-    $("print-measure-keep").onclick = () => keepMeasured();
-    $("print-tune-apply").onclick = () => tuneVerb("apply");
-    $("print-tune-undo").onclick = () => tuneVerb("undo");
-
-    // --- the filament loaded, and what a piece shows -------------------------------------
+    // --- the filament loaded ---------------------------------------------------------------
     // The filament on the printer's spool holder, chosen among those its slicer profile can
     // load (slicer/filaments.py): its next slices are made with it and take its own tuning.
-    // And a look at the piece the chosen file made: each fault seen, none to bad, kept as the
-    // printer's next look (print_faults.py), whose one change Take turn takes.
     // shown: the printer whose filaments the row holds; loading: the one asked, or the one
     // whose ask failed until it is asked again; drawn: the options the drop-down holds.
-    const fil = { shown: null, answer: null, loading: null, failing: null, fails: 0, drawn: null, faults: null, asking: false };
+    const fil = { shown: null, answer: null, loading: null, failing: null, fails: 0, drawn: null };
     function printerAt() {
         if (machineAt && machineAt.site && machineAt.path) return { site: machineAt.site, printer: machineAt.path };
         const c = prt.choices;
@@ -1855,44 +1657,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("print-filament").onchange = () => loadFilament();
     $("print-filament").addEventListener("blur", () => renderFilament());
 
-    function renderSeen(m) {
-        const row = $("print-seen-row");
-        row.hidden = !m || state.kind !== "printer" || !m.applies;
-        if (row.hidden) return;
-        if (!fil.faults) {
-            if (!fil.asking) {
-                fil.asking = true;
-                api("/slicer/faults").then((a) => { fil.faults = a.faults; renderSeen(measuring()); })
-                    .catch(() => {}).finally(() => { fil.asking = false; });
-            }
-            return;
-        }
-        const box = $("print-seen-faults");
-        if (box.dataset.for !== m.id) {
-            box.dataset.for = m.id;
-            box.innerHTML = fil.faults.map((f) => `<label class="seen-fault" title="${esc(f.name)}: ${esc(f.looks_like)}">${esc(f.name)}
-                <select class="seen-read" data-fault="${esc(f.id)}">${["none", "slight", "clear", "bad"].map((w, i) => `<option value="${i}">${w}</option>`).join("")}</select></label>`).join(" ");
-            if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
-        }
-        const entry = tuned(m), looks = (entry && entry.document.looks) || [];
-        $("print-seen-said").textContent = looks.length
-            ? `${looks.length} look${looks.length > 1 ? "s" : ""} kept for ${m.applies.filament}`
-            : `what the piece shows, for ${m.applies.filament}`;
-    }
-    // Keep look: every fault's severity, none included, kept as the printer's next look.
-    async function keepSeen() {
-        const m = measuring();
-        if (!m || state.kind !== "printer" || !m.applies) { refuse("seen: choose the file the piece was printed from, a slice made for this printer"); return false; }
-        const choices = [...$("print-seen-faults").querySelectorAll("select.seen-read")].map((el) => [el.dataset.fault, el.value]);
-        let answer;
-        try { answer = await post(`/slicer/slices/${encodeURIComponent(m.id)}/seen`, { seen: tuning.seenOf(choices) }); }
-        catch (e) { refuse(`seen: ${e.message}`); return false; }
-        await reloadTuning(m);
-        for (const el of $("print-seen-faults").querySelectorAll("select.seen-read")) el.value = "0";
-        tell(`${answer.look} kept for ${m.at.path}: ${answer.said}`);
-        return true;
-    }
-    $("print-seen-keep").onclick = () => keepSeen();
 
     // What a kept file's slice or toolpath was made from: the piece's path in its
     // site and the part's name, or nothing for a file no slice or toolpath made.
@@ -1963,7 +1727,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         showChosenSlice();
         followChosenFile();
         renderPlan();
-        renderMeasure();
+        renderFilament();
     }
     // One job of the history: when it started and finished, its kind, the file it ran
     // and the part it makes, how it ended (and why), and how far it got.
@@ -2408,9 +2172,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:start") { await startPrint(); return true; }
         if (action === "print:preview") { togglePreview(); return true; }
         if (action === "print:plan") return keepPlan();
-        if (action === "print:measure") return measureVerb();
-        if (action === "print:tune-apply") return tuneVerb("apply");
-        if (action === "print:tune-undo") return tuneVerb("undo");
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -2459,11 +2220,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-start"), "print:start"]);
         out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-plan"), "print:plan"]);
-        out.push([$("print-measure-keep"), "print:measure"]);
-        out.push([$("print-measure"), "print:measure"]);
-        for (const field of $("print-measure-plan").querySelectorAll("input.measure-read")) out.push([field, "print:measure"]);
-        out.push([$("print-tune-apply"), "print:tune-apply"]);
-        out.push([$("print-tune-undo"), "print:tune-undo"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);

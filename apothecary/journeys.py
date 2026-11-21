@@ -77,6 +77,8 @@ class Step:
 #             made from it chosen where one is kept: nothing is sliced
 #   file      the open Machine keeping a file for a part: sliced, or its toolpath
 #             written, where none is kept
+#   feedback  a part's cabinet in Part › Feedback, the piece chosen first, as its
+#             Part › View › Feedback does
 #   fit       a piece chosen and framed in the world, as f does
 #   edit      a part's editor opened, as Part › Edit does
 #   scad      a part's SCAD in its window, as Part › SCAD does
@@ -91,6 +93,7 @@ PUTS = (
     "part",
     "makes",
     "file",
+    "feedback",
     "fit",
     "edit",
     "scad",
@@ -238,9 +241,10 @@ DESIGN = Journey(
 
 
 # Print a part on a machine: a part chosen in Site, its numbers in Parameters, the
-# machine's Print window to slice it and draw its path, the job in Jobs, and the
-# printer tuned there from the coupon made to be measured, a turn at a time. The machine's
-# window and its Print window share a stack at the column's foot, Print in front.
+# machine's Print window to slice it and draw its path, the job in Jobs, and the piece
+# made filed in its part's cabinet, Part › Feedback, where the printer is tuned from the
+# coupon made to be measured, a turn at a time. The machine's window and its Print window
+# share a stack at the column's foot, Print in front.
 MAKE = Journey(
     id="make",
     title="Print",
@@ -248,7 +252,9 @@ MAKE = Journey(
     group="Machine",
     requires="machine",
     opened_by="a machine's badge or its row in Site, or Slice on a part's ring",
-    view=_machine_view("machine-print", "pictures", "bench", "settings", active="machine-print"),
+    view=_machine_view(
+        "machine-print", "part-feedback", "pictures", "bench", "settings", active="machine-print"
+    ),
     name="Print a part",
     staged_on=(("machine", "printer_1"), ("part", "footpedal"), ("makes", "footpedal")),
     steps=(
@@ -294,18 +300,20 @@ MAKE = Journey(
         Step(
             "measure",
             "Measure",
-            "the part made, read under measured a feature a row and kept as the next turn "
-            "of the printer's tuning, which says what the readings imply -- a box's sizes "
-            "separate nothing, and print_coupon under makes is the piece made to be "
+            "the piece made, in its part's cabinet, Part › Feedback, a drawer a print, "
+            "opened on it as its print ends: read under measured a feature a row and filed "
+            "as the next turn of the printer's tuning, which says what the readings imply "
+            "-- a box's sizes separate nothing, and print_coupon is the piece made to be "
             "measured; or looked at under seen, each fault none to bad, a look that moves "
             "one setting; Take turn takes either into the printer's next slices, for the "
-            "filament loaded on it",
-            forward=("machine-print",),
+            "filament the piece used",
+            forward=("part-feedback",),
+            owns=("part-feedback",),
             shown_by=(
                 "46-a-printer-tuned-from-its-prints.md",
                 "50-a-printer-tuned-from-what-it-shows.md",
             ),
-            puts=(("file", "footpedal"),),
+            puts=(("file", "footpedal"), ("feedback", "footpedal")),
         ),
     ),
 )
@@ -314,14 +322,21 @@ MAKE = Journey(
 # Cut a part on the router: the same path as Print a part's through another machine. The part
 # says how it is cut, the router's Cut window writes its toolpath and draws it on the
 # table, the router says what it needs before it moves, the cut is a job, and the piece
-# cut is measured there, its tool's allowance fed back to the router.
+# cut is measured in its part's cabinet, Part › Feedback, its tool's allowance fed back
+# to the router.
 CUT = Journey(
     id="cut",
     title="Cut",
     group="Machine",
     requires="machine",
     opened_by="the router's badge or its row in Site, or Toolpath on a part's ring",
-    view=_machine_view("machine-print", "machine-status", "machine-level", active="machine-print"),
+    view=_machine_view(
+        "machine-print",
+        "part-feedback",
+        "machine-status",
+        "machine-level",
+        active="machine-print",
+    ),
     name="Cut a part",
     staged_on=(("machine", "cnc_router"), ("part", "router_coupon"), ("makes", "router_coupon")),
     steps=(
@@ -378,11 +393,12 @@ CUT = Journey(
         Step(
             "measure",
             "Measure",
-            "the piece cut, measured: each size it names typed under measured, checked "
-            "against what was designed, and the tool's allowance kept for the router's "
-            "next toolpaths",
-            forward=("machine-print",),
-            puts=(("file", "router_coupon"),),
+            "the piece cut, in its part's cabinet, Part › Feedback: each size it names "
+            "typed under measured, checked against what was designed, filed, and the "
+            "tool's allowance kept for the router's next toolpaths",
+            forward=("part-feedback",),
+            owns=("part-feedback",),
+            puts=(("file", "router_coupon"), ("feedback", "router_coupon")),
             shown_by=("20-a-part-through-the-router.md",),
         ),
     ),

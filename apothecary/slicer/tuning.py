@@ -1182,6 +1182,18 @@ def add_look(
         return doc, doc.looks[-1]
 
 
+def answer(doc: TuningDocument) -> dict:
+    """The document as a route answers it: itself, each setting's trend and each fault's."""
+    return {
+        "document": doc.model_dump(mode="json", by_alias=True),
+        "trends": {
+            key: {"term": t.term, "state": t.state, "stop": t.stop, "said": t.said}
+            for key, t in trends(doc).items()
+        },
+        "faults": fault_trends(doc),
+    }
+
+
 def fault_trends(doc: TuningDocument) -> Dict[str, str]:
     """Each fault seen over the document's looks: its severity at each, and the change
     applied after it. A fault no look saw is left out, though each said none of it."""

@@ -237,14 +237,17 @@ carries -- so the turn after it knows what it measured.
 | `POST /slicer/tuning/apply`, `/undo` | `{site, printer, filament, process}`: Apply, Undo turn |
 | `GET /slicer/tuning/schema`, `POST /slicer/tuning/validate` | The schema; a document read back |
 
-In the page, under the chosen file in the Print window, **measured** has a row for
-each feature the slice's plan names (or its box), each a field for what it reads,
-repeats a space apart; **Keep** keeps the turn and says what it implies, **Take turn** and
-**Undo turn** (Print › Tune › Take turn and Undo turn on the control ring) are greyed with the reason where the
-server would refuse them, and the turns and each setting's trend are listed beneath.
-*Print a part*'s last step, Measure, stands there on the footpedal's file, says that a
-box's sizes separate nothing and that the coupon is the piece made to be measured, and
-gives this page's walkthrough to try.
+In the page it is the part's Feedback window ([cabinet.md](cabinet.md)), opened by a
+piece's ring, Part › View › Feedback, and by a print's end on the piece it made. Under the
+piece chosen there, **measured** has a row for each feature its slice's plan names (or its
+box), each a field for what it reads, repeats a space apart; **Keep** files the reading in
+the piece's drawer, keeps the turn and says what it implies; **Take turn** and **Undo turn**
+(Part › View › Feedback › Take turn and Undo turn on the ring) act for the printer that made
+the piece and the filament and process it used, greyed with the reason the tuning
+document gives; and the turns and each setting's trend are listed beneath. *Print a
+part*'s last step, Measure, stands there on the footpedal's cabinet, says that a box's
+sizes separate nothing and that the coupon is the piece made to be measured, and gives
+this page's walkthrough to try. The Print window measures nothing.
 
 ## The filament loaded
 
@@ -311,11 +314,12 @@ cube read with calipers proposes nothing, but what it shows does.
 | `GET /slicer/faults` | The faults, their levers, the severities |
 | `GET /slicer/filaments`, `POST /slicer/filaments/loaded` | The filament loaded and the choices; another loaded |
 
-In the page, the Print window's **seen** row, under **measured**, has a choice of none
-to bad for each fault and **Keep look**; Print › Measure on the ring keeps the look too,
-when a fault is chosen and nothing is read. The history beneath lists turns and looks
-in the order they were kept, and each fault seen over the looks. The **filament** row
-loads the filament chosen; a note of the spool is the route's alone.
+In the page, the Feedback window's **seen** row, under **measured**, has a choice of
+none to bad for each fault and **Keep look**, which files the look in the piece's drawer;
+Part › View › Feedback › Measure on the ring files the look too, when a fault is chosen
+and nothing is read. The history beneath lists turns and looks in the order they were
+kept, and each fault seen over the looks. The Print window's **filament** row loads the
+filament chosen; a note of the spool is the route's alone.
 
 ## The command line
 

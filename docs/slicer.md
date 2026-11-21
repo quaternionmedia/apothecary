@@ -198,12 +198,13 @@ Slice is a step of the loop from a picture to a print
   errors and warnings by line. A kept file a slice made says, in the card's
   files, what it was sliced from and for which printer; choosing it says that
   slice again under **makes**.
-- **Measured, fed back.** Under the chosen file, **measured** has a row for each
-  feature the piece's plan names (or the box of what was sliced), and **Keep** -- or
-  the control ring's Print › Measure -- keeps what they read as the next turn of the
-  printer's tuning and says what it implies; **Take turn** and **Undo turn** (Print ›
-  Tune) take it into the next slices or drop it ([below](#a-printer-tuned-from-its-prints)).
-  It is *Print a part*'s last step.
+- **Measured, fed back, elsewhere.** What the piece measures and shows is not the Print
+  window's: it is filed in the piece's drawer in its part's cabinet, the Part's
+  **Feedback** window ([cabinet.md](cabinet.md)), which a print's end opens on it. There,
+  **measured** has a row for each feature the piece's plan names (or the box of what was
+  sliced), and **Keep** keeps what they read as the next turn of the printer's tuning;
+  **Take turn** and **Undo turn** take it into the next slices or drop it
+  ([below](#a-printer-tuned-from-its-prints)). It is *Print a part*'s last step.
 - **Installing it.** The Bench's toolchain card draws the slicer after the
   toolchain modules: what it slices, where it is, the release pinned, and its
   own **Install** (or Update), whose log is the Bench's task log. It is

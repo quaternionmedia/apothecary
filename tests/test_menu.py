@@ -794,9 +794,6 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "print:start",
         "print:preview",
         "print:plan",
-        "print:measure",
-        "print:tune-apply",
-        "print:tune-undo",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",
@@ -827,21 +824,27 @@ def _labels_by_action(options) -> dict:
 
 
 def test_the_control_ring_says_what_the_machine_s_windows_say():
-    """A job's acts are worded once: the Print window's Take turn, Undo turn and Abort, and
-    a printer's Pause where a router's is Hold (static/machine_words.js pauseWord), are
-    what the control ring's cells say too."""
+    """A job's acts are worded once: the Print window's Abort, and a printer's Pause where a
+    router's is Hold (static/machine_words.js pauseWord), are what the control ring's cells
+    say too; the Feedback window's Take turn and Undo turn, what a part's piece's Feedback
+    cells say."""
     machine = (STATIC / "widgets" / "machine.js").read_text(encoding="utf-8")
+    feedback = (STATIC / "widgets" / "feedback.js").read_text(encoding="utf-8")
     words = (STATIC / "machine_words.js").read_text(encoding="utf-8")
 
-    def button(name: str) -> str:
-        text = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', machine)[1]
-        return re.sub(r"^\W+", "", text)
+    def button(name: str, text: str = machine) -> str:
+        said = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', text)[1]
+        return re.sub(r"^\W+", "", said)
 
     pause = dict(re.findall(r'verb: "(\w+)".*?pauseWord: "(\w+)"', words))
     printer = _labels_by_action(control_options(PRINTER))
     router = _labels_by_action(router_control_options(ROUTER))
-    assert printer["print:tune-apply"] == button("print-tune-apply") == "Take turn"
-    assert printer["print:tune-undo"] == button("print-tune-undo") == "Undo turn"
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    piece = _labels_by_action(
+        resolve(on, _garage(), picture=PictureContext(printers=["printer_1"])).options
+    )
+    assert piece["feedback:tune-apply"] == button("feedback-tune-apply", feedback) == "Take turn"
+    assert piece["feedback:tune-undo"] == button("feedback-tune-undo", feedback) == "Undo turn"
     assert printer["control:sd-abort"] == router["control:job-abort"] == button("print-cancel")
     assert button("print-cancel") == "Abort"
     assert printer["control:sd-pause"] == pause["Print"] == "Pause"
@@ -906,7 +909,6 @@ def test_a_router_s_control_ring_is_its_own():
         "print:start",
         "print:preview",
         "print:plan",
-        "print:measure",
         "control:estop",
         "control:arm",
     }
@@ -2162,8 +2164,15 @@ def test_a_part_whose_pieces_move_has_its_motion_under_view_after_fit():
     moving = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True, motion=True)))
     still = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     view = next(c for c in moving.options[-1].children if c.label == "View")
-    assert [c.label for c in view.children] == ["SCAD", "Fullscreen", "Ghost", "Fit", "Motion"]
-    assert [(c.label, c.action) for c in view.children[-1].children] == [
+    assert [c.label for c in view.children] == [
+        "SCAD",
+        "Fullscreen",
+        "Ghost",
+        "Fit",
+        "Motion",
+        "Feedback",
+    ]
+    assert [(c.label, c.action) for c in view.children[-2].children] == [
         ("Motion", "part:motion:open"),
         ("Play", "part:motion:play"),
         ("Back", "part:motion:back"),
@@ -2176,6 +2185,52 @@ def test_a_part_whose_pieces_move_has_its_motion_under_view_after_fit():
     assert "part:motion:play" not in set(every_action([still]))
     for verb in ("open", "play", "back", "step", "reset", "bought"):
         assert carried_by(f"part:motion:{verb}").name == "VIEWER"
+
+
+def test_a_part_that_is_made_has_its_cabinet_under_view_after_motion():
+    """Part › View › Feedback, on a part that is made: the part's cabinet in Part › Feedback,
+    then what is done to the piece chosen there. After Motion, so no cell of View moves; a
+    part's View has room for it however full its ring is. A camera, a board, a machine
+    drawn as a part, anything inside a printer, and a piece made from a picture -- no part's
+    -- have none."""
+    from apothecary.menu import PartSeen, PictureContext, carried_by
+
+    garage = _garage()
+    garage.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+
+    def on(path, part=None, **told):
+        picture = PictureContext(part=part or PartSeen(editable=True), **told)
+        return resolve(Context(pointing=Pointing.NODE, targets=[path]), garage, picture=picture)
+
+    ring = on("footpedal", printers=["printer_1"])
+    view = next(c for c in _group(ring, "Part").children if c.label == "View")
+    feedback = view.children[-1]
+    assert (feedback.label, feedback.id) == ("Feedback", "feedback")
+    assert [(c.label, c.action) for c in feedback.children] == [
+        ("Feedback", "feedback:open"),
+        ("Measure", "feedback:measure"),
+        ("Note", "feedback:note"),
+        ("Take turn", "feedback:tune-apply"),
+        ("Undo turn", "feedback:tune-undo"),
+    ]
+    assert all(carried_by(c.action).name == "VIEWER" for c in feedback.children)
+    still = on("footpedal", part=PartSeen(editable=True, motion=True))
+    assert address_of(still, "part:fit") == address_of(ring, "part:fit")
+    assert address_of(still, "feedback:open")[:-2] == address_of(ring, "feedback:open")[:-2]
+    # With no printer pinned it is there all the same: the cabinet holds what was made
+    # wherever, and Feedback is the door to it.
+    assert "feedback:open" in set(every_action([on("footpedal")]))
+    for path, told in (
+        ("printer_1", {"printers": ["printer_1"]}),
+        ("printer_1.frame_system.mainboard", {"printers": ["printer_1"]}),
+        ("footpedal", {"camera_parts": ["footpedal"]}),
+        ("cnc_router", {}),
+        ("disc_1", {"made": ["disc_1"], "words": ["disc"], "printers": ["printer_1"]}),
+    ):
+        assert "feedback:open" not in set(every_action([on(path, **told)])), path
+    assert "feedback:open" not in set(
+        every_action([on("footpedal", part=PartSeen(editable=True, board=True))])
+    )
 
 
 def test_a_part_s_ring_holds_its_scad_editor_too():
@@ -2197,13 +2252,14 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     # A ring holds eight: SCAD and Fullscreen are under View, beside the ghost and Fit,
     # and History holds Undo and Redo.
     view, history = part.children[5:7]
-    assert [(c.label, c.action) for c in view.children] == [
+    assert [(c.label, c.action or c.id) for c in view.children] == [
         ("SCAD", "part:scad"),
         ("Fullscreen", "part:fullscreen"),
         ("Ghost", "part:ghost"),
         ("Fit", "part:fit"),
+        ("Feedback", "feedback"),
     ]
-    assert [(c.label, c.action) for c in history.children] == [
+    assert [(c.label, c.action or c.id) for c in history.children] == [
         ("Undo", "part:undo"),
         ("Redo", "part:redo"),
     ]
@@ -2291,7 +2347,11 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         "part:view",
         "part:history",
     ]
-    assert [c.action for c in untold.children[4].children] == ["part:ghost", "part:fit"]
+    assert [c.action or c.id for c in untold.children[4].children] == [
+        "part:ghost",
+        "part:fit",
+        "feedback",
+    ]
 
 
 def test_a_part_s_presets_and_an_end_s_adapter_come_after_the_rest_of_its_ring():
@@ -2456,7 +2516,7 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
         ("cnc_router", ()),
     ):
         labels = [o.label for o in on(path, ["printer_1"], cameras).options]
-        assert "Slice" not in labels, path
+        assert "Slice" not in labels and "Feedback" not in labels, path
     # Nor a board on the bench: a devkit running a sketch, or a board the boards
     # library draws (the server says which, as PartSeen.board), is bought, not printed.
     from apothecary.menu import PartSeen

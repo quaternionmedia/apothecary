@@ -3,6 +3,7 @@
 import click
 
 from .airgap import airgap
+from .cabinet import cabinet
 from .census import census
 from .docs import docs
 from .evidence import evidence
@@ -105,6 +106,7 @@ cli.add_command(lighting)
 cli.add_command(airgap)
 cli.add_command(loop)
 cli.add_command(tuning)
+cli.add_command(cabinet)
 cli.add_command(rig)
 cli.add_command(evidence)
 cli.add_command(family)

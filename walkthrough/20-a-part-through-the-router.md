@@ -217,7 +217,8 @@ in its cuts, so its toolpath says what a person measures.
     True
 
 A person cuts it, measures each across with calipers, and types what it
-measures -- in the page, under *measured* in the Cut window. The holes come out
+measures -- in the page, under *measured* in the part's Feedback window, where the
+measurement is filed in the piece's drawer. The holes come out
 big and the face small by about the same: that is the tool's. What is left, the
 same way on both in proportion to their size, is the scale -- the controller's
 steps per millimetre -- which is said, and not applied.

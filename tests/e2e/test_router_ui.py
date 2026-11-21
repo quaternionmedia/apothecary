@@ -947,12 +947,13 @@ def test_no_tool_is_drawn_while_a_poll_does_not_say_where_it_is_in_the_volume(pa
 # toolpath written for cnc_router after it takes it.
 @pytest.mark.e2e
 def test_the_emoji_cut_and_measured_is_fed_back_into_the_router_s_toolpaths(page: Page, url: str):
-    """The router's calibration piece, a 😮, its toolpath written in the Cut window: under
-    measured it names what to measure, an eye, the mouth and the face, as designed. Its
-    sizes typed and kept -- once by Keep, once by the ring's Cut › Measure -- the tool's
-    allowance is kept for cnc_router, and its next toolpath takes it, saying so."""
-    from rings import on_row
-
+    """The router's calibration piece, a 😮, its toolpath written in the Cut window, which
+    measures nothing. In Part › Feedback, opened from ⊞ Windows, the emoji's toolpath is
+    a piece made elsewhere, among every part's: chosen, under measured it names what to
+    measure, an eye, the mouth and the face, as designed. Its sizes typed and kept, the
+    piece's drawer is opened and the measurement filed there, the tool's allowance kept for
+    cnc_router, and its next toolpath takes it, saying so; that one measured too is filed
+    in a drawer of its own."""
     errors: list = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     open_garage(page, url, settle=False)
@@ -964,31 +965,47 @@ def test_the_emoji_cut_and_measured_is_fed_back_into_the_router_s_toolpaths(page
     machine.locator("#print-part").select_option("router_emoji")
     machine.locator("#print-slice").click()
     expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=10000)
-    field, said = machine.locator("#print-measure"), machine.locator("#print-measure-said")
+    assert machine.locator("#print-measure").count() == 0
+    first = machine.locator("#print-pick").input_value()
+    windows.from_the_windows_menu(page, "part-feedback")
+    feedback = windows.panel(page, "part-feedback")
+    piece = feedback.locator("#feedback-piece")
+    expect(piece.locator(f"option[value='file:{first}']")).to_have_count(1, timeout=10000)
+    piece.select_option(f"file:{first}")
+    expect(feedback.locator("#feedback-title")).to_have_text("Feedback · router_emoji")
+    field, said = feedback.locator("#feedback-measure"), feedback.locator("#feedback-measure-said")
     expect(said).to_have_text("of eye 10 × mouth 20 × face 60 mm designed", timeout=10000)
     expect(field).to_have_attribute("placeholder", "eye × mouth × face mm")
     field.fill("10.12 × 20.14 × 59.84")
-    machine.locator("#print-measure-keep").click()
+    feedback.locator("#feedback-measure-keep").click()
     expect(page.locator("#status")).to_contain_text(
         "scale -0.04%, the steps per millimetre's, not applied; "
-        "tool_allowance +0.000 -> +0.136 mm: kept for cnc_router",
+        "tool_allowance +0.000 -> +0.136 mm: filed in router_emoji's drawer, and kept for "
+        "cnc_router",
         timeout=10000,
     )
     expect(said).to_contain_text("cnc_router's tool +0.136 mm")
+    expect(feedback.locator("#feedback-filed li")).to_contain_text("measured (tool_allowance)")
     # The next toolpath makes its offsets with it, and says where it came from.
     machine.locator("#print-slice").click()
     expect(machine.locator("#print-slice-said")).to_contain_text(
         "tool_allowance +0.136 measured", timeout=10000
     )
-    # Measured again from that one, the eye alone, kept by the router's ring.
+    # Measured again from that one, the eye alone: a piece of its own, in a drawer of its own.
+    second = machine.locator("#print-pick").input_value()
+    assert second != first
+    expect(piece.locator(f"option[value='file:{second}']")).to_have_count(1, timeout=10000)
+    piece.select_option(f"file:{second}")
     field.fill("10.02")
-    on_row(page, "cnc_router", "Device", "Control", "Cut", "Measure")
+    feedback.locator("#feedback-measure-keep").click()
     expect(page.locator("#status")).to_contain_text(
-        "tool_allowance +0.136 -> +0.156 mm: kept for cnc_router", timeout=10000
+        "tool_allowance +0.136 -> +0.156 mm: filed in router_emoji's drawer", timeout=10000
     )
     expect(said).to_contain_text("cnc_router's tool +0.156 mm")
     kept = httpx.get(
         f"{url}/cam/corrections", params={"site": "garage", "router": "cnc_router"}, timeout=15.0
     ).json()["correction"]
     assert kept["value"] == 0.156 and len(kept["measurements"]) == 2
+    drawers = httpx.get(f"{url}/cabinet/router_emoji", timeout=15.0).json()["drawers"]
+    assert sorted(d["file"]["file_id"] for d in drawers) == sorted([first, second])
     assert errors == [], errors

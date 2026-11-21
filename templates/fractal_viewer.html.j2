@@ -862,6 +862,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/layers.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/loops.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/feedback.css">
     <script type="importmap">
     {
         "imports": {
@@ -927,6 +928,7 @@
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
         import { mountMotion } from '/static/widgets/motion.js';
+        import { mountFeedback } from '/static/widgets/feedback.js';
         import { knownWindows, transientWindows, mountSystems, defineJourneyViews, openFor } from '/static/systems.js';
         import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
@@ -1885,8 +1887,27 @@
                     // The Part's windows are filled by the editor in Selected
                     // (showPartSections); a section brought in front measures the SCAD
                     // editor, which may have been built while its window was closed.
+                    // Feedback is the part's cabinet, filled by its own widget
+                    // (widgets/feedback.js) on the part asked for (openFeedback).
                     part: {
-                        mount: () => ({ redraw: () => { this.scadEditor?.measure(); this.focusEditor(); } }),
+                        mount: (slot, sections) => {
+                            this.feedback = mountFeedback(sections.feedback, {
+                                base: BASE_URL,
+                                say: (t, kind) => this.setStatus(t, kind === 'error' ? 'error' : 'success'),
+                            });
+                            window.apothecaryFeedback = this.feedback;
+                            return {
+                                redraw: () => {
+                                    this.scadEditor?.measure(); this.focusEditor();
+                                    // Feedback itself opened with no part asked for (⊞ Windows
+                                    // › Feedback): the selected piece's part, where a piece is.
+                                    // Another Part window opened leaves it as it was.
+                                    const selected = this.selectedName && this.selectedName !== FLOOR_KEY ? this.nodeByPath(this.selectedName) : null;
+                                    const part = selected?.part_ref;
+                                    if (this.feedback && !this.feedback.part() && part && this.panels.isShown('part-feedback')) this.feedback.show(part).then(() => this.showPartSections());
+                                },
+                            };
+                        },
                     },
                     // A board's Machine: its sections' windows are there while it is open
                     // (mountMachinePanel attaches them, closeMachine takes them away), each
@@ -5204,6 +5225,9 @@
                 if (!part) return;
                 const editing = this.partSection && this.selectedBodyEl.contains(this.partSection) ? this.partSection : null;
                 for (const [id, host] of Object.entries(part.sections)) {
+                    // Feedback is filled by its own widget, on the part it was asked for: it has
+                    // nothing to show, and its stack gives its room away, until a part is shown.
+                    if (id === 'feedback') { part.setEmpty(id, !this.feedback?.part()); continue; }
                     const block = editing?.parts?.[id];
                     // Nothing to show: its stack gives its room away (panels.js) until it has.
                     part.setEmpty(id, !block);
@@ -8508,16 +8532,47 @@
                 return row ? row.path : this.pieceOf(name);
             }
 
-            // A print done of a part with a sketch of its own: its board, next. The job
-            // names the piece by its path or the part by its name.
+            // A print or a cut done: the piece's drawer in its part's cabinet, Part ›
+            // Feedback, opened on it, where what it measures and shows is filed; and a part
+            // with a sketch of its own: its board, next. The job names the piece by its path
+            // or the part by its name.
             afterPrint(job) {
+                if (job.job_id) this.feedbackAfter(job.job_id);
                 if (!job.part) return null;
-                const part = this.nodeByPath(job.part)?.part_ref || String(job.part).split('.').pop();
+                const node = this.nodeByPath(job.part);
+                const part = node?.part_ref || String(job.part).split('.').pop();
+                // A part's piece has a drawer; a piece made from a picture is no part's.
+                const said = node && !node.part_ref ? [] : [`its drawer is in Part › Feedback`];
                 const row = Object.values(this.bindings || {}).find((r) => r.sketch === part);
-                if (!row) return null;
-                return row.device
+                if (row) said.push(row.device
                     ? `${part}'s board next: ${row.path}'s ring, Device › Flash`
-                    : `${part}'s board next: ${row.path}'s ring, Flash sketch, opens the Bench on its sketch`;
+                    : `${part}'s board next: ${row.path}'s ring, Flash sketch, opens the Bench on its sketch`);
+                return said.length ? said.join('; ') : null;
+            }
+
+            // The drawer the job's piece is in, if the cabinet keeps one, opened in Part ›
+            // Feedback. Nothing opens for a piece made from a picture, no part's.
+            async feedbackAfter(jobId) {
+                try {
+                    const r = await fetch(`${BASE_URL}/cabinet?job=${encodeURIComponent(jobId)}`);
+                    const found = r.ok ? (await r.json()).drawer : null;
+                    if (found) await this.openFeedback(found.part, { drawer: found.id });
+                } catch { /* the cabinet did not answer: the print's end is said all the same */ }
+            }
+
+            // Part › Feedback in front on a part's cabinet -- a part's name, or a piece's
+            // path read as the part it is built from -- with the drawer named, or that job's,
+            // chosen. { said } or { refused }.
+            async openFeedback(part, { drawer = null, job = null } = {}) {
+                const node = this.nodeByPath(part);
+                const name = node ? node.part_ref : part;
+                if (!name) return { refused: `${part} is built from no part: a part's pieces are filed in its cabinet` };
+                this.systems.part.widget();
+                this.panels.open('part-feedback');
+                const chosen = await this.feedback.show(name, { drawer, job });
+                this.showPartSections();
+                const which = !chosen ? 'nothing made of it yet' : chosen.drawer ? 'a drawer chosen' : 'a piece made elsewhere chosen';
+                return { said: `${name}'s cabinet in Part › Feedback, ${which}` };
             }
 
             // The Bench in front, its Build form on a sketch -- by id, or by its part's
@@ -9269,6 +9324,14 @@
                     const kept = await print.show();
                     if (!kept || !kept.file) return { refused: `${subject}'s ${router ? 'toolpath' : 'slice'} for ${who} did not end in three minutes: its task is in the ${found.card} window` };
                     return { did: router ? `${subject}'s toolpath written for ${who}, as Toolpath does: ${kept.file}` : `${subject} sliced for ${who}, as Slice does: ${kept.file}` };
+                }
+                if (verb === 'feedback') {
+                    if (here(subject)) return { refused: here(subject) };
+                    await choose(subject);
+                    const part = this.nodeByPath(subject)?.part_ref;
+                    if (part && this.feedback?.part() === part && this.panels.isOpen('part-feedback')) return {};
+                    const opened = await this.openFeedback(subject);
+                    return opened.refused ? { refused: opened.refused } : { did: `${opened.said}, as Part › View › Feedback does` };
                 }
                 if (verb === 'edit') {
                     if (here(subject)) return { refused: here(subject) };
@@ -10968,7 +11031,7 @@
     // addresses written onto the controls the page already has.
     import { installRing, annotate, addressOf, addresses, resolveRing } from '/static/ring.js';
     import { steer as steerKnobs, knobsCan } from '/static/deck_knobs.js';
-    import { withLatch, shownCan, shownVerdict } from '/static/can.js';
+    import { withLatch, shownCan } from '/static/can.js';
     import { viaRing } from '/static/format.js';
 
     (() => {
@@ -11005,27 +11068,10 @@
             const device = { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
             return judged ? { ...device, can: canOf(row.device.port) } : device;
         }
-        // Print › Tune › Apply and Undo turn are refused by the printer's tuning document,
-        // not its port (static/tuning.js canApply, canUndo; menu.py PAGE_ANSWERS), which only
-        // its Print window holds: read as its two buttons show it. Their row hidden, no file
-        // a slice made for this printer is chosen, as the Machine says when either is asked for.
-        const TUNE_BUTTONS = [['tune.apply', 'print-tune-apply'], ['tune.undo', 'print-tune-undo']];
-        function tuneCan(m) {
-            const out = {};
-            for (const [verb, id] of TUNE_BUTTONS) {
-                const btn = m.handle.$(id);
-                if (!btn) continue;
-                out[verb] = btn.closest('[hidden]')
-                    ? { ok: false, kind: 'file', why: 'choose a file a slice made for this printer' }
-                    : shownVerdict(btn);
-            }
-            return out;
-        }
         // A board's open Machine as its ring is told it: the board, and what the server would
-        // refuse of its port with what the Machine's windows know over it.
+        // refuse of its port.
         function machineDevice(m) {
-            const device = m.handle.device();
-            return device.can ? { ...device, can: { ...device.can, ...tuneCan(m) } } : device;
+            return m.handle.device();
         }
         // What the server would refuse of a board now (firmware/can.py), the answer its
         // Machine's buttons are greyed from: its open Machine's, with what that page knows
@@ -11208,6 +11254,22 @@
                 if (action === 'working:open') {
                     const said = await viewer.openWorkingSpace(path);
                     viewer.setStatus(`${said}${tail}`, 'success');
+                    return;
+                }
+                // Part › View › Feedback on a part's piece: the part's cabinet in Part ›
+                // Feedback, and the window's acts on the piece chosen there. Its first cell
+                // shows it on this piece's part; the others show it first when another
+                // part's is shown or it is closed.
+                if (action.startsWith('feedback:')) {
+                    const part = viewer.nodeByPath(path)?.part_ref;
+                    if (!part) { refuse(`${path} is built from no part: a part's pieces are filed in its cabinet`); return; }
+                    if (action === 'feedback:open' || !viewer.feedback || viewer.feedback.part() !== part || !viewer.panels.isOpen('part-feedback')) {
+                        const opened = await viewer.openFeedback(part);
+                        if (opened.refused) { refuse(opened.refused); return; }
+                        if (action === 'feedback:open') { viewer.setStatus(`${intent.label}: ${opened.said}${tail}`, 'success'); return; }
+                    }
+                    // The widget says what it did, or why not.
+                    await viewer.feedback.verb(action);
                     return;
                 }
                 // A made piece's Print names the printer it prints on; the piece is the
@@ -11603,6 +11665,8 @@
                 for (const el of document.querySelectorAll(`#part-saved .trash-row[data-variant] .${cls}`)) pairs.push([el, `part:trash:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
             }
             for (const el of document.querySelectorAll('#part-saved .trash-empty')) pairs.push([el, 'part:trash:empty']);
+            // Part › Feedback's controls are the cells of the piece's Feedback.
+            if (viewer.feedback) pairs.push(...viewer.feedback.pairs());
             // The Motion window's controls are the cells of Part › View › Motion.
             viewer.motionTaught = addresses(ring);
             for (const [selector, action] of MOTION_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);

@@ -111,6 +111,7 @@ SHOWS = {
     "part-variants": "#part-saved",
     "part-history": "#part-history-none",
     "part-readiness": "#part-checklist",
+    "part-feedback": "#feedback-card",
     "machine-status": "#c-hot:visible, #c-spindle:visible",
     "machine-temperature": "#chart",
     "machine-print": "#print-part",

@@ -124,7 +124,14 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
     assert stacks["site"] == ["site", "problems", "pinned", "jobs", "scad"]
     assert stacks["selected"] == ["selected"]
     assert windows.state(page, "part-parameters")["stack"] == ["part-parameters"]
-    assert stacks["machine"][:5] == ["machine", "machine-print", "pictures", "bench", "settings"]
+    assert stacks["machine"][:6] == [
+        "machine",
+        "machine-print",
+        "part-feedback",
+        "pictures",
+        "bench",
+        "settings",
+    ]
     assert windows.state(page, "machine")["shown"] is False
     assert windows.world_width(page) > page.viewport_size["width"] / 2
 
@@ -157,7 +164,7 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         ("slice", "machine-print", 3, "Slice"),
         ("see", "machine-print", 4, "See"),
         ("print", "machine-print", 5, "Start"),
-        ("measure", "machine-print", 6, "Measure"),
+        ("measure", "part-feedback", 6, "Measure"),
     ):
         nxt = page.locator(f"{RAIL} .journey-next")
         expect(nxt).to_have_attribute("data-next", step)

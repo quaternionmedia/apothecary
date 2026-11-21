@@ -20,6 +20,7 @@ import re
 
 import httpx
 import pytest
+import rings
 import windows
 from boards import BOARD, PRINTER
 from garage import open_garage, row, select, to_site
@@ -226,10 +227,12 @@ def test_make_opens_the_board_s_machine_though_the_universe_s_boards_answer_late
 
 @pytest.mark.e2e
 def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: str):
-    """The footpedal made on printer_1, then read in its Print window: a row for each
-    size of its box, kept as the first turn of printer_1's tuning, which says a box's
-    sizes separate no error from another, so Apply is greyed and the next slice takes
-    the profile's own walls; Undo turn drops the turn."""
+    """The footpedal made on printer_1, then read in its part's cabinet: its ring's
+    Part › View › Feedback brings the Feedback window, where its slice is listed as a piece
+    made elsewhere with a row for each size of its box. Keep opens the piece's drawer and files
+    the first turn of printer_1's tuning, which says a box's sizes separate no error from
+    another, so Take turn is greyed and the next slice takes the profile's own walls; Undo
+    turn drops the turn, and its filing says so. The Print window measures nothing."""
     errors: list = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     open_garage(page, url, settle=False)
@@ -238,37 +241,59 @@ def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: st
     expect(page.locator("#make-here")).to_have_text(re.compile("on printer_1"), timeout=15000)
     page.locator("#make-here").click()
     expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
-    said = windows.in_machine(page, "#print-measure-said")
+    assert windows.in_machine(page, "#print-measure-plan").count() == 0
+    rings.on_row(page, "footpedal", "Part", "View", "Feedback", "Feedback")
+    expect(page.locator("#status")).to_contain_text("footpedal's cabinet in Part › Feedback")
+    feedback = windows.panel(page, "part-feedback")
+    expect(feedback.locator("#feedback-title")).to_have_text("Feedback · footpedal")
+    expect(feedback.locator("#feedback-piece")).to_contain_text("made elsewhere")
+    said = feedback.locator("#feedback-measure-said")
     expect(said).to_contain_text("of 3 features of its box", timeout=10000)
+    # Its ring's other cells act on the piece chosen there: nothing filed, no turn to take;
+    # nothing typed, Measure takes a person to the rows.
+    rings.on_row(page, "footpedal", "Part", "View", "Feedback", "Take turn")
+    expect(page.locator("#status")).to_contain_text("Take turn: nothing is filed of this piece yet")
+    rings.on_row(page, "footpedal", "Part", "View", "Feedback", "Measure")
+    expect(page.locator("#status")).to_contain_text(
+        "read the piece: x, y, z, each in mm in its row, then Keep"
+    )
     record = next(
         r
         for r in page.request.get(f"{url}/slicer/slices").json()
         if r["made"]["name"] == "footpedal"
     )
     x, y, _ = record["size"]
-    rows = '#print-measure-plan input[data-feature="{}"]'
-    windows.in_machine(page, rows.format("x")).fill(f"{x + 0.2:.3f} {x + 0.22:.3f}")
-    windows.in_machine(page, rows.format("y")).fill(f"{y + 0.1:.3f}")
-    windows.in_machine(page, "#print-measure-keep").click()
+    rows = '#feedback-measure-plan input[data-feature="{}"]'
+    feedback.locator(rows.format("x")).fill(f"{x + 0.2:.3f} {x + 0.22:.3f}")
+    feedback.locator(rows.format("y")).fill(f"{y + 0.1:.3f}")
+    feedback.locator("#feedback-measure-keep").click()
     expect(page.locator("#status")).to_contain_text(
-        "turn-1 kept for printer_1: footpedal read at 2 features: no term determined",
+        "turn-1 filed in footpedal's drawer, for printer_1: footpedal read at 2 features: "
+        "no term determined",
         timeout=10000,
     )
-    apply = windows.in_machine(page, "#print-tune-apply")
+    filed = feedback.locator("#feedback-filed li")
+    expect(filed).to_have_count(1)
+    expect(filed.first).to_contain_text("measured (turn-1)")
+    expect(feedback.locator("#feedback-piece-said")).not_to_contain_text("no drawer yet")
+    apply = feedback.locator("#feedback-tune-apply")
     expect(apply).to_be_disabled()
     expect(apply).to_have_attribute("title", re.compile("turn-1 proposes no change"))
-    expect(windows.in_machine(page, "#print-tune-history")).to_contain_text(
+    expect(feedback.locator("#feedback-tune-history")).to_contain_text(
         "turn-1, footpedal: no term determined; not separated: contour, foot, scale_x, "
         "scale_y; proposed: nothing"
     )
+    (drawer,) = page.request.get(f"{url}/cabinet/footpedal").json()["drawers"]
+    assert drawer["file"]["file_id"] == record["file_id"] and drawer["job"] is None
     # The next slice for printer_1 takes the profile's own walls: nothing was applied.
     windows.in_machine(page, "#print-slice").click()
     expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
     expect(windows.in_machine(page, "#print-slice-said")).not_to_contain_text(
         "xy_contour_compensation -"
     )
-    windows.in_machine(page, "#print-tune-undo").click()
+    feedback.locator("#feedback-tune-undo").click()
     expect(page.locator("#status")).to_contain_text("turn-1 undone", timeout=10000)
+    expect(filed.first).to_have_class(re.compile("undone"))
     assert errors == []
 
 
@@ -276,8 +301,9 @@ def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: st
 def test_the_filament_loaded_and_a_fault_seen_tune_the_printers_next_slices(page: Page, url: str):
     """printer_1's Print window says the filament loaded on it, the profile's own until
     one is chosen; another chosen is what its next slice is made with. The footpedal
-    made, then looked at: stringing seen clear is kept as the first look of its
-    tuning, which steps the retraction; Take turn takes it, and Undo turn drops it.
+    made, then looked at in its part's cabinet, Part › Feedback: stringing seen clear is
+    filed as the first look of printer_1's tuning, which steps the retraction; Take turn
+    takes it, and Undo turn drops it.
     The filaments' first ask fails and is asked again; the drop-down is not drawn again
     while a person has it, nor when nothing it holds changed."""
     errors: list = []
@@ -330,25 +356,27 @@ def test_the_filament_loaded_and_a_fault_seen_tune_the_printers_next_slices(page
     windows.in_machine(page, "#print-slice").click()
     expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
 
-    seen = windows.in_machine(page, '#print-seen-faults select[data-fault="stringing"]')
+    rings.on_row(page, "footpedal", "Part", "View", "Feedback", "Feedback")
+    feedback = windows.panel(page, "part-feedback")
+    seen = feedback.locator('#feedback-seen-faults select[data-fault="stringing"]')
     expect(seen).to_be_visible(timeout=10000)
     seen.select_option("2")
-    windows.in_machine(page, "#print-seen-keep").click()
+    feedback.locator("#feedback-seen-keep").click()
     expect(page.locator("#status")).to_contain_text(
-        "look-1 kept for printer_1: footpedal looked at: stringing clear; proposed: "
-        "filament_retraction_length 4 mm -> 4.5 mm",
+        "look-1 filed in footpedal's drawer, for printer_1: footpedal looked at: stringing "
+        "clear; proposed: filament_retraction_length 4 mm -> 4.5 mm",
         timeout=10000,
     )
     expect(seen).to_have_value("0")
-    history = windows.in_machine(page, "#print-tune-history")
+    history = feedback.locator("#feedback-tune-history")
     expect(history).to_contain_text("look-1, footpedal, seen: stringing clear")
-    windows.in_machine(page, "#print-tune-apply").click()
+    feedback.locator("#feedback-tune-apply").click()
     expect(page.locator("#status")).to_contain_text(
         "Taken for printer_1's next slices: filament_retraction_length", timeout=10000
     )
     expect(history).to_contain_text(
         "stringing: clear at look-1 (then filament_retraction_length 4.5)"
     )
-    windows.in_machine(page, "#print-tune-undo").click()
+    feedback.locator("#feedback-tune-undo").click()
     expect(page.locator("#status")).to_contain_text("look-1 undone", timeout=10000)
     assert errors == []

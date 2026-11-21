@@ -31,6 +31,7 @@ happened (OrcaSlicer's whole configuration is in the G-code it wrote).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -317,6 +318,7 @@ def slice_into(
         runner.log(f"  {setting.name} = {setting.value!r}  [{setting.origin}: {setting.source}]")
     stl = target.stl(runner.log)
     size = model_size(stl)
+    stl_sha256 = hashlib.sha256(stl).hexdigest()
     work = _work_dir()
     try:
         model = work / "model.stl"
@@ -359,6 +361,7 @@ def slice_into(
             made=target.made,
             printer=printer.at,
             size=size,
+            stl_sha256=stl_sha256,
             plan=target.plan,
             settings=resolved.settings,
             estimate=Estimate(**output.estimate) if output.estimate else None,

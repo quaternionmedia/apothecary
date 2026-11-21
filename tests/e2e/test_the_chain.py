@@ -77,8 +77,8 @@ PICTURED = {
         "cut; Toolpath's stage is the router's Cut window; See writes the coupon's "
         "toolpath where none is kept and draws it on the table; Needs is the router's "
         "Status, where it says what it needs before it moves; Cut is the Machine and "
-        "Jobs; Measure is the Cut window again, the coupon's file chosen and what it "
-        "names to measure under measured. The picture is See.",
+        "Jobs; Measure is the coupon's cabinet in Part › Feedback, its toolpath among its "
+        "pieces and what it names to measure under measured. The picture is See.",
     ),
     "board": (
         "hear",
@@ -220,15 +220,16 @@ STANDS = {
     ("make", "slice"): lambda page: _says(page, "machine-print", "footpedal"),
     ("make", "see"): _path_drawn_on("printer_1"),
     ("make", "print"): lambda page: _shown(page, "machine-print"),
-    # The footpedal's file chosen, what it was sliced to under measured, nothing kept.
-    ("make", "measure"): lambda page: _says(page, "machine-print", "sliced"),
+    # The footpedal's cabinet in Part › Feedback, its slice among its pieces, nothing filed.
+    ("make", "measure"): lambda page: _says(page, "part-feedback", "Feedback · footpedal"),
     ("cut", "choose"): _on(ROUTER),
     ("cut", "toolpath"): lambda page: _says(page, "machine-print", "Toolpath"),
     ("cut", "see"): _path_drawn_on("cnc_router"),
     ("cut", "needs"): lambda page: _says(page, "machine-status", "Pins on"),
     ("cut", "cut"): lambda page: _shown(page, "machine-print"),
-    # The coupon's file chosen, what it names to measure under measured, nothing kept.
-    ("cut", "measure"): lambda page: _says(page, "machine-print", "mm designed"),
+    # The coupon's cabinet in Part › Feedback, what its toolpath names to measure under
+    # measured, nothing filed.
+    ("cut", "measure"): lambda page: _says(page, "part-feedback", "mm designed"),
     ("board", "pin"): lambda page: (
         _on(DEVKIT)(page),
         _selected("esp32_blink")(page),
@@ -415,9 +416,11 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
         if journey.id == "drawing":
             made = _drawn(page).get("made")
 
-    # Nothing armed, nothing started, no piece made, no word given, no real port touched.
+    # Nothing armed, nothing started, no piece made, no word given, nothing filed, no real
+    # port touched.
     with httpx.Client(base_url=url, timeout=15.0) as http:
         assert http.get("/firmware/printers/armed").json() == {"armed": {}}
+        assert http.get("/cabinet").json() == {"parts": []}
         assert (
             http.get("/firmware/printers/print", params={"port": PRINTER}).json()["running"]
             is False

@@ -144,10 +144,13 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     # not the Machine's beside it. The stage's part is under makes wherever it is entered.
     assert make.steps[4].forward[0] == "machine-print"
     assert ("makes", "footpedal") in make.staged_on
-    # The part made, read in the Print window as a turn of the printer's tuning, a file
-    # of it there whose plan (or box) gives the rows to read.
-    assert make.steps[-1].forward == ("machine-print",) and make.steps[-1].owns == ()
-    assert make.steps[-1].puts == (("file", "footpedal"),)
+    # The piece made, read in its part's cabinet, Part › Feedback, as a turn of the
+    # printer's tuning: a file of it kept, whose plan (or box) gives the rows to read, and
+    # the cabinet opened on the part.
+    assert make.steps[-1].forward == ("part-feedback",)
+    assert make.steps[-1].owns == ("part-feedback",)
+    assert make.steps[-1].puts == (("file", "footpedal"), ("feedback", "footpedal"))
+    assert by_id("cut").steps[-1].forward == ("part-feedback",)
     assert make.steps[-1].shown_by == (
         "46-a-printer-tuned-from-its-prints.md",
         "50-a-printer-tuned-from-what-it-shows.md",

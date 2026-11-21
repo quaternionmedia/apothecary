@@ -152,6 +152,7 @@ said and not applied: printer_1's profile holds
 
 Every later slice for printer_1 with that filament and process takes those four,
 each with the turn it came from; `apothecary tuning` does all of this from the
-shell, and the Print window's **measured** row from the page.
+shell, and the **measured** row of the part's Feedback window from the page, where each
+turn is filed in the drawer of the piece it read (`apothecary cabinet`).
 
     >>> _ = os.environ.pop("APOTHECARY_STATE_DIR") if before is None else os.environ.update(APOTHECARY_STATE_DIR=before)

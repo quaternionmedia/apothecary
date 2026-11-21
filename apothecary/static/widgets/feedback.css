@@ -1,0 +1,13 @@
+/* Part › Feedback (widgets/feedback.js): a part's cabinet, on the page's palette
+ * (static/tokens.css), its card as the Machine's are (widgets/machine.css). */
+.feedback { padding: 0.6rem 0.75rem; color: var(--ink); font-size: 14px; }
+#feedback-card .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin: 0.3rem 0; font-size: 0.78rem; color: var(--ink-2); }
+#feedback-card label { color: var(--ink-3); }
+#feedback-card button { font: inherit; font-size: 0.75rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.5rem; cursor: pointer; }
+#feedback-card button:hover { background: #2f382f; }
+#feedback-card select, #feedback-card input { font: inherit; font-size: 0.75rem; background: #1a1e1a; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.15rem 0.3rem; }
+#feedback-card select#feedback-piece { max-width: 100%; }
+#feedback-card [hidden] { display: none !important; }
+#feedback-tune-history { white-space: pre-line; }
+.feedback-filed { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 0.74rem; color: var(--ink-2); }
+.feedback-filed li.undone { text-decoration: line-through; color: var(--ink-3); }
