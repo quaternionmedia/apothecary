@@ -43,6 +43,23 @@ def from_the_windows_menu(page: Page, pid: str) -> None:
     expect(page.locator(".windows-menu-body")).to_be_hidden()
 
 
+VIEW_MENU = "#view-menu > .view-menu-body"
+
+
+def view_entry(page: Page, view: str):
+    """A view's entry in the header's ⚙ View, which lists them while it is open."""
+    return page.locator(f"{VIEW_MENU} .view-item[data-view='{view}']")
+
+
+def from_the_view_menu(page: Page, view: str) -> None:
+    """A view pressed in the header's ⚙ View, as a person presses it, greyed
+    (aria-disabled alone, which Playwright's wait for an enabled element counts as
+    disabled) or not: the menu folds away."""
+    page.locator("#view-menu > summary").click()
+    view_entry(page, view).click(timeout=5000, force=True)
+    expect(page.locator(VIEW_MENU)).to_be_hidden()
+
+
 # A board's Machine: its main window, and every window of it -- the Machine and each
 # of its sections (``machine-<section>``), which live while it is open.
 MACHINE = ".panel[data-panel='machine']"

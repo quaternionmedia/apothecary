@@ -78,9 +78,10 @@ Left to right, one row:
   router, a part that says how it is cut; a piece made from a picture is made on
   its own site's printers. For another machine, open it: its **makes** offers
   every part.
-- **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
-  Settings ([below](#settings)).
-- **⊞ Windows**: the views, the journeys, then every window by its group, ●
+- **⚙ View**: how the page looks: the views, windows laid out together for one
+  kind of work ([below](#the-windows)), then how the world is drawn
+  ([below](#how-the-world-is-drawn)), and Settings ([below](#settings)).
+- **⊞ Windows**: see-through's switch, the journeys, then every window by its group, ●
   open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
   front.
 - **Docs** opens the documentation in a new tab, the world left where it
@@ -278,7 +279,8 @@ edges and an amber dot: an applied variant, not saved.
 
 ## How the world is drawn
 
-⚙ View folds out the controls below, each named as its cell of the canvas
+⚙ View folds out, under its views ([the windows](#the-windows)), the controls
+below, each named as its cell of the canvas
 ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 `f` with nothing selected).
 
@@ -726,7 +728,7 @@ by its group -- Site, Part, Pictures, Machine, Tools, Family, Airgap, eight at m
 ring's cells, and each a cell of the canvas ring's Panels -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
-at its place, and above them the **views**: windows laid out together for one
+at its place. The header's **⚙ View** lists the **views**, under their heading: windows laid out together for one
 kind of work, each also a cell of Panels › Windows.
 
 Each group has a colour of its own, and a window wears its group's wherever it
@@ -788,7 +790,7 @@ which the page, the ring and the tests all read.
 A view needs its main window. The Machine view, and the Print view, open the Machine
 of the machine selected, or else stepped into, when none is open; with none to open
 each is offered greyed, its tooltip saying why as every greyed control's does
-("Disabled: <why>. ..."), and asked for, from ⊞ Windows or the ring, it says why and
+("Disabled: <why>. ..."), and asked for, from ⚙ View or the ring, it says why and
 leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
 the printer's Machine.
 Laid out, either lands on the file the machine would run: the path of the file its
@@ -842,7 +844,7 @@ what it made:
 | 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure | the Feedback window |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
-listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
+listed in ⚙ View › Views and has a cell on the ring's Panels › Windows, which is
 full; the others are entered from ⊞ Windows › Journeys and from the
 [tour](tour.md), which takes the page to each stage.
 

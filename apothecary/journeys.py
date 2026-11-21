@@ -1,7 +1,7 @@
 """The page's journeys: the paths a person takes through its windows.
 
 A journey's windows are laid out together as a view, as each focused system's are
-(systems.py): listed in the header's ⊞ Windows › Views and on the ring's Panels ›
+(systems.py): listed in the header's ⚙ View › Views and on the ring's Panels ›
 Windows after the systems', and defined on the page from this registry by
 static/systems.js. docs/plans/journeys-2026-11-11.md plans them.
 
@@ -128,7 +128,7 @@ class Journey:
     # machine whose window it opens and the piece it chooses.
     staged_on: Tuple[Tuple[str, str], ...] = ()
     # Its view's cell under the ring's Panels › Windows, as a system's view's is, and
-    # its entry in ⊞ Windows › Views. That ring is full, so only the first journey has
+    # its entry in ⚙ View › Views. That ring is full, so only the first journey has
     # one: the others are entered from ⊞ Windows › Journeys and the tour.
     cell: str = ""
     # The site its subjects stand in -- the pieces and machines its puts name -- which

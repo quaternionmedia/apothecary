@@ -1,5 +1,5 @@
 """The journeys' registry (apothecary/journeys.py) and what reads it: each journey's
-view, laid out from ⊞ Windows and the ring's Panels › Windows after the systems'.
+view, laid out from ⚙ View and the ring's Panels › Windows after the systems'.
 That a view lays its windows out on the page is tests/e2e/test_journeys.py's."""
 
 from __future__ import annotations

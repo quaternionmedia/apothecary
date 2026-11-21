@@ -415,7 +415,7 @@ FAMILY = System(
 
 
 # In the order their views are listed: under Panels › Windows, after the
-# layout's own two cells, and in ⊞ Windows after Default.
+# layout's own two cells, and in ⚙ View after Default.
 SYSTEMS: Tuple[System, ...] = (PART, MACHINE, AIRGAP, FAMILY)
 
 

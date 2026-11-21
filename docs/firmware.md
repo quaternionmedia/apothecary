@@ -604,8 +604,8 @@ A machine is a node drawn from a part that says it is one (`BasePart.machine`:
 the Ender a printer, the AnoleX a router), whether or not a board is pinned to
 it (`GET /sites/{name}/machines`). Everything that prepares a job asks its board
 nothing, so a machine with no board connected -- none pinned, or one pinned and
-unplugged -- opens its Machine all the same, from its badge, its ring or ⊞
-Windows › Machine view: its Print or Cut card alone, its head saying no board is
+unplugged -- opens its Machine all the same, from its badge, its ring or ⚙
+View › Machine: its Print or Cut card alone, its head saying no board is
 connected. What it makes is chosen there, its slice or toolpath written for it
 by its node (`GET /sites/{name}/machines/{path}` answers its choices as
 `/jobs/choices` does for a port), the file kept for its kind, and the file's

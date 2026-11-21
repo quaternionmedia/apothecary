@@ -79,7 +79,7 @@ travel away: the card says so in place of the key, and the Machine view says why
 status line, as it does for a machine with no volume. In `apothecary serve --simulated` the router's work zero is seeded at
 the coupon's stock, so the coupon's toolpath is drawn on the coupon.
 
-⊞ Windows › Machine, and the ring's Panels › Windows › Machine view, land on it. The
+⚙ View › Machine, and the ring's Panels › Windows › Machine view, land on it. The
 Machine of the machine selected, or else stepped into, is opened when none is, its windows
 are laid out, the file its card has chosen is drawn, all of it, and the world is framed on
 the path; a slider a person left part way stays there. With no file of that machine's kept, the status line says how

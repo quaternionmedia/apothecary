@@ -128,7 +128,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "universe-crumb": (LIST, WHAT_YOU_SEE, "the trail's first crumb: the universe, from anywhere"),
     "site-level": (LIST, WHAT_YOU_SEE, "the trail's crumb for the site: up to its own level"),
     "site-item": (WIDGET, WHAT_YOU_SEE, "a site under the site crumb's ▾, loading the one chosen"),
-    # The header's View menu (a fold, like Site's): how the world is drawn.
+    # The header's View menu (a fold, like Site's): how the world is drawn, under
+    # the views panels.js lists there as it opens.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
     "settings-open": (
@@ -1415,17 +1416,29 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         NOTHING,
         "a Machine's button pressed: the windows its ring verb acts on opened",
     ),
-    # The header's ⊞ Windows: listed afresh as it opens, its views and every window
-    # by its group, the first focused; the arrows move along them.
+    # The header's ⊞ Windows: listed afresh as it opens, every window by its group,
+    # the first focused; the arrows move along them.
     "windowsMenuEl:toggle:fillMenu": (
         AUTOMATIC,
         NOTHING,
-        "⊞ Windows opened: its views and windows listed afresh, the first focused",
+        "⊞ Windows opened: its windows listed afresh, the first focused",
     ),
     "windowsBody:keydown:stepFocus": (
         GESTURE,
         NOTHING,
         "the arrows, Home and End moving along ⊞ Windows' list",
+    ),
+    # The header's ⚙ View: its views listed afresh as it opens, each saying whether
+    # it can be laid out now, the first focused; the arrows move along them.
+    "viewMenuEl:toggle:fillViews": (
+        AUTOMATIC,
+        NOTHING,
+        "⚙ View opened: its views listed afresh, the first focused",
+    ),
+    "viewsBody:keydown:stepFocus": (
+        GESTURE,
+        NOTHING,
+        "the arrows, Home and End moving along ⚙ View's views",
     ),
     "window:keydown:onEscapeKey": (
         GESTURE,

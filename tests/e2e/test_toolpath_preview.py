@@ -6,7 +6,7 @@ the machine's marks draw in the world: every segment, then through one layer or 
 then none. Then what differs: a router's file counts from its work zero, so its path
 stands where the controller's zero says, and on the coupon once it is set there.
 
-The Machine view lands on that path, from ⊞ Windows and from the ring: the selected
+The Machine view lands on that path, from ⚙ View and from the ring: the selected
 machine's Machine opened when none is, the file its card has chosen drawn and framed,
 or how a file comes to be kept; and with no machine to open, why not.
 """
@@ -335,7 +335,7 @@ def test_a_router_whose_zero_is_not_known_draws_no_path_and_says_why(page: Page,
     _keep_only(url, machine)
     _settings_unread(page, None)
     _selected(page, url, machine.node)
-    _from_windows(page)
+    _from_view(page)
     expect(page.locator(f"{windows.MACHINE_ROOT}.kind-router")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     said = body.locator("#print-preview-said")
@@ -353,8 +353,6 @@ def test_a_router_whose_zero_is_not_known_draws_no_path_and_says_why(page: Page,
 
 
 # --- the Machine view lands on the path ---------------------------------------------------
-
-MACHINE_VIEW = ".windows-menu-body .view-item[data-view='machine']"
 
 
 def _keep_only(url: str, *machines: Machine, cut: bool = False) -> None:
@@ -392,12 +390,9 @@ def _selected(page: Page, url: str, node: str | None) -> None:
     assert page.evaluate("() => window.fractalViewer.machine") is None
 
 
-def _from_windows(page: Page) -> None:
-    """⊞ Windows › Machine, as a person presses it: greyed (aria-disabled alone, which
-    Playwright's wait for an enabled element counts as disabled) or not."""
-    page.locator("#windows-menu > summary").click()
-    page.locator(MACHINE_VIEW).click(timeout=5000, force=True)
-    expect(page.locator(".windows-menu-body")).to_be_hidden()
+def _from_view(page: Page) -> None:
+    """⚙ View › Machine, as a person presses it, greyed or not."""
+    windows.from_the_view_menu(page, "machine")
 
 
 def _from_the_ring(page: Page) -> None:
@@ -422,22 +417,22 @@ def _framed(page: Page, node: str) -> dict:
 
 @pytest.mark.e2e
 @pytest.mark.parametrize("kind", list(MACHINES))
-def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path(
+def test_view_machine_opens_the_selected_machine_and_lands_on_its_file_s_path(
     page: Page, url: str, kind: str
 ):
-    """A machine selected, its Machine not open, its file kept: ⊞ Windows › Machine opens
+    """A machine selected, its Machine not open, its file kept: ⚙ View › Machine opens
     the Machine, lays its windows out, draws the whole of the file's path in the world
     and frames it, the slider that goes through it beside it."""
     machine = MACHINES[kind]
     expected = machine.expected
     _keep_only(url, machine)
     _selected(page, url, machine.node)
-    page.locator("#windows-menu > summary").click()
-    entry = page.locator(MACHINE_VIEW)
+    page.locator("#view-menu > summary").click()
+    entry = windows.view_entry(page, "machine")
     expect(entry).not_to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_attribute("title", re.compile(f"Opens {machine.node}'s Machine"))
     entry.click(timeout=5000)
-    expect(page.locator(".windows-menu-body")).to_be_hidden()
+    expect(page.locator(windows.VIEW_MENU)).to_be_hidden()
 
     expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     body = windows.machine(page)
@@ -463,7 +458,7 @@ def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path
 
 @pytest.mark.e2e
 @pytest.mark.parametrize("kind", list(MACHINES))
-def test_windows_machine_lands_on_the_path_of_the_machine_stepped_into(
+def test_view_machine_lands_on_the_path_of_the_machine_stepped_into(
     page: Page, url: str, kind: str
 ):
     """Double-clicked into, nothing selected: the machine stepped into is the one its
@@ -474,7 +469,7 @@ def test_windows_machine_lands_on_the_path_of_the_machine_stepped_into(
     page.locator(f"#contents-list .contents-item[data-path='{machine.node}']").dblclick()
     expect(status(page)).to_contain_text(f"Stepped into {machine.node}")
     assert not page.evaluate("() => window.fractalViewer.selectedName")
-    _from_windows(page)
+    _from_view(page)
     expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
@@ -491,17 +486,17 @@ def test_stepped_into_a_piece_with_no_board_the_machine_view_says_which(page: Pa
     _selected(page, url, None)
     page.locator("#contents-list .contents-item[data-path='workbench']").dblclick()
     expect(status(page)).to_contain_text("Stepped into workbench")
-    _from_windows(page)
+    _from_view(page)
     expect(status(page)).to_contain_text("no Machine is open, and workbench has no board pinned")
     assert page.evaluate("() => window.fractalViewer.machine") is None
 
 
 @pytest.mark.e2e
-def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_universe(
+def test_view_machine_lands_on_the_path_in_a_site_reached_through_the_universe(
     page: Page, url: str
 ):
     """The garage stepped into from its piece in the universe is the garage: its
-    router selected, ⊞ Windows › Machine opens the Machine and draws and frames the
+    router selected, ⚙ View › Machine opens the Machine and draws and frames the
     file's path, as it does in the garage opened by its address."""
     machine = MACHINES["router"]
     _keep_only(url, machine)
@@ -512,7 +507,7 @@ def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_univers
     wears(page, machine.node)
     _select(page, machine.node)
     assert page.evaluate("() => window.fractalViewer.machine") is None
-    _from_windows(page)
+    _from_view(page)
     expect(page.locator(f"{windows.MACHINE_ROOT}.kind-router")).to_be_attached(timeout=20000)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
@@ -561,7 +556,7 @@ def test_with_no_file_kept_the_machine_view_says_how_one_comes_to_be(
     machine = MACHINES[kind]
     _keep_only(url)
     _selected(page, url, machine.node)
-    _from_windows(page)
+    _from_view(page)
     expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=20000)
     said = status(page)
     expect(said).to_contain_text("No path is drawn: no file is kept yet", timeout=10000)
@@ -582,19 +577,19 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
     before = page.evaluate(
         "() => window.apothecaryPanels.list().filter((w) => w.open).map((w) => w.id)"
     )
-    page.locator("#windows-menu > summary").click()
-    entry = page.locator(MACHINE_VIEW)
+    page.locator("#view-menu > summary").click()
+    entry = windows.view_entry(page, "machine")
     expect(entry).to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_attribute(
         "title", re.compile(r"^Disabled: no Machine is open and nothing is selected")
     )
-    other = page.locator(".windows-menu-body .view-item[data-view='part']")
+    other = windows.view_entry(page, "part")
     grey = "(el) => getComputedStyle(el).opacity"
     assert entry.evaluate(grey) == "0.45" and other.evaluate(grey) == "1"
     # Pressed all the same, as a person can: aria-disabled alone, which Playwright's own
     # wait for an enabled element counts as disabled.
     entry.click(timeout=5000, force=True)
-    expect(page.locator(".windows-menu-body")).to_be_hidden()
+    expect(page.locator(windows.VIEW_MENU)).to_be_hidden()
     said = status(page)
     expect(said).to_contain_text("Machine view: no Machine is open and nothing is selected")
     expect(said).to_contain_text("select a machine with a board pinned to it")
@@ -621,7 +616,7 @@ def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page
     printer = MACHINES["printer"]
     _keep_only(url, printer, cut=True)
     _selected(page, url, printer.node)
-    _from_windows(page)
+    _from_view(page)
     body = windows.machine(page)
     expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
     expect(body.locator("#print-pick option:checked")).to_contain_text(printer.file)
@@ -629,7 +624,7 @@ def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page
 
     _keep_only(url, cut=True)
     _selected(page, url, printer.node)
-    _from_windows(page)
+    _from_view(page)
     said = status(page)
     expect(said).to_contain_text(
         "No path is drawn: the file kept, router_coupon-cnc_router.nc, was made for a router, "
@@ -667,7 +662,7 @@ def test_a_file_that_says_no_kind_of_machine_is_no_card_s_to_choose(page: Page, 
         lambda route: route.fulfill(json=[A_FILE_OF_NO_KIND]),
     )
     _selected(page, url, printer.node)
-    _from_windows(page)
+    _from_view(page)
     pick = windows.machine(page).locator("#print-pick")
     expect(pick.locator("option").first).to_have_text("— none kept for a printer —", timeout=10000)
     expect(pick.locator("option", has_text=A_FILE_OF_NO_KIND["name"])).to_be_attached()

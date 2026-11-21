@@ -26,7 +26,6 @@ from garage import select as _select
 from playwright.sync_api import Page, expect
 
 MAINBOARD = "printer_1.frame_system.mainboard"
-MAKE = ".windows-menu-body .view-item[data-view='make']"
 MAKE_A_THING = ".windows-menu-body .journey-item[data-journey='make']"
 RAIL = "#journey-rail"
 STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
@@ -57,8 +56,8 @@ def test_the_make_view_is_greyed_until_a_machine_is_there(page: Page, url: str):
     """The footpedal chosen and no Machine open: the Print view says what it needs."""
     open_garage(page, url, settle=False)
     _select(page, "footpedal")
-    page.locator("#windows-menu > summary").click()
-    entry = page.locator(MAKE)
+    page.locator("#view-menu > summary").click()
+    entry = windows.view_entry(page, "make")
     # Greyed as every control the page greys is: its look and "Disabled: <why>".
     expect(entry).to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_attribute("title", re.compile(r"^Disabled: .*footpedal"))
@@ -108,12 +107,12 @@ def _enter_make_a_thing(page: Page) -> None:
 @pytest.mark.e2e
 def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, url: str):
     _machine_open_and_the_part_chosen(page, url)
-    page.locator("#windows-menu > summary").click()
-    entry = page.locator(MAKE)
+    page.locator("#view-menu > summary").click()
+    entry = windows.view_entry(page, "make")
     expect(entry).not_to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_text("Print")
     entry.click(timeout=5000)
-    expect(page.locator(".windows-menu-body")).to_be_hidden()
+    expect(page.locator(windows.VIEW_MENU)).to_be_hidden()
     expect(status(page)).to_contain_text("The Print view: its windows laid out together")
 
     # Print comes in front of the Machine's stack once its card has drawn.
