@@ -38,7 +38,16 @@ from .facets import SYSTEMS as SITE_SYSTEMS
 from .hierarchy import Assembly, find_node_by_path
 from .journeys import JOURNEYS
 from .journeys import by_id as journey_by_id
-from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, shells_in
+from .layer_colours import (
+    BED_MESH,
+    CATEGORY,
+    GRID,
+    MACHINE_BUTTONS,
+    MEASURE,
+    SHELL,
+    colour_of,
+    shells_in,
+)
 from .projects.parts.skeleton import ROOT
 from .projects.registry import category_of
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
@@ -1137,13 +1146,15 @@ def _view(
     )
 
 
-# The world's own layers, and the words their cells say. The grid and the machines'
-# buttons are a set of their own, among which Only this and All act; the measurement
-# is a mode, so it is only ever shown or not.
+# The world's own layers, and the words their cells say. The grid, the machines'
+# buttons and their bed readings are a set of their own, among which Only this and All
+# act; the measurement is a mode, so it is only ever shown or not. The bed mesh comes
+# last, so the cells before it keep theirs.
 WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
     (GRID, "Grid"),
     (MACHINE_BUTTONS, "Buttons"),
     (MEASURE, "Measure"),
+    (BED_MESH, "Bed mesh"),
 )
 
 
@@ -1151,8 +1162,8 @@ def _layer_ring(layer: str, label: str) -> Option:
     """One layer's ring, in its colour: Shown, then Selectable where a click can pick
     what it draws (a shell's, a System's, a category's), then Only this and All -- this
     layer shown and the others of its set hidden, and every one of its set shown -- where
-    it has a set (not the measurement): the shells, the pieces' layers, or the grid and
-    the buttons. Each does what its row of the Layers window does, or the same over its
+    it has a set (not the measurement): the shells, the pieces' layers, or the grid, the
+    buttons and the bed mesh. Each does what its row of the Layers window does, or the same over its
     set (``layer:<verb>:<layer>``, the page's)."""
     colour = colour_of(layer)
 

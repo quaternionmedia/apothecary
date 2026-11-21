@@ -86,6 +86,7 @@ def test_every_colour_written_down_is_one_the_page_can_draw():
 def test_a_layer_is_named_as_the_pick_scope_names_it():
     assert colour_of("grid") == WORLD["grid"]
     assert colour_of("measure") == WORLD["measure"]
+    assert colour_of("bed-mesh") == WORLD["bed-mesh"]
     assert colour_of("shell:0") == SHELLS[0]
     assert colour_of(f"shell:{len(SHELLS) + 1}") == SHELLS[1]
     # A System's, a Kind's and a category's are the facets' (apothecary/facets.py).
@@ -106,11 +107,11 @@ def test_the_machines_buttons_wear_the_machine_groups_colour_as_tokens_say_it():
 
 
 def test_the_shells_and_the_worlds_own_stand_apart_from_each_other_and_from_what_they_meet():
-    """A shell's rings, the build volumes and the measurement are drawn beside the
-    facets' clusters and pieces, the badges of each group and the colours that mean a
-    state: each is at least 20 apart (ΔE*76) from all of those and from each other. The
-    facets' are held apart from each other in tests/test_facets.py."""
-    own = [*SHELLS, WORLD["grid"], WORLD["measure"]]
+    """A shell's rings, the build volumes, the measurement and a bed reading's posts are
+    drawn beside the facets' clusters and pieces, the badges of each group and the colours
+    that mean a state: each is at least 20 apart (ΔE*76) from all of those and from each
+    other. The facets' are held apart from each other in tests/test_facets.py."""
+    own = [*SHELLS, WORLD["grid"], WORLD["measure"], WORLD["bed-mesh"]]
     for a, b in itertools.combinations(own, 2):
         assert _apart(a, b) >= 20, (a, b)
     met = [*_facets(), *_groups().values(), *_states()]
@@ -182,6 +183,7 @@ def test_the_garage_has_its_systems_its_loose_parts_kinds_and_the_worlds_layers_
         "grid",
         "machine-buttons",
         "measure",
+        "bed-mesh",
     ]
     assert colours["system:building"] == "#9c8f7a"
     # A machine's System wears the Machines token's colour (apothecary/facets.py).
@@ -212,12 +214,15 @@ def test_a_site_is_sent_with_its_colours():
 
 
 def test_the_page_holds_no_palette_of_its_own():
-    """The facets' colours, the build volumes' and the measurement's are the table's,
-    read from the site the page is sent: none is written in the page."""
+    """The facets' colours, the build volumes', the measurement's and the bed mesh's are
+    the table's, read from the site the page is sent: none is written in the page, nor in
+    the marks a machine wears in it."""
     assert "CATEGORY_COLORS" not in TEMPLATE
-    for colour in [*_facets(), WORLD["grid"], WORLD["measure"], "#ffb347"]:
-        assert f"0x{colour[1:]}" not in TEMPLATE, colour
-        assert colour not in TEMPLATE, colour
+    marks = (ROOT / "apothecary" / "static" / "machine_marks.js").read_text(encoding="utf-8")
+    for colour in [*_facets(), WORLD["grid"], WORLD["measure"], WORLD["bed-mesh"], "#ffb347"]:
+        for text in (TEMPLATE, marks):
+            assert f"0x{colour[1:]}" not in text, colour
+            assert colour not in text, colour
     assert layer_colours.TOKENS.name == "tokens.css"
 
 

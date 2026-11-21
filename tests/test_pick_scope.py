@@ -19,7 +19,7 @@ NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 pytestmark = pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 
 SCRIPT = """
-import { makePickScope, WALL, GRID, MACHINE_BUTTONS, MEASURE, layersOf, setOf } from "%(module)s";
+import { makePickScope, WALL, GRID, MACHINE_BUTTONS, BED_MESH, MEASURE, layersOf, setOf } from "%(module)s";
 const store = () => { const m = new Map(); return {
     getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), m }; };
 const out = {};
@@ -29,6 +29,7 @@ out.defaults = {
     depth: s.depth(),
     part: s.pickable(piece(0, "category:part")), outer: s.pickable(piece(3, "category:part")), wall: s.pickable(piece(null, WALL)),
     drawnWall: s.drawn(piece(null, WALL)), wallLayer: WALL, grid: s.isShown(GRID), buttons: s.isShown(MACHINE_BUTTONS),
+    bedMesh: s.isShown(BED_MESH), bedMeshLayer: BED_MESH,
     bare: s.pickable({ name: "x" }) && s.drawn({ name: "x" }) && s.pickable(null),
     json: s.toJSON(),
 };
@@ -42,7 +43,8 @@ out.passed = { drawn: s.drawn(piece(3, "category:part")), pickable: s.pickable(p
 s.setShown("shell:3", false);
 s.setSelectable("shell:3", true);
 out.tickedShows = { shown: s.isShown("shell:3"), selectable: s.isSelectable("shell:3") };
-out.shownOnly = { refused: s.setSelectable(GRID, true), selectable: s.isSelectable(GRID) };
+out.shownOnly = { refused: s.setSelectable(GRID, true), selectable: s.isSelectable(GRID),
+    bedMesh: [s.setSelectable(BED_MESH, true), s.isSelectable(BED_MESH)] };
 // Measure is a shown-only layer, off at first, and never kept.
 const mm = makePickScope({ storage: store() });
 out.measure = { first: mm.isShown(MEASURE), refused: mm.setSelectable(MEASURE, true), json: mm.toJSON() };
@@ -62,8 +64,9 @@ out.told = told;
 const kept = store();
 const a = makePickScope({ storage: kept });
 a.setDepth(3); a.setShown("shell:1", false); a.setSelectable("category:part", false); a.setSelectable(WALL, true); a.setShown(GRID, false);
+a.setShown(BED_MESH, false);
 const b = makePickScope({ storage: kept });
-out.kept = { json: b.toJSON(), wall: b.isSelectable(WALL), raw: kept.m.get("apothecary.pickScope") };
+out.kept = { json: b.toJSON(), wall: b.isSelectable(WALL), raw: kept.m.get("apothecary.pickScope"), bedMesh: b.isShown(BED_MESH) };
 b.reset();
 out.reset = { json: b.toJSON(), stored: kept.m.has("apothecary.pickScope") };
 // A damaged store, and a store that throws, leave the defaults.
@@ -76,7 +79,7 @@ out.layers = [layersOf({ shell: 2, layer: "category:part", category: "wall" }), 
 // Only this and All: among a layer's set, told once, selectable as it was chosen.
 const site = { shells: [0, 1, 2], layers: ["system:machines", "category:bolt", "category:board", "kind:shop"] };
 out.sets = [setOf("shell:1", site), setOf("category:board", site), setOf("system:machines", site), setOf(GRID, site),
-    setOf(MACHINE_BUTTONS, site), setOf(MEASURE, site), setOf("shell:7", site), setOf("category:nut", site)];
+    setOf(MACHINE_BUTTONS, site), setOf(MEASURE, site), setOf("shell:7", site), setOf("category:nut", site), setOf(BED_MESH, site)];
 const o = makePickScope({ storage: store() });
 let heard = []; o.onChange((what) => heard.push(what));
 o.setSelectable("shell:1", false);
@@ -87,7 +90,7 @@ out.all = { did: o.showAll(setOf("shell:0", site)), again: o.showAll(setOf("shel
     shown: [0, 1, 2].map((n) => o.isShown(`shell:${n}`)), selectable1: o.isSelectable("shell:1"),
     selectable0: o.isSelectable("shell:0") };
 o.showOnly(GRID, setOf(GRID, site));
-out.world = { grid: o.isShown(GRID), buttons: o.isShown(MACHINE_BUTTONS), measure: o.isShown(MEASURE) };
+out.world = { grid: o.isShown(GRID), buttons: o.isShown(MACHINE_BUTTONS), bedMesh: o.isShown(BED_MESH), measure: o.isShown(MEASURE) };
 out.heard = heard;
 // A Kind's heading: each of its categories at once, told once, said as the heading.
 const k = makePickScope({ storage: store() });
@@ -125,7 +128,8 @@ def test_the_defaults_are_what_the_page_did_before(result):
     assert d["depth"] == 1
     assert d["part"] and d["outer"]
     assert not d["wall"]
-    assert d["drawnWall"] and d["grid"] and d["buttons"] and d["bare"]
+    assert d["drawnWall"] and d["grid"] and d["buttons"] and d["bedMesh"] and d["bare"]
+    assert d["bedMeshLayer"] == "bed-mesh"
     # The walls are the Building System's (apothecary/facets.py).
     assert d["wallLayer"] == "system:building"
     assert d["json"] == {"depth": 1, "hidden": [], "unselectable": []}
@@ -136,7 +140,7 @@ def test_selectable_lies_within_shown(result):
     assert result["reshown"] is True
     assert result["passed"] == {"drawn": True, "pickable": False, "inner": True}
     assert result["tickedShows"] == {"shown": True, "selectable": True}
-    assert result["shownOnly"] == {"refused": False, "selectable": False}
+    assert result["shownOnly"] == {"refused": False, "selectable": False, "bedMesh": [False, False]}
 
 
 def test_depth_is_a_whole_number_from_one(result):
@@ -151,10 +155,11 @@ def test_what_differs_is_kept_and_walls_selectable_is_not(result):
     kept = result["kept"]
     assert kept["json"] == {
         "depth": 3,
-        "hidden": ["grid", "shell:1"],
+        "hidden": ["bed-mesh", "grid", "shell:1"],
         "unselectable": ["category:part"],
     }
     assert kept["wall"] is False
+    assert kept["bedMesh"] is False
     assert json.loads(kept["raw"]) == kept["json"]
     assert result["reset"] == {
         "json": {"depth": 1, "hidden": [], "unselectable": []},
@@ -192,11 +197,12 @@ def test_only_this_and_all_act_among_a_layers_set(result):
         ["shell:0", "shell:1", "shell:2"],
         pieces,
         pieces,
-        ["grid", "machine-buttons"],
-        ["grid", "machine-buttons"],
+        ["grid", "machine-buttons", "bed-mesh"],
+        ["grid", "machine-buttons", "bed-mesh"],
         ["measure"],
         ["shell:0", "shell:1", "shell:2", "shell:7"],
         [*pieces, "category:nut"],
+        ["grid", "machine-buttons", "bed-mesh"],
     ]
     assert result["only"] == {
         "did": True,
@@ -213,7 +219,7 @@ def test_only_this_and_all_act_among_a_layers_set(result):
         "selectable1": False,
         "selectable0": True,
     }
-    assert result["world"] == {"grid": True, "buttons": False, "measure": False}
+    assert result["world"] == {"grid": True, "buttons": False, "bedMesh": False, "measure": False}
     assert result["heard"] == [
         {"layer": "shell:1", "selectable": False},
         {"layer": "shell:1", "only": True},

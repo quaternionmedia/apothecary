@@ -8,13 +8,16 @@
  *   category:NAME    the pieces of a category: a part's, or a word no System holds
  *   grid             the alignment grid: the floor grid and the machines' build volumes
  *   machine-buttons  the badges standing on a machine in the world
+ *   bed-mesh         a machine's bed reading laid over its bed: a printer's bed mesh, a
+ *                    router's table map (machine_marks.js)
  *   measure          the measurement layer: dimension lines on the selection, and a click
  *                    in the world drops a point to measure between rather than selecting
  * A piece is on its shell's layer, where it has one, and on its System's or its
  * category's, as the server sends it (node.layer). A Kind (kind:NAME) is no layer: a
  * heading over its categories', each shown or made selectable at once (setShownEach).
- * The grid, the machine buttons and the measurement are only ever shown or not: a click
- * never picks the first two, and the third is a mode, so none has a selectable tick.
+ * The grid, the machine buttons, the bed mesh and the measurement are only ever shown or
+ * not: a click never picks the first three, and the last is a mode, so none has a
+ * selectable tick.
  * Measure is off at first, and, like walls selectable, the session's: never kept.
  *
  * Depth is a separate number: how many levels below the level in view a click reaches
@@ -29,7 +32,7 @@
  *
  * A layer's ring (View › Layers) also shows one layer alone of its set, or every one of
  * its set (showOnly, showAll, setOf): the shells, the pieces' layers (Systems and
- * categories), or the grid and the machine buttons.
+ * categories), or the world's own: the grid, the machine buttons and the bed mesh.
  *
  * Plain ES module, no dependencies and no listeners of its own: the page asks it
  * (pickable, drawn) and is told (onChange).
@@ -40,9 +43,12 @@ export const DEPTH_MAX = 8;
 export const WALL = "system:building";
 export const GRID = "grid";
 export const MACHINE_BUTTONS = "machine-buttons";
+export const BED_MESH = "bed-mesh";
 // Layers a click never picks: only their being shown is the person's to say.
 export const MEASURE = "measure";
-export const SHOWN_ONLY = new Set([GRID, MACHINE_BUTTONS, MEASURE]);
+export const SHOWN_ONLY = new Set([GRID, MACHINE_BUTTONS, BED_MESH, MEASURE]);
+// The world's own layers, one set: what Only this and All act among (setOf).
+const WORLD_SET = [GRID, MACHINE_BUTTONS, BED_MESH];
 
 export const shellLayer = (n) => `shell:${n}`;
 export const categoryLayer = (name) => `category:${name}`;
@@ -65,11 +71,12 @@ export function layerOf(node) {
 
 /* The layers of `id`'s set, `id` among them, which Only this and All act among: the
  * shells the site has, its pieces' layers (`layers`: its Systems and categories), or the
- * grid and the machines' buttons. The measurement is a mode, a set of its own. */
+ * world's own -- the grid, the machines' buttons and their bed readings. The measurement
+ * is a mode, a set of its own. */
 export function setOf(id, { shells = [], layers = [] } = {}) {
     if (id.startsWith("shell:")) return [...new Set([...shells.map(shellLayer), id])];
     if (isPieceLayer(id)) return [...new Set([...layers.filter(isPieceLayer), id])];
-    if (id === GRID || id === MACHINE_BUTTONS) return [GRID, MACHINE_BUTTONS];
+    if (WORLD_SET.includes(id)) return [...WORLD_SET];
     return [id];
 }
 

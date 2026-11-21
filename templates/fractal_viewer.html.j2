@@ -920,7 +920,7 @@
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
-        import { makePickScope, setOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
+        import { makePickScope, setOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER, BED_MESH as BED_MESH_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex } from '/static/layer_colours.js';
         import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, clusterLabel, limbOf, facesEye, pieceNear } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
@@ -1414,6 +1414,7 @@
                 this.layersWorld = mountLayersWorld({
                     scope: this.pickScope,
                     meshes: () => this.meshByName, overlays: () => this.compoundOverlayByKey, volumes: () => this.buildVolumeMeshByName,
+                    readings: () => Object.values(this.marks || {}).map((m) => m.marks).filter(Boolean),
                     nodeOf: (key) => this.renderNodeByKey[key], grid: () => this.gridHelper,
                     place: () => ({ site: this.siteName, focusPath: this.focusPath }), universe: UNIVERSE,
                     orbits: () => this.applyOrbits(), anchors: () => this.anchors.touch(), measure: () => this.measure.layersApplied(),
@@ -9856,7 +9857,7 @@
                 } catch (e) { answer = null; }
                 const view = answer && answer.where;
                 if (!view || !view.frame || !this.machine || !this.machine.plan || this.machine.path !== planned.path || this.marks[planned.path]) return;
-                const marks = makeMachineMarks(view, { drawVolume: false });
+                const marks = makeMachineMarks(view, { drawVolume: false, meshShown: this.pickScope.isShown(BED_MESH_LAYER) });
                 marks.group.position.copy(marksToScene(this.machineOrigin(planned.path, view.frame)));
                 marks.group.userData.key = planned.path;
                 this.scene.add(marks.group);
@@ -10063,7 +10064,7 @@
                     if (!this.marks[path] || !this.marks[path].pending) return;
                     if (!where || !where.printer || !where.printer.frame) { delete this.marks[path]; return; }
                     // The world already draws each printer's build volume (updateBuildVolumeIndicator).
-                    const marks = makeMachineMarks(where.printer, { drawVolume: false });
+                    const marks = makeMachineMarks(where.printer, { drawVolume: false, meshShown: this.pickScope.isShown(BED_MESH_LAYER) });
                     marks.group.position.copy(marksToScene(this.machineOrigin(path, where.printer.frame)));
                     marks.group.userData.key = path;  // the printer's: they never dim its board's badge
                     this.scene.add(marks.group);

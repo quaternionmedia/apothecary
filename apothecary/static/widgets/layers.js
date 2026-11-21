@@ -11,8 +11,8 @@
  * walls in View is its row's Selectable); the parts a heading for each Kind, its ticks
  * set when every one of its categories is so, half set when some are, and acting on
  * them all, and a row for each of its categories beneath it; a row for each word neither
- * holds (a picture's); and the world's own, the alignment grid, the machines' buttons and
- * the measurement, only Shown.
+ * holds (a picture's); and the world's own, the alignment grid, the machines' buttons, the
+ * measurement and the machines' bed readings, only Shown.
  * With Measure shown, what it reads (the selection's size, the distance between two points,
  * the gap between two pieces, the diameter or wall under a click, each with its source) is
  * written below the rows as text.
@@ -30,7 +30,7 @@
  */
 
 import { setReason } from "/static/can.js";
-import { GRID, MACHINE_BUTTONS, MEASURE, WALL, DEPTH_MAX, shellLayer } from "/static/pick_scope.js";
+import { GRID, MACHINE_BUTTONS, BED_MESH, MEASURE, WALL, DEPTH_MAX, shellLayer } from "/static/pick_scope.js";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -38,6 +38,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 export function layerLabel(id) {
     if (id === GRID) return "Alignment grid";
     if (id === MACHINE_BUTTONS) return "Machine buttons";
+    if (id === BED_MESH) return "Bed mesh";
     if (id === MEASURE) return "Measure";
     if (id.startsWith("shell:")) return `Shell ${id.slice("shell:".length)}`;
     if (id.startsWith("category:")) return id.slice("category:".length);
@@ -142,6 +143,7 @@ ${section("Parts, by shell", shellRows)}${section("Systems", systemRows)}${secti
             row(GRID, layerLabel(GRID), "The machines' build volumes, drawn in this colour, and the floor grid, drawn in the faint greys a floor wears: this layer shows or hides both", false),
             row(MACHINE_BUTTONS, layerLabel(MACHINE_BUTTONS), "The badges a machine wears in the world", false),
             row(MEASURE, layerLabel(MEASURE), "While shown, a click in the world drops a point to measure between and selects nothing, and reads the diameter or the wall under it; the selection reads its size", false),
+            row(BED_MESH, layerLabel(BED_MESH), "A machine's bed reading, drawn as a relief over its bed: a printer's bed mesh, a router's table map, its corner posts in this colour", false),
         ])}</table>
 <div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls${taught("layer:reset")}">Reset</button></div>
 ${reading()}`;

@@ -28,7 +28,7 @@
  *                                   the layers say, and a change to the scope answered
  */
 
-import { GRID, MEASURE, WALL } from "/static/pick_scope.js";
+import { BED_MESH, GRID, MEASURE, WALL } from "/static/pick_scope.js";
 import { layerLabel } from "/static/widgets/layers.js";
 
 // The reason a layer not shown hides a drawn thing (hideFor).
@@ -100,6 +100,8 @@ export function layersSaid(what, { wallsSaid }) {
  *   scope                 the pick scope
  *   meshes(), overlays(), volumes()   the pieces' meshes and the outlines round them, by
  *                         key, and the machines' build-volume boxes
+ *   readings()            the machines' marks, each wearing its bed reading
+ *                         (machine_marks.js showMesh)
  *   nodeOf(key)           the node a key draws
  *   grid()                the level's grid as drawn now
  *   place()               { site, focusPath }: where the view is; `universe` the universe's name
@@ -110,15 +112,16 @@ export function layersSaid(what, { wallsSaid }) {
  *   redraw()              the level drawn again
  *   say(words)            the status line
  *   wallsSaid()           what Select walls says of itself */
-export function mountLayersWorld({ scope, meshes, overlays, volumes, nodeOf, grid, place, universe, orbits, anchors, measure, invalidate, walls, redraw, say, wallsSaid }) {
+export function mountLayersWorld({ scope, meshes, overlays, volumes, readings = () => [], nodeOf, grid, place, universe, orbits, anchors, measure, invalidate, walls, redraw, say, wallsSaid }) {
     const wanted = () => gridWanted(scope, { ...place(), universe });
 
     // Every drawn thing put as the layers say: pieces and the outlines round them, the
-    // alignment grid and the build volumes.
+    // alignment grid and the build volumes, and the machines' bed readings.
     function apply() {
         for (const [key, mesh] of Object.entries(meshes())) hideFor(mesh, BY_LAYER, !scope.drawn(nodeOf(key)));
         for (const [key, overlay] of Object.entries(overlays())) hideFor(overlay, BY_LAYER, !scope.drawn(nodeOf(key)));
         for (const box of Object.values(volumes())) hideFor(box, BY_LAYER, !scope.isShown(GRID));
+        for (const marks of readings()) marks.showMesh(scope.isShown(BED_MESH));
         orbits();
         grid().visible = wanted();
         anchors();

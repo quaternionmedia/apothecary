@@ -327,25 +327,28 @@ then Kinds, each over its categories, then words.
 | Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
 | Measure | Dimension lines on the selection, and a click that drops a point to measure between and reads the diameter or the wall under it ([below](#measure)) | Shown (off at first) |
+| Bed mesh | A machine's bed reading, the relief laid over its bed: a printer's bed mesh, a router's table map ([A machine's frame](#a-machines-frame)). Hidden, a reading taken or shown afterwards is hidden too, until the tick is on again | Shown |
 
 **Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
 server sends with the site (`layer_colours`, beside `tree`), so the page writes none of
 its own: a System's or a category's pieces are drawn in it, the build volumes in the grid's (the floor grid's lines are the faint greys a floor is drawn in, and the row says so), the
-measurement in its own, and a machine's badges wear the Machine group's, which is the
-machine buttons' layer's. A System's, a Kind's and a category's are the facets' tokens,
+measurement in its own, a bed reading's corner posts in the bed mesh's yellow (its relief
+keeps the blue-to-amber of its heights), and a machine's badges wear the Machine group's,
+which is the machine buttons' layer's. A System's, a Kind's and a category's are the facets' tokens,
 a category a shade of its kind's. A word nobody wrote down, a picture's, takes a
 colour from its name, the same every time. The Layers window's rows wear their layers'
 colours, a legend, and a tick, the stepper's - and + and Reset each name in their tip
 the address of the ring's cell that does the same.
 
 **Each layer has a ring of its own**, under the canvas ring's View › Layers: Window 8
-(the Layers window), World 6 (the grid's, the machine buttons' and the measurement's
-rings), Reset 2 (the window's Reset), then the layers of what lies beneath the level in
+(the Layers window), World 6 (the grid's, the machine buttons', the measurement's and
+the bed mesh's rings, so the bed mesh is shown or hidden by View › Layers › World › Bed
+mesh › Shown), Reset 2 (the window's Reset), then the layers of what lies beneath the level in
 view -- Shells 4 in the universe, then its Systems, its Kinds and its words -- listed as
 the window lists them, more than eight grouped as any list is. A Kind's ring holds Shown
 and Selectable over all its categories, its heading's ticks, then each category's ring.
 A layer's ring wears its colour, and holds what its row does and two acts over its set
-(the shells, the pieces' layers, or the grid and the machine buttons):
+(the shells, the pieces' layers, or the grid, the machine buttons and the bed mesh):
 
 | Cell | Does |
 |---|---|
@@ -503,8 +506,9 @@ own page for that (`chrome://gpu`, `about:support`) says which.
 ### A machine's frame
 
 Everything the world draws of a machine -- the wire box of its working volume, its
-bed's plane, its tool's mark, a reading's relief, a file's path, the grid of the
-machine stepped into -- is placed by one record, its **frame**, which
+bed's plane, its tool's mark, a reading's relief (shown or hidden as the Bed mesh layer,
+[Layers](#layers)), a file's path, the grid of the machine stepped into -- is placed by
+one record, its **frame**, which
 `api.machine_frame` builds and two answers serve: each machine node of the site's
 tree (`frame`), and the printer `GET /firmware/printers/where` describes for a port
 (`printer.frame`). Its fields, in the site's millimetres:

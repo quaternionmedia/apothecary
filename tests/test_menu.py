@@ -1844,7 +1844,13 @@ def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own(
     ]
     assert layers.children[0].action == "view:layers"
     assert layers.children[2].action == "layer:reset"
-    assert [c.label for c in layers.children[1].children] == ["Grid", "Buttons", "Measure"]
+    # The bed mesh last, so the cells before it keep theirs.
+    assert [(c.label, c.cell) for c in layers.children[1].children] == [
+        ("Grid", 8),
+        ("Buttons", 6),
+        ("Measure", 2),
+        ("Bed mesh", 4),
+    ]
     assert [c.id for c in layers.children[3].children] == [
         "layer:system:building",
         "layer:system:furniture",
@@ -1898,7 +1904,7 @@ def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own(
         "layer:selectable:kind:machines",
         "layer:category:machine",
     ]
-    for layer in ("shell:2", "category:machine", "kind:machines", "grid", "measure"):
+    for layer in ("shell:2", "category:machine", "kind:machines", "grid", "measure", "bed-mesh"):
         ring = _layer_ring_of(universe, layer)
         assert ring.colour == colour_of(layer)
         for cell in ring.children:
@@ -1917,7 +1923,14 @@ def test_a_layers_ring_holds_the_acts_its_set_has():
     universe = resolve(Context(pointing=Pointing.CANVAS), sites.store.get("apothecary"))
     acts = {
         layer: [(c.label, c.action, c.cell) for c in _layer_ring_of(universe, layer).children]
-        for layer in ("shell:0", "category:electrical", "grid", "machine-buttons", "measure")
+        for layer in (
+            "shell:0",
+            "category:electrical",
+            "grid",
+            "machine-buttons",
+            "measure",
+            "bed-mesh",
+        )
     }
     assert acts["shell:0"] == [
         ("Shown", "layer:shown:shell:0", 8),
@@ -1937,6 +1950,11 @@ def test_a_layers_ring_holds_the_acts_its_set_has():
         ("All", "layer:all:grid", 2),
     ]
     assert [a[0] for a in acts["machine-buttons"]] == ["Shown", "Only this", "All"]
+    assert acts["bed-mesh"] == [
+        ("Shown", "layer:shown:bed-mesh", 8),
+        ("Only this", "layer:only:bed-mesh", 6),
+        ("All", "layer:all:bed-mesh", 2),
+    ]
     assert acts["measure"] == [("Shown", "layer:shown:measure", 8)]
     electronics = _layer_ring_of(universe, "kind:electronics")
     assert [(c.label, c.action) for c in electronics.children] == [

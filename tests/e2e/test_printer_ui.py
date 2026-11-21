@@ -28,8 +28,10 @@ import time
 
 import httpx
 import pytest
+import rings
 import windows
-from boards import BOARD, PRINTER
+from boards import BOARD, PRINTER, wears
+from garage import open_garage, said
 from garage import select as _select
 from playwright.sync_api import Page, expect
 from viewer_ready import FRAMES, settled
@@ -1055,6 +1057,74 @@ def test_the_reading_shown_is_drawn_over_the_bed(page: Page, printer_url: str):
     machine.locator("#level-history .pick", has_text="read").first.click()
     expect(machine.locator("#level-stats")).to_contain_text("read ·")
     page.wait_for_function(f"(id) => ({shown})().record_id === id", arg=read_id)
+
+
+# How many bed readings the scene draws now: three.js passes over what is hidden, and
+# over everything a hidden thing holds, as the renderer does.
+BED_MESH_DRAWN = (
+    "() => { let n = 0; window.fractalViewer.scene.traverseVisible("
+    "(o) => { if (o.userData.layer === 'bed-mesh') n += 1; }); return n; }"
+)
+# A reading the page's own event shows after the layer is hidden: the printer's.
+A_LATER_READING = {
+    "id": "20260921T090000.000-dev_ttyFAKE1",
+    "port": PRINTER,
+    "board": "FAKESERIAL1",
+    "machine": "printer",
+    "at": "2026-09-21T09:00:00.000000Z",
+    "method": "read",
+    "mesh": [[0.0, 0.2, 0.3], [0.1, 0.25, 0.4], [0.05, 0.3, 0.5]],
+    "stats": {"range": 0.5, "mean": 0.23},
+    "firmware": "Marlin made up",
+}
+
+
+@pytest.mark.e2e
+def test_the_bed_mesh_is_a_layer_hidden_and_shown_again(page: Page, printer_url: str):
+    """The reading over the printer's bed is the Bed mesh layer's: its Shown tick in the
+    Layers window takes it out of the scene, kept rather than dropped; a reading shown
+    afterwards is drawn hidden too; the choice holds over a reload, as every layer's;
+    and the ring's View › Layers › World › Bed mesh › Shown puts it back."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    read_id = _read_the_bed(printer_url)
+    open_garage(page, printer_url, settle=False)
+    wears(page, "printer_1")
+    marks = "window.fractalViewer.marks['printer_1']"
+    shown = f"() => {marks} && {marks}.marks && {marks}.marks.mesh()"
+    page.wait_for_function(
+        f"(id) => ({shown})() && ({shown})().record_id === id", arg=read_id, timeout=15000
+    )
+    assert page.evaluate(BED_MESH_DRAWN) == 1
+
+    windows.from_the_windows_menu(page, "layers")
+    tick = page.locator(
+        ".panel[data-panel='layers'] input[data-layer='bed-mesh'][data-kind='shown']"
+    )
+    expect(tick).to_be_checked()
+    tick.uncheck()
+    said(page, "Bed mesh: hidden")
+    assert page.evaluate(BED_MESH_DRAWN) == 0
+    assert page.evaluate(f"() => {marks}.marks.mesh().record_id") == read_id
+
+    page.evaluate(
+        "(reading) => window.dispatchEvent(new CustomEvent('apothecary:mesh', { detail: reading }))",
+        A_LATER_READING,
+    )
+    page.wait_for_function(f"(id) => ({shown})().record_id === id", arg=A_LATER_READING["id"])
+    assert page.evaluate(BED_MESH_DRAWN) == 0
+
+    page.reload()
+    wears(page, "printer_1")
+    page.wait_for_function(
+        f"(id) => ({shown})() && ({shown})().record_id === id", arg=read_id, timeout=15000
+    )
+    assert "bed-mesh" in page.evaluate("() => window.fractalViewer.pickScope.toJSON().hidden")
+    assert page.evaluate(BED_MESH_DRAWN) == 0
+
+    rings.on_world(page, "View", "Layers", "World", "Bed mesh", "Shown")
+    said(page, "Bed mesh: shown")
+    assert page.evaluate(BED_MESH_DRAWN) == 1
 
 
 @pytest.mark.e2e

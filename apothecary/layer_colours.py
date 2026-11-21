@@ -3,16 +3,18 @@
 
 A layer is named as the pick scope names it (``static/pick_scope.js``): ``shell:N``,
 ``system:NAME``, ``category:NAME``, ``kind:NAME`` (a heading over its categories' layers,
-``facets.py``), ``grid``, ``machine-buttons``, ``measure``. Its colour is used for what it
-draws in the world -- a shell's rings, a System's or a category's pieces, the outline round
-a cluster on a shell, the build volumes, the badges, the measurement -- and for its cells of
+``facets.py``), ``grid``, ``machine-buttons``, ``measure``, ``bed-mesh``. Its colour is used
+for what it draws in the world -- a shell's rings, a System's or a category's pieces, the
+outline round a cluster on a shell, the build volumes, the badges, the measurement, a bed
+reading's corner posts -- and for its cells of
 the ring and its row of the Layers window, so a person who sees a colour in one place knows
 it in the others. The page is told the colours of the layers a site has, with the site
 (``layer_colours``); the ring's cells carry theirs (``apothecary/menu.py``).
 
 - **The world's own**: the alignment grid's, the colour the machines' build volumes are
   drawn in; the machines' buttons', the Machine group's own (``static/tokens.css``), since
-  the badges it draws wear it; the measurement's.
+  the badges it draws wear it; the measurement's; the bed mesh's, a level's yellow, the
+  posts at a bed reading's corners (its relief wears its heights' blue and amber).
 - **A shell's**, by its number, innermost first, and from the first again past the last.
 - **A System's, a Kind's and a category's** are the facets' (``facets.py``, their tokens):
   a category a shade of its kind's. A word neither facet holds (a picture's word is
@@ -38,6 +40,7 @@ from .facets import colour as facet_colour
 GRID = "grid"
 MACHINE_BUTTONS = "machine-buttons"
 MEASURE = "measure"
+BED_MESH = "bed-mesh"
 SHELL = "shell:"
 
 TOKENS = Path(__file__).resolve().parent / "static" / "tokens.css"
@@ -57,6 +60,8 @@ WORLD: Dict[str, str] = {
     GRID: "#33ffdd",
     MACHINE_BUTTONS: _token("--group-machine"),
     MEASURE: "#ff2fd0",
+    # A bed reading's corner posts; its relief keeps its heights' colours.
+    BED_MESH: "#fff200",
 }
 
 # Innermost first. Bright and saturated, apart from the facets' quieter colours, so

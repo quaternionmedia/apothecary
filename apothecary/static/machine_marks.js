@@ -5,7 +5,10 @@
  * its working area, its table and its tool, placed by the position the page
  * computes from its controller's (toolPosition below), and its table map as
  * the relief, where the map says its points were probed. A reading is laid
- * over the marks of the kind of machine that took it, by its caller.
+ * over the marks of the kind of machine that took it, by its caller. The
+ * relief is the bed mesh layer's (pick_scope.js BED_MESH): shown or hidden as
+ * the page says (showMesh), a reading drawn later as the page last said, and
+ * its corner posts in the layer's colour.
  *
  * One group, in the printer's own frame (apothecary's z-up, relative to the
  * printer's origin), laid out by the machine's frame (api.machine_frame, the
@@ -25,6 +28,8 @@
 import * as THREE from "three";
 import { esc } from "/static/board_text.js";
 import { toScene } from "/static/frames.js";
+import { layerColour } from "/static/layer_colours.js";
+import { BED_MESH } from "/static/pick_scope.js";
 
 export const VOLUME_COLOR = 0x6fb3e8;
 export const NOZZLE_COLOR = 0xff8080;
@@ -40,6 +45,7 @@ export const MOVE_COLORS = { extrude: 0x6fdb75, cut: 0xffcc66, plunge: 0xff8080,
 const MESH_LOW = [0x6f, 0xb3, 0xe8];   // the bed card's blue, below the mean
 const MESH_HIGH = [0xe8, 0xb0, 0x4a];  // its amber, above
 const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from the probeable edge
+const MESH_POST = 0xffffff;            // the corner posts, where the site sent no colour for the layer
 
 // apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up (frames.js).
 export { toScene };
@@ -127,8 +133,9 @@ export function meshExaggeration(range) {
 /* `printer` is what GET /firmware/printers/where answers for the printer; its
  * `frame` (api.machine_frame) is what the marks are laid out by (its position
  * is the caller's to apply). `drawVolume: false` leaves the wire box to a scene
- * that already has one. */
-export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
+ * that already has one; `meshShown: false` draws a bed reading hidden, the bed
+ * mesh layer not shown. */
+export function makeMachineMarks(printer, { drawVolume = true, meshShown = true, onNote } = {}) {
     const note = (text, key) => { if (onNote) onNote(text, key); };
     const group = new THREE.Group();
     // What the bed carries -- its plane, the reading's relief, a file's path -- in a group
@@ -205,6 +212,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     // replaced whenever the page shows another reading.
     let meshGroup = null;
     let meshDrawn = null;
+    let meshWanted = !!meshShown;  // the bed mesh layer shown (showMesh)
     function clearMesh() {
         if (meshGroup) {
             bedGroup.remove(meshGroup);
@@ -270,7 +278,9 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             const k = (j * nCols + i) * 3;
             posts.push(new THREE.Vector3(positions[k], bedY, positions[k + 2]), new THREE.Vector3(positions[k], positions[k + 1], positions[k + 2]));
         }
-        meshGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(posts), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })));
+        meshGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(posts), new THREE.LineBasicMaterial({ color: layerColour(BED_MESH, MESH_POST), transparent: true, opacity: 0.6 })));
+        meshGroup.userData.layer = BED_MESH;
+        meshGroup.visible = meshWanted;
         bedGroup.add(meshGroup);
         meshDrawn = {
             rows: nRows, cols: nCols, range, exaggeration, bounds,
@@ -369,6 +379,14 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         target() { return { ...target }; },
         setMesh,
         mesh() { return meshDrawn ? JSON.parse(JSON.stringify(meshDrawn)) : null; },
+        // The bed reading shown or hidden, now and for each reading drawn after (the bed
+        // mesh layer, pick_scope.js); whether it changed.
+        showMesh(on) {
+            if (!!on === meshWanted) return false;
+            meshWanted = !!on;
+            if (meshGroup) meshGroup.visible = meshWanted;
+            return true;
+        },
         volume() {
             if (!hasVolume) return null;
             const [vx, vy, vz] = frame.volume;
