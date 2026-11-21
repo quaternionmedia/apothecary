@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import time
 
 import httpx
 import part_editing
@@ -41,16 +43,22 @@ TALLER = "translate([0, 0, size]) cube(size / 2);"
 
 
 @pytest.fixture(scope="module")
-def url(start_server, every_stl_built, tmp_path_factory):
+def folder(tmp_path_factory):
+    """The module's server's cache and state folder."""
+    return tmp_path_factory.mktemp("part-answers")
+
+
+@pytest.fixture(scope="module")
+def url(start_server, every_stl_built, tmp_path_factory, folder):
     real = every_stl_built()["path"]
     if not real:
         pytest.skip("OpenSCAD not installed")
-    folder = tmp_path_factory.mktemp("part-answers")
     orca = write_fake_orcaslicer(tmp_path_factory.mktemp("orca"))
     url = start_server(
         {
             "APOTHECARY_OPENSCAD": real,
             "APOTHECARY_CACHE_DIR": str(folder / "cache"),
+            "APOTHECARY_STATE_DIR": str(folder / "state"),
             "APOTHECARY_SIMULATED_PRINTER": "idle",
             "APOTHECARY_ORCASLICER": str(orca),
             "FAKE_ORCA_LAYERS": "5",
@@ -87,6 +95,34 @@ def variants_cleared(url):
         for variant in http.get(f"/parts/{PART}/saved").json():
             http.delete(f"/parts/{PART}/saved/{variant['name']}").raise_for_status()
         http.delete(f"/parts/{PART}/trash", params={"confirm": "true"}).raise_for_status()
+
+
+@pytest.fixture
+def cabinet_cleared(url, folder):
+    """After the test, nothing in the part's cabinet: no piece made of it is listed for
+    the tests after it."""
+    yield
+    shutil.rmtree(folder / "state" / "cabinet" / PART, ignore_errors=True)
+
+
+def _made(http: httpx.Client, variant: str) -> str:
+    """The cube's cached variant ``variant`` sliced for printer_1, and the piece's drawer
+    opened, as filing something of a piece printed from its slice opens it: the drawer's
+    id. The scripted slicer writes the same G-code whatever it slices, so a second slice
+    is the same kept file, and the same drawer."""
+    body = {"part": PART, "site": "garage", "printer": "printer_1", "variant": variant}
+    task = http.post("/slicer/slice", json=body)
+    task.raise_for_status()
+    task = task.json()
+    deadline = time.monotonic() + 60
+    while task["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.1)
+        task = http.get(f"/slicer/tasks/{task['id']}").json()
+    assert task["status"] == "succeeded", task["lines"]
+    file_id = task["slice"]["record"]["file_id"]
+    drawer = http.post(f"/cabinet/{PART}/drawers", json={"file_id": file_id})
+    drawer.raise_for_status()
+    return drawer.json()["id"]
 
 
 def _open(page: Page, url: str, site: str = "apothecary", part: str = PART) -> None:
@@ -304,6 +340,54 @@ def test_the_variants_window_alone_lists_the_saved_variants(
     expect(_row(page, "three")).to_have_class(re.compile(r"\bchosen\b"))
     assert windows.state(page, VARIANTS)["shown"]
     expect(scad.locator(".saved-row")).to_have_count(0)
+    assert errors == []
+
+
+@pytest.mark.e2e
+def test_the_pieces_made_of_a_part_are_listed_under_the_variant_each_was_made_of(
+    page: Page, url, cube_as_it_was, variants_cleared, cabinet_cleared
+):
+    """What was made of the part is in its Variants window: a piece printed of a saved
+    variant's text is folded under that variant's row, of this save. The variant deleted,
+    the piece is in the fold of pieces made of no saved variant, above Deleted, of the
+    variant deleted. A piece chosen opens its drawer in Part › Feedback."""
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _save(page, url, "wide", params={"size": 30})
+    with httpx.Client(base_url=url, timeout=90.0) as http:
+        text = http.get(f"/parts/{PART}/saved/wide").json()["scad"]
+        drawn = http.post(f"/parts/{PART}/draft/render", json={"scad": text})
+        drawn.raise_for_status()
+        piece_id = _made(http, drawn.json()["variant"])
+        made = http.get(f"/cabinet/{PART}/variants").json()
+    assert [(p["id"], p["how"]) for p in made["variants"]["wide"]] == [(piece_id, "saved")]
+    assert made["unsaved"] == []
+    _open(page, url)
+    _edit(page)
+    _variants(page)
+    made = _row(page, "wide").locator(".variant-made")
+    expect(made.locator("summary")).to_have_text("made: 1 printed", timeout=15000)
+    made.locator("summary").click()
+    piece = made.locator(f".made-row[data-drawer='{piece_id}']")
+    expect(piece.locator(".made-how")).to_have_text("of this save")
+    expect(piece.locator(".made-piece")).to_contain_text("print on printer_1")
+    apart = windows.panel(page, VARIANTS).locator("details.made-apart")
+    expect(apart).to_have_count(0)
+
+    # Deleted, the variant's piece is one of no saved variant's.
+    _manage(page, "wide").locator(".variant-delete").click()
+    expect(_status(page)).to_contain_text("wide moved to the trash", timeout=15000)
+    expect(apart.locator("summary")).to_have_text("Made of no saved variant (1)")
+    apart.locator("summary").click()
+    piece = apart.locator(f".made-row[data-drawer='{piece_id}']")
+    expect(piece.locator(".made-how")).to_have_text("of wide, deleted")
+
+    piece.locator(".made-piece").click()
+    expect(_status(page)).to_contain_text(
+        f"{PART}'s cabinet in Part › Feedback, a drawer chosen", timeout=15000
+    )
+    feedback = windows.panel(page, "part-feedback")
+    expect(feedback.locator("#feedback-piece")).to_have_value(f"drawer:{piece_id}")
     assert errors == []
 
 

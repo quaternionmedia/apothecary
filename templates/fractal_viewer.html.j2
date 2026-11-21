@@ -741,6 +741,12 @@
         .history-row.current { border-left-color: #5ec27e; }
         .history-row .history-now { color: #5ec27e; font-size: 10px; }
         details.variant-trash { margin-top: 6px; }
+        /* The pieces made of a variant, folded under its row; those of none, in their fold. */
+        .variant-made summary { cursor: pointer; color: #8a929e; }
+        details.made-apart { margin-top: 6px; }
+        .made-row { padding: 1px 0 1px 8px; border-left: 2px solid #2a2f38; margin: 2px 0; font-size: 11px; }
+        .made-row .made-piece { background: none; border: 0; padding: 0; color: #4a9eff; cursor: pointer; font: inherit; text-align: left; }
+        .made-row .made-how { color: #8a929e; }
         .trash-row { display: flex; gap: 6px; align-items: center; font-size: 11px; padding: 2px 0; }
         .trash-row .trash-name { color: #b08a8a; }
         /* Two variants compared: a blue, b orange, as they are drawn. */
@@ -956,7 +962,7 @@
         import { mountMotion } from '/static/widgets/motion.js';
         import { mountFeedback } from '/static/widgets/feedback.js';
         import { knownWindows, transientWindows, mountSystems, defineJourneyViews, openFor } from '/static/systems.js';
-        import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
+        import { mountScadEditor, variantChoices, historyRows, trashRows, madeOf, madeApart } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toolPosition as toolPositionOf, makeBedGrid } from '/static/machine_marks.js';
@@ -5408,6 +5414,14 @@
                         'variant-compare': 'compare', 'variant-delete': 'delete', 'variant-restore': 'restore',
                         'trash-restore': 'undelete', 'trash-forget': 'forget', 'trash-empty': 'empty' };
                     savedList.onclick = (ev) => {
+                        // A piece made of the part: its drawer, in Part › Feedback.
+                        const piece = ev.target.closest('.made-piece');
+                        if (piece) {
+                            this.openFeedback(target.part, { drawer: piece.dataset.drawer })
+                                .then(({ said, refused }) => this.setStatus(said ?? refused, refused ? 'error' : 'success'))
+                                .catch((err) => this.setStatus(`The piece's drawer did not open: ${err.message}`, 'error'));
+                            return;
+                        }
                         const chosen = ev.target.closest('.saved-variant');
                         if (chosen) { this.chooseSavedVariant(target, chosen.dataset.variant); return; }
                         const more = ev.target.closest('.variant-more');
@@ -7820,16 +7834,19 @@
             }
 
             // The part's variants saved in git, every one in its Variants window with what
-            // it changes and its ⋯, and the deleted ones in the Deleted fold under them,
-            // left open or shut as it was. The name Save keeps an edit under when none is
-            // typed is the next free one.
+            // it changes, its ⋯ and the pieces made of it, then the pieces made of none,
+            // and the deleted ones in the Deleted fold under them, each fold left open or
+            // shut as it was. The name Save keeps an edit under when none is typed is the
+            // next free one.
             async loadSavedVariants(target, chosen = null) {
                 const scad = this.scadStages[target.key];
                 if (!scad || !target.part) return;
                 const part = encodeURIComponent(target.part);
-                const [saved, trash] = await Promise.all([
+                const asked = this.madeAsked = (this.madeAsked ?? 0) + 1;
+                const [saved, trash, made] = await Promise.all([
                     fetch(`${BASE_URL}/parts/${part}/saved?diff=true`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
                     fetch(`${BASE_URL}/parts/${part}/trash`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+                    this.fetchMade(target),
                 ]);
                 scad.saved = saved;
                 scad.trash = trash;
@@ -7845,8 +7862,54 @@
                 const list = this.variantList(target);
                 if (!list) return;
                 const open = list.querySelector('.variant-trash')?.open;
+                const folds = this.madeFolds(list);
                 list.innerHTML = variantChoices(scad.saved, { chosen: mark })
+                    + `<div class="made-apart-slot"></div>`
                     + `<details class="fold variant-trash"${open ? ' open' : ''}><summary>Deleted (${scad.trash.length})</summary>${trashRows(scad.trash)}</details>`;
+                // The rows are new, so they are filled: with this answer, or left to the
+                // asking made since, which fills them when it answers.
+                if (asked === this.madeAsked) this.showMade(target, made, folds);
+            }
+
+            // The pieces made of the part, its cabinet's drawers by the saved variant each
+            // was made of (GET /cabinet/{part}/variants); null when it did not answer.
+            fetchMade(target) {
+                return fetch(`${BASE_URL}/cabinet/${encodeURIComponent(target.part)}/variants`)
+                    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+            }
+
+            // Which made folds of the list are open: each variant's by its name, and the
+            // pieces of none's.
+            madeFolds(list) {
+                return {
+                    variants: new Set([...list.querySelectorAll('.saved-row[data-variant] .variant-made[open]')].map((d) => d.closest('[data-variant]').dataset.variant)),
+                    apart: !!list.querySelector('.made-apart')?.open,
+                };
+            }
+
+            // The pieces made of the part in its Variants window: under each saved variant
+            // what was made of it, and in their fold above Deleted those made of none.
+            showMade(target, made, folds) {
+                const list = this.variantList(target);
+                if (!list || !made) return;
+                for (const row of list.querySelectorAll('.saved-row[data-variant]')) {
+                    const slot = row.querySelector('.made-slot');
+                    if (slot) slot.innerHTML = madeOf(made.variants?.[row.dataset.variant], { open: folds.variants.has(row.dataset.variant) });
+                }
+                const apart = list.querySelector('.made-apart-slot');
+                if (apart) apart.innerHTML = madeApart(made.unsaved, { open: folds.apart });
+            }
+
+            // The pieces made of the part read again -- a print or a cut has opened a
+            // drawer -- and shown in its Variants window, nothing else in it redrawn.
+            async loadMade(target) {
+                if (!target?.part || !this.variantList(target)) return;
+                const asked = this.madeAsked = (this.madeAsked ?? 0) + 1;
+                const made = await this.fetchMade(target);
+                // An answer overtaken by a later asking is dropped: the later one is newer.
+                if (asked !== this.madeAsked) return;
+                const list = this.variantList(target);
+                if (list) this.showMade(target, made, this.madeFolds(list));
             }
 
             // The Variants window's list of the part being edited, while `target` is.
@@ -8651,6 +8714,8 @@
                     const r = await fetch(`${BASE_URL}/cabinet?job=${encodeURIComponent(jobId)}`);
                     const found = r.ok ? (await r.json()).drawer : null;
                     if (found) await this.openFeedback(found.part, { drawer: found.id });
+                    // The piece among those made of its part, in the Variants window.
+                    if (found && this.scadTarget?.part === found.part) await this.loadMade(this.scadTarget);
                 } catch { /* the cabinet did not answer: the print's end is said all the same */ }
             }
 

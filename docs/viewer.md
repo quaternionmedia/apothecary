@@ -1138,6 +1138,13 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   earlier one restored by its **Restore** as a new save, the history keeping
   what came between), **Compare** and **Delete**. Choosing a variant's name in
   the list draws it, as Draw does.
+- What was made of the part is in the same list: under each variant, folded,
+  the pieces printed or cut of it, each with when, on what machine, how its job
+  ended and what is filed of it; and above Deleted, **Made of no saved
+  variant**, the pieces of the part's own text, of an edit or numbers never
+  saved, or of a variant since deleted. A piece chosen opens its drawer in
+  **Feedback** ([the cabinet](cabinet.md#in-the-page)); a print's or a cut's end
+  puts its piece in the list.
 - Delete moves a variant to the trash (`refs/apothecary/trash/`): **Part ›
   Variants › Deleted**, and the Deleted fold under the Variants window's list,
   hold it -- each deleted variant's **Restore** brings it back, its **Forget**

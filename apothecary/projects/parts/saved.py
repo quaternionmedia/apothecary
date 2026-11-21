@@ -75,6 +75,7 @@ fetch an object it lacks (``GIT_NO_LAZY_FETCH``), and nothing may prompt.
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -992,6 +993,56 @@ def list_trash(part: BasePart, repo: Optional[Path] = None) -> List[SavedVariant
     return _variants(part, where, trash_refs(part) + "/", with_scad=False, root=TRASH_ROOT)
 
 
+class SaveText(NamedTuple):
+    """One save of a variant, by the sha256 of its text as it is served: what a draft
+    drawn from it and rendered records (``variants.Made.draft``)."""
+
+    name: str
+    commit: str
+    digest: str
+    params: Dict[str, Any]  # what its text sets otherwise than the part's own
+    current: bool  # the variant is this commit now
+    deleted: bool  # the variant is in the trash
+
+
+def save_texts(
+    part: BasePart, repo: Optional[Path] = None, history: bool = False
+) -> List[SaveText]:
+    """Each saved variant of the part, then each deleted one, newest first: its text as
+    it is served, by sha256, as it is now, or with ``history`` at every save of it.
+    None outside git."""
+    try:
+        where = where_saved(part, repo)
+    except GitError:
+        return []
+    found = []
+    for root, refs in ((REF_ROOT, part_refs(part)), (TRASH_ROOT, trash_refs(part))):
+        out = git(
+            where.repo,
+            "for-each-ref",
+            "--sort=-creatordate",
+            "--format=%(refname)%00%(objectname)",
+            refs + "/",
+        )
+        for line in out.splitlines():
+            ref, tip = line.split("\0")
+            name = ref[len(refs) + 1 :]
+            commits = _own_commits(where.repo, where, part, tip) if history else [tip]
+            for commit in commits or [tip]:
+                text, _, _ = _served(part, where, commit)
+                found.append(
+                    SaveText(
+                        name=name,
+                        commit=commit,
+                        digest=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                        params=_shown_params(part, text),
+                        current=commit == tip,
+                        deleted=root == TRASH_ROOT,
+                    )
+                )
+    return found
+
+
 def restore_from_trash(
     part: BasePart, name: str, to: Optional[str] = None, repo: Optional[Path] = None
 ) -> SavedVariant:
@@ -1053,6 +1104,7 @@ __all__ = [
     "OVERLAY_SUFFIX",
     "PARAMS_SUFFIX",
     "REF_ROOT",
+    "SaveText",
     "SavedVariant",
     "TRASH_ROOT",
     "Taken",
@@ -1072,6 +1124,7 @@ __all__ = [
     "restore_variant",
     "ref_for",
     "repository_of",
+    "save_texts",
     "save_variant",
     "saved_names",
     "shown_repository",

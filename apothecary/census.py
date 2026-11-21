@@ -231,6 +231,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a button that puts the SCAD editor over the whole page, or back",
     ),
     "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
+    "made-piece": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a piece made of a part, a row under the variant it was made of or among those of "
+        "none: its drawer opened in Part › Feedback",
+    ),
     "part-preset": (WIDGET, WHAT_YOU_SEE, "a drop-down that stages one of a part's presets"),
     "join-btn": (
         WIDGET,

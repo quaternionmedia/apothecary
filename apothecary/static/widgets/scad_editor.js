@@ -210,8 +210,49 @@ export function variantChoices(list, { chosen = null } = {}) {
         return `<div class="saved-row${v.name === chosen ? " chosen" : ""}" data-variant="${esc(v.name)}">`
             + `<button type="button" class="saved-variant" data-variant="${esc(v.name)}" title="Draw ${esc(v.name)}: its SCAD in the editor and its numbers staged, rendered (Part › Variants › ${esc(v.name)} › Draw)">${esc(v.name)}</button>`
             + `<span class="saved-when">${esc(when(v.date))}</span>${head}${overlay}${manage}`
-            + `<div class="saved-numbers">${esc(numbers(v.params))}</div>${changes}</div>`;
+            + `<div class="saved-numbers">${esc(numbers(v.params))}</div>${changes}<div class="made-slot"></div></div>`;
     }).join("");
+}
+
+// What a piece was made of, beside it: of a saved variant (madeOf), or of none (madeApart).
+const MADE_OF = { saved: "of this save", earlier: "of an earlier save", values: "with its values" };
+
+function madeHow(p) {
+    if (p.how in MADE_OF) return MADE_OF[p.how];
+    if (p.how === "deleted") return `of ${p.deleted.join(", ")}, deleted`;
+    if (p.how === "draft") return "of an edit never saved";
+    if (p.how === "values") return `${numbers(p.params)}, never saved`;
+    return "the part's own";
+}
+
+function madeCount(pieces) {
+    const printed = pieces.filter((p) => p.made === "print").length;
+    const cut = pieces.length - printed;
+    return [printed && `${printed} printed`, cut && `${cut} cut`].filter(Boolean).join(", ");
+}
+
+/* A piece made of the part, a row: when, on what, how its job ended and what is filed
+ * of it, and what it was made of; chosen, its drawer opens in Part › Feedback. */
+function madeRow(p) {
+    const ended = p.outcome ?? "no job here";
+    const said = `${when(p.at)} · ${p.made} on ${p.machine}${p.filament ? ` (${p.filament})` : ""}: ${ended}${p.filed ? `; ${p.filed} filed` : ""}`;
+    const save = p.how === "earlier" && p.commit ? ` title="the save ${esc(p.commit.slice(0, 10))}"` : "";
+    return `<div class="made-row" data-drawer="${esc(p.id)}">`
+        + `<button type="button" class="made-piece" data-drawer="${esc(p.id)}" title="Its drawer in Part › Feedback: what was read of it, seen and noted">${esc(said)}</button>`
+        + ` <span class="made-how"${save}>${esc(madeHow(p))}</span></div>`;
+}
+
+/* The pieces made of one saved variant, folded under its row, the newest first. */
+export function madeOf(pieces, { open = false } = {}) {
+    if (!pieces || !pieces.length) return "";
+    return `<details class="variant-made"${open ? " open" : ""}><summary>made: ${esc(madeCount(pieces))}</summary>${pieces.map(madeRow).join("")}</details>`;
+}
+
+/* The pieces made of no saved variant -- the part's own, an edit or numbers never saved,
+ * a variant since deleted -- in their fold. */
+export function madeApart(pieces, { open = false } = {}) {
+    if (!pieces || !pieces.length) return "";
+    return `<details class="fold made-apart"${open ? " open" : ""}><summary>Made of no saved variant (${pieces.length})</summary>${pieces.map(madeRow).join("")}</details>`;
 }
 
 /* A variant's saves, newest first: when, what was said, its numbers; each but the

@@ -45,6 +45,7 @@ written whole under a lock.
 |---|---|
 | `GET /cabinet` | The parts with a drawer; `?job=` the drawer that job's piece is in |
 | `GET /cabinet/{part}` | Its drawers, the newest first, each with its `line` and without its record |
+| `GET /cabinet/{part}/variants` | Its drawers by the saved variant each piece was made of (`variants`, by name) and those of none (`unsaved`); each piece says `how` |
 | `GET /cabinet/{part}/drawers/{id}` | One drawer whole, with its machine's `tuning` (a printer's, for the filament and process the piece used) or `allowance` (a router's) |
 | `POST /cabinet/{part}/drawers` | `{file_id}`: the drawer of a kept slice or cut of the part, opened if need be |
 | `POST /cabinet/{part}/drawers/{id}/measured` | `{readings}`: a print's features in mm (repeats as a list), a cut's sizes (null where not measured) |
@@ -75,6 +76,17 @@ feature a print's plan names (or its box), or one field of a cut's sizes, with *
 **seen**, each fault none to bad, with **Keep look**; **note**, with **Keep note**; Take
 turn and Undo turn; the tuning's history; and what the drawer holds, an undone filing
 struck through. Machine › Print and Cut print and cut: they measure nothing.
+
+**Variants**, the part's saved variants, lists what was made of each, folded under its
+row, and the pieces made of none in their own fold; a piece chosen there opens its
+drawer here. A piece is a saved variant's when it was rendered from that variant's text
+-- `saved`, as the variant is now, `earlier`, one of its saves before -- or made with the
+values the variant's text sets now (`values`): the part's numbers applied, or an overlay's.
+An earlier save counts for a piece whose draft is no variant's text now, and each piece
+is sorted by itself, whatever else was made.
+One made of none is the part's own text (`own`), an edit never saved (`draft`), numbers
+never saved (`values`), or of variants now in the trash (`deleted`). A piece is listed
+under each variant it is one of: a duplicate's pieces are its original's.
 
 ## The command line
 

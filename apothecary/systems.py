@@ -198,7 +198,8 @@ PART = System(
             "Variants",
             "every saved variant of the part, with what it changes: drawn from its row, "
             "renamed, duplicated, an earlier save restored, compared, deleted to the trash "
-            "and restored from it",
+            "and restored from it; and the pieces made of each, and of none, each opening "
+            "its drawer in Feedback",
             home="part-parameters",
             verbs=("part:variant:", "part:trash:"),
         ),

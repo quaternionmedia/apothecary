@@ -924,3 +924,132 @@ class TestCompare:
         before = _as_it_stands(checkout)
         TestClient(app).get("/parts/block/compare", params={"a": "wider", "b": "@part"})
         assert _as_it_stands(checkout) == before
+
+
+class TestThePiecesMadeOfEachVariant:
+    """``GET /cabinet/{part}/variants``: each piece in the part's cabinet under the saved
+    variant it was made of -- rendered from that save's text, from an earlier save's, or
+    with the values its text sets -- and the pieces of none listed apart, saying what they
+    were made of."""
+
+    @pytest.fixture
+    def cabinet(self, tmp_path, monkeypatch):
+        from apothecary import cabinet
+
+        monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+        return cabinet
+
+    def made(self, cabinet, at: int, *, draft: str | None = None, params=None, made="print"):
+        """A drawer of the block's, opened ``at`` minutes past noon."""
+        from datetime import datetime, timezone
+
+        return cabinet._open(
+            "block",
+            datetime(2026, 11, 21, 12, at, tzinfo=timezone.utc),
+            made=made,
+            file=cabinet.MadeFrom(name=f"block-{at}", file_id=f"file-{at}"),
+            variant=f"{at:024x}",
+            params=params or {},
+            draft=hashlib.sha256(draft.encode()).hexdigest() if draft is not None else None,
+            machine=cabinet.Machine(kind="printer" if made == "print" else "router", name="m"),
+        ).id
+
+    def test_each_piece_is_under_the_variant_it_was_made_of(self, checkout, block, cabinet):
+        save_variant(block, "wider", EDITED, {"width": 50})
+        save_variant(block, "wider", EDITED, {"width": 60})
+        save_variant(block, "tall", SCAD, {"width": 70})
+        saved.duplicate_variant(block, "wider", "wider-copy")
+        save_variant(block, "gone", SCAD.replace("3])", "4])"))
+        saved.delete_variant(block, "gone")
+        now = self.made(cabinet, 1, draft=wide(EDITED, 60), params={"width": 60})
+        before = self.made(cabinet, 2, draft=wide(EDITED, 50), params={"width": 50})
+        values = self.made(cabinet, 3, params={"width": 70.0}, made="cut")
+        own = self.made(cabinet, 4)
+        draft = self.made(cabinet, 5, draft=SCAD + "// never saved\n")
+        numbers = self.made(cabinet, 6, params={"width": 77})
+        deleted = self.made(cabinet, 7, draft=SCAD.replace("3])", "4])"))
+
+        body = TestClient(app).get("/cabinet/block/variants").json()
+
+        listed = {
+            name: [(p["id"], p["how"]) for p in pieces] for name, pieces in body["variants"].items()
+        }
+        assert listed == {
+            # The same commit: a duplicate's pieces are its original's.
+            "wider": [(before, "earlier"), (now, "saved")],
+            "wider-copy": [(before, "earlier"), (now, "saved")],
+            "tall": [(values, "values")],
+        }
+        unsaved = [(p["id"], p["how"], p["deleted"]) for p in body["unsaved"]]
+        assert unsaved == [
+            (deleted, "deleted", ["gone"]),
+            (numbers, "values", []),
+            (draft, "draft", []),
+            (own, "own", []),
+        ]
+        piece = body["variants"]["tall"][0]
+        assert piece["made"] == "cut" and piece["cached"] == f"{3:024x}"
+        assert piece["line"].startswith("cut on m")
+
+    def test_a_piece_is_sorted_by_itself_whatever_else_was_made(self, checkout, block, cabinet):
+        save_variant(block, "wider", EDITED, {"width": 50})
+        save_variant(block, "wider", EDITED, {"width": 60})
+        old_values = self.made(cabinet, 1, params={"width": 50})
+
+        def where():
+            body = TestClient(app).get("/cabinet/block/variants").json()
+            assert body["variants"] == {}
+            return [(p["id"], p["how"]) for p in body["unsaved"]]
+
+        # 50 is what wider set once and sets no more: numbers never saved.
+        assert where() == [(old_values, "values")]
+        # A draft that is no variant's text now has every save read, and moves nothing else.
+        draft = self.made(cabinet, 2, draft=SCAD + "// never saved\n")
+        assert where() == [(draft, "draft"), (old_values, "values")]
+
+    def test_every_save_is_read_once_while_the_variants_stand(
+        self, checkout, block, cabinet, monkeypatch
+    ):
+        save_variant(block, "wider", EDITED, {"width": 50})
+        save_variant(block, "wider", EDITED, {"width": 60})
+        before = self.made(cabinet, 1, draft=wide(EDITED, 50), params={"width": 50})
+        read = saved.save_texts
+        walks = []
+
+        def counted(part, repo=None, history=False):
+            if history:
+                walks.append(part.name)
+            return read(part, repo, history)
+
+        monkeypatch.setattr(saved, "save_texts", counted)
+        client = TestClient(app)
+        for _ in range(2):
+            body = client.get("/cabinet/block/variants").json()
+            assert [(p["id"], p["how"]) for p in body["variants"]["wider"]] == [(before, "earlier")]
+        assert walks == ["block"]
+        # A save more, and the walk is made again: the piece is of an earlier save still.
+        save_variant(block, "wider", EDITED, {"width": 65})
+        body = client.get("/cabinet/block/variants").json()
+        assert [(p["id"], p["how"]) for p in body["variants"]["wider"]] == [(before, "earlier")]
+        assert walks == ["block", "block"]
+
+    def test_a_part_with_nothing_made_lists_nothing_and_reads_no_git(
+        self, checkout, block, cabinet, monkeypatch
+    ):
+        def asked(*args, **kwargs):
+            raise AssertionError("no piece: no variant is read")
+
+        monkeypatch.setattr(saved, "save_texts", asked)
+        body = TestClient(app).get("/cabinet/block/variants").json()
+        assert body == {"part": "block", "variants": {}, "unsaved": []}
+
+    def test_a_part_outside_git_has_every_piece_apart(self, tmp_path, cabinet, monkeypatch):
+        loose = tmp_path / "loose" / "block.scad"
+        loose.parent.mkdir()
+        loose.write_text(SCAD)
+        part = BasePart(name="block", source_file=loose)
+        monkeypatch.setattr(api, "load_part_wrapper", lambda name: part)
+        piece = self.made(cabinet, 1, params={"width": 50})
+        body = TestClient(app).get("/cabinet/block/variants").json()
+        assert body["variants"] == {}
+        assert [(p["id"], p["how"]) for p in body["unsaved"]] == [(piece, "values")]

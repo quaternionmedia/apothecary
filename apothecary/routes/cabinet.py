@@ -5,6 +5,8 @@
 - ``GET /cabinet/{part}``: its drawers, the newest first, each without the record that
   made it, with its line (``line``). A filing's answer is the drawer whole, with what
   the filing made said (``said``).
+- ``GET /cabinet/{part}/variants``: its drawers by the saved variant each piece was made
+  of (``cabinet.by_variant``), and those of none (``unsaved``): Part › Variants lists them.
 - ``GET /cabinet/{part}/drawers/{id}``: one drawer whole, with what its machine keeps of
   it now: a printer's tuning for the filament and process the piece used (``tuning``),
   a router's tool allowance (``allowance``); null where none is kept.
@@ -120,6 +122,53 @@ def cabinet_of(part: str):
     except cabinet.Refused as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"part": part, "drawers": [_summary(d) for d in found]}
+
+
+# Every save of a part's variants, as last read, by what the variants were then: each
+# one's newest save and its text. A variant's earlier saves do not change while those
+# stand, so the walk over them is made once and not at each asking.
+_SAVES: dict = {}
+
+
+def _every_save(part: str, loaded, tips: list) -> list:
+    from ..projects.parts import saved
+
+    where = str(saved.where_saved(loaded).repo)
+    key = (where, *((s.name, s.commit, s.digest, s.deleted) for s in tips))
+    kept = _SAVES.get(part)
+    if kept is None or kept[0] != key:
+        kept = _SAVES[part] = (key, saved.save_texts(loaded, history=True))
+    return kept[1]
+
+
+@router.get("/{part}/variants")
+def cabinet_by_variant(part: str):
+    """``part``'s drawers by the saved variant each piece was made of: each variant's saves
+    read as they are now, and every save of each where a piece's draft is none of those."""
+    try:
+        found = cabinet.drawers(part)
+    except cabinet.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    saves: list = []
+    if found:
+        from .. import api
+        from ..projects.parts import saved
+
+        try:
+            loaded = api.load_part_wrapper(part)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            loaded = None  # no part of that name now: none of its pieces is a variant's
+        try:
+            if loaded is not None:
+                saves = saved.save_texts(loaded)
+                now = {s.digest for s in saves}
+                if any(d.draft is not None and d.draft not in now for d in found):
+                    saves = _every_save(part, loaded, saves)
+        except saved.GitError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from None
+    return cabinet.by_variant(part, found, saves).model_dump(mode="json")
 
 
 @router.get("/{part}/drawers/{drawer_id}")

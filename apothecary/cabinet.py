@@ -32,7 +32,7 @@ import re
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Literal, Mapping, Optional, Protocol, Sequence, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -342,6 +342,127 @@ def job_told(job: jobs.Job) -> None:
                 _write(drawer)
     except Exception:  # the cabinet's failure is no reason for a machine's to be told one
         log.exception("the cabinet could not keep job %s", job.id)
+
+
+# ---- by variant ---------------------------------------------------------------------------
+#
+# Part › Variants lists each piece under the saved variant it was made of. A piece rendered
+# from a draft names the draft's sha256, which is a save's when the draft was that save's
+# text: ``saved`` the variant as it is now, ``earlier`` one of its saves before. Otherwise a
+# piece whose values are the ones a variant's text sets -- the part's numbers applied, or an
+# overlay's -- was made ``values`` of it. A piece of no saved variant is ``own``, the part's
+# own text; ``draft``, a text never saved; ``values``, numbers never saved; or ``deleted``,
+# of variants now in the trash.
+
+_RANK = {"saved": 0, "earlier": 1, "values": 2}
+
+
+class Save(Protocol):
+    """One save of a variant, as ``projects.parts.saved.save_texts`` reads it."""
+
+    name: str
+    commit: str
+    digest: str
+    params: Mapping[str, object]
+    current: bool
+    deleted: bool
+
+
+class Piece(BaseModel):
+    """A drawer as Part › Variants lists it."""
+
+    id: str
+    at: datetime
+    made: Made
+    machine: str
+    filament: Optional[str] = None
+    outcome: Optional[str] = None  # how its job ended; None: no job here made it
+    line: str
+    params: Dict[str, object] = Field(default_factory=dict)
+    cached: Optional[str] = None  # its variant's key in the variant cache
+    draft: bool = False  # rendered from a draft of the part's text
+    filed: int = 0  # what is filed of it and not undone
+    how: Literal["saved", "earlier", "values", "own", "draft", "deleted"]
+    commit: Optional[str] = None  # the save it was made of
+    deleted: List[str] = Field(default_factory=list)  # the deleted variants it was made of
+
+
+class ByVariant(BaseModel):
+    part: str
+    # Each saved variant a piece was made of, its pieces the newest first.
+    variants: Dict[str, List[Piece]] = Field(default_factory=dict)
+    unsaved: List[Piece] = Field(default_factory=list)
+
+
+def _same(a: object, b: object) -> bool:
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return float(a) == float(b)
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b, strict=True))
+    return a == b
+
+
+def _same_values(made: Mapping[str, object], saved: Mapping[str, object]) -> bool:
+    """Whether a piece was made with the values a save sets: some, and the same."""
+    return (
+        bool(made) and made.keys() == saved.keys() and all(_same(made[k], saved[k]) for k in made)
+    )
+
+
+def _piece(drawer: Drawer, how: str, commit: Optional[str] = None, deleted=()) -> Piece:
+    return Piece(
+        id=drawer.id,
+        at=drawer.at,
+        made=drawer.made,
+        machine=drawer.machine.name,
+        filament=drawer.filament,
+        outcome=drawer.job.outcome if drawer.job else None,
+        line=drawer.said(),
+        params=dict(drawer.params),
+        cached=drawer.variant,
+        draft=drawer.draft is not None,
+        filed=sum(1 for f in drawer.filed if f.undone is None),
+        how=how,
+        commit=commit,
+        deleted=list(deleted),
+    )
+
+
+def by_variant(part: str, found: Sequence[Drawer], saves: Sequence[Save]) -> ByVariant:
+    """``found`` (the newest first) by the saved variant each piece was made of, the best
+    match of each variant's saves (``saved``, then ``earlier``, then ``values``); a piece of
+    several variants -- a duplicate's, the same values -- is listed under each. A piece is
+    sorted by itself, whatever else was made: an earlier save counts only for a piece
+    whose draft is no variant's text as it is now, and values are those a variant sets now."""
+    sorted_ = ByVariant(part=part)
+    now = {save.digest for save in saves if save.current}
+    for drawer in found:
+        best: Dict[Tuple[str, bool], Tuple[str, str]] = {}
+        for save in saves:
+            if drawer.draft is not None and drawer.draft == save.digest:
+                if not save.current and drawer.draft in now:
+                    continue
+                how = "saved" if save.current else "earlier"
+            elif save.current and _same_values(drawer.params, save.params):
+                how = "values"
+            else:
+                continue
+            key = (save.name, save.deleted)
+            if key not in best or _RANK[how] < _RANK[best[key][0]]:
+                best[key] = (how, save.commit)
+        live = [(name, hit) for (name, deleted), hit in best.items() if not deleted]
+        for name, (how, commit) in live:
+            sorted_.variants.setdefault(name, []).append(_piece(drawer, how, commit))
+        if live:
+            continue
+        gone = sorted(name for name, deleted in best if deleted)
+        how = (
+            "deleted" if gone else "draft" if drawer.draft else "values" if drawer.params else "own"
+        )
+        sorted_.unsaved.append(_piece(drawer, how, deleted=gone))
+    return sorted_
 
 
 # ---- filing -------------------------------------------------------------------------------
