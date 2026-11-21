@@ -702,6 +702,21 @@ world alone, the whole layout, and `~` again brings every window back. The
 layout a person makes is remembered by this browser; Panels › Windows › Reset
 layout puts every window where the page puts it.
 
+**See-through windows.** `o`, or the first row of ⊞ Windows, makes every window
+see-through, and the same again makes them solid: the world is drawn under the
+whole layout, past its own window's edges, and every other window is drawn over
+it as opaque as Settings' Windows › Opacity says (60% unless changed), so the
+world shows through it. Its tabs stay solid, and so does a loud window, which
+must be seen. The world's own window shows what it showed -- the same view, its
+middle the middle of the view, its depth ladder and hint bar in its corners --
+and the view follows that window wherever it is dragged or sized. Under a
+stack maximised over the rest the world is drawn too, its view framed on the
+whole layout, and nothing of it is reached through that stack. ⊞ Windows' slider sets the opacity as it moves, and
+turns see-through on; Settings keeps both, for this browser. While it is on,
+each frame of the world is drawn at the whole layout's size, not its window's;
+with a window above or below the world's, its labels, the measure's rods and a
+drag's pan are sized by the layout's height ([todo.md](../todo.md)).
+
 Every stack but the world's wears a **+** beside its ☐: it lists every window
 by its group -- Site, Part, Pictures, Machine, Tools, Family, Airgap, eight at most, a
 ring's cells, and each a cell of the canvas ring's Panels -- and a
@@ -1140,7 +1155,7 @@ has none. The routes are `/parts/{name}/draft/check`, `/draft/render` and
 ## Settings
 
 **Settings**, a tab beside Pictures, holds every shortcut and navigation
-setting of the page, and is the reference for every binding. ⚙ View ›
+setting of the page, and how its windows look, and is the reference for every binding. ⚙ View ›
 Settings and the canvas ring's View › Settings open it. Each row says its default under its name, and its ↺ puts it back;
 **Reset all**, at the foot, puts every one back. A change applies at once,
 with no reload.
@@ -1152,6 +1167,7 @@ with no reload.
 | Ring: right-click with | Ctrl | The modifier held with a right-click to open the ring at the pointer: Ctrl, Alt, Shift or Meta |
 | Step in | Page Down | The key that steps into the selected piece, or what the middle of the view shows |
 | Step out | Page Up | The key that steps out to the level above |
+| See-through windows | `o` | The key that makes the windows see-through, and solid again |
 | Projector: mark the bed | `c` | On the projector page ([projector](projector.md)): lays the four markers over the bed, and takes them off again |
 | Projector: mark a plane above | `u` | On the projector page: marks the second plane, the top of a piece of known thickness laid on the bed |
 | Automatic zoom | on | Whether the wheel pushed on past the limit steps at all |
@@ -1160,6 +1176,8 @@ with no reload.
 | Resistance | 500 | How much scrolling past the limit it takes before a step; a wheel's notch is about 100 |
 | Nearest | 0.08 | How near the pieces of a level the camera may come, as a fraction of the level's size: where stepping in starts |
 | Farthest | 8 | How far out of a level it may go, as a multiple of the distance that frames the level: where stepping out starts |
+| See-through | off | Whether the windows are [see-through](#the-windows): the world drawn under every one, showing through it |
+| Opacity | 60 | How opaque a window is while see-through, in per cent: 10 to 90 |
 
 **A shortcut's field** takes the next key pressed: press the field, then the
 key, with Ctrl, Alt, Shift or Meta if they are to be held. A key another
@@ -1184,6 +1202,7 @@ defaults, and a change holds until the page is left.
 | Page Up, or Backspace | Steps out a level (Settings' Step out), Page Up while the world has the keys; from a site's own level, to the universe |
 | Arrows, Shift+arrows | Pan, and turn, the view, while the world has the keyboard's focus |
 | `~` (or the key left of 1) | Shows the world alone, or every window back |
+| `o` | Makes the windows see-through, the world showing through them, or solid again (Settings' See-through windows) |
 | `P` | Takes a picture, with a camera selected |
 | `?` | Shows or hides the hint bar |
 | Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's fullscreen it leaves it, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |

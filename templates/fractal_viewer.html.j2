@@ -135,7 +135,8 @@
            widest sans-serif a Linux browser is likely to have, with Shift and Page Down
            in it as Settings may put them; a narrower world cuts it rather than wraps it. */
         .viewer-hint {
-            position: absolute; bottom: 1rem; left: 1rem; max-width: calc(100% - 2rem);
+            position: absolute; bottom: calc(var(--frame-bottom, 0px) + 1rem); left: calc(var(--frame-left, 0px) + 1rem);
+            max-width: calc(100% - var(--frame-left, 0px) - var(--frame-right, 0px) - 2rem);
             background: rgba(0,0,0,0.7); padding: 0.5rem 0.75rem;
             border-radius: 4px; font-size: 11px; color: #888;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -147,7 +148,7 @@
            one tick per possible depth in the loaded tree, filled from the
            root to however deep the current focus is. */
         #minimap {
-            position: absolute; top: 1rem; right: 1rem;
+            position: absolute; top: calc(var(--frame-top, 0px) + 1rem); right: calc(var(--frame-right, 0px) + 1rem);
             display: flex; flex-direction: column; gap: 4px;
             background: rgba(0,0,0,0.5); padding: 0.5rem; border-radius: 6px;
         }
@@ -239,6 +240,29 @@
         /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
            windows under it are hidden, not only covered, so nothing of them is reached. */
         .lm_root:has(> .lm_maximised) > :not(.lm_maximised) { visibility: hidden; }
+        /* See-through windows (panels.js seeThrough): the world laid under the whole
+           layout, its own window framing the view as before, and every other window
+           drawn --window-opacity opaque over it, its tabs solid. The world stands past
+           its window's edges, under the others; under a stack maximised over the rest
+           it is still drawn, framed on the whole layout, and nothing of it is reached there. A loud window -- a real
+           machine that moves when it is pressed -- stays solid. The ring the keyboard's
+           focus wears goes round the world's window, not the canvas under every one. */
+        .see-through .world-window, .see-through .lm_items:has(> * > .world-window) { overflow: visible; }
+        .see-through .world-window { z-index: 0; }
+        .see-through .panel-window { z-index: 1; opacity: var(--window-opacity, 1); }
+        .see-through .panel-window.loud { opacity: 1; }
+        .see-through .lm_root:has(> .lm_maximised) .world-window > .viewer-panel { visibility: visible; }
+        .see-through #viewer-canvas:focus-visible:not([data-pressed]) { outline: none; }
+        .see-through .viewer-panel:has(> #viewer-canvas:focus-visible:not([data-pressed]))::after {
+            content: ""; position: absolute; pointer-events: none; box-shadow: inset 0 0 0 2px #6fb3e8;
+            inset: var(--frame-top, 0px) var(--frame-right, 0px) var(--frame-bottom, 0px) var(--frame-left, 0px);
+        }
+        /* ⊞ Windows' first row: see-through's switch, and how opaque a window is then. */
+        .see-through-row { display: flex; align-items: center; gap: 0.4rem; padding-right: 0.7rem; border-bottom: 1px solid #333; margin-bottom: 0.2rem; }
+        .see-through-row .see-through-item { width: auto; flex: 0 0 auto; }
+        .see-through-row .see-through-item[aria-pressed="true"] { color: #9cd2ff; }
+        .see-through-row .see-through-level { flex: 1 1 auto; min-width: 5rem; accent-color: #6fb3e8; }
+        .see-through-row .see-through-said { font-size: 0.75rem; color: #a8adb5; min-width: 2.4em; text-align: right; font-variant-numeric: tabular-nums; }
         /* A loud window: an armed printer's control pad -- a real machine that moves
            when it is pressed. Its tab is red and stays red, its frame glows, and
            as it opens it pulses (widgets/machine.js). */
@@ -1691,6 +1715,12 @@
                     });
                 }
                 document.querySelector('.side-panel')?.remove();
+                // See-through windows (Settings' Windows, its key, ⊞ Windows' first row):
+                // the world drawn under every window and showing through it, the camera
+                // framed on the world's own window wherever it stands.
+                this.worldFrame = null;
+                this.panels.onFrame((frame) => { this.worldFrame = frame; if (this.renderer) this.onResize(); });
+                this.applySeeThrough();
                 // Every board the page knows, polled once whatever draws it (boards.js):
                 // the badges, Site's tree, Selected's Device line and the Machine all
                 // read it and redraw on its one event. One Machine in front, its sections the
@@ -2119,8 +2149,9 @@
                             })),
                             press: (id) => this.enterJourney(id),
                         },
+                        seeThrough: this.seeThroughRow(),
                     });
-                    windowsBody.querySelector('button')?.focus();
+                    (windowsBody.querySelector('.view-item') || windowsBody.querySelector('button'))?.focus();
                 });
                 windowsBody.addEventListener('keydown', (ev) => this.panels.stepFocus(windowsBody, ev));
                 this.panels.onChoose((id) => this.onWindowChosen(id));
@@ -2261,6 +2292,8 @@
                 this.settingsOpenBtn.addEventListener('click', () => this.openSettings());
                 // ? brings the hint bar back (and puts it away again).
                 window.addEventListener('keydown', (e) => this.onHintKey(e));
+                // o (Settings' See-through windows): the windows see-through, or solid again.
+                window.addEventListener('keydown', (e) => this.onSeeThroughKey(e));
                 // f frames the selected piece, Selected and its editor kept open, as the
                 // ring's Part › View › Fit does, else the level; Shift+F the level.
                 window.addEventListener('keydown', (e) => this.onFitKey(e));
@@ -2318,7 +2351,17 @@
                 // A window moved to a screen of another density changes this too.
                 const ratio = window.devicePixelRatio * COARSE[this.coarse];
                 if (this.renderer.getPixelRatio() !== ratio) this.renderer.setPixelRatio(ratio);
-                this.camera.aspect = width / height;
+                // See-through, the canvas stands under the whole layout and the camera's
+                // own view is the world's window (panels.js onFrame): drawn past it, under
+                // the other windows, the world's window shows what it would alone.
+                const f = this.worldFrame;
+                if (f) {
+                    this.camera.aspect = f.width / f.height;
+                    this.camera.setViewOffset(f.width, f.height, -f.x, -f.y, width, height);
+                } else {
+                    this.camera.aspect = width / height;
+                    this.camera.clearViewOffset();
+                }
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(width, height, false);
                 if (this.anchors) this.anchors.update();  // badges stand where the new projection puts them
@@ -2493,6 +2536,46 @@
                 if (shown) return;
                 try { localStorage.setItem(HINT_SEEN_KEY, 'seen'); } catch (e) { /* kept nowhere: shown again next visit */ }
             }
+            // See-through windows, as Settings has them: on, the world under every window
+            // and each window as opaque as Windows › Opacity says; off, solid.
+            applySeeThrough() {
+                const v = this.settings.values();
+                this.panels.seeThrough(v.seeThrough, { opacity: v.windowOpacity / 100 });
+            }
+            seeThroughSaid() {
+                const v = this.settings.values(), key = keyLabel(v.seeThroughKey);
+                return v.seeThrough
+                    ? `See-through windows: the world under every window, each ${v.windowOpacity}% opaque (${key}: solid again)`
+                    : `Solid windows (${key}: see-through)`;
+            }
+            // o, as Settings has it: see-through on, or off. The status line says which.
+            onSeeThroughKey(event) {
+                if (!matches(event, this.settings.get('seeThroughKey')) || !mayAct(event)) return;
+                event.preventDefault();
+                this.settings.set('seeThrough', !this.settings.get('seeThrough'));
+                this.setStatus(this.seeThroughSaid(), 'success');
+            }
+            // ⊞ Windows' first row (panels.js fillMenu): the switch and the opacity, as
+            // Settings has them, each change kept there.
+            seeThroughRow() {
+                const v = this.settings.values(), level = this.settings.SETTINGS.find((s) => s.id === 'windowOpacity');
+                return {
+                    on: v.seeThrough, opacity: v.windowOpacity / 100, min: level.min, max: level.max, step: level.step,
+                    key: keyLabel(v.seeThroughKey),
+                    set: ({ on = null, opacity = null }) => {
+                        if (opacity !== null) this.settings.set('windowOpacity', Math.round(opacity * 100));
+                        if (on !== null) this.settings.set('seeThrough', on);
+                        this.setStatus(this.seeThroughSaid(), 'success');
+                    },
+                };
+            }
+            // Where the world's window stands on the page: the canvas, or, see-through,
+            // the part of the canvas under the whole layout that its window shows.
+            viewRect() {
+                const r = this.canvas.getBoundingClientRect(), f = this.worldFrame;
+                return f ? { left: r.left + f.x, top: r.top + f.y, width: f.width, height: f.height } : r;
+            }
+
             // P, with a camera selected: Take picture, as its ring's cell does.
             onPictureKey(event) {
                 if (!(matches(event, 'p') || matches(event, 'Shift+p')) || !mayAct(event)) return;
@@ -4043,6 +4126,7 @@
             // what it governs follows at once. The ring's key and modifier are the ring
             // wiring's to follow (installRing's configure).
             settingsChanged(values, id) {
+                if (id === null || id === 'seeThrough' || id === 'windowOpacity') this.applySeeThrough();
                 if (id === null || id === 'dollyIn' || id === 'dollyOut') {
                     this.applyReach();
                     if (this.reach) this.updateCameraClipping(this.reach.span);
@@ -10841,7 +10925,7 @@
                 let path = target, why = how;
                 if (!path && this.selectedName && this.selectedName !== FLOOR_KEY) { path = this.selectedName; why = `${how ? `${how}, ` : ''}the selection`; }
                 if (!path) {
-                    const r = this.canvas.getBoundingClientRect();
+                    const r = this.viewRect();
                     path = this.raycastChild({ clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 });
                     why = `${how ? `${how}, ` : ''}the middle of the view`;
                 }

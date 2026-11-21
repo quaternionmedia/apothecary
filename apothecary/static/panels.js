@@ -51,11 +51,21 @@
  * Each window's element is a `section.panel[data-panel=<id>]`: a pinned bar
  * (pinnedSlot) above a body that scrolls. The element outlives its component:
  * closed and opened again, the same element, with what it holds, is shown.
+ *
+ * See-through (seeThrough), the world is laid under the whole layout rather than in
+ * its own window alone, and every other window lets it show through: the host wears
+ * `see-through` and `--window-opacity`, how opaque the page's styles draw a window
+ * then. The world's element is told where its window stands in it (`--frame-left`,
+ * `-top`, `-right`, `-bottom`) and so is the page (onFrame), which frames its view
+ * on that window, so what the world's window shows is what it showed -- or on the
+ * whole layout while another window is maximised over it. Off, the
+ * world is as big as its window again. ⊞ Windows wears the switch and the opacity
+ * when the page gives fillMenu its own (`seeThrough`).
  */
 
 import { GoldenLayout, LayoutConfig } from "golden-layout";
 import { setReason } from "./can.js";
-import { mayAct } from "./keys.js";
+import { mayAct, takes } from "./keys.js";
 
 const TILDE_KEYS = new Set(["`", "~"]);
 const WORLD = "world";
@@ -156,6 +166,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         if (id === WORLD) {
             container.element.classList.add("world-window");
             container.element.appendChild(world);
+            watchWorld(container.element);
             return;
         }
         const r = record(id);
@@ -199,6 +210,69 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     }
     for (const id of knownTypes) layout.registerComponentFactoryFunction(id, factory);
 
+    // ---- see-through windows ----------------------------------------------------
+    // Declared before the layout is first laid out, which makes the world's window.
+    let through = null;      // { opacity } while see-through, else null
+    let worldWindow = null;  // the world's window's element, where it stands now
+    let framed = "null";     // the frame last told, so each is told once
+    let laidUnder = false;   // the world's element wears the styles below
+    const framers = [];
+    const FRAME_SIDES = ["left", "top", "right", "bottom"];
+    const watcher = window.ResizeObserver ? new ResizeObserver(() => frameWorld()) : null;
+    watcher?.observe(host);
+    function watchWorld(el) {
+        if (worldWindow && worldWindow !== el) watcher?.unobserve(worldWindow);
+        worldWindow = el;
+        watcher?.observe(el);
+        frameWorld();
+    }
+    // Where the world's window stands in the layout (`x`, `y`: the world's element is laid
+    // that far up and left of it) and the frame the view is drawn in, in pixels of the
+    // world's element laid under the layout: the world's window -- or, while another
+    // window is maximised over it, which GoldenLayout lays out of sight, the whole layout.
+    // Null while not see-through, or while the world's window has no size.
+    function frameOf() {
+        if (!through || !worldWindow?.isConnected) return null;
+        const whole = host.getBoundingClientRect(), own = worldWindow.getBoundingClientRect();
+        if (!(own.width > 0 && own.height > 0 && whole.width > 0 && whole.height > 0)) return null;
+        const x = own.left - whole.left, y = own.top - whole.top;
+        const covered = !!host.querySelector(".lm_maximised") && !isWorldAlone();
+        const frame = covered ? { x: 0, y: 0, width: whole.width, height: whole.height } : { x, y, width: own.width, height: own.height };
+        return { x, y, frame, fullWidth: whole.width, fullHeight: whole.height };
+    }
+    // The world laid under the whole layout, or back in its window; the page told the
+    // frame of its view whenever that changed.
+    function frameWorld() {
+        const f = frameOf();
+        if (f) {
+            Object.assign(world.style, {
+                position: "absolute", left: `${-f.x}px`, top: `${-f.y}px`, right: "auto", bottom: "auto",
+                width: `${f.fullWidth}px`, height: `${f.fullHeight}px`,
+            });
+            const { frame } = f;
+            const inset = { left: frame.x, top: frame.y, right: f.fullWidth - frame.x - frame.width, bottom: f.fullHeight - frame.y - frame.height };
+            for (const side of FRAME_SIDES) world.style.setProperty(`--frame-${side}`, `${inset[side]}px`);
+            laidUnder = true;
+        } else if (laidUnder) {
+            for (const k of ["position", "left", "top", "right", "bottom", "width", "height"]) world.style[k] = "";
+            for (const side of FRAME_SIDES) world.style.removeProperty(`--frame-${side}`);
+            laidUnder = false;
+        }
+        const told = f ? { ...f.frame } : null;
+        const key = JSON.stringify(told);
+        if (key === framed) return;
+        framed = key;
+        for (const fn of framers) fn(told);
+    }
+    function seeThrough(on, opacity) {
+        const level = Math.min(1, Math.max(0.05, Number(opacity) || (through ? through.opacity : 1)));
+        through = on ? { opacity: level } : null;
+        host.classList.toggle("see-through", !!through);
+        if (through) host.style.setProperty("--window-opacity", String(level));
+        else host.style.removeProperty("--window-opacity");
+        frameWorld();
+    }
+
     let remembered = null;
     try { remembered = JSON.parse(localStorage.getItem(storageKey) || "null"); } catch (e) { remembered = null; }
     const start = (remembered && kept(remembered, knownTypes, TRANSIENT)) || null;
@@ -238,6 +312,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     }
     const flush = () => { if (saving) { clearTimeout(saving); save(); } };
     layout.on("stateChanged", remember);
+    // A window moved past the world's, which moves it and leaves its size, is seen here.
+    layout.on("stateChanged", frameWorld);
     window.addEventListener("pagehide", flush);
 
     const item = (id) => layout.findFirstComponentItemById(id);
@@ -575,10 +651,11 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         spawnOpen = null;
         list.remove();
     }
-    // Up and down move along a list's buttons, Home and End to its ends.
+    // Up and down move along a list's buttons, Home and End to its ends -- unless what
+    // has the focus takes the key itself (a slider, its arrows).
     function stepFocus(list, ev) {
         const keys = { ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity };
-        if (!list || !(ev.key in keys)) return;
+        if (!list || !(ev.key in keys) || takes(ev.target, ev.key)) return;
         const buttons = [...list.querySelectorAll("button:not(:disabled)")];
         if (!buttons.length) return;
         ev.preventDefault();
@@ -696,8 +773,42 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         }
     });
 
-    function fillMenu(into, done, own, journeys) {
+    // ⊞ Windows' first row, given the page's own see-through (`look`): its switch, and
+    // how opaque a window is then, a slider that turns it on as it moves. The page keeps
+    // both and calls seeThrough; the row says what it was told.
+    function seeThroughRow(look) {
+        const row = document.createElement("div");
+        row.className = "see-through-row";
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "window-item see-through-item";
+        const range = document.createElement("input");
+        range.type = "range";
+        range.className = "see-through-level";
+        Object.assign(range, { min: String(look.min ?? 10), max: String(look.max ?? 90), step: String(look.step ?? 5) });
+        range.setAttribute("aria-label", "How opaque a window is, see-through");
+        const said = document.createElement("span");
+        said.className = "see-through-said";
+        let on = !!look.on, level = Math.round(Number(look.opacity) * 100);
+        const paint = () => {
+            b.textContent = `${on ? "◉" : "○"} See-through`;
+            b.setAttribute("aria-pressed", String(on));
+            b.title = on ? `See-through: the world shows through every window, each ${level}% opaque. Pressed, the windows are solid again${look.key ? ` (${look.key})` : ""}`
+                : `Solid windows. Pressed, the world is drawn under every window and shows through it, each ${level}% opaque${look.key ? ` (${look.key})` : ""}`;
+            range.value = String(level);
+            range.title = `How opaque a window is, see-through: ${level}%. Moved, see-through is on`;
+            said.textContent = `${level}%`;
+        };
+        b.addEventListener("click", () => { on = !on; look.set({ on }); paint(); });
+        range.addEventListener("input", () => { on = true; level = Number(range.value); look.set({ on, opacity: level / 100 }); paint(); });
+        paint();
+        row.append(b, range, said);
+        return row;
+    }
+
+    function fillMenu(into, done, own, journeys, look) {
         into.replaceChildren();
+        if (look) into.append(seeThroughRow(look));
         const viewsHead = document.createElement("div");
         viewsHead.className = "spawn-group";
         viewsHead.textContent = "Views";
@@ -961,14 +1072,27 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * the view needs and says what came of it. Without it a view is laid out by
          * applyView, and one whose window the page has not got is disabled.
          * `journeys`, the page's: { list: [{ id, name, title, current }], press(id) },
-         * listed after the views. */
-        fillMenu(into, { done = null, views: own = null, journeys = null } = {}) { fillMenu(into, done, own, journeys); },
+         * listed after the views. `seeThrough`, the page's: { on, opacity (a fraction),
+         * min, max, step (per cent), key (its shortcut, as said), set({ on, opacity }) },
+         * a row above the views: its switch, and a slider of how opaque a window is. */
+        fillMenu(into, { done = null, views: own = null, journeys = null, seeThrough: look = null } = {}) { fillMenu(into, done, own, journeys, look); },
+        /* See-through windows (see the header): on, every window but the world's drawn
+         * `opacity` opaque (a fraction) over the world laid under the whole layout; off,
+         * solid, the world in its own window. */
+        seeThrough(on = true, { opacity = null } = {}) { seeThrough(!!on, opacity); return !!through; },
+        isSeeThrough() { return !!through; },
+        /* `fn(frame)` is told where the world's window stands in the world's element --
+         * { x, y, width, height }, pixels -- each time that changes while see-through,
+         * and null when it is not; at once, with where it stands now. */
+        onFrame(fn) { framers.push(fn); fn(JSON.parse(framed)); },
         /* `fn(id)` is told of each window a person chooses: its tab, ⊞ Windows, a +. */
         onChoose(fn) { choosers.push(fn); },
         /* Up, down, Home and End along a list's buttons: the Windows menu's keys. */
         stepFocus,
         destroy() {
             closeSpawn();
+            seeThrough(false);
+            watcher?.disconnect();
             window.removeEventListener("keydown", onKey);
             window.removeEventListener("pagehide", flush);
             for (const r of records.values()) r.releasing = true;

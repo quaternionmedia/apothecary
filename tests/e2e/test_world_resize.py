@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 import windows
 from doc_capture import WRAP_WORDS, _blanked, picture, same_picture
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
 SIZES = """() => {
@@ -129,3 +129,107 @@ def test_a_picture_with_words_blanked_is_of_the_world_drawn_at_the_size_they_lea
         page.evaluate("() => window.__unblank()")
     assert blanked["height"] > on_screen["height"], (on_screen, blanked)
     assert same_picture(shot, drawn), "the picture is not of the world drawn at its size"
+
+
+# The world and its window as the page has them: the canvas, the world's window and the
+# layout, each [left, top, width, height] on the page; the camera's aspect; where the
+# middle of each piece of the level is drawn, on the page (its bounds' centre through
+# the camera, as viewer_ready's SIGHTED has it); and the middle of the view's box.
+FRAMED = """() => {
+    const v = window.fractalViewer, box = (r) => [r.left, r.top, r.width, r.height];
+    const canvas = v.canvas.getBoundingClientRect();
+    const at = {};
+    for (const [key, node] of Object.entries(v.renderNodeByKey)) {
+        const b = node.world_bounds;
+        if (key.includes('.') || !b) continue;
+        const p = v.sceneAt((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2).project(v.camera);
+        if (Math.abs(p.z) <= 1) at[key] = [canvas.left + (p.x + 1) / 2 * canvas.width, canvas.top + (1 - p.y) / 2 * canvas.height];
+    }
+    return {
+        canvas: box(canvas), own: box(document.querySelector('.world-window').getBoundingClientRect()),
+        layout: box(document.querySelector('.main-content').getBoundingClientRect()),
+        aspect: v.camera.aspect, offset: !!(v.camera.view && v.camera.view.enabled), at, middle: box(v.viewRect()),
+    };
+}"""
+
+
+def _near(a, b, by=1.5) -> bool:
+    return all(abs(x - y) <= by for x, y in zip(a, b, strict=True))
+
+
+def _inside(xy, box) -> bool:
+    return box[0] <= xy[0] <= box[0] + box[2] and box[1] <= xy[1] <= box[1] + box[3]
+
+
+@pytest.mark.e2e
+def test_see_through_draws_the_world_under_every_window_and_its_own_shows_what_it_did(
+    page: Page, base_url: str
+):
+    """`o` (Settings' See-through windows) lays the canvas under the whole layout and
+    draws every window over it at Settings' opacity, 60%; the world's own window shows
+    what it showed -- each piece's middle drawn where it was, the middle of the view
+    its window's -- and as that window narrows, the view follows it. `o` again: solid
+    windows, the canvas the world's window's size."""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.goto(f"{base_url}/viewer/sites/garage")
+    settled(page)
+    solid = page.evaluate(FRAMED)
+    assert not solid["offset"] and _near(solid["canvas"], solid["own"])
+    shown = {k: xy for k, xy in solid["at"].items() if _inside(xy, solid["own"])}
+    assert shown, "garage's level has pieces drawn in the world's window"
+
+    page.keyboard.press("o")
+    expect(page.locator("#status")).to_contain_text("See-through windows")
+    page.wait_for_function(
+        f"(layout) => ({FRAMED})().canvas.every((v, i) => Math.abs(v - layout[i]) <= 1.5)",
+        arg=solid["layout"],
+        timeout=5000,
+    )
+    settled(page)
+    through = page.evaluate(FRAMED)
+    assert through["offset"] and _near(through["own"], solid["own"]), through
+    assert through["aspect"] == pytest.approx(through["own"][2] / through["own"][3], rel=1e-3)
+    assert _near(through["middle"], through["own"])
+    for key, xy in shown.items():
+        assert key in through["at"] and _near(through["at"][key], xy), (
+            key,
+            xy,
+            through["at"].get(key),
+        )
+    # Every window over the world, 60% opaque; the world's window under them.
+    look = page.evaluate(
+        """() => [...document.querySelectorAll('.panel-window, .world-window')].map((el) => {
+            const s = getComputedStyle(el); return [el.classList.contains('world-window'), s.opacity, s.zIndex]; })"""
+    )
+    assert [o for w, o, z in look if w] == ["1"] and all(z == "0" for w, o, z in look if w), look
+    assert {(o, z) for w, o, z in look if not w} == {("0.6", "1")}, look
+    # Behind Site's window the world is there to be seen: the canvas under the window, not
+    # cut back to the world's own (the browser finds there only what is drawn there).
+    behind = page.evaluate(
+        """() => { const r = document.querySelector('.panel[data-panel="site"]').getBoundingClientRect();
+            return document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+                .map((el) => el.id === 'viewer-canvas' ? 'canvas' : el.classList.contains('panel-window') ? 'window' : null)
+                .filter(Boolean); }"""
+    )
+    assert behind == ["window", "canvas"], behind
+
+    # The splitter beside the world dragged toward it, over the canvas: the view follows.
+    splitter = page.locator(".lm_root > .lm_row > .lm_splitter").first
+    edge = splitter.bounding_box()
+    windows.drag(page, splitter, (edge["x"] - 160, edge["y"] + edge["height"] / 2))
+    page.wait_for_function(
+        f"(was) => {{ const f = ({FRAMED})(); return f.own[2] < was - 100 && Math.abs(f.aspect - f.own[2] / f.own[3]) < 1e-3; }}",
+        arg=through["own"][2],
+        timeout=5000,
+    )
+    narrower = page.evaluate(FRAMED)
+    assert _near(narrower["canvas"], solid["layout"]) and _near(narrower["middle"], narrower["own"])
+
+    page.keyboard.press("o")
+    expect(page.locator("#status")).to_contain_text("Solid windows")
+    page.wait_for_function(
+        f"() => {{ const f = ({FRAMED})(); return !f.offset && f.canvas.every((v, i) => Math.abs(v - f.own[i]) <= 1.5); }}",
+        timeout=5000,
+    )
+    again = _in_step(page)
+    assert again["width"] == pytest.approx(narrower["own"][2], abs=2)

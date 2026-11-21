@@ -1051,6 +1051,122 @@ def test_the_world_alone_and_a_window_opened_brings_everything_back(wm: Page):
     assert _js(wm, "() => [P.isWorldAlone(), P.isShown('sel')]") == [False, True]
 
 
+BOXES = """() => {
+    const box = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+    const host = document.getElementById('host'), world = document.getElementById('world');
+    return { host: box(host), own: box(document.querySelector('.world-window')), world: box(world),
+             frame: ['left', 'top', 'right', 'bottom'].map((s) => world.style.getPropertyValue(`--frame-${s}`)),
+             wears: host.classList.contains('see-through'), opacity: host.style.getPropertyValue('--window-opacity'),
+             told: window.told };
+}"""
+
+
+def _near(a, b, by=1.0) -> bool:
+    return all(abs(x - y) <= by for x, y in zip(a, b, strict=True))
+
+
+def _within(inner, outer, by=1.0) -> bool:
+    """A box inside another, as the harness's world -- a line of text -- is inside its
+    window."""
+    return (
+        inner[0] >= outer[0] - by
+        and inner[1] >= outer[1] - by
+        and inner[0] + inner[2] <= outer[0] + outer[2] + by
+        and inner[1] + inner[3] <= outer[1] + outer[3] + by
+    )
+
+
+@pytest.mark.e2e
+def test_see_through_lays_the_world_under_the_layout_and_says_where_its_window_stands(wm: Page):
+    """See-through, the world's element is the whole layout's size, under it, and the
+    page is told where the world's window stands in it -- worn too, as --frame-* -- and
+    told again as that window grows; off, the world is its window's size again and the
+    page is told null."""
+    _js(wm, "() => { window.told = []; P.onFrame((f) => window.told.push(f)); }")
+    off = _js(wm, BOXES)
+    assert off["told"] == [None] and not off["wears"]
+    assert _within(off["world"], off["own"])
+
+    assert _js(wm, "() => P.seeThrough(true, { opacity: 0.4 })") is True
+    on = _js(wm, BOXES)
+    assert on["wears"] and on["opacity"] == "0.4"
+    assert _near(on["world"], on["host"]), on
+    x, y, w, h = (
+        on["own"][0] - on["host"][0],
+        on["own"][1] - on["host"][1],
+        on["own"][2],
+        on["own"][3],
+    )
+    told = on["told"][-1]
+    assert _near([told["x"], told["y"], told["width"], told["height"]], [x, y, w, h]), on
+    right = on["host"][2] - x - w
+    worn = [float(v.removesuffix("px")) for v in on["frame"]]
+    assert _near(worn, [x, y, right, on["host"][3] - y - h]), on
+    assert right > 100  # the column stands right of the world, over the world's element
+
+    # The world alone: its window is the whole layout, and the frame follows it.
+    assert _js(wm, "() => P.worldAlone(true)") is True
+    wm.wait_for_function(
+        "() => window.told.at(-1) && window.told.at(-1).width > 1100", timeout=5000
+    )
+    alone = _js(wm, BOXES)
+    assert _near([alone["told"][-1][k] for k in ("x", "y")], [0, 0])
+    assert _near(alone["world"], alone["host"])
+    _js(wm, "() => P.worldAlone(false)")
+    wm.wait_for_function("(w) => Math.abs(window.told.at(-1).width - w) <= 1", arg=w, timeout=5000)
+
+    # Another window maximised over the world's, which GoldenLayout lays out of sight: the
+    # view is framed on the whole layout, the world still laid under it.
+    _js(wm, "() => H.item('sel').parentItem.toggleMaximise()")
+    wm.wait_for_function(
+        "() => window.told.at(-1) && window.told.at(-1).width > 1100", timeout=5000
+    )
+    covered = _js(wm, BOXES)
+    assert _near([covered["told"][-1][k] for k in ("x", "y")], [0, 0])
+    assert _near(covered["world"], covered["host"]), covered
+    _js(wm, "() => H.item('sel').parentItem.toggleMaximise()")
+    wm.wait_for_function("(w) => Math.abs(window.told.at(-1).width - w) <= 1", arg=w, timeout=5000)
+
+    assert _js(wm, "() => P.seeThrough(false)") is False
+    back = _js(wm, BOXES)
+    assert back["told"][-1] is None and not back["wears"] and back["opacity"] == ""
+    assert _near(back["world"], off["world"]) and back["frame"] == ["", "", "", ""]
+
+
+@pytest.mark.e2e
+def test_the_windows_menu_wears_see_through_when_the_page_gives_it(wm: Page):
+    """⊞ Windows' first row, given the page's see-through: its switch says how it stands
+    and turns it, and its slider, moved, sets how opaque a window is and turns it on;
+    the slider keeps its arrows, the menu's Up and Down moving no focus from it."""
+    _js(
+        wm,
+        """() => { window.said = []; const into = document.createElement('div'); into.id = 'menu';
+            // Over the layout, as the page's ⊞ Windows is.
+            Object.assign(into.style, { position: 'fixed', zIndex: '1000', top: '40px', left: '40px', width: '20rem', background: '#252525' });
+            document.body.append(into);
+            P.fillMenu(into, { seeThrough: { on: false, opacity: 0.6, min: 10, max: 90, step: 5, key: 'o',
+                set: (c) => window.said.push(c) } });
+            into.addEventListener('keydown', (ev) => P.stepFocus(into, ev)); }""",
+    )
+    menu = wm.locator("#menu")
+    switch, level = menu.locator(".see-through-item"), menu.locator(".see-through-level")
+    expect(menu.locator(":scope > *").first).to_have_class("see-through-row")
+    expect(switch).to_have_text("○ See-through")
+    expect(switch).to_have_attribute("aria-pressed", "false")
+    expect(level).to_have_value("60")
+    expect(menu.locator(".see-through-said")).to_have_text("60%")
+    switch.click()
+    expect(switch).to_have_text("◉ See-through")
+    assert _js(wm, "() => window.said") == [{"on": True}]
+    switch.click()
+    level.focus()
+    wm.keyboard.press("ArrowUp")
+    assert _js(wm, "() => document.activeElement.className") == "see-through-level"
+    expect(level).to_have_value("65")
+    expect(switch).to_have_attribute("aria-pressed", "true")
+    assert _js(wm, "() => window.said.at(-1)") == {"on": True, "opacity": 0.65}
+
+
 @pytest.mark.e2e
 def test_the_harness_is_the_modules_the_viewer_loads():
     """The page under test is the viewer's own modules, not copies: the viewer imports

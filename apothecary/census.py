@@ -1432,6 +1432,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "Ctrl+S, while a part's editor is open: its variant saved, from anywhere on the page",
     ),
     "window:keydown:onHintKey": (GESTURE, WHAT_YOU_SEE, "a key (?) that brings the hint bar back"),
+    "window:keydown:onSeeThroughKey": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a key (o, as Settings has it) that makes the windows see-through, or solid again",
+    ),
     "window:keydown:onFitKey": (
         GESTURE,
         WHAT_YOU_SEE,
