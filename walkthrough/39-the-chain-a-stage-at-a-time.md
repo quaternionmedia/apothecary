@@ -33,7 +33,7 @@ The chain starts at a part. The footpedal is chosen among the garage's pieces; i
 4 Kept: nothing more to do
     Design a part › 4 Kept (the tour): every variant saved of it, and this tab's applies, each drawn again from its row
 5 Ready: nothing more to do
-    Design a part › 5 Ready (the tour): whether it is ready to make, and what the site says is wrong
+    Design a part › 5 Ready (the tour): whether the part is ready to make, in its Readiness; the header's Layout valid and Problems speak of the site's layout, not of the part
 ```
 
 ## 2. Print a part: the part sliced for the printer, its path drawn, the job ready

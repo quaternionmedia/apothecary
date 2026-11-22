@@ -397,6 +397,15 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         blank=CHANGING,
     )
 
+    # Its Bench stands without the board: the sketch is built with none there, so the
+    # missing board is not what it needs, and the Bench opens on its sketch.
+    box.locator(".tour-pop-stages button").nth(1).click()
+    expect(title).to_have_text("Flash a board · 2. Bench")
+    _taken_to(page, "bench")
+    expect(box.locator(".tour-pop-needs")).to_be_empty()
+    expect(did).to_contain_text([re.compile(r"the Bench opened on")])
+    assert windows.state(page, "bench")["shown"] is True
+
     # 11. Every word kept is the server's to give back, oldest first.
     kept = httpx.get(f"{url}/tour/feedback", timeout=15.0).json()["feedback"]
     assert [(r["stage"], r["verdict"], r["note"], r["by"]) for r in kept] == [

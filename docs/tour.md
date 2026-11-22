@@ -106,7 +106,16 @@ photograph taken: where a stage needs one that is not there, the page leaves the
 rest and enters the stage all the same, so a person stands where it is done, and the
 box opens on what the stage needs, in the page's own words for it -- *esp32_blink's
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
-section*. With that done, ↻ takes the page the rest of the way.
+section*. With that done, ↻ takes the page the rest of the way. A stage that stands
+without what its journey is staged on is not stopped by it: Flash a board's Bench
+builds a sketch with no board connected, so it opens on the sketch whatever the board.
+A picture that is not there is named inside the pictures folder, as a person names
+it, never by where the server keeps that folder.
+
+Design a part's Ready is the part's Readiness. The header's **Layout valid** and the
+Problems window speak of the site's layout -- pieces that overlap, a wall a door
+cannot pass -- and say nothing of whether a part is ready to make, so a part can be
+not ready while the layout is valid; the stage says which is which.
 
 **Nothing is armed, started, sent or made.** Print's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes

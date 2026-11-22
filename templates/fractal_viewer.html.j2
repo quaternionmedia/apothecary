@@ -840,7 +840,7 @@
                 <div class="panel-section" data-panel="problems" data-home="site" data-group="Site" title="The site's problems (the header's count opens them); each row selects its piece">
                     <div class="panel-header">Problems</div>
                     <div class="panel-body site-problems">
-                        <p id="site-problems-none" class="empty-note">No problems: the layout is valid.</p>
+                        <p id="site-problems-none" class="empty-note">No problems in the site's layout. Whether a part is ready to make is its Readiness, under Part.</p>
                         <ul id="problem-list" class="problem-list"></ul>
                     </div>
                 </div>
@@ -9444,8 +9444,17 @@
                     const named = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]} Machines` : `${who[0]} Machine`;
                     did.push(`${named} closed: ${journey.name} has no machine in it`);
                 }
+                // What the journey is staged on, then the stage's own puts; a stage that
+                // stands alone (stands_alone) goes on to its own past what the journey's
+                // could not do, which is not its need.
                 let needs = null;
-                for (const [verb, subject] of [...(journey.staged_on || []), ...(step.puts || [])]) {
+                for (const [verb, subject] of journey.staged_on || []) {
+                    const done = await this.stagePut(verb, subject, { reload });
+                    if (done.refused && step.stands_alone) continue;
+                    if (done.refused) { needs = done.refused; break; }
+                    if (done.did) did.push(done.did);
+                }
+                for (const [verb, subject] of needs ? [] : step.puts || []) {
                     const done = await this.stagePut(verb, subject, { reload });
                     if (done.refused) { needs = done.refused; break; }
                     if (done.did) did.push(done.did);

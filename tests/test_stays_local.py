@@ -977,7 +977,7 @@ def test_each_refusal_of_the_picture_root_has_its_status_and_says_why(monkeypatc
     assert asked("../outside.png")[0] == 403
     assert asked("missing.png") == (
         404,
-        f"there is no picture at {root / 'missing.png'}, or it is not an ordinary file",
+        "there is no picture missing.png in the pictures folder, or it is not an ordinary file",
     )
     with monkeypatch.context() as broken:
 

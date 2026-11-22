@@ -64,6 +64,10 @@ class Step:
     # What the tour does to take the page to it, after its journey's ``staged_on``: (verb,
     # subject) pairs, in order.
     puts: Tuple[Tuple[str, str], ...] = ()
+    # Whether it stands without what its journey is staged on: Flash a board's Bench
+    # builds a sketch with no board there, so a board missing is not its need, and its
+    # own puts are done all the same.
+    stands_alone: bool = False
 
 
 # What takes the page to a stage, each as a person would do it (the template's stagePut):
@@ -230,7 +234,8 @@ DESIGN = Journey(
         Step(
             "ready",
             "Ready",
-            "whether it is ready to make, and what the site says is wrong",
+            "whether the part is ready to make, in its Readiness; the header's Layout valid "
+            "and Problems speak of the site's layout, not of the part",
             forward=("part-readiness", "problems"),
             owns=("part-readiness", "problems"),
             puts=(("edit", "footpedal"),),
@@ -458,6 +463,7 @@ BOARD = Journey(
             forward=("bench",),
             owns=("bench",),
             puts=(("bench", "esp32_blink"),),
+            stands_alone=True,
             shown_by=("05-firmware.md#1", "05-firmware.md#2", "05-firmware.md#6"),
         ),
         Step(
@@ -808,6 +814,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
                     "owns": list(s.owns),
                     "draws": s.draws,
                     "puts": [list(put) for put in s.puts],
+                    "stands_alone": s.stands_alone,
                 }
                 for s in j.steps
             ],
