@@ -192,6 +192,10 @@ Shims, once the bed's tilt is to be taken out at its mounts
       soak once it gets there, then **▤ Probe bed** twice, one after the other:
       `uv run apothecary bed runs --site garage --printer printer_1` lists both
       newest, each *heated*.
+- [ ] The bed screw and a mount's outer diameter, with calipers, kept:
+      `uv run apothecary bed mount --site garage --printer printer_1 --screw M3`
+      (or `M4`, or `--hole` for another) `--outer` the diameter; `bed mount` alone
+      then says both kept, neither a default.
 - [ ] `uv run apothecary bed shims --site garage --printer printer_1`: the two
       readings named first, their floor, a shim or *none* for each corner, and
       the bow said against `measured.mesh_range_bound`. Keep its output in the

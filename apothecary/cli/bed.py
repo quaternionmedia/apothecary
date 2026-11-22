@@ -1,6 +1,8 @@
 """``apothecary bed``: what a printer's bed readings say, and the shims that level it.
 
 ``bed runs`` lists the readings of a printer's pinned board, each heated or cold.
+``bed mount`` says, or keeps, what the printer's shims fit: its bed screw and its mounts'
+outer diameter, measured at the bench.
 ``bed shims`` turns the newest heated pair, or the readings named, into the least shims
 that level the bed on its solid mounts (``apothecary/bed_shims.py``), and says the command
 that slices them. ``bed compare`` sets readings taken after fitting them beside those
@@ -12,7 +14,7 @@ the bench, from the printer's Machine.
 from __future__ import annotations
 
 import json
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import click
 
@@ -133,6 +135,41 @@ def bed_shims(
     )
 
 
+@bed.command("mount")
+@_where
+@click.option(
+    "--screw",
+    type=click.Choice(["M3", "M4"]),
+    default=None,
+    help="The bed screw: the hole its preset gives.",
+)
+@click.option("--hole", type=float, default=None, help="The screw's hole, mm, over the screw's.")
+@click.option(
+    "--outer", type=float, default=None, help="The mount's outer diameter, mm, from calipers."
+)
+@click.option("--json-out/--text", default=False)
+def bed_mount(
+    site: str,
+    printer: str,
+    screw: Optional[str],
+    hole: Optional[float],
+    outer: Optional[float],
+    json_out: bool,
+):
+    """What a printer's shims fit: the hole its bed screw passes and its mounts' outer
+    diameter. With no option, what is kept, or the part's defaults, said as defaults;
+    given, kept for the printer in the state folder, what is not given kept as it was."""
+    if screw is None and hole is None and outer is None:
+        _or_die(bs.printer_part, site, printer)
+        found = bs.mount(site, printer)
+    else:
+        found = _or_die(bs.keep_mount, site, printer, screw=screw, hole_d=hole, outer_d=outer)
+    if json_out:
+        click.echo(json.dumps(mount_json(found), indent=2))
+        return
+    click.echo(f"{printer}'s shims fit a {found.said()}")
+
+
 @bed.command("compare")
 @_where
 @click.option(
@@ -192,6 +229,18 @@ def _run_json(run: bs.Run) -> dict:
     }
 
 
+def mount_json(found: bs.Mount) -> dict:
+    return {
+        "hole_d": found.hole_d,
+        "outer_d": found.outer_d,
+        "hole_kept": found.hole_kept,
+        "outer_kept": found.outer_kept,
+        "screw": found.screw,
+        "at": found.at,
+        "said": found.said(),
+    }
+
+
 def shims_json(found: bs.Shims) -> dict:
     """What ``bed shims --json-out`` says, and the page draws."""
     least, most, rms = found.residual
@@ -225,6 +274,7 @@ def shims_json(found: bs.Shims) -> dict:
         "bound": found.bound,
         "left": round(found.left, 4),
         "outside": round(found.outside, 2),
+        "mount": mount_json(found.mount) if found.mount else None,
         "params": found.params(),
         "slice": found.slice_command(),
     }

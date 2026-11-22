@@ -19,7 +19,10 @@ as the bench takes them. Their spread at each point of the grid is the floor. A
 reading's bed temperature says whether it was heated (``HEATED_C``). The bed is levelled
 at the temperature it prints at, since the plate and the probe both move as they warm.
 Shims already fitted are said by label (``fitted``), and the new set is a whole set to
-fit in their place.
+fit in their place. What a shim fits on the machine, the hole its bed screw passes and its
+mounts' outer diameter, is kept per machine in the state folder once a person has measured
+it (``keep_mount``, ``bed/mounts.json``); until then the part's defaults stand, and are said
+to be defaults.
 
 The printer's profile says where its screws are (``measured.bed_screws`` in
 ``parts/<printer>/slicer.json``): as many as it has, each named, with the label its shim
@@ -36,10 +39,14 @@ computes.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+
+from .state_folder import state_dir, write_whole
 
 Mesh = Sequence[Sequence[float]]
 
@@ -278,6 +285,40 @@ class Shim:
 
 
 @dataclass(frozen=True)
+class Mount:
+    """What a machine's shims fit: the hole its bed screw passes and the ring across, at
+    least its mounts' face. Each is kept per machine once a person has measured it
+    (``keep_mount``); until then it is the part's own default, and said as one."""
+
+    hole_d: float
+    outer_d: float
+    hole_kept: bool = False
+    outer_kept: bool = False
+    screw: Optional[str] = None  # the bed screw a kept hole was set by, "M3" or "M4"
+    at: Optional[str] = None  # when it was last kept
+
+    def params(self) -> Dict[str, float]:
+        """The part's parameters a person has measured: none of its defaults."""
+        out: Dict[str, float] = {}
+        if self.hole_kept:
+            out["hole_d"] = self.hole_d
+        if self.outer_kept:
+            out["outer_d"] = self.outer_d
+        return out
+
+    def said(self) -> str:
+        screw = f" ({self.screw})" if self.hole_kept and self.screw else ""
+        hole = f"screw hole {self.hole_d:g} mm{screw}" + ("" if self.hole_kept else " (a default)")
+        ring = f"ring {self.outer_d:g} mm across" + ("" if self.outer_kept else " (a default)")
+        if self.hole_kept and self.outer_kept:
+            return f"{hole}, {ring}: kept {self.at}"
+        return (
+            f"{hole}, {ring}: a default stands until the bed screw and the mount's outer "
+            "diameter, read with calipers, are kept (`apothecary bed mount`)"
+        )
+
+
+@dataclass(frozen=True)
 class Shims:
     """Readings turned into shims, with what they cannot fix."""
 
@@ -291,6 +332,7 @@ class Shims:
     outside: float  # how far the furthest screw stands outside the grid, mm
     bound: Optional[float] = None  # the profile's measured.mesh_range_bound, mm
     mesh: List[List[float]] = field(default_factory=list)  # the readings' mean
+    mount: Optional[Mount] = None  # what the shims fit; None, the part's defaults unsaid
 
     @property
     def printed(self) -> Tuple[Shim, ...]:
@@ -318,6 +360,7 @@ class Shims:
         return {
             "thicknesses": [s.printed for s in self.printed],
             "labels": " ".join(s.screw.label for s in self.printed),
+            **(self.mount.params() if self.mount else {}),
         }
 
     def slice_command(self, part: str = "bed_shims") -> Optional[str]:
@@ -329,6 +372,7 @@ class Shims:
             f"apothecary slicer slice {part} -p thicknesses="
             + ",".join(f"{t:.1f}" for t in p["thicknesses"])
             + f" -p 'labels={p['labels']}'"
+            + "".join(f" -p {k}={p[k]:g}" for k in ("hole_d", "outer_d") if k in p)
         )
 
     def said(self) -> List[str]:
@@ -370,6 +414,8 @@ class Shims:
             f"the furthest screw stands {self.outside:.1f} mm outside the probed grid, where "
             "the plane is carried beyond its points",
         ]
+        if self.mount is not None:
+            lines.append(f"each shim fits a {self.mount.said()}")
         if self.bound is not None:
             lines.append(
                 f"the profile's bound for a stored mesh is {self.bound:g} mm "
@@ -403,6 +449,7 @@ def compute(
     runs: Sequence[Run] = (),
     fitted: Optional[Mapping[str, float]] = None,
     bound: Optional[float] = None,
+    mount: Optional[Mount] = None,
 ) -> Shims:
     """The least shims that level the mean of ``meshes`` on ``bed``'s screws.
 
@@ -465,6 +512,7 @@ def compute(
         outside=max(_outside(area, s) for s in bed.screws),
         bound=bound,
         mesh=mesh,
+        mount=mount,
     )
 
 
@@ -575,6 +623,84 @@ def heated_pair(found) -> list:
     return probes[:1]
 
 
+def mounts_file() -> Path:
+    """Where each machine's mount is kept: the state folder's ``bed/mounts.json``, a
+    machine's ``site/printer`` its key. Machine state: never committed."""
+    return state_dir() / "bed" / "mounts.json"
+
+
+def _mounts() -> Dict[str, dict]:
+    try:
+        held = json.loads(mounts_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return held if isinstance(held, dict) else {}
+
+
+def _defaults() -> Tuple[float, float]:
+    from .projects.parts.bed_shims import Params
+
+    fields = Params.model_fields
+    return float(fields["hole_d"].default), float(fields["outer_d"].default)
+
+
+def mount(site: str, printer: str) -> Mount:
+    """What ``printer``'s shims fit: what is kept for it, else the part's defaults."""
+    hole, outer = _defaults()
+    held = _mounts().get(f"{site}/{printer}") or {}
+    return Mount(
+        hole_d=float(held.get("hole_d", hole)),
+        outer_d=float(held.get("outer_d", outer)),
+        hole_kept="hole_d" in held,
+        outer_kept="outer_d" in held,
+        screw=held.get("screw"),
+        at=held.get("at"),
+    )
+
+
+def keep_mount(
+    site: str,
+    printer: str,
+    *,
+    screw: Optional[str] = None,
+    hole_d: Optional[float] = None,
+    outer_d: Optional[float] = None,
+) -> Mount:
+    """Keep what a person measured of ``printer``'s mounts: the bed screw (``screw``,
+    which sets the hole as its preset does), the hole typed over it (``hole_d``) and the
+    mount's outer diameter (``outer_d``). What is not given stays as it was kept, or the
+    part's default. Checked as the part checks its parameters; ShimError says why not."""
+    from pydantic import ValidationError
+
+    from .projects.parts.bed_shims import SCREW_HOLES, Params
+
+    printer_part(site, printer)  # a printer of the site, or ShimError
+    if screw is not None and screw not in SCREW_HOLES:
+        raise ShimError(f"a bed screw is {' or '.join(SCREW_HOLES)}, not {screw!r}")
+    if screw is None and hole_d is None and outer_d is None:
+        raise ShimError("nothing to keep: the bed screw, the hole or the mount's outer diameter")
+    held = _mounts()
+    now = dict(held.get(f"{site}/{printer}") or {})
+    if screw is not None:
+        now["screw"] = screw
+        now["hole_d"] = SCREW_HOLES[screw]
+    if hole_d is not None:
+        now["hole_d"] = float(hole_d)
+        if screw is None:
+            now.pop("screw", None)  # a hole typed over is no longer the screw's preset
+    if outer_d is not None:
+        now["outer_d"] = float(outer_d)
+    hole, outer = _defaults()
+    try:
+        Params(hole_d=now.get("hole_d", hole), outer_d=now.get("outer_d", outer))
+    except ValidationError as exc:
+        raise ShimError(f"not a mount a shim fits: {exc.errors()[0]['msg']}") from None
+    now["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    held[f"{site}/{printer}"] = now
+    write_whole(mounts_file(), json.dumps(held, indent=2) + "\n")
+    return mount(site, printer)
+
+
 def printer_part(site: str, printer: str) -> str:
     """The part ``printer``'s node in ``site`` is built from: the one whose profile it
     keeps."""
@@ -636,4 +762,5 @@ def for_printer(
         runs=[run_of(r) for r in chosen],
         fitted=fitted,
         bound=range_bound(profile),
+        mount=mount(site, printer),
     )

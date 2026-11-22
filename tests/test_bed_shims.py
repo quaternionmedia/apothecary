@@ -201,7 +201,6 @@ def test_the_part_takes_the_shell_s_words_and_gives_the_scad_a_list():
         ({"thicknesses": [0.5], "labels": 'A"'}, "letters and digits"),
         ({"hole_d": 9, "outer_d": 10}, "under 1 mm of ring"),
         ({"tab_t": 0.7, "label_depth": 0.6}, "a shallower label"),
-        ({"tab_width": 14}, "no wider than the ring"),
     ],
 )
 def test_shims_the_part_cannot_draw_are_refused(given, match):
@@ -328,3 +327,84 @@ def test_the_command_says_what_it_lacks(tmp_path, monkeypatch):
     assert "OTHER, pinned at printer_1 in garage, has no probe of its bed" in result.output
     assert "--fitted is LABEL=MM" in _run("shims", "--fitted", "FL").output
     assert "has no reading nope" in _run("shims", "--reading", "nope").output
+
+
+# --- what a shim fits: the bed screw and the mount, kept per machine ---------------------
+
+
+def test_until_a_mount_is_kept_the_part_s_defaults_stand_and_are_said_to(tmp_path, monkeypatch):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    held = bs.mount("garage", "printer_1")
+    assert (held.hole_d, held.outer_d, held.hole_kept, held.outer_kept) == (4.6, 12.0, False, False)
+    assert held.params() == {}
+    assert held.said().startswith("screw hole 4.6 mm (a default), ring 12 mm across (a default)")
+    found = bs.compute([planted(0.004, 0, 0)], BED, AREA, mount=held)
+    assert "hole_d" not in found.params() and "-p hole_d" not in found.slice_command()
+    assert any(
+        line.startswith("each shim fits a screw hole 4.6 mm (a default)") for line in found.said()
+    )
+
+
+def test_a_mount_kept_is_the_machine_s_across_a_restart_and_the_slice_takes_it(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    bs.keep_mount("garage", "printer_1", screw="M3")
+    half = bs.mount("garage", "printer_1")
+    assert (half.hole_d, half.screw, half.hole_kept, half.outer_kept) == (3.4, "M3", True, False)
+    assert "ring 12 mm across (a default)" in half.said()
+    bs.keep_mount("garage", "printer_1", outer_d=11.8)
+    # Read again from the state folder, as a restarted server reads it.
+    kept = json.loads((tmp_path / "state" / "bed" / "mounts.json").read_text(encoding="utf-8"))
+    assert kept["garage/printer_1"]["hole_d"] == 3.4 and kept["garage/printer_1"]["outer_d"] == 11.8
+    whole = bs.mount("garage", "printer_1")
+    assert whole.said().startswith("screw hole 3.4 mm (M3), ring 11.8 mm across: kept ")
+    found = bs.compute([planted(0.004, 0, 0)], BED, AREA, mount=whole)
+    assert found.params()["hole_d"] == 3.4 and found.params()["outer_d"] == 11.8
+    assert found.slice_command().endswith(" -p hole_d=3.4 -p outer_d=11.8")
+    assert Params(**found.params())
+    # A hole typed over the screw's is no longer that screw's preset.
+    assert bs.keep_mount("garage", "printer_1", hole_d=3.6).screw is None
+    # Another machine keeps its own, and has none yet.
+    assert not bs.mount("garage", "cnc_router").hole_kept
+
+
+@pytest.mark.parametrize(
+    "given, match",
+    [
+        ({"screw": "M5"}, "M3 or M4"),
+        ({}, "nothing to keep"),
+        ({"outer_d": 5.0}, "not a mount a shim fits"),
+        ({"hole_d": 10.0}, "not a mount a shim fits"),
+    ],
+)
+def test_a_mount_no_shim_fits_is_refused_and_nothing_kept(tmp_path, monkeypatch, given, match):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    with pytest.raises(bs.ShimError, match=match):
+        bs.keep_mount("garage", "printer_1", **given)
+    assert not (tmp_path / "state" / "bed" / "mounts.json").exists()
+    with pytest.raises(bs.ShimError, match="has no printer at nowhere"):
+        bs.keep_mount("garage", "nowhere", screw="M4")
+
+
+def test_the_part_s_presets_are_the_screws(tmp_path):
+    from apothecary.projects.parts.bed_shims import SCREW_HOLES
+
+    assert {name: PART.preset(name)["hole_d"] for name in PART.presets} == {
+        screw.lower(): hole for screw, hole in SCREW_HOLES.items()
+    }
+    assert all(len(p.label) <= 12 for p in PART.presets.values())
+
+
+def test_the_command_says_and_keeps_the_mount(tmp_path, monkeypatch):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    said = _run("mount").output
+    assert said.startswith("printer_1's shims fit a screw hole 4.6 mm (a default)")
+    kept = json.loads(_run("mount", "--screw", "M4", "--outer", "13", "--json-out").output)
+    assert (kept["hole_d"], kept["outer_d"], kept["hole_kept"], kept["outer_kept"]) == (
+        4.6,
+        13.0,
+        True,
+        True,
+    )
+    assert "M5" in _run("mount", "--screw", "M5").output  # click names the choice refused

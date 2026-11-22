@@ -177,10 +177,22 @@ The newest heated pair is what `bed shims` levels, with no reading named:
     left by the plane, which shims cannot fix: -0.266..+0.218 mm (a range of 0.484), rms 0.138
     left by rounding to 0.1 mm layers and the corners that get none: up to 0.150 mm between corners
     the furthest screw stands 48.2 mm outside the probed grid, where the plane is carried beyond its points
+    each shim fits a screw hole 4.6 mm (a default), ring 12 mm across (a default): a default stands until the bed screw and the mount's outer diameter, read with calipers, are kept (`apothecary bed mount`)
     the profile's bound for a stored mesh is 0.3 mm (measured.mesh_range_bound): the plane alone leaves 0.484, over it, so no shim brings a reading under it
     <BLANKLINE>
     slice them: uv run apothecary slicer slice bed_shims -p thicknesses=0.7,0.8 -p 'labels=FL BL'
     then: print them, fit each on the mount its label names, heat the bed and let it soak, probe it twice, and compare (apothecary bed compare)
+
+A shim goes round its bed screw and bears on the mount, so its hole and its ring are the
+machine's: the screw and the mount's outer diameter, measured at the bench. Until they are
+kept, the part's defaults stand, and every answer says they are defaults. `bed mount`
+keeps them for the printer, in the state folder, and the slice takes them:
+
+    >>> bed("mount", "--screw", "M3", "--outer", "11.8")  # doctest: +ELLIPSIS
+    printer_1's shims fit a screw hole 3.4 mm (M3), ring 11.8 mm across: kept ...
+    >>> said = CliRunner().invoke(cli, ["bed", "shims", "--site", "garage", "--printer", "printer_1", "--json-out"]).output
+    >>> json.loads(said)["slice"]
+    "apothecary slicer slice bed_shims -p thicknesses=0.7,0.8 -p 'labels=FL BL' -p hole_d=3.4 -p outer_d=11.8"
 
 Once the shims are fitted and the bed is probed twice again, `bed compare` sets the two
 pairs side by side:

@@ -37,6 +37,9 @@ Heating and probing are a person's acts, done at the printer from its Machine.
 5. **Fit.** Over each corner its label names: loosen the knob, lift the corner
    enough to slide the shim onto the mount, slot first, with its tab out past
    the mount, then tighten the knob again.
+
+Before the first print, the bed screw and a mount's outer diameter are measured and
+kept, so the shims fit them ([below](#what-a-shim-fits)).
 6. **Heat, soak and probe twice again**, then set the two pairs side by side:
    `uv run apothecary bed compare --site garage --printer printer_1 --before A
    --before B --after C --after D`. `bed shims` with `--fitted LABEL=MM` for
@@ -57,6 +60,24 @@ Heating and probing are a person's acts, done at the printer from its Machine.
 A shim stack only raises a corner, so the rule never lowers one: the highest
 stays where it is. The part draws only the shims to print, as many as the
 corners that get one.
+
+## What a shim fits
+
+A shim goes round its bed screw and bears on its mount, so its hole and its ring are the
+machine's. These two figures are measured at the bench:
+
+| | Kept as | With |
+|---|---|---|
+| The bed screw | `hole_d`, the clearance hole its preset gives (`M3`, `M4`), and a hole typed over it where the screw needs another | the screw, read off the printer or measured across its thread |
+| A mount's outer diameter, where it meets the bed | `outer_d`, the ring at least that across | calipers |
+
+Each is kept per machine, in the state folder's `bed/mounts.json` under the machine's
+`site/printer`: machine state, never committed, and the same after a restart.
+`apothecary bed mount --site S --printer P --screw M3 --outer 11.8` keeps them, and with
+no option says what is kept. Until a figure is kept, the part's default stands: a hole
+for an M4 and a 12 mm ring, which are not printer_1's measured screw and mount. `bed
+shims`, the slice command it prints and the part's own Parameters each say which figures
+are defaults. A figure kept goes into every slice of the shims after it.
 
 ## Where the screws are
 
@@ -94,5 +115,6 @@ follow, `probe-each-print`, or the plate's to replace.
 |---|---|
 | `apothecary bed runs --site S --printer P` | The readings of the printer's pinned board, newest first: bed temperature, heated or cold, range and note |
 | `apothecary bed shims --site S --printer P` | The shims, from the newest heated pair, or from `--reading ID` repeated; `--fitted LABEL=MM` for the shims in place; `--json-out` |
+| `apothecary bed mount --site S --printer P` | What the shims fit, kept or the part's defaults; `--screw M3` or `M4`, `--hole MM`, `--outer MM` keep it for the printer |
 | `apothecary bed compare --site S --printer P --before ID --after ID` | What each corner needs before and after, the range and the residual of each, and how far the mean moved |
 | `apothecary slicer slice bed_shims -p thicknesses=... -p 'labels=...'` | The shims sliced for the printer, as `bed shims` prints it |

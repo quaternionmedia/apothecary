@@ -23,11 +23,25 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
-from .base import BasePart
+from .base import BasePart, Preset
 from .skeleton import ROOT
 
 MM = {"unit": "mm"}
 FLOOR_UNDER_A_LABEL = 0.2  # what a label's cut leaves of the tab: one first layer
+
+SCREW_HOLES = {"M3": 3.4, "M4": 4.6}
+"""The hole each bed screw a shim may go round is given, mm: a clearance hole a little
+over the screw, as its preset sets it. What a mount is found to need is typed over it."""
+
+PRESETS = {
+    screw.lower(): Preset(
+        params={"hole_d": hole},
+        description=f"the hole for an {screw} bed screw, {hole:g} mm; type over it what the "
+        "screw needs",
+        label=f"{screw} screw",
+    )
+    for screw, hole in SCREW_HOLES.items()
+}
 
 
 class Params(BaseModel):
@@ -52,11 +66,17 @@ class Params(BaseModel):
         12.0,
         ge=6,
         le=40,
-        description="The ring across: at least the mount's face it bears on",
+        description="The ring across, at least the mount's face it bears on: 12 mm is a "
+        "default until calipers read the mount",
         json_schema_extra=MM,
     )
     hole_d: float = Field(
-        4.6, ge=2, le=10, description="The hole the screw passes", json_schema_extra=MM
+        4.6,
+        ge=2,
+        le=10,
+        description="The hole the bed screw passes: 4.6 mm, an M4's, is a default until the "
+        "screw is known (a preset, M3 or M4)",
+        json_schema_extra=MM,
     )
     slot: bool = Field(True, description="An open slot from the hole to the rim")
     gap: float = Field(
@@ -120,8 +140,6 @@ class Params(BaseModel):
             raise ValueError(f"a label is letters and digits: {words}")
         if self.hole_d >= self.outer_d - 2:
             raise ValueError("the hole leaves under 1 mm of ring: a smaller hole or a wider ring")
-        if self.tab_width > self.outer_d:
-            raise ValueError("the tab is no wider than the ring")
         if self.tab_clear >= self.tab_length - 4:
             raise ValueError(
                 "the tab's thick part is 4 mm long or more: a longer tab or less clear"
@@ -172,6 +190,7 @@ def create(root: Path) -> BasePart:
         readme_path=root / "parts" / "bed_shims" / "README.md",
         preview_color=Color.from_hex("#c9a227"),
         print_settings=PrintSettings(nozzle_diameter=0.4, layer_height=0.1),
+        presets=PRESETS,
     )
 
 
