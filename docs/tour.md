@@ -13,8 +13,9 @@ The tour is [the viewer's journeys](viewer.md#journeys), in their order, which i
 order of the chain the page manages: a part designed; made on the printer, or cut on
 the router; the board a machine runs on; a deck's knobs on the machines; the site
 brought up, and watched; photographs, a drawing read into shapes that stand up as
-parts to design; and last two ends joined by the adapter the server derives
-between them, a part to print. Each journey hands the next what it made.
+parts to design; a printer's bed levelled, the shims computed from its readings a
+part to print; and last two ends joined by the adapter the server derives between
+them, a part to print. Each journey hands the next what it made.
 
 The box has no words of its own. A stage's line is its step's in
 `apothecary/journeys.py`.
@@ -123,7 +124,9 @@ not ready while the layout is valid; the stage says which is which.
 **Nothing is armed, started, sent or made.** Print's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
-Make are a person's.
+Make are a person's. So are Level a bed's heating, probing, measuring and fitting: Heat
+brings the Machine forward, Probe its Runs, Measure bed_shims' Parameters, where the bed
+screw and the mount's outer diameter are typed and kept, and Fit names what to do.
 
 A window chosen in the page that another stage of the journey owns -- its tab, ⊞
 Windows or a stack's + -- moves the box to that stage, and takes the page nowhere. One chosen while the page is

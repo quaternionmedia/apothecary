@@ -20,8 +20,9 @@ The journeys are in the order of the chain the page manages, each handing the ne
 what it made: a part designed; the part made on a printer, or cut on a router; the
 board that runs a machine built, flashed and heard; a deck's knobs on the machines;
 the site brought up a step at a time through the family's hub, then watched; a
-drawing photographed into pieces, which are parts to design; and two ends joined by
-an adapter the server derives between them, a part to print.
+drawing photographed into pieces, which are parts to design; the shims that level a
+printer's bed, computed from its readings; and two ends joined by an adapter the server
+derives between them, each a part to print.
 
 The tour takes the page to a stage by its ``puts``: what the page does to stand where
 the stage is, each a verb the page already has and its subject, done only where it is
@@ -781,10 +782,117 @@ JOIN = Journey(
 )
 
 
+# Level a bed: printer_1's bed heated and probed twice, the two runs set against each
+# other for the floor a shim must clear, what the shims fit measured at the bench and
+# kept for the printer, the shims that lift its low corners to the highest computed and
+# drawn at its screws, handed to Print a part, fitted, and the bed probed again and set
+# against what it was. Heating, probing, measuring and fitting are a person's: a stage
+# that needs one says so, and the tour does none of them. What it hands on is the shims,
+# a part to print, as Join a hose hands on its adapter.
+LEVEL = Journey(
+    id="level",
+    title="Level",
+    group="Machine",
+    requires="machine",
+    opened_by="a printer's badge or its row in Site, then Panels › Machine › Bed",
+    view=_machine_view(
+        "bed-runs",
+        "bed-differences",
+        "bed-fixes",
+        "bed-history",
+        "machine-print",
+        active="bed-runs",
+    ),
+    name="Level a bed",
+    staged_on=(("machine", "printer_1"),),
+    steps=(
+        Step(
+            "heat",
+            "Heat",
+            "the bed on at the loaded filament's printing temperature, control armed in the "
+            "Machine, then about ten minutes' soak: the plate and the probe move as they warm",
+            forward=("machine",),
+            owns=("machine",),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "probe",
+            "Probe",
+            "▤ Probe bed in the Machine's Bed level, twice, one after the other: each run in "
+            "Runs, heated or cold, and the one chosen drawn over the bed",
+            forward=("bed-runs", "machine"),
+            owns=("bed-runs",),
+            puts=(("fit", "printer_1"),),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "compare",
+            "Compare",
+            "the second run less the first in Differences: the floor a shim must clear, and the "
+            "bow, which no shim fixes",
+            forward=("bed-differences",),
+            owns=("bed-differences",),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "measure",
+            "Measure",
+            "what a shim fits, measured at the bench and typed in bed_shims' Parameters: the "
+            "bed screw chosen, M3 or M4, the hole typed over where it needs another; a "
+            "mount's outer diameter where it meets the bed, read with calipers, as the ring; "
+            "then Keep mount in Fixes keeps both as printer_1's",
+            forward=("part-parameters", "bed-fixes"),
+            owns=("part-parameters", "selected"),
+            puts=(("part", "bed_shims"),),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "shims",
+            "Shims",
+            "each corner's shim in Fixes, drawn at its screw in the world as wide as the mount: "
+            "the highest none, one under a layer or under the floor skipped",
+            forward=("bed-fixes",),
+            owns=("bed-fixes",),
+            puts=(("fit", "printer_1"),),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "print",
+            "Print",
+            "Make these in Fixes: the shims rendered at their thicknesses and the mount kept, "
+            "and sliced for the printer in its Print window, where Print a part goes on; "
+            "▶ Print is a person's",
+            forward=("machine-print", "bed-fixes"),
+            owns=("machine-print",),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "fit",
+            "Fit",
+            "each shim on the mount its label names, slot first, its tab out past the mount; "
+            "then the bed heated, soaked and probed twice again",
+            forward=("bed-runs",),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "after",
+            "After",
+            "after less before in Differences, and each reading's range in History against "
+            "the bound for a stored mesh",
+            forward=("bed-history", "bed-differences"),
+            owns=("bed-history",),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+    ),
+)
+
+
 # In the order of the chain, each handing the next what it made; a view's cell on the
 # ring is the first's alone. Join a hose comes last: an adapter between two ends is a
-# part designed by the server, which hands it to Print a part as Design a part does.
-JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, RUN, DRAWING, JOIN)
+# part designed by the server, which hands it to Print a part as Design a part does. Level a
+# bed comes before it for the same reason: its shims are a part the server computes from a
+# printer's readings, handed to Print a part.
+JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, RUN, DRAWING, LEVEL, JOIN)
 
 
 def by_id(journey_id: str) -> Journey:

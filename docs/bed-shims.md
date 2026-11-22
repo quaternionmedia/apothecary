@@ -70,7 +70,12 @@ their place.
 The garage holds a `bed_shims` piece on printer_1's bed, where shims are printed, as
 the router coupon stands on the router's table. Its Parameters are where the bed screw
 (`screw`, M3 or M4, a hole typed over it where it needs another) and the mount's outer
-diameter are set before Keep.
+diameter are set before Keep, and the tour's Level a bed chooses it at Measure.
+
+The tour's **Level a bed** takes the page through it a stage at a time: Heat, Probe,
+Compare, Measure, Shims, Print, Fit and After. Heating, probing, measuring and fitting
+are the person's: a stage brings forward the window where each is done or seen, and
+does none of them ([the tour](tour.md)).
 
 ## What is computed
 

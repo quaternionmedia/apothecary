@@ -123,6 +123,19 @@ PICTURED = {
         "which is left to the person: a piece made is a part, to design. The picture "
         "is Marks.",
     ),
+    "level": (
+        "measure",
+        "Level a bed: its readings, what a shim fits, and the shims that level it",
+        "A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat and "
+        "Probe are the person's, and Runs lists what the bench kept, the printer framed; "
+        "Compare is the second "
+        "run less the first, the floor a shim must clear. Measure chooses bed_shims, the "
+        "piece on printer_1's bed, its numbers in Parameters: the bed screw chosen, a "
+        "mount's outer "
+        "diameter typed from calipers, and Keep mount in Fixes keeps both as printer_1's. "
+        "Shims draws each at its screw; Print slices them for the printer, where Print a part "
+        "goes on. The picture is Measure: what is measured is the person's.",
+    ),
     "join": (
         "ends",
         "Join a hose: two ends, each one part at its numbers, and the adapter between them",
@@ -259,6 +272,20 @@ STANDS = {
     ("drawing", "marks"): lambda page: _says(page, "marks", "whiteboard.png · whiteboard"),
     ("drawing", "models"): lambda page: _says(page, "models", "qmcp"),
     ("drawing", "pieces"): _selected("whiteboard"),
+    ("level", "heat"): _on(PRINTER),
+    ("level", "probe"): lambda page: _says(page, "bed-runs", "printer_1's board"),
+    ("level", "compare"): lambda page: _says(page, "bed-differences", "No heated pair yet"),
+    ("level", "measure"): lambda page: (
+        _selected("bed_shims")(page),
+        expect(
+            windows.panel(page, "part-parameters").locator(".param[data-field='screw']")
+        ).to_be_visible(),
+        _says(page, "bed-fixes", "default"),
+    ),
+    ("level", "shims"): lambda page: _says(page, "bed-fixes", "Probe bed first"),
+    ("level", "print"): lambda page: _shown(page, "machine-print"),
+    ("level", "fit"): lambda page: _shown(page, "bed-runs"),
+    ("level", "after"): lambda page: _shown(page, "bed-history"),
     ("join", "ends"): lambda page: (
         _selected("dust_port")(page),
         expect(windows.panel(page, "part-parameters").locator("#part-preset")).to_be_visible(),
@@ -301,6 +328,11 @@ DID = {
         "whiteboard.png pinned at whiteboard, as its Picture › Folder does",
         "3 shapes found at whiteboard, as its Picture › Find shapes › outline does",
     ],
+    "level": [
+        "printer_1's Machine opened",
+        "printer_1 framed in the world, as f does",
+        "bed_shims chosen",
+    ],
     "join": [
         "apothecary opened, where Join a hose stands (garage was open)",
         "dust_port's editor opened, as Part › Edit does",
@@ -331,8 +363,9 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
             "taken to each stage by the [tour](34-the-tour.md): a part designed, made "
             "on the printer, cut on the router; the board a machine runs on; a deck's "
             "knobs on the machines; the site brought up and watched; a drawing "
-            "photographed into shapes, which stand up as parts to design; and two ends "
-            "joined by an adapter the server derives between them. Each journey "
+            "photographed into shapes, which stand up as parts to design; a printer's bed "
+            "levelled by shims computed from its readings; and two ends joined by an "
+            "adapter the server derives between them. Each journey "
             "hands the next what it made. Under each is what the tour's box said the "
             "page did to stand on each stage, then what the page said of it. "
             "[docs/tour.md](../docs/tour.md) is the reference."
