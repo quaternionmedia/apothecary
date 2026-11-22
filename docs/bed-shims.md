@@ -58,7 +58,7 @@ Machine › Bed (`widgets/bed_shims.js`). Everything in them is the server's ans
 |---|---|
 | **Runs** | The readings of the printer's pinned board, newest first: each a small heatmap of its grid, the back row on top as the bed lies, blue low and amber high; its bed temperature, marked *heated* or *cold*; its range and its note. A run chosen is drawn over the bed in the world, on the Bed mesh layer |
 | **Differences** | The newest heated pair's second run less its first, the repeatability floor; the newest pair less the pair before it, what was done between them; and what the plane leaves, the bow, set against the bound for a stored mesh. Each a heatmap of the difference, blue below none and amber above |
-| **Fixes** | The bed from above, the probed grid dashed, each screw where the profile puts it with its shim, *none* at the highest and *skipped* where a layer or the floor leaves it out; each corner in words. The shims are drawn at their screws in the world, on the Bed mesh layer, as tall as the relief stretches them and as wide as the mount's ring. Under them, what each shim fits: the screw hole and the ring, each marked *default* until it is kept. **⇩ Keep from Parameters** (Panels › Machine › Bed › Keep mount) keeps the hole and the ring Parameters holds for `bed_shims` as the printer's (`PUT /bed/{site}/{printer}/mount`). **⚒ Make these** (Panels › Machine › Bed › Make these) renders `bed_shims` at the shims' thicknesses and the mount kept, and slices it for the printer in its Print window, where Print a part goes on |
+| **Fixes** | The bed from above, the probed grid dashed, each screw where the profile puts it with its shim, *none* at the highest and *skipped* where a layer or the floor leaves it out; each corner in words. The shims are drawn at their screws in the world, on the Bed mesh layer, as wide as the mount's ring and stretched as the relief is: drawn again with each reading drawn, so both stand at one stretch, the one the Bed mesh layer's note says. Fixes also stands them on `bed_shims`, the piece on the printer's bed, as soon as it has them: its Parameters show their thicknesses and labels, and the piece drawn is them, not the part's defaults. Under them, what each shim fits: the screw hole and the ring, each marked *default* until it is kept. **⇩ Keep from Parameters** (Panels › Machine › Bed › Keep mount) keeps the hole and the ring Parameters holds for `bed_shims` as the printer's (`PUT /bed/{site}/{printer}/mount`). **⚒ Make these** (Panels › Machine › Bed › Make these) stands the shims on `bed_shims` if they are not standing yet and slices the piece as drawn, at the shims' thicknesses and the mount kept, for the printer in its Print window, where Print a part goes on |
 | **History** | Each reading's range, oldest on the left, heated filled and cold hollow, a read of the stored mesh ringed, with the profile's bound drawn as a line |
 
 The newest pair and the pair before it are told by their order: heated probes taken
@@ -70,7 +70,9 @@ their place.
 The garage holds a `bed_shims` piece on printer_1's bed, where shims are printed, as
 the router coupon stands on the router's table. Its Parameters are where the bed screw
 (`screw`, M3 or M4, a hole typed over it where it needs another) and the mount's outer
-diameter are set before Keep, and the tour's Level a bed chooses it at Measure.
+diameter are set before Keep, and the tour's Level a bed chooses it at Measure. Its
+thicknesses and labels are the ones Fixes stood on it; a ⚒ Make or a Slice of it makes
+those.
 
 The tour's **Level a bed** takes the page through it a stage at a time: Heat, Probe,
 Compare, Measure, Shims, Print, Fit and After. Heating, probing, measuring and fitting

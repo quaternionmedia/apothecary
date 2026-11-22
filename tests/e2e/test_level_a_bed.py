@@ -36,6 +36,7 @@ from apothecary.simulated import PRINTER
 BOX = "#tour-pop"
 STEP_ON = "() => window.fractalViewer.journey?.step"
 VIEWER = "window.fractalViewer"
+MARKS = f"{VIEWER}.marks['printer_1'].marks"
 RECORDED = [
     [-0.065, -0.055, 0.017, 0.148, 0.740],
     [0.151, 0.178, 0.241, 0.381, 0.638],
@@ -212,10 +213,21 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
         blank=CHANGING,
     )
 
-    # Measure: bed_shims in Parameters, the screw's preset and the mount typed, kept.
+    # Measure: bed_shims in Parameters at the shims the readings call for, stood there by
+    # Fixes and drawn, not the part's own defaults; the screw chosen and the mount typed,
+    # kept.
     _stage(page, "Measure", "measure")
     fixes = windows.panel(page, "bed-fixes")
     expect(fixes.locator(".bed-mount .bed-default")).to_have_count(2, timeout=20000)
+    called = httpx.get(f"{url}/bed/garage/printer_1", timeout=15.0).json()["shims"]["params"]
+    assert called["thicknesses"] != [0.5, 0.5, 0.5], called
+    page.wait_for_function(
+        f"(t) => JSON.stringify({VIEWER}.partStages['part:bed_shims']?.staged?.thicknesses)"
+        " === JSON.stringify(t)",
+        arg=called["thicknesses"],
+        timeout=30000,
+    )
+    assert page.evaluate(f"() => {VIEWER}.variantByPart['bed_shims']"), "drawn as its defaults"
     params = windows.panel(page, "part-parameters")
     params.locator(".param[data-field='screw'] select.param-choice").select_option(label=SCREW)
     params.locator(".param[data-field='outer_d'] .param-number").fill(OUTER)
@@ -234,7 +246,8 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
     settled(page)
     story.shows(
         "What a shim fits, measured and kept",
-        "bed_shims in Parameters: M3 chosen as its bed screw, which sets the hole, and 11.8 "
+        "bed_shims in Parameters, at the thicknesses the readings call for, which Fixes "
+        "stood on the piece: M3 chosen as its bed screw, which sets the hole, and 11.8 "
         "typed as the ring, what calipers read across the mount. Keep mount in Fixes "
         "keeps both as printer_1's, in the state folder; neither is marked a default now.",
         blank=CHANGING,
@@ -263,20 +276,46 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
         "after a reload as before it.",
         blank=CHANGING,
     )
+    # One stretch for the relief and the shims: a reading of another range drawn over
+    # the bed stretches both alike, and the reading drawn is put back.
+    drawn_id = page.evaluate(f"() => {MARKS}.mesh().record_id")
+    runs = httpx.get(f"{url}/bed/garage/printer_1", timeout=15.0).json()["runs"]
+    shown = next(r for r in runs if r["id"] == drawn_id)
+    steeper = {**shown, "id": "steeper", "mesh": [[v * 3 for v in row] for row in shown["mesh"]]}
+    stretches = page.evaluate(
+        f"""(records) => {{ const m = {MARKS}, seen = [];
+            for (const r of records) {{ m.setMesh(r); seen.push([m.mesh().exaggeration, m.shims().stretch]); }}
+            return seen; }}""",
+        [steeper, shown],
+    )
+    assert stretches[0][0] != stretches[1][0], stretches
+    assert all(relief == shim for relief, shim in stretches), stretches
 
     # Print: Make these, sliced in the Print window; nothing printed.
     _stage(page, "Print", "print")
     windows.panel(page, "bed-fixes").locator("#bed-make").click()
+    # Make these says what it did, and the slice's own line takes its place once the
+    # file is kept; the picture waits for that line, the last the status bar changes.
     expect(page.locator("#status")).to_contain_text(
-        "chosen in printer_1's Print window and sliced", timeout=60000
+        re.compile(r"chosen in printer_1's Print window and sliced|bed_shims\.gcode kept"),
+        timeout=60000,
+    )
+    expect(page.locator("#status")).to_contain_text(
+        "bed_shims.gcode kept and chosen", timeout=60000
     )
     expect(windows.panel(page, "machine-print")).to_contain_text("bed_shims", timeout=60000)
+    # The file is of the shims drawn: the variant the piece shows, never the part's defaults.
+    drawn_variant = page.evaluate(f"() => {VIEWER}.variantByPart['bed_shims']")
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        made = [s for s in http.get("/slicer/slices").json() if s["made"]["name"] == "bed_shims"]
+    newest = max(made, key=lambda s: s["at"])
+    assert drawn_variant and newest["made"]["variant"] == drawn_variant, newest["made"]
     settled(page)
     story.shows(
         "The shims sliced for the printer",
-        "Make these renders bed_shims at the shims' thicknesses and the mount kept, and "
-        "slices it for printer_1 in its Print window, where Print a part goes on. ▶ Print "
-        "is a person's, armed.",
+        "Make these slices bed_shims as it is drawn, at the shims' thicknesses and the "
+        "mount kept, for printer_1 in its Print window, where Print a part goes on. ▶ "
+        "Print is a person's, armed.",
         blank=CHANGING,
     )
 

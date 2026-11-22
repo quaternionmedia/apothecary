@@ -16,11 +16,13 @@ the tab whatever the shim's thickness.
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from apothecary.core import OpenSCADObject
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
 from .base import BasePart
@@ -70,8 +72,7 @@ class Params(BaseModel):
         0.0,
         ge=0,
         le=10,
-        description="The hole, typed over the screw's where it needs another; 0 is the "
-        "screw's own",
+        description="The hole, typed over the screw's where it needs another; 0 is the screw's own",
         json_schema_extra=MM,
     )
     slot: bool = Field(True, description="An open slot from the hole to the rim")
@@ -164,8 +165,38 @@ class Params(BaseModel):
         return self
 
 
+class SetScad(OpenSCADObject):
+    """A SCAD file with each of ``values`` written over its own top-level assignment: the
+    part's SCAD as its parameters set it, one assignment per name, so OpenSCAD has no
+    value overwritten to warn about."""
+
+    source: str
+    values: Dict[str, Any]
+
+    def render(self) -> str:
+        from .stl_renderer import scad_literal
+
+        text = self.source
+        for name, value in self.values.items():
+            line = re.compile(rf"^({re.escape(name)}\s*=\s*)[^;]*;", re.M)
+            literal = scad_literal(value)
+            text, found = line.subn(lambda m, lit=literal: f"{m.group(1)}{lit};", text, count=1)
+            if not found:
+                raise ValueError(f"{name} is assigned nowhere at the top of the part's SCAD")
+        return text.rstrip("\n")
+
+
 class BedShimsPart(BasePart):
-    """Shims in a column along Y, as many as their thicknesses."""
+    """Shims in a column along Y, as many as their thicknesses.
+
+    Its SCAD is written from its parameters (``geometry``): the file's own assignments,
+    each set to the value given. So the page edits its numbers in Parameters and never
+    its text, and Parameters shows the shims drawn -- the ones a printer's readings call
+    for, once the page stands them on the piece -- rather than the file's defaults."""
+
+    def geometry(self, params: Mapping[str, Any]) -> OpenSCADObject:
+        values = self.scad_overrides(Params(**params).model_dump())
+        return SetScad(source=self.source_file.read_text(encoding="utf-8"), values=values)
 
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
         p = Params(**(params or {}))

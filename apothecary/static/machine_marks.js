@@ -24,7 +24,7 @@
  * Where a printer's bed shims are computed (widgets/bed_shims.js), they stand on the bed
  * at their screws (setShims): a disc as tall as its shim, the relief's stretch on it, as
  * wide as the mount's ring; a ring where a corner gets none. They are on the bed mesh
- * layer with the relief.
+ * layer with the relief, and drawn again whenever it is, so both stand at one stretch.
  *
  * And the board's badge (makeBoardBadge, sayBoard): ⚡ at the board's own spot,
  * its words what the board model says of it, on the anchors layer's badges.
@@ -230,6 +230,10 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         meshDrawn = null;
     }
     function setMesh(record) {
+        drawMesh(record);
+        if (shimsAsked) drawShims();  // at the stretch the relief now has
+    }
+    function drawMesh(record) {
         clearMesh();
         const rows = record && record.mesh;
         if (!rows || !rows.length || !rows[0].length || !hasVolume) return;
@@ -304,6 +308,7 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
     // On the bed mesh layer with the relief, shown and hidden with it.
     let shimGroup = null;
     let shimsDrawn = null;
+    let shimsAsked = null;  // the shims and mount last asked for, drawn again with each relief
     function clearShims() {
         shimsDrawn = null;
         if (!shimGroup) return;
@@ -312,8 +317,13 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         shimGroup = null;
     }
     function setShims(list, mount) {
+        shimsAsked = list && list.length ? { list, mount } : null;
+        drawShims();
+    }
+    function drawShims() {
         clearShims();
-        if (!list || !list.length || !hasVolume) return;
+        if (!shimsAsked || !hasVolume) return;
+        const { list, mount } = shimsAsked;
         const stretch = meshDrawn ? meshDrawn.exaggeration : 10;
         const ring = (mount && mount.outer_d ? mount.outer_d : 12) / 2;
         shimGroup = new THREE.Group();

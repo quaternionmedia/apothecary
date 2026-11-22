@@ -31,6 +31,9 @@
  *   shims(list, mount): each screw's shim drawn at its screw in the world, as wide as the
  *   mount's ring; null clears them
  *   make(params): the part bed_shims at `params` sliced for the printer; what it said
+ *   stand(params): the shims stood on the site's bed_shims pieces, as an Apply would:
+ *   drawn, shown in Parameters and made by a Slice or ⚒ Make of the part. Fixes asks it
+ *   whenever the readings call for other shims than it last stood
  *   measured(): { screw, hole_d, outer_d } as Parameters holds them for bed_shims (hole_d
  *   null where none is typed over the screw's), or null
  *   -> { load(), choose(id), act(verb), story() }
@@ -67,9 +70,9 @@ function heatmap(grid, colour, name) {
 
 function flatOf(grid) { return (grid || []).flat(); }
 
-export function mountBedShims(sections, { base, printer, say, draw, shims, make, measured }) {
+export function mountBedShims(sections, { base, printer, say, draw, shims, make, stand, measured }) {
     const el = sections;
-    let story = null, chosen = null, error = null, loading = null;
+    let story = null, chosen = null, error = null, loading = null, stood = null;
 
     const empty = (text) => `<p class="bed-empty">${esc(text)}</p>`;
 
@@ -171,10 +174,18 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
             + `<ul class="bed-shims">${lines}</ul>`
             + `<p class="bed-left">Left by rounding and the corners skipped: up to ${esc(mm(s.left))} mm between corners. Left by the plane: the bow, ${esc(mm(s.residual.range))} mm.</p>`
             + mountLine
+            + (s.params ? `<p class="bed-stood">These stand on bed_shims, the piece on ${esc(story.printer)}'s bed: its Parameters show them, and a Slice or ⚒ Make of it makes them.</p>` : "")
             + (s.params
                 ? `<p><button type="button" id="bed-make" title="bed_shims at these thicknesses, rendered and sliced for this printer in its Print window: nothing is printed, ▶ Print is a person's">⚒ Make these</button> <code>${esc(s.slice)}</code></p>`
                 : `<p class="bed-empty">No corner needs a shim: the bed is as level as shims make it.</p>`);
         shims(s.shims, m);
+        // The shims the readings call for stood on bed_shims, once per set: drawn on the
+        // piece, in its Parameters, and what a Slice or ⚒ Make of it makes.
+        const asked = s.params ? JSON.stringify(s.params) : null;
+        if (asked && asked !== stood && stand) {
+            stood = asked;
+            stand(s.params).catch((e) => { stood = null; say(`Fixes: the shims were not stood on bed_shims: ${e.message}`, "error"); });
+        }
     }
 
     function renderHistory() {

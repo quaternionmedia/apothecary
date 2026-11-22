@@ -2051,6 +2051,7 @@
                     draw: (record, newest) => this.drawReading(this.machine?.path, record, newest),
                     shims: (list, mount) => this.drawShims(this.machine?.path, list, mount),
                     make: (params) => this.makeShims(params),
+                    stand: (params) => this.standShims(params),
                     measured: () => this.shimsMeasured(),
                 });
                 window.apothecaryBedShims = this.bedShims;
@@ -9172,22 +9173,55 @@
                 const hole = Number(at.hole_d) > 0 ? Number(at.hole_d) : null;
                 return { screw, hole_d: hole, outer_d: Number(at.outer_d) };
             }
-            // Fixes' Make these: bed_shims rendered at the shims' thicknesses and the mount
-            // kept, and that variant chosen and sliced in the open Machine's Print window, as
-            // ⚒ Make does a part. Nothing is armed, started or sent: ▶ Print is the person's.
-            async makeShims(params) {
-                const machine = this.machine;
-                if (!machine || !machine.handle) throw new Error("open a printer's Machine: the shims are sliced for it");
-                const response = await fetch(`${BASE_URL}/parts/bed_shims/stl/generate`, {
+            // The shims a printer's readings call for (Fixes' parameters: their thicknesses,
+            // labels and the mount kept) stood on the site's bed_shims pieces in this tab, as
+            // an Apply of those numbers stands them: the variant rendered, or found in the
+            // cache, drawn on every piece of the part, its numbers what Parameters shows and
+            // what a Slice or ⚒ Make of the part makes. Nothing when it is drawn already.
+            // Whether it drew; an Error saying why it could not.
+            async standShims(params) {
+                const ref = 'bed_shims';
+                const response = await fetch(`${BASE_URL}/parts/${ref}/stl/generate?${AS_IT_RESTS}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params }),
                 });
                 const body = await response.json().catch(() => ({}));
-                if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `bed_shims was not rendered (${response.status})`);
+                if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `${ref} was not rendered (${response.status})`);
                 const variant = body.saved ? null : body.variant;
+                if ((this.variantByPart[ref] ?? null) === (variant ?? null) && variant) return false;
+                if (variant) this.useVariant(ref, variant, body); else this.forgetVariant(ref);
+                const url = variant ? this.variantUrl(ref, variant) : `${BASE_URL}/parts/${ref}/stl?${AS_IT_RESTS}&t=${Date.now()}`;
+                const reloads = Object.values(this.renderNodeByKey)
+                    .filter((n) => n.part_ref === ref && this.meshByName[nodeKey(n)]
+                        && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
+                    .map((n) => this.loadAndUpgrade(n, this.loadGeneration, async () => {
+                        const mesh = await this.loadSTLMesh(n, url, variant ? body.measured : null);
+                        if (variant) mesh.userData.variant = variant;
+                        return mesh;
+                    }));
+                await this.addToWave(Promise.all(reloads));
+                this.clearFailure(ref);
+                const stage = this.partStages[`part:${ref}`];
+                if (stage) {
+                    Object.assign(stage.committed, JSON.parse(JSON.stringify(params)));
+                    Object.assign(stage.staged, JSON.parse(JSON.stringify(params)));
+                    if (this.editorTarget?.key === `part:${ref}`) this.showStaged(this.editorTarget);
+                }
+                this.showDrawn(ref);
+                return true;
+            }
+            // Fixes' Make these: the shims stood on bed_shims (standShims) and that variant,
+            // the one drawn, chosen and sliced in the open Machine's Print window, as ⚒ Make
+            // does a part. Nothing is armed, started or sent: ▶ Print is the person's.
+            async makeShims(params) {
+                const machine = this.machine;
+                if (!machine || !machine.handle) throw new Error("open a printer's Machine: the shims are sliced for it");
+                await this.standShims(params);
+                const variant = this.variantByPart['bed_shims'] ?? null;
                 this.makingWith(machine);
                 const started = await machine.handle.print.slice('bed_shims', variant);
                 if (started && started.refused) throw new Error(started.refused);
-                return `bed_shims at ${params.thicknesses.map((t) => Number(t).toFixed(1)).join(', ')} mm (${params.labels}) chosen in ${machine.path}'s Print window and sliced; then ▶ Print with control armed`;
+                const thick = params.thicknesses.map((t) => Number(t).toFixed(1)).join(', ');
+                return `bed_shims as drawn, ${thick} mm (${params.labels}), chosen in ${machine.path}'s Print window and sliced${started && started.said ? `: ${started.said}` : ''}; then ▶ Print with control armed`;
             }
             // A board's Machine (widgets/machine.js): a printer's cards and controls or
             // a devkit's sketch and serial output, with the board's one log, a tab

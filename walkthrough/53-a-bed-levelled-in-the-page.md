@@ -31,7 +31,7 @@ Differences: the second run less the first, which is the probe's repeatability a
 
 ## 3. What a shim fits, measured and kept
 
-bed_shims in Parameters: M3 chosen as its bed screw, which sets the hole, and 11.8 typed as the ring, what calipers read across the mount. Keep mount in Fixes keeps both as printer_1's, in the state folder; neither is marked a default now.
+bed_shims in Parameters, at the thicknesses the readings call for, which Fixes stood on the piece: M3 chosen as its bed screw, which sets the hole, and 11.8 typed as the ring, what calipers read across the mount. Keep mount in Fixes keeps both as printer_1's, in the state folder; neither is marked a default now.
 
 ![What a shim fits, measured and kept](screenshots/53-03-what-a-shim-fits-measured-and-kept.png)
 
@@ -43,7 +43,7 @@ Fixes draws the bed from above: each screw where printer_1's profile puts it, th
 
 ## 5. The shims sliced for the printer
 
-Make these renders bed_shims at the shims' thicknesses and the mount kept, and slices it for printer_1 in its Print window, where Print a part goes on. ▶ Print is a person's, armed.
+Make these slices bed_shims as it is drawn, at the shims' thicknesses and the mount kept, for printer_1 in its Print window, where Print a part goes on. ▶ Print is a person's, armed.
 
 ![The shims sliced for the printer](screenshots/53-05-the-shims-sliced-for-the-printer.png)
 

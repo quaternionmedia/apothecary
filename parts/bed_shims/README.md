@@ -28,6 +28,11 @@ a hole for an M4 and a 12 mm ring, are defaults awaiting a caliper reading: they
 printer_1's measured screw and mount. What a machine's mounts are found to be is kept
 for that machine (`apothecary bed mount`), and its shims are sliced at it.
 
+The wrapper draws the SCAD with each parameter written over its assignment at the top
+of the file, so the page treats the part as a model and not as text to edit: what
+Parameters holds is what is drawn and sliced. In the page, Fixes stands the shims it
+computes on the garage's `bed_shims` piece; Make these slices the piece as drawn.
+
 ```bash
 uv run apothecary bed shims --site garage --printer printer_1   # the shims, and the slice command
 uv run apothecary parts verify bed_shims -p thicknesses=0.7,0.8 -p "labels=FL BL"
