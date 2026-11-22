@@ -565,7 +565,13 @@ for the world while no Machine is open on it and the server holds its link, so a
 machine drawn in the world follows its board ([viewer.md](viewer.md#a-machines-frame)):
 one poller per board, whatever draws it. The model scans for boards when a site
 loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
-so a replugged board is found without a reload; it never scans on a timer.
+so a replugged board is found without a reload; it never scans on a timer. A board
+that does not answer is asked less often: each quiet poll after the first doubles the
+wait, up to a minute, since a poll opens its port and an open can reset it. Its log
+says so, and the first poll it answers, **Poll** among them, sets the interval again.
+Only the server's answer that the board is quiet counts: a request that fails, the
+server restarting or a port that would not open, opened nothing, and the next poll
+comes at the interval.
 
 `/firmware/monitor?port=…` opens the viewer on the site the port is pinned
 in with the Machine of the piece it is pinned to open, or, for a port
@@ -874,7 +880,10 @@ kind's file with what it was kept for, and its ▶ stays refused. A file kept fo
 router is checked in GRBL's terms too ([docs/cnc.md](cnc.md)). **Slice**, beside **makes**, slices the part or piece chosen there for
 the printer and chooses the G-code it keeps, so Print follows Slice; a file a
 slice made says what it was sliced from and for which printer ([the
-slicer](slicer.md#in-the-page)). The card shows each control once what it
+slicer](slicer.md#in-the-page)). The file chosen follows the part under makes: a part named
+there gives the newest file made of it for this kind of machine, or none, which says
+Slice makes one, never a file made of another part. A file chosen by a person stays
+chosen, and ▶ Print says it was made of another part than makes names. The card shows each control once what it
 needs holds, in the loop's order: makes and Choose File are the two ways in;
 Slice is there once a part is chosen under makes, the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the

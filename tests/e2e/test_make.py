@@ -119,6 +119,38 @@ def test_make_on_the_part_selected_slices_it_on_this_site_s_printer(page: Page, 
 
 
 @pytest.mark.e2e
+def test_the_file_chosen_follows_the_part_under_makes(page: Page, url: str):
+    """calibration_cube sliced in printer_1's Print, then the hose adapter named under
+    makes, none of which is kept: the cube's file gives way to none, which says Slice
+    makes one, and is not left chosen for a part it does not make. The cube's file
+    chosen again by a person stays chosen."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    open_garage(page, url, settle=False)
+    _machines_known(page)
+    assert page.evaluate("() => window.fractalViewer.openMachine('printer_1')") is True
+    page.wait_for_function("() => window.apothecaryPanels.isShown('machine-print')", timeout=10000)
+    makes, pick = windows.in_machine(page, "#print-part"), windows.in_machine(page, "#print-pick")
+    expect(makes.locator("option[value='calibration_cube']")).to_be_attached(timeout=10000)
+    makes.select_option("calibration_cube")
+    windows.in_machine(page, "#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+    expect(pick).to_have_value(re.compile("calibration_cube"))
+    cube = pick.input_value()
+
+    makes.select_option("hose_adapter")
+    expect(pick).to_have_value("")
+    expect(pick.locator("option:checked")).to_have_text(
+        "— none of hose_adapter kept: Slice makes one —"
+    )
+    # A person's own choice is theirs.
+    pick.select_option(cube)
+    page.wait_for_timeout(500)
+    expect(pick).to_have_value(cube)
+    assert errors == []
+
+
+@pytest.mark.e2e
 def test_make_on_the_part_stepped_into_takes_it_to_the_printer_whose_board_is_connected(
     page: Page, url: str
 ):

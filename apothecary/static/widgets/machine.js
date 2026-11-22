@@ -1149,6 +1149,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
         } else if (running) {
             out["print.start"] = { ok: false, kind: "held", why: `a ${job.kind || "job"} from here is under way` };
+        } else if (chosen && ofAnother(chosen, $("print-part").value)) {
+            const part = $("print-part").value;
+            out["print.start"] = { ok: false, kind: "file", why: `${chosen.name} was made of ${madeFrom(chosen.id)[0]}, and makes names ${part}: ${words().prepare || "Slice"} makes one of ${part}, or makes names ${madeFrom(chosen.id)[0]}` };
         } else if (chosen && canNow.start && canNow.start.file === chosen.id) {
             // Whether this file would be started now is the server's to say (can-start).
             out["print.start"] = canNow.start.verdict;
@@ -1768,7 +1771,25 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const stays = had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))
             && (!madeForAnother(had) || prt.picked === had);
         sel.value = stays ? had : own ? own.id : "";
+        fileOfThePart();
         renderPrint();
+    }
+    // A file made of another part than the one under makes (madeFrom); a file kept by
+    // Choose File says nothing of what it makes.
+    const ofAnother = (f, part) => { const of = madeFrom(f && f.id); return !!(part && of.length && !of.includes(part)); };
+    // The file chosen follows the part under makes: one made of another part gives way
+    // to the newest of this machine's kind made of this one, or to none, which says
+    // Slice (or Toolpath) makes one. A file chosen by a person stays, and ▶ says why not.
+    function fileOfThePart() {
+        const sel = $("print-pick"), part = $("print-part").value;
+        const chosen = prt.files.find((f) => f.id === sel.value);
+        if (!part || !chosen || !ofAnother(chosen, part) || prt.picked === chosen.id) return;
+        const mine = prt.files.find((f) => fits(f) && madeFrom(f.id).includes(part));
+        if (mine) { sel.value = mine.id; return; }
+        let none = sel.querySelector('option[value=""]');
+        if (!none) { none = document.createElement("option"); none.value = ""; sel.prepend(none); }
+        none.textContent = `— none of ${part} kept: ${words().prepare || "Slice"} makes one —`;
+        sel.value = "";
     }
     // A kept file says the kind of machine it was kept for (Choose File keeps it for
     // the Machine's kind, a slice for a printer, a toolpath for a router), and is sent
@@ -1823,6 +1844,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         prt.wanted = path;
         await loadChoices();
         prt.wanted = null;
+        prt.picked = null;
+        fileOfThePart();
+        renderPrint();
         $("print-card").scrollIntoView({ block: "nearest" });
         return $("print-part").value === path;
     }
@@ -2084,7 +2108,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     };
     $("print-start").onclick = startPrint;
     $("print-slice").onclick = () => startSlice();
-    $("print-part").onchange = renderPrint;
+    $("print-part").onchange = () => { prt.picked = null; fileOfThePart(); renderPrint(); };
     $("print-pause").onclick = () => printVerb("pause");
     $("print-resume").onclick = () => printVerb("resume");
     $("print-cancel").onclick = () => printVerb("cancel", $("print-cancel"));

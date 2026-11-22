@@ -145,6 +145,53 @@ def test_one_poller_per_board_whatever_draws_it(page: Page, url: str):
 
 
 @pytest.mark.e2e
+def test_a_quiet_board_is_asked_less_often_and_at_the_interval_once_it_answers(
+    page: Page, url: str
+):
+    """printer_1's Machine open, and every status the server gives said offline, as a
+    board that does not answer is: the wait doubles after each quiet poll after the
+    first, so in thirty seconds the port is asked a handful of times and not fifteen,
+    and the log says so. Poll pressed once it answers: every interval again."""
+    page.clock.install()
+    open_garage(page, url, settle=False)
+    _select(page, "printer_1")
+    page.locator("#selected-body .device-section .dev-open").click()
+    machine = windows.machine(page)
+    windows.machine_ready(page, "printer")
+
+    body = httpx.get(f"{url}{STATUS}", params={"port": PRINTER}, timeout=15.0).json()
+    body.update(state="offline", raw=["no 'ok' within 5s (0 lines received)"])
+
+    def quiet(route):
+        route.fulfill(json=body)
+
+    asked = []
+    page.on("request", lambda r: asked.append(r.url) if STATUS in r.url else None)
+    page.route(f"**{STATUS}*", quiet)
+    page.clock.pause_at(page.evaluate("Date.now()") + 1000)
+    page.wait_for_timeout(500)
+    asked.clear()
+    for _ in range(30):
+        page.clock.fast_forward(1000)
+        page.wait_for_timeout(120)
+    # At a steady 2 s it would be fifteen: 2, 2, 4, 8 and 16 s apart is five.
+    assert 3 <= len(asked) <= 6, f"{len(asked)} status requests in 30 s: {asked}"
+    expect(machine.locator("#log")).to_contain_text(
+        f"{PRINTER} is quiet: asked again less often", timeout=5000
+    )
+
+    page.unroute(f"**{STATUS}*")
+    page.clock.resume()
+    machine.locator("#poll").click()
+    expect(machine.locator("#log")).to_contain_text(f"{PRINTER} answered: polled every 2 s again")
+    # The clock runs again: six and a half seconds at 2 s is three polls, where the
+    # quiet board's wait would have been a sixteen seconds' one.
+    asked.clear()
+    page.wait_for_timeout(6500)
+    assert 3 <= len(asked) <= 4, asked
+
+
+@pytest.mark.e2e
 def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
     """The board's log is in its Machine, with the one box that asks it for a report:
     no log panel of its own, no second box; a report answered lands there, poll
