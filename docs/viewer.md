@@ -52,16 +52,11 @@ Left to right, one row:
   loads, the one left answers nothing when it comes. The first crumb pressed
   while a site loads steps out of that site, the one the address names. A picture's view or a
   take-back in another site names that site and leaves the screen where it is.
-- **The rail of a journey**, beside the banner while one is entered: its name,
-  its steps numbered, the one a person is on filled, **Next** with the step
-  after's number and name, and ✕ to leave it ([below](#journeys)). Up to 1400 px
-  wide a step's name shows on the step a person is on alone, the others' in their
-  tooltips; up to 1100 px the journey's name and every step's go.
-- **⚒ Make**, after the banner and a journey's rail, wherever the piece selected,
+- **⚒ Make**, after the banner, wherever the piece selected,
   or else the part stepped into, is a part or a piece made from a picture -- not a
   board, a machine, a camera, or a thing bought whole and drawn as it is, its part
   tagged `bought` (the Stream Deck +, the webcam) -- (on a
-  narrow header it gives way before the rail does): it names the part and
+  narrow header it gives way before the banner does): it names the part and
   the machine it makes it on -- the first of every site's machines that make it
   (`GET /sites/{name}/makers`): for a part that says how it is cut, a router
   first, whatever else is plugged in; then one whose board is connected where it
@@ -78,9 +73,10 @@ Left to right, one row:
   router, a part that says how it is cut; a piece made from a picture is made on
   its own site's printers. For another machine, open it: its **makes** offers
   every part.
-- **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
-  Settings ([below](#settings)).
-- **⊞ Windows**: the views, the journeys, then every window by its group, ●
+- **⚙ View**: how the page looks: the views, windows laid out together for one
+  kind of work ([below](#the-windows)), then how the world is drawn
+  ([below](#how-the-world-is-drawn)), and Settings ([below](#settings)).
+- **⊞ Windows**: see-through's switch, then every window by its group, ●
   open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
   front.
 - **Docs** opens the documentation in a new tab, the world left where it
@@ -278,7 +274,8 @@ edges and an amber dot: an applied variant, not saved.
 
 ## How the world is drawn
 
-⚙ View folds out the controls below, each named as its cell of the canvas
+⚙ View folds out, under its views ([the windows](#the-windows)), the controls
+below, each named as its cell of the canvas
 ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 `f` with nothing selected).
 
@@ -726,7 +723,7 @@ by its group -- Site, Part, Pictures, Machine, Tools, Family, Airgap, eight at m
 ring's cells, and each a cell of the canvas ring's Panels -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
-at its place, and above them the **views**: windows laid out together for one
+at its place. The header's **⚙ View** lists the **views**, under their heading: windows laid out together for one
 kind of work, each also a cell of Panels › Windows.
 
 Each group has a colour of its own, and a window wears its group's wherever it
@@ -788,7 +785,7 @@ which the page, the ring and the tests all read.
 A view needs its main window. The Machine view, and the Print view, open the Machine
 of the machine selected, or else stepped into, when none is open; with none to open
 each is offered greyed, its tooltip saying why as every greyed control's does
-("Disabled: <why>. ..."), and asked for, from ⊞ Windows or the ring, it says why and
+("Disabled: <why>. ..."), and asked for, from ⚙ View or the ring, it says why and
 leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
 the printer's Machine.
 Laid out, either lands on the file the machine would run: the path of the file its
@@ -811,9 +808,12 @@ its own while Bought is ticked ([airgap.md](airgap.md#the-motion-view)).
 
 A journey is a path a person takes through the windows, a step at a time
 (`apothecary/journeys.py`; the plan is
-[journeys-2026-11-11.md](plans/journeys-2026-11-11.md)). ⊞ Windows › Journeys
-enters one: its view is laid out where it can be now, and its rail stands in the
-header at its first step.
+[journeys-2026-11-11.md](plans/journeys-2026-11-11.md)). The [Tour box](tour.md)
+is the one place a journey is chosen and stepped: **Tour** in the header opens it,
+its drop-down holds the journeys, and under it are the chosen journey's steps,
+numbered, the one a person is on marked, with ‹ and › to the one before and after.
+A journey chosen there has its view laid out where it can be now, and is entered
+at its first step.
 
 The journeys are in the order of the chain the page manages, each handing the next
 what it made:
@@ -821,12 +821,11 @@ what it made:
 | Journey | Its steps | What it hands on |
 |---|---|---|
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
-| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Start, 6 Measure | a job on the printer, and its correction |
+| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print, 6 Measure | a job on the printer, and its correction |
 | **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut, 6 Measure | a job on the router, and its tool's allowance |
 | **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
 | **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
-| **Start a site** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
-| **Watch a site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
+| **Run a site** (`run`) | 1 Steps, 2 Members, 3 Audit, 4 Space, 5 Hour | a site in working order, and what each machine's hour held |
 | **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
 | **Join a hose** (`join`) | 1 Ends, 2 Adapter, 3 Ready | the adapter between two ends, for Print a part: it stands in the universe, where the port part and the adapter are ([above](#presets-and-the-adapter-between-two-ends)) |
 
@@ -838,29 +837,31 @@ what it made:
 | 2 | **Shape** | Parameters, then Selected | Selected, Parameters |
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
-| 5 | **Start** | the Machine, then Jobs | the Machine, Jobs |
+| 5 | **Print** | the Print window, then Jobs | the Machine, Jobs |
 | 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure | the Feedback window |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
-listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
-full; the others are entered from ⊞ Windows › Journeys and from the
-[tour](tour.md), which takes the page to each stage.
+listed in ⚙ View › Views and has a cell on the ring's Panels › Windows, which is
+full; the others' are laid out by the tour alone, which takes the page to each
+stage.
 
-- **A step on the rail enters it**, the step already on included: its windows
-  come in front of their stacks, the one it is about first, and a closed one
-  opens again. **Next** enters the step after; the last step has none.
+- **A step chosen in the box enters it** -- its number, ‹ or ›, and ↻ for the
+  step already on: its windows come in front of their stacks, the one it is
+  about first, and a closed one opens again.
 - **A window of a board's Machine** with none open opens the selected machine's;
   with none to open, the step's other windows come forward and the status line
   says how a Machine is opened -- a machine's badge or its row in Site, or Slice
   on a part's ring.
-- **A window chosen moves the rail** to the step that owns it -- its tab, ⊞
+- **A window chosen moves the box** to the step that owns it -- its tab, ⊞
   Windows or a stack's + -- and moves nothing else. A window the page brings
   forward by itself moves nothing.
 - **The address keeps the journey and its step** (`?journey=make&step=slice`),
-  so a reload or a link lands on that step, the windows as the browser
-  remembers them and the step's brought forward.
-- **✕ leaves the journey**: the rail goes, the address forgets it, and the
-  windows stay where they are.
+  so a reload or a link opens the box on that step, the windows as the browser
+  remembers them and the step's brought forward. No one pressed anything then,
+  so nothing is started on the way ([the tour](tour.md#opening-it)).
+- **The box closed leaves the journey** -- its ✕, or Tour again: the address
+  forgets it, the status line says so, and the windows stay where they are. The
+  box folded to its head leaves nothing.
 
 - **Site**: its chips, one for each System, Kind and word beneath the level in view
   in the facets' order and colours, each opening its pieces at every depth (a Kind's in

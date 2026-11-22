@@ -42,8 +42,8 @@
  *
  * A view is a named arrangement of windows, written in their ids (resolveView), and
  * may name the window it cannot be laid out without (`requires`). Every stack but the
- * world's wears a + listing every window by its group; fillMenu draws the same, under
- * the views, into a menu of the page's.
+ * world's wears a + listing every window by its group; fillMenu draws the same into
+ * a menu of the page's, and fillViews the views into another.
  *
  * What a person did to the layout is remembered per browser, without the windows
  * made for the moment, and a remembered layout the page cannot read is ignored.
@@ -806,15 +806,16 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         return row;
     }
 
-    function fillMenu(into, done, own, journeys, look) {
+    // The views, each an entry that lays its windows out: drawn into a menu of the
+    // page's (its ⚙ View), under their heading.
+    function fillViews(into, done, own) {
         into.replaceChildren();
-        if (look) into.append(seeThroughRow(look));
         const viewsHead = document.createElement("div");
         viewsHead.className = "spawn-group";
         viewsHead.textContent = "Views";
         into.append(viewsHead);
         for (const [id, v] of views) {
-            if (v.listed === false) continue;  // a journey's, laid out by entering it
+            if (v.listed === false) continue;  // a journey's, laid out by the Tour box going to it
             const b = document.createElement("button");
             b.type = "button";
             b.className = "window-item view-item";
@@ -831,25 +832,11 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.addEventListener("click", () => { if (own) own.press(id); else api.applyView(id); if (done) done(); });
             into.append(b);
         }
-        // The page's journeys, each entered by its name: its view laid out, the rail of
-        // its steps in the header. The one entered now is marked.
-        if (journeys && journeys.list.length) {
-            const head = document.createElement("div");
-            head.className = "spawn-group";
-            head.textContent = "Journeys";
-            into.append(head);
-            for (const j of journeys.list) {
-                const b = document.createElement("button");
-                b.type = "button";
-                b.className = "window-item journey-item";
-                b.dataset.journey = j.id;
-                b.textContent = j.name;
-                b.title = j.title;
-                if (j.current) b.setAttribute("aria-current", "true");
-                b.addEventListener("click", () => { journeys.press(j.id); if (done) done(); });
-                into.append(b);
-            }
-        }
+    }
+
+    function fillMenu(into, done, look) {
+        into.replaceChildren();
+        if (look) into.append(seeThroughRow(look));
         for (const [group, rs] of windowsByGroup()) {
             const head = document.createElement("div");
             head.className = "spawn-group";
@@ -1064,18 +1051,22 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             remember();
             return true;
         },
-        /* The header's Windows menu, drawn into `into` each time it opens: the views,
-         * then every window by its group, each opened (or brought in front) by a press.
-         * `views` is the page's own way with a view, where it has one: { offer(id) ->
-         * { refused, title }, press(id) } -- why the view cannot be laid out now (else
-         * null) and what its entry says, and the press itself, which may open the window
-         * the view needs and says what came of it. Without it a view is laid out by
-         * applyView, and one whose window the page has not got is disabled.
-         * `journeys`, the page's: { list: [{ id, name, title, current }], press(id) },
-         * listed after the views. `seeThrough`, the page's: { on, opacity (a fraction),
-         * min, max, step (per cent), key (its shortcut, as said), set({ on, opacity }) },
-         * a row above the views: its switch, and a slider of how opaque a window is. */
-        fillMenu(into, { done = null, views: own = null, journeys = null, seeThrough: look = null } = {}) { fillMenu(into, done, own, journeys, look); },
+        /* The header's Windows menu, drawn into `into` each time it opens: every window
+         * by its group, each opened (or brought in front) by a press. `done()` is called
+         * after a press. `seeThrough`, the page's: { on, opacity
+         * (a fraction), min, max, step (per cent), key (its shortcut, as said),
+         * set({ on, opacity }) }, a row above them: its switch, and a slider of how
+         * opaque a window is. */
+        fillMenu(into, { done = null, seeThrough: look = null } = {}) { fillMenu(into, done, look); },
+        /* The views, drawn into `into` each time the menu that holds them opens: a
+         * heading, then an entry a view (`.view-item[data-view]`), its windows laid out
+         * by a press. `done()` is called after a press. `views` is the page's own way
+         * with a view, where it has one: { offer(id) -> { refused, title }, press(id) }
+         * -- why the view cannot be laid out now (else null) and what its entry says,
+         * and the press itself, which may open the window the view needs and says what
+         * came of it. Without it a view is laid out by applyView, and one whose window
+         * the page has not got is disabled. */
+        fillViews(into, { done = null, views: own = null } = {}) { fillViews(into, done, own); },
         /* See-through windows (see the header): on, every window but the world's drawn
          * `opacity` opaque (a fraction) over the world laid under the whole layout; off,
          * solid, the world in its own window. */
@@ -1087,7 +1078,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         onFrame(fn) { framers.push(fn); fn(JSON.parse(framed)); },
         /* `fn(id)` is told of each window a person chooses: its tab, ⊞ Windows, a +. */
         onChoose(fn) { choosers.push(fn); },
-        /* Up, down, Home and End along a list's buttons: the Windows menu's keys. */
+        /* Up, down, Home and End along a list's buttons: a menu's keys. */
         stepFocus,
         destroy() {
             closeSpawn();

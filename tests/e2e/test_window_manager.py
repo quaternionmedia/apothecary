@@ -532,7 +532,7 @@ def test_a_view_that_needs_a_window_the_page_has_not_says_so_and_does_nothing(wm
     assert _where(wm, "a") is not None  # nothing moved
     button = _js(
         wm,
-        """() => { const into = document.createElement('div'); P.fillMenu(into);
+        """() => { const into = document.createElement('div'); P.fillViews(into);
             const b = into.querySelector("[data-view='v']");
             return [b.disabled, b.getAttribute('aria-disabled'), b.title]; }""",
     )
@@ -543,13 +543,24 @@ def test_a_view_that_needs_a_window_the_page_has_not_says_so_and_does_nothing(wm
         "true",
         "Disabled: V lays out V's windows: open V first (its ring). The windows laid out as V",
     ]
+    # The views are fillViews' to draw, under their heading: the Windows menu has none.
+    drawn = _js(
+        wm,
+        """() => { const views = document.createElement('div'), menu = document.createElement('div');
+            P.fillViews(views); P.fillMenu(menu);
+            return [views.firstElementChild.textContent, views.querySelectorAll('.view-item').length > 1,
+                views.querySelectorAll('[data-window]').length,
+                menu.querySelectorAll('.view-item, [data-view]').length,
+                menu.querySelectorAll('.window-item[data-window]').length > 0]; }""",
+    )
+    assert drawn == ["Views", True, 0, 0, True]
     _js(wm, "() => H.reg('m', { open: false })")
     assert _js(wm, "() => P.viewMissing('v')") is None and _js(wm, "() => P.applyView('v')") is True
 
 
 @pytest.mark.e2e
 def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_not_dead(wm: Page):
-    """The page's own way with a view (fillMenu's `views`): its entry says what the page
+    """The page's own way with a view (fillViews' `views`): its entry says what the page
     says of it, greyed where the page refuses it -- disabled to assistive technology,
     "Disabled: <why>. <what it does>" -- and a press goes to the page either way, which
     may open what the view needs, or say why it cannot."""
@@ -561,7 +572,7 @@ def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_no
     drawn = _js(
         wm,
         """() => { const into = document.createElement('div'); window.pressed = []; window.menuClosed = 0;
-            P.fillMenu(into, { done: () => { window.menuClosed += 1; }, views: {
+            P.fillViews(into, { done: () => { window.menuClosed += 1; }, views: {
                 offer: (id) => (id === 'v' ? { refused: 'Nothing to open', title: null } : { refused: null, title: id === 'default' ? 'The page says' : null }),
                 press: (id) => window.pressed.push(id) } });
             const of = (id) => { const b = into.querySelector(`[data-view='${id}']`);

@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-The page's journeys a stage at a time, in a box over the page: going to a stage takes the page there, a person explores it where it stands, and one word is kept on the stage -- it works, or it is off, with what is off. The box says nothing of its own: a stage's words are the ones its journey's rail shows. [docs/tour.md](../docs/tour.md) is the reference.
+The page's journeys a stage at a time, in a box over the page: going to a stage takes the page there, a person explores it where it stands, and one word is kept on the stage -- it works, or it is off, with what is off. The box is the one place a journey is chosen and stepped, and says nothing of its own: a stage's words are its step's. [docs/tour.md](../docs/tour.md) is the reference.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, its printer a simulation pinned to printer_1's mainboard, its router's controller not pinned, and its slicer a script that answers as OrcaSlicer's command line does. Its state folder is this test's, so the feedback it keeps is its own.
 
@@ -29,7 +29,7 @@ Tour in the header: a box above the windows, on the first stage with no word on 
 
 ## 2. A journey chosen takes the page to its first stage
 
-Print a part, chosen in the box's drop-down. The page is taken to its first stage: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box keeps what the page did, then what the page said, folded under one line, opened here. The stage is there to explore.
+Print a part, chosen in the box's drop-down. The page is taken to its first stage: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out. The box keeps what the page did, then what the page said, folded under one line, opened here. The stage is there to explore.
 
 ![A journey chosen takes the page to its first stage](screenshots/34-02-a-journey-chosen-takes-the-page-to-its-first-stage.png)
 
@@ -38,7 +38,7 @@ printer_1's Machine opened
 footpedal chosen
 footpedal named under makes in printer_1's Print window
 Print a part entered, its windows laid out
-Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
+Print a part › 1 Choose (the tour): a part, among the site's pieces
 ```
 
 ## 3. ✓ Works keeps the word and takes the page to the next stage, with what to try
@@ -66,10 +66,10 @@ Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 
 
 ## 5. ✗ Off keeps what is off, and only with it
 
-✗ Off with the field empty is refused, the box saying what it needs and staying on the stage; with what is off typed, it is kept, and the box goes to Start and takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.
+✗ Off with the field empty is refused, the box saying what it needs and staying on the stage; with what is off typed, it is kept, and the box goes to Print and takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.
 
 ```
-Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 ```
 
 ## 6. A view laid out moves the windows, and not the box
@@ -87,7 +87,7 @@ The Default view laid out: every window goes where that view has it, and the box
 The canvas ring's Panels › Windows › Tour: Back goes to See, the page taken there again, where the box shows what was said of it; Works says otherwise now, and the latest word is the stage's. Off, Next, Take me here, Its page and Who, the name's field, are cells there too, and Tour opens and closes the box.
 
 ```
-Print a part · 5. Start
+Print a part · 5. Print
 ```
 
 ## 8. Reloaded, it is open where it was
@@ -95,7 +95,7 @@ Print a part · 5. Start
 The page reloaded: the box is open again on the stage it showed, where it was left; this browser keeps where it was, the server what was said.
 
 ```
-Print a part · 5. Start
+Print a part · 5. Print
 ```
 
 ## 9. A machine with no board connected is taken as the site plans it
@@ -107,7 +107,7 @@ cnc_router's Machine opened with no board connected: what it makes is planned th
 router_coupon chosen
 router_coupon named under makes in cnc_router's Print window
 Cut a part entered, its windows laid out
-Cut a part › 1 Choose (⊞ Windows › Cut a part): a part that says how it is cut, among the site's pieces
+Cut a part › 1 Choose (the tour): a part that says how it is cut, among the site's pieces
 ```
 
 ## 10. A stage that needs what only a person brings says what it needs
@@ -133,7 +133,7 @@ make/see	works	Ada
 
 ## What this page does not show
 
-- **A stage armed or started.** Start's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.
+- **A stage armed or started.** Print's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.
 - **What changes on every run.** Moments are blanked in the pictures and left out of the words, and so is how many stages the tour holds, which any stage added to a journey changes.
 
 Run it yourself:

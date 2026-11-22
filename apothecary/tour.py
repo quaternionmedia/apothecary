@@ -1,7 +1,7 @@
 """The tour: the page's journeys a stage at a time, and what a person said of each.
 
 The journeys (journeys.py) order it, in the order of the chain the page manages. A
-stage's words are its own line on the rail, and what there is to try on it is what the
+stage's words are its step's own in journeys.py, and what there is to try on it is what the
 stage names: steps of the walkthrough's pages, each read back here with its heading, its
 words and the picture kept with it, and pages that show the same thing whole. The tour
 has no words of its own.

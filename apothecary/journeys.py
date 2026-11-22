@@ -1,7 +1,7 @@
 """The page's journeys: the paths a person takes through its windows.
 
 A journey's windows are laid out together as a view, as each focused system's are
-(systems.py): listed in the header's ⊞ Windows › Views and on the ring's Panels ›
+(systems.py): listed in the header's ⚙ View › Views and on the ring's Panels ›
 Windows after the systems', and defined on the page from this registry by
 static/systems.js. docs/plans/journeys-2026-11-11.md plans them.
 
@@ -10,16 +10,16 @@ A view is written as a system's is (systems.py's ``Layout``): window ids, a
 ``{"world": True}``. A window the page has not got when the view is laid out --
 a board's Machine while none is open -- is left out of it.
 
-A journey's steps are numbered on a rail in the header while it is entered, the step
-a person is on filled and Next naming the one after (codecartographer's step rail,
-after alfred's stage rail). A step brings its windows forward, the one it is about
-first; choosing a window it owns -- its tab, ⊞ Windows or a stack's + -- says a
-person is on it.
+A journey is chosen and stepped in the Tour box (static/widgets/tour_popover.js,
+tour.py), and nowhere else: its steps numbered there, the one a person is on marked,
+‹ and › going to the one before and after. A step brings its windows forward, the one
+it is about first; choosing a window it owns -- its tab, ⊞ Windows or a stack's + --
+moves the box to it. The box closed, the journey is left, its windows where they are.
 
 The journeys are in the order of the chain the page manages, each handing the next
 what it made: a part designed; the part made on a printer, or cut on a router; the
 board that runs a machine built, flashed and heard; a deck's knobs on the machines;
-the site brought up a step at a time through the family's hub; the site watched; a
+the site brought up a step at a time through the family's hub, then watched; a
 drawing photographed into pieces, which are parts to design; and two ends joined by
 an adapter the server derives between them, a part to print.
 
@@ -39,15 +39,15 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from .site_names import UNIVERSE
-from .systems import FAMILY, PART, Layout
+from .systems import PART, Layout
 
 
 @dataclass(frozen=True)
 class Step:
     id: str
-    # Its name on the rail, after its number.
+    # Its name in the Tour box, after its number.
     label: str
-    # The rail's tooltip, what Next says is coming, and the tour's words for the stage.
+    # The tour's words for the stage, and the status line's as it is entered.
     hint: str
     # The windows entering it brings forward, the one it is about first: that one is
     # in front where two share a stack. A closed one is opened again.
@@ -120,16 +120,16 @@ class Journey:
     requires: str
     opened_by: str
     view: Layout
-    # What the rail, ⊞ Windows › Journeys and the tour call it: what a person does and
-    # to what, the title's verb and one thing (Design a part, Print a part).
+    # What the tour calls it: what a person does and to what, the title's verb and one
+    # thing (Design a part, Print a part).
     name: str = ""
     steps: Tuple[Step, ...] = ()
     # What the tour does for every stage of it, before the stage's own ``puts``: the
     # machine whose window it opens and the piece it chooses.
     staged_on: Tuple[Tuple[str, str], ...] = ()
     # Its view's cell under the ring's Panels › Windows, as a system's view's is, and
-    # its entry in ⊞ Windows › Views. That ring is full, so only the first journey has
-    # one: the others are entered from ⊞ Windows › Journeys and the tour.
+    # its entry in ⚙ View › Views. That ring is full, so only Print a part has
+    # one: the others' views are laid out by the tour alone.
     cell: str = ""
     # The site its subjects stand in -- the pieces and machines its puts name -- which
     # the tour opens first where another is open: the garage, or the universe, where
@@ -242,9 +242,10 @@ DESIGN = Journey(
 
 # Print a part on a machine: a part chosen in Site, its numbers in Parameters, the
 # machine's Print window to slice it and draw its path, the job in Jobs, and the piece
-# made filed in its part's cabinet, Part › Feedback, where the printer is tuned from the
-# coupon made to be measured, a turn at a time. The machine's window and its Print window
-# share a stack at the column's foot, Print in front.
+# printed measured or looked at in its part's cabinet, Part › Feedback, either fed back
+# to the printer (docs/print-tuning.md). The machine's window and its Print window share
+# a stack at the column's foot, Print in front. Its stages that are Cut a part's too --
+# Choose, See, the one that starts the job, Measure -- say the same things the same way.
 MAKE = Journey(
     id="make",
     title="Print",
@@ -261,7 +262,7 @@ MAKE = Journey(
         Step(
             "choose",
             "Choose",
-            "the part, among the site's pieces",
+            "a part, among the site's pieces",
             forward=("site", "selected"),
             owns=("site", "problems", "pinned", "scad"),
         ),
@@ -284,14 +285,14 @@ MAKE = Journey(
         Step(
             "see",
             "See",
-            "the chosen file's path, drawn on the machine",
+            "the slice's path drawn on the bed, a layer at a time under the preview's slider",
             forward=("machine-print",),
             draws=True,
             puts=(("file", "footpedal"),),
         ),
         Step(
             "print",
-            "Start",
+            "Print",
             "control armed in the Machine, ▶ Print, the job in Jobs",
             forward=("machine-print", "jobs"),
             owns=("machine", "jobs"),
@@ -300,13 +301,9 @@ MAKE = Journey(
         Step(
             "measure",
             "Measure",
-            "the piece made, in its part's cabinet, Part › Feedback, a drawer a print, "
-            "opened on it as its print ends: read under measured a feature a row and filed "
-            "as the next turn of the printer's tuning, which says what the readings imply "
-            "-- a box's sizes separate nothing, and print_coupon is the piece made to be "
-            "measured; or looked at under seen, each fault none to bad, a look that moves "
-            "one setting; Take turn takes either into the printer's next slices, for the "
-            "filament the piece used",
+            "the piece printed, in its part's cabinet, Part › Feedback: each feature it names "
+            "typed under measured, or each fault marked under seen, filed, and Take turn "
+            "takes either into the printer's next slices",
             forward=("part-feedback",),
             owns=("part-feedback",),
             shown_by=(
@@ -534,17 +531,33 @@ HANDS = Journey(
 )
 
 
-# Start a site: the procedure, each step a member's of the family and fired
-# through the hub on GO; the members, each with its door; and the hub's audit of what
-# it delivered. The Family system's own view.
-BRING_UP = Journey(
-    id="bring-up",
-    title="Start",
+# Run a site: brought up, then watched. The procedure, each step a member's of the
+# family and fired through the hub on GO; the members, each with its door; the hub's
+# audit of what it delivered; then the Workspace, the site as its evidence has it, and
+# one machine's hour of it. The Family system's view with the Workspace behind the
+# Procedure in the tall stack beside the world, and Site behind Jobs.
+RUN = Journey(
+    id="run",
+    title="Run",
     group="Family",
     requires="procedure",
     opened_by="⊞ Windows › Procedure",
-    view=FAMILY.view,
-    name="Start a site",
+    view={
+        "row": [
+            {"world": True, "size": 34},
+            {"stack": ["procedure", "working"], "size": 30, "active": "procedure"},
+            {
+                "column": [
+                    {"stack": ["family-members"], "size": 20},
+                    {"stack": ["family-deliveries"], "size": 26},
+                    {"stack": ["jobs", "site", "pinned"], "size": 22, "active": "jobs"},
+                    {"stack": ["selected"], "size": 32},
+                ],
+                "size": 36,
+            },
+        ]
+    },
+    name="Run a site",
     steps=(
         Step(
             "steps",
@@ -579,33 +592,6 @@ BRING_UP = Journey(
             owns=("family-deliveries", "jobs"),
             shown_by=("25-a-procedure-through-the-window.md#4",),
         ),
-    ),
-)
-
-
-# Watch a site: the Workspace, the site as its evidence has it, then one
-# machine's hour of it.
-WATCH = Journey(
-    id="watch",
-    title="Watch",
-    group="Site",
-    requires="working",
-    opened_by="⊞ Windows › Workspace",
-    view={
-        "row": [
-            {"world": True, "size": 40},
-            {"stack": ["working"], "size": 36},
-            {
-                "column": [
-                    {"stack": ["site", "pinned", "jobs"], "size": 50, "active": "site"},
-                    {"stack": ["selected"], "size": 50},
-                ],
-                "size": 24,
-            },
-        ]
-    },
-    name="Watch a site",
-    steps=(
         Step(
             "space",
             "Space",
@@ -787,7 +773,7 @@ JOIN = Journey(
 # In the order of the chain, each handing the next what it made; a view's cell on the
 # ring is the first's alone. Join a hose comes last: an adapter between two ends is a
 # part designed by the server, which hands it to Print a part as Design a part does.
-JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, BRING_UP, WATCH, DRAWING, JOIN)
+JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, RUN, DRAWING, JOIN)
 
 
 def by_id(journey_id: str) -> Journey:

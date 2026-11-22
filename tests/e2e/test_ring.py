@@ -716,10 +716,9 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
 ):
     """Every stack but the world's wears a + among its buttons: pressed, every window by
     its group, ● open and ○ closed; a closed one chosen opens as a tab of that stack.
-    The header's ⊞ Windows lists the views and the same windows, the first focused and
-    the arrows moving along them; a window chosen there opens at its place, a view lays
-    its windows out."""
-    world = _open_panels(page, ring_url)
+    The header's ⊞ Windows lists the same windows and no view, the first entry focused
+    and the arrows moving along them; a window chosen there opens at its place."""
+    _open_panels(page, ring_url)
     expect(page.locator(".lm_stack:has(.world-window) .lm_spawn")).to_have_count(0)
     plus = page.locator(".lm_stack:has(.lm_tab[data-panel='site']) .lm_spawn")
     plus.click()
@@ -740,18 +739,68 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     assert windows.state(page, "gather")["stack"][-1] == "gather"
     assert windows.state(page, "gather")["stack"][0] == "site"
 
-    # ⊞ Windows: the views, then the windows; the first focused, the arrows moving.
+    # ⊞ Windows: the windows, and no view or journey; its first entry focused, the
+    # arrows moving.
     page.locator("#windows-menu > summary").click()
     body = page.locator(".windows-menu-body")
+    expect(body.locator(".view-item, [data-view]")).to_have_count(0)
+    assert "views" not in [g.lower() for g in body.locator(".spawn-group").all_inner_texts()]
+    expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
+    expect(body.locator(".journey-item, [data-journey]")).to_have_count(0)
+    entries = body.locator(".window-item[data-window]")
+    focused = "(el) => el === document.activeElement"
+    assert entries.nth(0).evaluate(focused)
+    page.keyboard.press("ArrowDown")
+    assert entries.nth(1).evaluate(focused)
+    # Gather, closed by its tab's ✕, chosen there: open again at its place, the menu away.
+    page.keyboard.press("Escape")
+    windows.close(page, "gather")
+    windows.from_the_windows_menu(page, "gather")
+    assert windows.state(page, "gather")["open"] is True
+
+
+@pytest.mark.e2e
+def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows_out(
+    page: Page, ring_url: str
+):
+    """The header's ⚙ View lists the views under their heading, above how the world is
+    drawn: one that cannot be laid out now greyed with its reason, the first focused and
+    the arrows moving along them. A view pressed there lays its windows out and folds the
+    menu away. ⊞ Windows lists none of them."""
+    world = _open_panels(page, ring_url)
+    windows.open_window(page, "gather")
+    page.locator("#view-menu > summary").click()
+    expect(page.locator("#view-menu > summary")).to_have_text("⚙ View")
+    body = page.locator(windows.VIEW_MENU)
+    expect(body.locator(".view-menu-views .spawn-group")).to_have_text(["Views"])
     expect(body.locator(".view-item")).to_have_text(
         ["Default", "Part", "Machine", "Airgap", "Family", "Print"]
     )
-    expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
+    # The views first, then how the world is drawn, and Settings.
+    order = body.evaluate(
+        """(el) => { const at = (s) => el.querySelector(s).getBoundingClientRect().top;
+            return [at('.view-item[data-view=default]'), at('.view-item[data-view=make]'),
+                at('#snap-toggle'), at('#settings-open')]; }"""
+    )
+    assert order == sorted(order) and len(set(order)) == 4, order
+    # No Machine open and nothing selected: the Machine view is greyed, as every control
+    # the page greys is, and says why; the Part view is not.
+    machine = windows.view_entry(page, "machine")
+    expect(machine).to_have_attribute("aria-disabled", "true")
+    expect(machine).to_have_attribute("title", re.compile(r"^Disabled: no Machine is open"))
+    expect(machine).to_have_css("opacity", "0.45")
+    expect(windows.view_entry(page, "part")).not_to_have_attribute("aria-disabled", "true")
+    expect(windows.view_entry(page, "part")).to_have_css("opacity", "1")
     assert page.evaluate("() => document.activeElement.dataset.view") == "default"
     page.keyboard.press("ArrowDown")
     assert page.evaluate("() => document.activeElement.dataset.view") == "part"
+    page.keyboard.press("End")
+    assert page.evaluate("() => document.activeElement.dataset.view") == "make"
+    page.keyboard.press("Home")
+    page.keyboard.press("ArrowDown")
     page.keyboard.press("Enter")
     expect(body).to_be_hidden()
+    expect(page.locator("#view-menu")).not_to_have_attribute("open", "")
     # The Part view: Selected in front beside the world, Site's below it, the rest closed.
     assert windows.state(page, "selected")["stack"][0] == "selected"
     assert windows.state(page, "site")["stack"] == ["site", "problems", "scad"]
@@ -761,9 +810,14 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     assert world.bounding_box()["width"] == pytest.approx(
         page.viewport_size["width"] * share, abs=12
     )
-    # Default again, from the menu.
+    # ⊞ Windows lists every window, and no view.
     page.locator("#windows-menu > summary").click()
-    body.locator(".view-item[data-view='default']").click()
+    listed = page.locator(".windows-menu-body")
+    expect(listed.locator(".window-item[data-window='site']")).to_be_visible()
+    expect(listed.locator(".view-item, [data-view]")).to_have_count(0)
+    page.keyboard.press("Escape")
+    # Default again, from the menu, drawn afresh as it opens.
+    windows.from_the_view_menu(page, "default")
     assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
 
 

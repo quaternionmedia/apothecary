@@ -245,9 +245,9 @@ the piece's drawer, keeps the turn and says what it implies; **Take turn** and *
 (Part › View › Feedback › Take turn and Undo turn on the ring) act for the printer that made
 the piece and the filament and process it used, greyed with the reason the tuning
 document gives; and the turns and each setting's trend are listed beneath. *Print a
-part*'s last step, Measure, stands there on the footpedal's cabinet, says that a box's
-sizes separate nothing and that the coupon is the piece made to be measured, and gives
-this page's walkthrough to try. The Print window measures nothing.
+part*'s last step, Measure, stands there on the footpedal's cabinet and gives this
+page's walkthrough to try: a piece with no plan is read by its box, whose sizes separate
+nothing, and the coupon is the piece made to be measured. The Print window measures nothing.
 
 ## The filament loaded
 

@@ -925,7 +925,7 @@ PANEL_GROUPS = {
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
 # The views: each focused system's windows laid out together (systems.py), then each
 # journey's that has a cell (journeys.py: the ring is full, so the first's alone), a cell
-# of Panels › Windows after the layout's own two and an entry of the header's ⊞ Windows. The page defines each from the same entry; a view's
+# of Panels › Windows after the layout's own two and an entry of the header's ⚙ View. The page defines each from the same entry; a view's
 # windows the page has not got are left out of it.
 VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
     (journey.id, journey.cell) for journey in JOURNEYS if journey.cell

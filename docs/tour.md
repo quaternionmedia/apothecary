@@ -1,7 +1,8 @@
 # The tour
 
 The page's journeys, a stage at a time, in a box over the page: the way a person finds
-their way through the app, and the way they say how each part of it is.
+their way through the app, and the way they say how each part of it is. The box is the
+one place a journey is chosen and stepped.
 [Walkthrough 34](../walkthrough/34-the-tour.md) goes through the box, and
 [walkthrough 39](../walkthrough/39-the-chain-a-stage-at-a-time.md) through every stage
 it takes the page to.
@@ -15,7 +16,8 @@ brought up, and watched; photographs, a drawing read into shapes that stand up a
 parts to design; and last two ends joined by the adapter the server derives
 between them, a part to print. Each journey hands the next what it made.
 
-The box has no words of its own. A stage's line is the one its journey's rail shows.
+The box has no words of its own. A stage's line is its step's in
+`apothecary/journeys.py`.
 Under it is what there is to try on the stage: the steps of the walkthrough that go
 through it, each a link to its picture, and the pages that show the same thing whole,
 at the command line (`shown_by`, in `apothecary/journeys.py`).
@@ -26,12 +28,19 @@ at the command line (`shown_by`, in `apothecary/journeys.py`).
 opens above the windows, so a view or a journey laid out moves them and not it. It is
 small, since it stands over the world: its head names the stage and how many have a
 word on them. It is dragged by its head, folded to its head by a double-click there,
-and closed by its ✕ or by Tour again. Where it stands, whether it is open and the stage
+and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
+windows stay where they are, the address forgets the journey and its stage, and the
+status line says so. Folded, it leaves nothing. Where it stands, whether it is open and the stage
 it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
 it where it was: the page is then taken to that stage as ↻ does, so the box is not left
 over a page it is not true of. No one pressed anything then, so nothing is started on
 the way: where the stage needs a slice, a toolpath or shapes found and none is kept,
 the box says so and that ↻ makes it.
+
+An address that names a journey and a stage (`?journey=make&step=slice`, which the
+page keeps while the box is on one) opens the box on that stage the same way: the
+page taken there, the windows as this browser remembers them and the stage's brought
+forward, and nothing started.
 
 Opened in a browser that has not taken it before, it starts at the first stage with no
 word on the build the server runs.
@@ -69,8 +78,8 @@ thing only where it is not so already:
   | `shapes` | the shapes of the picture drawn at a piece found (on a reload, not found: ↻ finds them) | Picture › Find shapes |
 
 - a Machine that is open is closed where the journey has no machine in it;
-- the journey is entered at the stage, its windows laid out and its rail in the
-  header.
+- the journey is entered at the stage, its windows laid out; one the page is on
+  already keeps its windows where they are, and the stage's come forward.
 
 So a stage that needs the work of the one before it has it done first: See draws a
 file's path, so with no file of its piece kept the piece is sliced for the machine; Marks needs a
@@ -94,12 +103,13 @@ box opens on what the stage needs, in the page's own words for it -- *esp32_blin
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
 section*. With that done, ↻ takes the page the rest of the way.
 
-**Nothing is armed, started, sent or made.** Start's stage brings the Print window, where ▶ Print is, and Jobs
+**Nothing is armed, started, sent or made.** Print's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
 Make are a person's.
 
-Moving the rail in the page moves the box to that stage, and takes the page nowhere.
+A window chosen in the page that another stage of the journey owns -- its tab, ⊞
+Windows or a stack's + -- moves the box to that stage, and takes the page nowhere.
 
 ## Saying how a stage is
 
@@ -125,7 +135,9 @@ A word is a line of `tour/feedback.jsonl` under the state folder
 (`APOTHECARY_STATE_DIR`, [configuration](configuration.md#apothecary_-variables)): the
 stage (`make/slice`), `works` or `off`, what is off, who said it, the moment, and the
 commit the server ran, with whether its tree had changes beside it. A line is never
-rewritten; the latest for a stage is its feedback.
+rewritten; the latest for a stage is its feedback. A word on a stage no journey has
+is kept as it is: shown on no stage, and given back by `GET /tour/feedback` with the
+rest.
 
 ## The routes
 

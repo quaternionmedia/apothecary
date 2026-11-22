@@ -55,7 +55,7 @@ NO_BOARD = (
 # any stage added to a journey, how many the tour holds.
 STAGES = r"(?<=\d/)\d+"
 CHANGING = ((BOX, MOMENT), (BOX, STAGES), ("#status", MOMENT))
-STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
+STEP_ON = "() => window.fractalViewer.journey?.step"
 
 
 def _words(text: str) -> str:
@@ -103,7 +103,7 @@ def _feedback(url: str) -> dict:
 
 
 def _taken_to(page, step: str) -> None:
-    """The box done taking the page to ``step``, and the rail there."""
+    """The box done taking the page to ``step``, and the page's journey on it."""
     expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
     page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
 
@@ -126,8 +126,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "The page's journeys a stage at a time, in a box over the page: going to a "
             "stage takes the page there, a person explores it where it stands, and one "
             "word is kept on the stage -- it works, or it is off, with what is off. The "
-            "box says nothing of its own: a stage's words are the ones its journey's "
-            "rail shows. [docs/tour.md](../docs/tour.md) is the reference."
+            "box is the one place a journey is chosen and stepped, and says nothing of "
+            "its own: a stage's words are its step's. [docs/tour.md](../docs/tour.md) is "
+            "the reference."
         ),
         runtime=(
             "It drives a real browser against a real server of its own, its printer a "
@@ -136,7 +137,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "does. Its state folder is this test's, so the feedback it keeps is its own."
         ),
         does_not_show=[
-            "**A stage armed or started.** Start's stage brings the Print window and Jobs "
+            "**A stage armed or started.** Print's stage brings the Print window and Jobs "
             "forward; arming control and starting a print are a person's.",
             "**What changes on every run.** Moments are blanked in the pictures and "
             "left out of the words, and so is how many stages the tour holds, which any "
@@ -172,7 +173,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "of an earlier build (0000000): this stage waits for a word again"
     )
     expect(box.locator(".tour-pop-stages button").first).to_have_class(re.compile(r"\bearlier\b"))
-    expect(page.locator("#journey-rail")).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
     assert page.evaluate("() => window.fractalViewer.machine") is None
     settled(page)
     story.shows(
@@ -208,9 +209,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "A journey chosen takes the page to its first stage",
         "Print a part, chosen in the box's drop-down. The page is taken to its first "
         "stage: printer_1's Machine opened and the footpedal chosen, as a person would "
-        "do each, and the journey entered at Choose, its windows laid out and its rail "
-        "in the header. The box keeps what the page did, then what the page said, "
-        "folded under one line, opened here. The stage is there to explore.",
+        "do each, and the journey entered at Choose, its windows laid out. The box "
+        "keeps what the page did, then what the page said, folded under one line, "
+        "opened here. The stage is there to explore.",
         shown="\n".join(_words(t) for t in did.all_inner_texts()),
         blank=CHANGING,
     )
@@ -277,7 +278,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     assert _feedback(url)["make/see"] is None
     box.locator(".tour-pop-note").fill(NOTE)
     box.get_by_role("button", name="✗ Off").click()
-    expect(title).to_have_text("Print a part · 5. Start")
+    expect(title).to_have_text("Print a part · 5. Print")
     _taken_to(page, "print")
     see = _feedback(url)["make/see"]
     assert (see["verdict"], see["note"]) == ("off", NOTE)
@@ -285,7 +286,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     story.says(
         "✗ Off keeps what is off, and only with it",
         "✗ Off with the field empty is refused, the box saying what it needs and staying "
-        "on the stage; with what is off typed, it is kept, and the box goes to Start and "
+        "on the stage; with what is off typed, it is kept, and the box goes to Print and "
         "takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.",
         shown=_words(did.last.inner_text()),
     )
@@ -318,7 +319,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     expect(box.locator(".tour-pop-feedback")).to_contain_text(f"✗ Off: {NOTE} -- said by {BY} ")
     open_from_key(page)
     press(page, "Panels", "Windows", "Tour", "Works")
-    expect(title).to_have_text("Print a part · 5. Start")
+    expect(title).to_have_text("Print a part · 5. Print")
     assert _feedback(url)["make/see"]["verdict"] == "works"  # the latest is its feedback
     _taken_to(page, "print")
     story.says(
@@ -333,7 +334,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     # 8. Reloaded: open again, where it was.
     page.reload()
     expect(box).to_be_visible(timeout=30000)
-    expect(title).to_have_text("Print a part · 5. Start")
+    expect(title).to_have_text("Print a part · 5. Print")
     # And the page is taken to that stage again, not left bare under a box that says
     # where it was: its machine open, its part chosen.
     page.wait_for_function(

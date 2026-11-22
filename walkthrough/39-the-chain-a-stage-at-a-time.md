@@ -25,7 +25,7 @@ The chain starts at a part. The footpedal is chosen among the garage's pieces; i
 
 ```
 1 Choose: footpedal chosen; footpedal framed in the world, as f does; Design a part entered, its windows laid out
-    Design a part › 1 Choose (⊞ Windows › Design a part): the part, among the site's pieces: what it is drawn from, and its envelope
+    Design a part › 1 Choose (the tour): the part, among the site's pieces: what it is drawn from, and its envelope
 2 Numbers: footpedal's editor opened, as Part › Edit does
     Design a part › 2 Numbers (the tour): its numbers as controls in Parameters: staged, checked, then Apply in Selected
 3 Text: footpedal's SCAD opened in its window, as Part › SCAD does
@@ -38,23 +38,23 @@ The chain starts at a part. The footpedal is chosen among the garage's pieces; i
 
 ## 2. Print a part: the part sliced for the printer, its path drawn, the job ready
 
-The part goes to a machine. printer_1's Machine is opened and the footpedal chosen; Slice's stage is the Machine's Print window with the part under makes; See needs a file, so the page slices the footpedal for printer_1 where none is kept, and its path is drawn on the bed; Start's stage is the Print window and Jobs. The picture is Start: the tour arms nothing and starts nothing.
+The part goes to a machine. printer_1's Machine is opened and the footpedal chosen; Slice's stage is the Machine's Print window with the part under makes; See needs a file, so the page slices the footpedal for printer_1 where none is kept, and its path is drawn on the bed; Print's stage is the Print window and Jobs. The picture is Print: the tour arms nothing and starts nothing.
 
 ![Print a part: the part sliced for the printer, its path drawn, the job ready](screenshots/39-02-print-a-part-the-part-sliced-for-the-printer-its-p.png)
 
 ```
 1 Choose: printer_1's Machine opened; footpedal chosen; footpedal named under makes in printer_1's Print window; Print a part entered, its windows laid out
-    Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
+    Print a part › 1 Choose (the tour): a part, among the site's pieces
 2 Shape: footpedal chosen
     Print a part › 2 Shape (the tour): its numbers, in Parameters
 3 Slice: footpedal chosen
     Print a part › 3 Slice (the tour): the machine's Print window: the part under makes, then Slice
 4 See: footpedal chosen; footpedal sliced for printer_1, as Slice does: footpedal.gcode
     Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
-5 Start: footpedal chosen
-    Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+5 Print: footpedal chosen
+    Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, a piece made elsewhere chosen, as Part › View › Feedback does
-    Print a part › 6 Measure (the tour): the piece made, in its part's cabinet, Part › Feedback, a drawer a print, opened on it as its print ends: read under measured a feature a row and filed as the next turn of the printer's tuning, which says what the readings imply -- a box's sizes separate nothing, and print_coupon is the piece made to be measured; or looked at under seen, each fault none to bad, a look that moves one setting; Take turn takes either into the printer's next slices, for the filament the piece used
+    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured, or each fault marked under seen, filed, and Take turn takes either into the printer's next slices
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table
@@ -65,7 +65,7 @@ The same path through another machine. cnc_router's Machine is opened in front, 
 
 ```
 1 Choose: cnc_router's Machine opened; router_coupon chosen; router_coupon named under makes in cnc_router's Print window; Cut a part entered, its windows laid out
-    Cut a part › 1 Choose (⊞ Windows › Cut a part): a part that says how it is cut, among the site's pieces
+    Cut a part › 1 Choose (the tour): a part that says how it is cut, among the site's pieces
 2 Toolpath: router_coupon chosen
     Cut a part › 2 Toolpath (the tour): the router's Cut window: the part under makes, then Toolpath
 3 See: router_coupon chosen; router_coupon's toolpath written for cnc_router, as Toolpath does: router_coupon-cnc_router.nc
@@ -86,7 +86,7 @@ A machine runs on a board, and a board on firmware. The simulated devkit stands 
 
 ```
 1 Pin: /dev/ttyFAKE2 pinned to esp32_blink, as Pin in its Device section does; esp32_blink's Machine opened; esp32_blink framed in the world, as f does; Flash a board entered, its windows laid out
-    Flash a board › 1 Pin (⊞ Windows › Flash a board): the board on its port pinned to its piece, in Selected: which device is which
+    Flash a board › 1 Pin (the tour): the board on its port pinned to its piece, in Selected: which device is which
 2 Bench: the Bench opened on esp32_blink@arduino, as esp32_blink's Device › Flash sketch does
     Flash a board › 2 Bench (the tour): the part's sketch on the Bench: each build of it with its toolchain, and Compile
 3 Flash: nothing more to do
@@ -103,48 +103,39 @@ Hands on what was made to move. The stream_deck piece is chosen and the Deck win
 
 ```
 1 Deck: stream_deck chosen; stream_deck framed in the world, as f does; Drive a machine entered, its windows laid out
-    Drive a machine › 1 Deck (⊞ Windows › Drive a machine): the Stream Deck + as the server draws it: its keys, its strip, and what it heard
+    Drive a machine › 1 Deck (the tour): the Stream Deck + as the server draws it: its keys, its strip, and what it heard
 2 Knobs: printer_1's Machine opened
     Drive a machine › 2 Knobs (the tour): its knobs jog the machine chosen on it, once armed: the printer's Machine beside it
 ```
 
-## 6. Start a site: the procedure, the family's members, the hub's audit
+## 6. Run a site: its procedure, the family's members, the hub's audit, then its Workspace
 
-The machines one at a time become a site brought up in order. No machine is in this journey, so the one open is closed. Steps is the Procedure, each step a member's of the family and fired through the hub on GO; Members is each member and its door; Audit is the hub's deliveries. The picture is Steps: GO is a person's.
+The machines one at a time become a site brought up in order, then watched. No machine's window is in this journey, so each one open is closed. Steps is the Procedure, each step a member's of the family and fired through the hub on GO; Members is each member and its door; Audit is the hub's deliveries. A site that is up is watched: Space is the Workspace on the garage, in front of the Procedure; Hour chooses printer_1 and opens its hour there: its state poll by poll, and where a camera over it would keep its frames. The picture is Steps: GO is a person's.
 
-![Start a site: the procedure, the family's members, the hub's audit](screenshots/39-06-start-a-site-the-procedure-the-family-s-members-th.png)
+![Run a site: its procedure, the family's members, the hub's audit, then its Workspace](screenshots/39-06-run-a-site-its-procedure-the-family-s-members-the-.png)
 
 ```
-1 Steps: printer_1's, cnc_router's and esp32_blink's Machines closed: Start a site has no machine in it; Start a site entered, its windows laid out
-    Start a site › 1 Steps (⊞ Windows › Start a site): the site's procedure: each step a member's, fired through the family's hub on GO
+1 Steps: printer_1's, cnc_router's and esp32_blink's Machines closed: Run a site has no machine in it; Run a site entered, its windows laid out
+    Run a site › 1 Steps (the tour): the site's procedure: each step a member's, fired through the family's hub on GO
 2 Members: nothing more to do
-    Start a site › 2 Members (the tour): each member of the family: how it is reached, and its door to where its step works
+    Run a site › 2 Members (the tour): each member of the family: how it is reached, and its door to where its step works
 3 Audit: nothing more to do
-    Start a site › 3 Audit (the tour): the hub's deliveries, newest first: each step, its member, and how it answered
+    Run a site › 3 Audit (the tour): the hub's deliveries, newest first: each step, its member, and how it answered
+4 Space: the Workspace opened: the Workspace of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.
+    Run a site › 4 Space (the tour): the site as its evidence has it: each machine's state, heard or quiet, and its pins
+5 Hour: printer_1 framed in the world, as f does; the Workspace opened: printer_1's hour in the Workspace: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
+    Run a site › 5 Hour (the tour): one machine's hour: its state and heaters poll by poll, and the cameras over it
 ```
 
-## 7. Watch a site: the Workspace, then one machine's hour
-
-A site that is up is watched. Space is the Workspace on the garage; Hour chooses printer_1 and opens its hour there: its state poll by poll, and where a camera over it would keep its frames. The picture is Space.
-
-![Watch a site: the Workspace, then one machine's hour](screenshots/39-07-watch-a-site-the-workspace-then-one-machine-s-hour.png)
-
-```
-1 Space: the Workspace opened: the Workspace of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.; Watch a site entered, its windows laid out
-    Watch a site › 1 Space (⊞ Windows › Watch a site): the site as its evidence has it: each machine's state, heard or quiet, and its pins
-2 Hour: printer_1 framed in the world, as f does; the Workspace opened: printer_1's hour in the Workspace: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
-    Watch a site › 2 Hour (the tour): one machine's hour: its state and heaters poll by poll, and the cameras over it
-```
-
-## 8. Read a drawing: the whiteboard photographed, squared, read
+## 7. Read a drawing: the whiteboard photographed, squared, read
 
 Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen on the garage's wall; Picture pins the folder's photograph of it there, as its ring's Picture › Folder does, squared and laid in front; Shapes finds its closed strokes; Marks sorts each mark; Models is where an image model is asked and never trusted; Pieces is where Picture › Make stands each shape up, which is left to the person: a piece made is a part, to design. The picture is Marks.
 
-![Read a drawing: the whiteboard photographed, squared, read](screenshots/39-08-read-a-drawing-the-whiteboard-photographed-squared.png)
+![Read a drawing: the whiteboard photographed, squared, read](screenshots/39-07-read-a-drawing-the-whiteboard-photographed-squared.png)
 
 ```
 1 Board: whiteboard chosen; whiteboard framed in the world, as f does; Read a drawing entered, its windows laid out
-    Read a drawing › 1 Board (⊞ Windows › Read a drawing): the whiteboard on the garage's wall: a place a picture can lie
+    Read a drawing › 1 Board (the tour): the whiteboard on the garage's wall: a place a picture can lie
 2 Picture: whiteboard.png pinned at whiteboard, as its Picture › Folder does
     Read a drawing › 2 Picture (the tour): a photograph of it pinned there: squared to it, sized by it, laid in front
 3 Shapes: 3 shapes found at whiteboard, as its Picture › Find shapes › outline does
@@ -157,15 +148,15 @@ Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen
     Read a drawing › 6 Pieces (the tour): Picture › Make stands each shape up as a piece: a part, to design and to make
 ```
 
-## 9. Join a hose: two ends, each one part at its numbers, and the adapter between them
+## 8. Join a hose: two ends, each one part at its numbers, and the adapter between them
 
 A part can be made between two others. The universe opens, where every part stands; the dust port is chosen and its editor opened, its presets above its numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's numbers it asks the server for the adapter between them. Adapter is the adapter's editor, where each end's fit is said; Ready is whether it can be printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the numbers measured, are the person's.
 
-![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-09-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
+![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-08-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
 
 ```
 1 Ends: apothecary opened, where Join a hose stands (garage was open); dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
-    Join a hose › 1 Ends (⊞ Windows › Join a hose): each end one part at its numbers: a preset chosen in Parameters, what calipers read typed over it; ⇄ Adapter in Selected keeps the first
+    Join a hose › 1 Ends (the tour): each end one part at its numbers: a preset chosen in Parameters, what calipers read typed over it; ⇄ Adapter in Selected keeps the first
 2 Adapter: nothing more to do
     Join a hose › 2 Adapter (the tour): ⇄ Adapter again at the other end's numbers: the adapter between them derived, drawn, and each end's fit said in Selected
 3 Ready: hose_adapter's editor opened, as Part › Edit does

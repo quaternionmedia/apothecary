@@ -22,7 +22,7 @@ from slicer_helpers import write_fake_orcaslicer
 
 BOX = "#tour-pop"
 SLICED_MS = 30000
-STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
+STEP_ON = "() => window.fractalViewer.journey?.step"
 
 
 @pytest.fixture(scope="module")
@@ -93,8 +93,8 @@ def test_a_stage_opens_its_site_and_draws_its_own_piece_s_file(page: Page, url: 
     assert not any("sliced for printer_1" in t for t in _did(page))
     expect(box.locator(".tour-pop-did li").last).to_contain_text("path is drawn on printer_1")
 
-    # Start names ▶ Print, which is in the Print window: that tab is brought forward.
-    box.locator(".tour-pop-stages button", has_text="5 Start").click()
+    # Print names ▶ Print, which is in the Print window: that tab is brought forward.
+    box.locator(".tour-pop-stages button", has_text="5 Print").click()
     _taken_to(page, "print")
     expect(windows.in_machine(page, "#print-start")).to_be_visible()
     assert errors == []

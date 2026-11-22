@@ -162,7 +162,7 @@ cuts the 😮 and feeds it back.
 
 A kept toolpath is drawn in the world before it is cut: the Cut card's preview slider, on
 the core a printer's file is read by too ([docs/toolpath-preview.md](toolpath-preview.md)).
-⊞ Windows › Machine, with the router selected or its Machine open, lands on it.
+⚙ View › Machine, with the router selected or its Machine open, lands on it.
 
 ## Not built
 

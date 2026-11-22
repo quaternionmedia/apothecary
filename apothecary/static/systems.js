@@ -31,7 +31,7 @@
  * defineJourneyViews(panels, journeys) defines each journey's view (apothecary/journeys.py),
  *   the windows a path through the page passes, laid out together, greyed until the
  *   window it `requires` is there. One with a cell on the ring is listed among the
- *   views after the systems'; the others are laid out by entering their journey.
+ *   views after the systems'; the others are laid out by the Tour box going to a stage of theirs.
  */
 
 export function knownWindows(systems) {

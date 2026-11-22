@@ -69,9 +69,8 @@ def test_a_page_written_by_hand_is_read_whole_from_its_first_words():
 
 def test_the_tour_is_the_journeys_in_the_chain_s_order_a_stage_at_a_time():
     """The document the box reads: every journey in the registry's order -- a part
-    designed, made, cut, its board, hands on it, the site brought up and watched, a
-    drawing to pieces, and two ends joined by an adapter last -- each stage with the
-    rail's own words."""
+    designed, made, cut, its board, hands on it, the site run, a drawing to pieces, and two ends joined by an adapter last -- each stage with its
+    step's own words."""
     doc = tour.document()
     assert [j["id"] for j in doc["journeys"]] == [j.id for j in journeys.JOURNEYS]
     assert doc["journeys"][0]["id"] == "design" and doc["journeys"][-1]["id"] == "join"
@@ -184,6 +183,38 @@ def test_a_line_that_does_not_read_is_left_out(kept):
     with kept.open("a", encoding="utf-8") as out:
         out.write("not feedback\n" + json.dumps({"stage": SHAPE}) + "\n")
     assert [r["stage"] for r in tour.said()] == [SHAPE]
+
+
+def test_a_word_kept_on_a_stage_no_journey_has_is_given_back_and_shown_on_no_stage(kept):
+    """The file is never rewritten, so it can hold a word on a stage the journeys have
+    not got: `GET /tour` answers with every stage as it is and that word on none, `GET
+    /tour/feedback` gives it back with the rest, and no new word is taken on it."""
+    tour.say(SHAPE, "works", by=BY)
+    gone = [
+        {**tour.said()[0], "stage": "bring-up/steps", "verdict": "off", "note": "GO is greyed"},
+        {**tour.said()[0], "stage": "watch/hour"},
+        {**tour.said()[0], "stage": "nowhere"},
+    ]
+    with kept.open("a", encoding="utf-8") as out:
+        out.writelines(json.dumps(record) + "\n" for record in gone)
+    assert not {r["stage"] for r in gone} & set(tour.stage_ids())
+    client = TestClient(app)
+    answered = client.get("/tour")
+    assert answered.status_code == 200
+    stages = [s for j in answered.json()["journeys"] for s in j["stages"]]
+    assert [s["id"] for s in stages] == tour.stage_ids()
+    assert [s["id"] for s in stages if s["feedback"]] == [SHAPE]
+    given = client.get("/tour/feedback")
+    assert given.status_code == 200
+    assert [r["stage"] for r in given.json()["feedback"]] == [
+        SHAPE,
+        "bring-up/steps",
+        "watch/hour",
+        "nowhere",
+    ]
+    again = {"stage": "watch/hour", "verdict": "works", "by": BY}
+    assert client.post("/tour/feedback", json=again).status_code == 404
+    assert len(kept.read_text(encoding="utf-8").splitlines()) == 4
 
 
 def test_a_word_is_of_the_build_it_was_said_of(kept, monkeypatch):

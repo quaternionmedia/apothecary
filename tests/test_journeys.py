@@ -1,5 +1,5 @@
 """The journeys' registry (apothecary/journeys.py) and what reads it: each journey's
-view, laid out from ⊞ Windows and the ring's Panels › Windows after the systems'.
+view, laid out from ⚙ View and the ring's Panels › Windows after the systems'.
 That a view lays its windows out on the page is tests/e2e/test_journeys.py's."""
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def test_the_make_view_holds_the_window_set_a_part_is_made_through():
 
 def test_the_ring_has_a_cell_for_the_first_journey_s_view_after_the_systems():
     """Panels › Windows is full, so Print a part's view alone has a cell there; the other
-    journeys are entered from ⊞ Windows › Journeys and the tour."""
+    journeys' views are laid out by the tour alone."""
     assert VIEWS[len(SYSTEMS) :] == (("make", "Print view"),)
     assert [j.id for j in JOURNEYS if j.cell] == ["make"]
 
@@ -127,7 +127,7 @@ def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
         assert len(owned) == len(set(owned)), journey.id
         for step in journey.steps:
             assert re.fullmatch(r"[a-z][a-z0-9-]*", step.id)
-            assert 0 < len(step.label) <= 8, step.label  # on the rail, after its number
+            assert 0 < len(step.label) <= 8, step.label  # in the Tour box, after its number
             assert step.hint and step.forward, step.id
             assert set(step.forward) | set(step.owns) <= named, (journey.id, step.id)
 
@@ -135,12 +135,12 @@ def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
 def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     make = by_id("make")
     assert make.name == "Print a part"
-    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Start", "Measure"]
+    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Print", "Measure"]
     assert make.steps[0].forward[0] == "site"
     assert make.steps[2].forward == ("machine-print",)
     assert [s.id for s in make.steps if s.draws] == ["see"]
     assert make.steps[4].owns == ("machine", "jobs")
-    # Start names ▶ Print, a button of the Print window: that tab is the one in front,
+    # Print names ▶ Print, a button of the Print window: that tab is the one in front,
     # not the Machine's beside it. The stage's part is under makes wherever it is entered.
     assert make.steps[4].forward[0] == "machine-print"
     assert ("makes", "footpedal") in make.staged_on
@@ -155,6 +155,70 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
         "46-a-printer-tuned-from-its-prints.md",
         "50-a-printer-tuned-from-what-it-shows.md",
     )
+
+
+def test_print_a_part_and_cut_a_part_name_the_same_act_the_same_way():
+    """The two are one path through two machines: the stages that are the same act --
+    Choose, See, Measure -- carry the same id and label in both, the stage that starts
+    the job is named for its machine's ▶ button and brings that window and Jobs forward,
+    and what is one machine's alone (Shape and Slice, Toolpath and Needs) is the rest."""
+    make, cut = by_id("make"), by_id("cut")
+    printed = {s.id: s for s in make.steps}
+    cuts = {s.id: s for s in cut.steps}
+    assert set(printed) & set(cuts) == {"choose", "see", "measure"}
+    for shared in ("choose", "see", "measure"):
+        assert printed[shared].label == cuts[shared].label, shared
+        assert printed[shared].forward == cuts[shared].forward, shared
+    assert [s.id for s in (make.steps[0], make.steps[-1])] == ["choose", "measure"]
+    assert [s.id for s in (cut.steps[0], cut.steps[-1])] == ["choose", "measure"]
+    for journey, starts in ((make, "print"), (cut, "cut")):
+        stage = journey.steps[-2]
+        assert (stage.id, stage.label) == (starts, journey.title), journey.id
+        assert f"▶ {journey.title}" in stage.hint, journey.id
+        assert stage.forward == ("machine-print", "jobs"), journey.id
+        assert stage.owns == ("machine", "jobs"), journey.id
+    # One line each in the Tour box: neither Measure is many times the other's length.
+    lengths = sorted(len(j.steps[-1].hint) for j in (make, cut))
+    assert lengths[1] < 1.5 * lengths[0], lengths
+
+
+def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():
+    """One journey where Drive a machine hands on: the procedure, the family's members
+    and the hub's audit, then the Workspace on the site and on one machine's hour, in a
+    view that holds each half's windows -- the Workspace behind the Procedure in the tall
+    stack, so each is in front in its own stages. No board's Machine is in it."""
+    run = by_id("run")
+    assert (run.name, run.title, run.group, run.requires) == (
+        "Run a site",
+        "Run",
+        "Family",
+        "procedure",
+    )
+    assert [j.id for j in JOURNEYS].index("run") == [j.id for j in JOURNEYS].index("hands") + 1
+    assert [(s.id, s.label) for s in run.steps] == [
+        ("steps", "Steps"),
+        ("members", "Members"),
+        ("audit", "Audit"),
+        ("space", "Space"),
+        ("hour", "Hour"),
+    ]
+    assert run.steps[0].forward == (run.requires,)
+    named = _layout_windows(run.view)
+    assert {
+        "world",
+        "procedure",
+        "family-members",
+        "family-deliveries",
+        "jobs",
+        "working",
+        "site",
+        "selected",
+    } <= named
+    assert not any(w == "machine" or w.startswith("machine-") for w in named)
+    tall = run.view["row"][1]
+    assert tall["stack"] == ["procedure", "working"] and tall["active"] == "procedure"
+    assert run.steps[3].puts == (("working", ""),)
+    assert run.steps[4].puts == (("fit", "printer_1"), ("working", "printer_1"))
 
 
 def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():
