@@ -156,7 +156,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     page.locator("#tour-pop-open").click()
     expect(box).to_be_visible()
     assert page.evaluate("() => document.querySelector('#tour-pop').matches(':popover-open')")
-    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^0/\d+$"))
+    # The earlier build's word counts, apart: no progress is lost to a deploy.
+    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^1/\d+ · 1 earlier$"))
     expect(title).to_have_text("Design a part · 1. Choose")
     expect(box.locator(".tour-pop-put")).to_be_enabled()
     # On the first stage ‹ is greyed as every control of the page is, saying why.
@@ -231,7 +232,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     said = _feedback(url)["make/choose"]
     assert (said["verdict"], said["by"], said["current"]) == ("works", BY, True)
     page.wait_for_function("() => window.apothecaryPanels.state('part-parameters').shown")
-    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^1/\d+$"))
+    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^2/\d+ · 1 earlier$"))
     tries = box.locator(".tour-pop-tries li")
     expect(tries).to_have_text(
         [

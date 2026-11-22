@@ -155,11 +155,11 @@ def _machine_view(*beside_the_machine: str, active: str) -> Layout:
                 "column": [
                     {
                         "stack": ["site", "problems", "pinned", "jobs", "scad"],
-                        "size": 22,
+                        "size": 16,
                         "active": "site",
                     },
-                    {"stack": ["selected"], "size": 26},
-                    {"stack": ["part-parameters"], "size": 22},
+                    {"stack": ["selected"], "size": 18},
+                    {"stack": ["part-parameters"], "size": 36},
                     {"stack": ["machine", *beside_the_machine], "size": 30, "active": active},
                 ],
                 "size": 38,

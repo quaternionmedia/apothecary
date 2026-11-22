@@ -53,7 +53,7 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
     Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
 5 Print: footpedal chosen
     Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
-6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, a piece made elsewhere chosen, as Part › View › Feedback does
+6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it, as Part › View › Feedback does
     Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured, or each fault marked under seen, filed, and Take turn takes either into the printer's next slices
 ```
 
@@ -74,7 +74,7 @@ The same path through another machine. cnc_router's Machine is opened in front, 
     Cut a part › 4 Needs (the tour): what the router needs before it moves: its state, its pins, each axis's home
 5 Cut: router_coupon chosen
     Cut a part › 5 Cut (the tour): control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs
-6 Measure: router_coupon chosen; router_coupon's cabinet in Part › Feedback, a piece made elsewhere chosen, as Part › View › Feedback does
+6 Measure: router_coupon chosen; router_coupon's cabinet in Part › Feedback, its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it, as Part › View › Feedback does
     Cut a part › 6 Measure (the tour): the piece cut, in its part's cabinet, Part › Feedback: each size it names typed under measured, checked against what was designed, filed, and the tool's allowance kept for the router's next toolpaths
 ```
 

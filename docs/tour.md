@@ -27,10 +27,12 @@ at the command line (`shown_by`, in `apothecary/journeys.py`).
 **Tour**, in the header, or the canvas ring's **Panels › Windows › Tour › Tour**. The box
 opens above the windows, so a view or a journey laid out moves them and not it. It is
 small, since it stands over the world: its head names the stage and how many have a
-word on them. It is dragged by its head, folded to its head by a double-click there,
+word on them, on any build, with how many of those were said of an earlier build and
+so wait for a word again. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
 windows stay where they are, the address forgets the journey and its stage, and the
-status line says so. Folded, it leaves nothing. What a stage frames is framed in the
+status line says so. A journey that opened another site (Join a hose, in the universe)
+is left on the site the page was on before the tour, opened again. Folded, it leaves nothing. What a stage frames is framed in the
 room of the world the box leaves, the largest beside it or above or below it, and
 framed again once the box shows what the stage said; a path a stage would draw and
 cannot leaves the world on the machine it is for. A journey entered with a world so

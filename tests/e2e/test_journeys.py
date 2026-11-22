@@ -306,6 +306,74 @@ def test_a_stage_frames_what_it_shows_where_the_box_does_not_cover_it(page: Page
 
 
 @pytest.mark.e2e
+def test_the_box_closed_after_a_journey_in_another_site_opens_the_first_site_again(
+    page: Page, url: str
+):
+    """Join a hose stands in the universe: chosen in the box from the garage, the page
+    opens it; the box closed, the garage is opened again and the status line says so."""
+    open_garage(page, url, settle=False)
+    page.locator("#tour-pop-open").click()
+    expect(page.locator(BOX)).to_be_visible()
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Join a hose")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.siteName !== 'garage'", timeout=30000)
+    page.locator(f"{BOX} .tour-pop-close").click()
+    page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=30000)
+    expect(status(page)).to_contain_text(
+        "Left Join a hose: garage opened again, where the page was before the tour"
+    )
+
+
+@pytest.mark.e2e
+def test_print_a_part_s_shape_shows_its_numbers_and_each_whole(page: Page, url: str):
+    """Print a part at Shape, at 1280 by 800: Parameters shows two of the footpedal's
+    numbers whole; and in Design a part's view, Selected's position fields hold every
+    digit of theirs."""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    _machine_open_and_the_part_chosen(page, url)
+    _choose_print_a_part(page, url)
+    page.locator(f"{BOX} .tour-pop-stages button").nth(1).click()
+    _on(page, "shape")
+    shown = page.evaluate(
+        """() => {
+            const body = document.querySelector(".panel[data-panel='part-parameters']").closest('.lm_content') || document.querySelector(".panel[data-panel='part-parameters']");
+            const r = body.getBoundingClientRect();
+            return [...body.querySelectorAll('input[type=range]')].filter((i) => {
+                const b = i.getBoundingClientRect();
+                return b.height > 0 && b.top >= r.top && b.bottom <= r.bottom;
+            }).length;
+        }"""
+    )
+    geo = page.evaluate(
+        """() => { const p = document.querySelector(".panel[data-panel='part-parameters']"); const c = p.closest('.lm_content') || p; const r = c.getBoundingClientRect();
+          return { win: [r.top, r.height, innerHeight], ranges: [...p.querySelectorAll('input[type=range]')].slice(0, 3).map((i) => Math.round(i.getBoundingClientRect().top)) }; }"""
+    )
+    assert shown >= 2, (shown, geo)
+    # Design a part's view, where Selected is a narrow column beside the world.
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Design a part")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.journey?.id === 'design'", timeout=10000)
+    expect(page.locator("#pos-x")).to_be_visible()
+    cut = page.evaluate(
+        """() => {
+            const c = document.createElement('canvas').getContext('2d');
+            return ['pos-x', 'pos-y', 'pos-z'].map((id) => document.getElementById(id)).filter((i) => {
+                const s = getComputedStyle(i);
+                c.font = `${s.fontSize} ${s.fontFamily}`;
+                const room = i.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - 14;
+                return c.measureText(i.value).width > room;
+            }).map((i) => [i.id, i.value, i.clientWidth]);
+        }"""
+    )
+    assert cut == [], cut
+    page.set_viewport_size({"width": 1280, "height": 720})
+
+
+@pytest.mark.e2e
 def test_a_window_chosen_while_the_page_is_on_its_way_is_followed_once_it_is_there(
     page: Page, url: str
 ):

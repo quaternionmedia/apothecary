@@ -501,8 +501,10 @@
         }
         .zoom-in-btn:hover { background: #33403a; }
         /* X, Y and Z on one line, whatever the column's width: each box gives way. */
-        .pos-row { gap: 0.3rem; }
-        .pos-row input[type="number"] { width: 0; min-width: 0; padding: 0.3rem 0.3rem; font-size: 0.78rem; }
+        .pos-row { gap: 0.3rem; flex-wrap: wrap; }
+        /* Wide enough for a coordinate's digits and the spinner beside them: a narrow
+           Selected wraps the row, never cuts a number short. */
+        .pos-row input[type="number"] { width: 0; min-width: 9ch; padding: 0.3rem 0.3rem; font-size: 0.78rem; }
         .pos-row .axis { font-size: 0.72rem; color: #777; flex: 0 0 auto; }
 
         /* ⚒ Make, in the header after the banner: what is selected, else what is in view,
@@ -8784,7 +8786,7 @@
                 this.panels.open('part-feedback');
                 const chosen = await this.feedback.show(name, { drawer, job });
                 this.showPartSections();
-                const which = !chosen ? 'nothing made of it yet' : chosen.drawer ? 'a drawer chosen' : 'a piece made elsewhere chosen';
+                const which = !chosen ? 'nothing made of it yet' : chosen.drawer ? 'a drawer chosen' : 'its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it';
                 return { said: `${name}'s cabinet in Part › Feedback, ${which}` };
             }
 
@@ -9433,8 +9435,12 @@
                     const from = this.siteName;
                     await this.chooseSite(journey.site);
                     if (this.siteName !== journey.site) return { did, said: `${journey.site} did not open: ${document.getElementById('status').textContent}`, refused: true };
+                    // The site the page was on before the tour first moved it: leaving the
+                    // journey opens it again.
+                    this.siteBeforeTour ??= from;
                     did.push(`${journey.site} opened, where ${journey.name} stands (${from} was open)`);
                 }
+                if (this.siteName === this.siteBeforeTour) this.siteBeforeTour = null;
                 // The site's own level: a piece is chosen and opened among the site's.
                 if (this.focusPath.length) { this.goUpTo(0, 'the tour'); did.push(`stepped out to ${this.siteName}`); }
                 // A journey with no machine in it: the one open is closed, as its tab's ✕ does.
@@ -9638,6 +9644,15 @@
                 if (!journey) return;
                 this.journey = null;
                 this.keepJourneyInAddress();
+                // A site the tour opened gives way to the one the page was on before it.
+                const back = this.siteBeforeTour;
+                this.siteBeforeTour = null;
+                if (back && back !== this.siteName && SITE_NAMES.includes(back)) {
+                    this.setStatus(`Left ${journey.name}: opening ${back} again, where the page was before the tour`, 'success');
+                    return this.chooseSite(back).then(() => {
+                        if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are`, 'success');
+                    });
+                }
                 this.setStatus(`Left ${journey.name}: its windows stay where they are`, 'success');
             }
             // A window a person chose moves the Tour box to the step that owns it, and

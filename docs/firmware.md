@@ -883,7 +883,8 @@ slice made says what it was sliced from and for which printer ([the
 slicer](slicer.md#in-the-page)). The file chosen follows the part under makes: a part named
 there gives the newest file made of it for this kind of machine, or none, which says
 Slice makes one, never a file made of another part. A file chosen by a person stays
-chosen, and ▶ Print says it was made of another part than makes names. The card shows each control once what it
+chosen, and ▶ Print says it was made of another part than makes names. Each kept file's
+row says when it was kept, so two of one name and length are told apart. The card shows each control once what it
 needs holds, in the loop's order: makes and Choose File are the two ways in;
 Slice is there once a part is chosen under makes, the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the

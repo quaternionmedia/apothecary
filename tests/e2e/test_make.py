@@ -278,7 +278,7 @@ def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: st
     expect(page.locator("#status")).to_contain_text("footpedal's cabinet in Part › Feedback")
     feedback = windows.panel(page, "part-feedback")
     expect(feedback.locator("#feedback-title")).to_have_text("Feedback · footpedal")
-    expect(feedback.locator("#feedback-piece")).to_contain_text("made elsewhere")
+    expect(feedback.locator("#feedback-piece")).to_contain_text("not printed from here")
     said = feedback.locator("#feedback-measure-said")
     expect(said).to_contain_text("of 3 features of its box", timeout=10000)
     # Its ring's other cells act on the piece chosen there: nothing filed, no turn to take;

@@ -276,6 +276,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- The Tour box counts every stage with a word on any build, those of an earlier build apart, so a deploy loses no progress; leaving a journey that opened another site opens the site the page was on again; a machine view gives Parameters room for two numbers at 1280 by 800, and Selected's position fields never cut a number short; a kept file's row says when it was kept, and a kept slice in a part's Feedback says it was not printed from here. ([doc](docs/tour.md))
 - A tour stage that stands without what its journey is staged on is not stopped by it (Flash a board's Bench opens with no board connected); a missing picture is named inside the pictures folder, not by the server's own path; Design a part's Ready and the empty Problems window say that Readiness is the part's and Layout valid the site's layout. ([doc](docs/tour.md))
 - A tour stage frames what it shows where the Tour box leaves the world clear, again once the box says what the stage said; a path that cannot be drawn leaves the world on its machine and not the last one shown, and a stage's refusal is in the box as well as the status line. ([doc](docs/tour.md))
 - A Print or Cut window's file follows the part under makes: one made of another part gives way to the newest made of this one, or to none, and ▶ says when a person's own choice was made of another part. ([doc](docs/firmware.md))

@@ -79,7 +79,7 @@ The Default view laid out: every window goes where that view has it, and the box
 ![A view laid out moves the windows, and not the box](screenshots/34-06-a-view-laid-out-moves-the-windows-and-not-the-box.png)
 
 ```
-2/… · 1 off
+3/… · 1 earlier · 1 off
 ```
 
 ## 7. Panels › Windows › Tour: its cells are its buttons

@@ -102,20 +102,24 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
     // dimmed, and its stage is among those still waiting.
     const now = (s) => (s.feedback?.current ? s.feedback : null);
     const mark = (s) => (s.feedback ? `${s.feedback.verdict === 'off' ? 'off' : 'works'}${s.feedback.current ? '' : ' earlier'}` : '');
+    // Each stage with a word on any build counts, so a deploy loses no progress; those
+    // said of an earlier build are counted apart, and wait for a word again.
     const count = (stages) => {
-        const said = stages.filter(now).length, off = stages.filter((s) => now(s)?.verdict === 'off').length;
-        return `${said}/${stages.length}${off ? ` · ${off} off` : ''}`;
+        const said = stages.filter((s) => s.feedback).length;
+        const earlier = stages.filter((s) => s.feedback && !s.feedback.current).length;
+        const off = stages.filter((s) => s.feedback?.verdict === 'off').length;
+        return `${said}/${stages.length}${earlier ? ` · ${earlier} earlier` : ''}${off ? ` · ${off} off` : ''}`;
     };
 
     function render() {
         const at = here();
         if (!at) return;
         const journey = journeyOf(at);
-        const said = state.stages.filter(now).length, off = state.stages.filter((s) => now(s)?.verdict === 'off').length;
+        const said = state.stages.filter((s) => s.feedback).length, off = state.stages.filter((s) => s.feedback?.verdict === 'off').length;
         const earlier = state.stages.filter((s) => s.feedback && !s.feedback.current).length;
         const name = $('.tour-pop-name');
         name.textContent = count(state.stages);
-        name.title = `${said} of ${state.stages.length} stages have a word on this build, ${off} off${earlier ? `; ${earlier} more were said of an earlier build` : ''}`;
+        name.title = `${said} of ${state.stages.length} stages have a word, ${off} off${earlier ? `; ${earlier} of them said of an earlier build, each waiting for a word on this one` : ''}`;
 
         const journeys = $('.tour-pop-journeys');
         journeys.replaceChildren(...state.journeys.map((j, i) => el('option', { value: String(i), textContent: `${j.name} · ${count(j.stages)}` })));

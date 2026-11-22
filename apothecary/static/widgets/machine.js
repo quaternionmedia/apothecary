@@ -1766,7 +1766,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const own = prt.files.find(fits);
         const none = prt.files.length && !own ? `<option value="">— none kept for ${state.kind ? `a ${state.kind}` : "this machine"} —</option>` : "";
         sel.innerHTML = prt.files.length
-            ? none + prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${fits(f) ? "" : ` · kept for a ${esc(f.machine)}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
+            ? none + prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${f.uploaded_at ? ` · kept ${stamp(f.uploaded_at)}` : ""}${fits(f) ? "" : ` · kept for a ${esc(f.machine)}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
             : '<option value="">— no files kept —</option>';
         const stays = had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))
             && (!madeForAnother(had) || prt.picked === had);
