@@ -354,6 +354,202 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     assert errors == []
 
 
+# --- walkthrough page 56: the router calibrated by its 😮, as Calibrate a router goes ---
+
+# The Feedback window's pieces and drawers are named by when they were made and filed;
+# its piece's drop-down, a moment in a control, is blanked whole.
+FEEDBACK = ".panel[data-panel='part-feedback']"
+# Once a cut has ended nothing streams: the status line's percentages are a measurement's.
+AT_REST = tuple(b for b in CHANGING if b != ("#status", STREAMED))
+
+
+@pytest.mark.e2e
+def test_the_router_calibrated_by_its_face_from_makes_to_the_allowance_kept(
+    page: Page, start_server, tmp_path_factory, walkthrough
+):
+    """Walkthrough page 56, the tour's Calibrate a router a stage at a time: the 😮 under
+    makes, its toolpath written and saying what to measure, control armed, the work zeroed
+    and the cut run to its end, its drawer opened in Part › Feedback at the end, its three
+    sizes typed and kept, and the next toolpath taking the allowance. On a server of its
+    own, so the router keeps no allowance before it."""
+    url = _router_server(start_server, tmp_path_factory)
+    story = walkthrough(
+        ordinal="56",
+        slug="a-router-calibrated-by-a-face",
+        title="A router calibrated by a face",
+        intro=(
+            "The router's calibration piece, a 😮 (`parts/router_emoji`), from makes to the "
+            "allowance kept, as the tour's *Calibrate a router* goes: chosen in the Cut "
+            "window, its toolpath written and saying what a person measures of the piece, "
+            "cut, its drawer opened in its cabinet at the cut's end, its eye, mouth and "
+            "face measured across and kept, and the next toolpath taking the tool's "
+            "allowance they give. [docs/cam.md](../docs/cam.md#measured-by-hand-fed-back) "
+            "is the reference; [page 20](20-a-part-through-the-router.md) measures the same "
+            "piece in this process, and [page 24](24-a-cut-from-the-card.md) goes round the "
+            "Cut card on the coupon."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own. The router is the "
+            "simulated GRBL controller on a fake port, pinned to cnc_router's controller as "
+            "the garage's real one is; its moves take a twentieth of real time, and it cuts "
+            "exactly its tool's diameter, so the sizes typed are made up, as a real tool's "
+            "might read. "
+            "Nothing opens a real port, and the real router is section I of "
+            "[docs/bench-checklist.md](../docs/bench-checklist.md)."
+        ),
+        does_not_show=[
+            "**A real piece.** The simulated router cuts nothing, and the sizes typed are "
+            "made up: a tool cutting about 0.14 mm wider than its diameter. The bench "
+            "checklist's section I is the 😮 cut from stock and read with calipers.",
+            "**The scale.** What the sizes say of the steps per millimetre is said and not "
+            "applied: it is the controller's `$100` and `$101`, which nothing here changes.",
+            "**A measurement refused.** A size more than 5% off what was designed is "
+            "refused and nothing is kept; [page 20](20-a-part-through-the-router.md) "
+            "shows it.",
+            "**What changes on every run.** Moments, the lines streamed and the tool's "
+            "position are blanked in the pictures.",
+        ],
+        browser_suite_only=True,
+    )
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    blank = (*CHANGING, *moments(FEEDBACK), f"{FEEDBACK} #feedback-piece")
+    still = (*AT_REST, *moments(FEEDBACK), f"{FEEDBACK} #feedback-piece", *LIVE)
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router", by_hand=True)
+    machine = windows.machine(page)
+    card = machine.locator("#print-card")
+
+    # 1. Choose: the 😮 under makes, a part the router makes that no piece of the garage is.
+    card.locator("#print-part").select_option("router_emoji")
+    expect(card.locator("#print-slice")).to_have_text("Toolpath")
+    expect(card.locator("#print-slice")).to_be_visible()
+    story.shows(
+        "router_emoji, the 😮, under makes in the router's Cut window",
+        "cnc_router's Machine opened from its Device line, and router_emoji chosen under "
+        "makes in its Cut window: a part the router makes, though no piece of the garage "
+        "stands for it. Its face is cut around from outside, its two eyes and its mouth "
+        "bored, each a circle calipers read across. Toolpath is there, since it says how "
+        "it is cut.",
+        blank=blank,
+    )
+
+    # 2. Toolpath: the cut written and drawn, and what to measure said, in the status line
+    # and in the card.
+    card.locator("#print-slice").click()
+    expect(page.locator("#status")).to_contain_text(
+        "▶ Cut cuts it, then measure its eye, mouth and face across, under measured in "
+        "Part › Feedback",
+        timeout=15000,
+    )
+    said = card.locator("#print-slice-said")
+    expect(said).to_contain_text(
+        "eye: the hole across, 10 mm; mouth: the hole across, 20 mm; face: the disc across, 60 mm"
+    )
+    assert "tool_allowance" not in said.inner_text()
+    windows.machine_ready(page, "router", by_hand=True)
+    expect(card.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    to_measure = said.locator(".declared", has_text="measure")
+    expect(to_measure).to_have_count(1)
+    to_measure.scroll_into_view_if_needed()
+    story.shows(
+        "Toolpath writes its cut, draws it, and says what to measure",
+        "Toolpath writes the 😮's cut from what it declares, keeps it and chooses it, and "
+        "the path is drawn on the table: the eyes and the mouth bored, then the face cut "
+        "around. The card's measure row says what a person measures of the piece once it "
+        "is cut, each as designed: an eye, the mouth and the face across, as the status "
+        "line said when the toolpath was kept. No tool_allowance is in the card: the "
+        "router keeps none yet.",
+        blank=blank,
+    )
+
+    # 3. Cut: armed, the work zeroed where the tool stands, ▶ Cut run to its end; at the
+    # end the piece's drawer opens in Part › Feedback.
+    machine.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    at = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0).json()
+    dx, dy, dz = (
+        want - at["position"][axis] for axis, want in zip("xyz", (-200, -300, -40), strict=True)
+    )
+    jogged = httpx.post(
+        f"{url}/firmware/printers/command",
+        json={"port": ROUTER, "command": f"$J=G91 G21 X{dx:.3f} Y{dy:.3f} Z{dz:.3f} F4000"},
+        timeout=15.0,
+    )
+    assert jogged.status_code == 200 and jogged.json()["lines"] == ["ok"], jogged.text
+    expect(machine.locator("#c-pos-s")).to_contain_text(
+        "machine X-200.0 Y-300.0 Z-40.00", timeout=4 * WITHIN_A_POLL
+    )
+    page.locator("#control button[data-cmd='G10 L20 P1 X0 Y0 Z0']").click()
+    expect(machine.locator("#c-pos")).to_contain_text("X0.0 Y0.0 Z0.00", timeout=WITHIN_A_POLL)
+    page.once("dialog", lambda d: d.accept())
+    card.locator("#print-start").click()
+    expect(card.locator("#print-progress")).to_contain_text("done", timeout=60000)
+    expect(card.locator("#print-history")).to_contain_text("cut · router_emoji-cnc_router.nc")
+    feedback = windows.panel(page, "part-feedback")
+    expect(feedback.locator("#feedback-title")).to_have_text(
+        "Feedback · router_emoji", timeout=15000
+    )
+    field = feedback.locator("#feedback-measure")
+    measure_said = feedback.locator("#feedback-measure-said")
+    expect(measure_said).to_have_text("of eye 10 × mouth 20 × face 60 mm designed", timeout=10000)
+    expect(field).to_have_attribute("placeholder", "eye × mouth × face mm")
+    drawers = httpx.get(f"{url}/cabinet/router_emoji", timeout=15.0).json()["drawers"]
+    assert len(drawers) == 1 and drawers[0]["job"], drawers
+    feedback.locator("#feedback-measure-row").scroll_into_view_if_needed()
+    story.shows(
+        "Armed, zeroed, ▶ Cut: at the cut's end its drawer opens in Part › Feedback",
+        "⚙ Control armed, the tool jogged over the stock's front-left corner and the pad's "
+        "XYZ zero here, then ▶ Cut, asked first, streams it to the end. The job is done "
+        "and in the card's history, and the piece's drawer opens in its cabinet, Part › "
+        "Feedback: its measured row names what to type, in order, and what was designed.",
+        blank=still,
+    )
+
+    # 4. Measure: the three sizes typed, as calipers read a tool cutting a little wide, and
+    # kept: each checked against what was designed, filed in the drawer.
+    field.fill("10.12 × 20.14 × 59.84")
+    feedback.locator("#feedback-measure-keep").click()
+    expect(page.locator("#status")).to_contain_text(
+        "router_emoji measured eye +0.12, mouth +0.14, face -0.16 mm against what was "
+        "designed; scale -0.04%, the steps per millimetre's, not applied; tool_allowance "
+        "+0.000 -> +0.136 mm: filed in router_emoji's drawer, and kept for cnc_router",
+        timeout=10000,
+    )
+    expect(measure_said).to_contain_text("cnc_router's tool +0.136 mm")
+    expect(feedback.locator("#feedback-filed li")).to_contain_text("measured (tool_allowance)")
+    feedback.locator("#feedback-measure-row").scroll_into_view_if_needed()
+    story.shows(
+        "An eye, the mouth and the face measured, and kept",
+        "The three sizes typed under measured as calipers read them, and Keep. Each is "
+        "checked against what was designed: the holes came out big and the face small by "
+        "about the same, which is the tool's, and what is left the same way on both, in "
+        "proportion, is the scale, said and not applied. The tool's allowance is kept for "
+        "cnc_router and its 6 mm tool, and the measurement filed in the piece's drawer.",
+        blank=still,
+    )
+
+    # 5. Kept: the next toolpath makes its offsets with it, and says where it came from.
+    card.locator("#print-slice").click()
+    expect(said).to_contain_text("tool_allowance +0.136 measured", timeout=10000)
+    kept = httpx.get(
+        f"{url}/cam/corrections", params={"site": "garage", "router": "cnc_router"}, timeout=15.0
+    ).json()["correction"]
+    assert (kept["value"], kept["tool"], len(kept["measurements"])) == (0.136, 6.0, 1)
+    said.locator("div", has_text=re.compile(r"^tool_allowance")).last.scroll_into_view_if_needed()
+    story.shows(
+        "Toolpath again takes the allowance: tool_allowance, measured",
+        "Toolpath pressed again writes the 😮 with the tool as wide as it cuts: the card "
+        "says tool_allowance +0.136, its origin measured, and the face's path stands a "
+        "little further out. Every later toolpath for cnc_router with a 6 mm tool takes it.",
+        blank=still,
+    )
+    assert errors == [], errors
+
+
 def _words(text: str) -> str:
     """A line with its moment blanked, so the page's words hold from run to run."""
     return re.sub(doc_capture.MOMENT, "<moment>", text)

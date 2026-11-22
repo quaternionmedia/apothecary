@@ -1,7 +1,7 @@
 """Every stage of every journey, the page taken there by the tour: the chain the page
 manages, a stage at a time, on simulated machines as a person starts them. A part
-designed; made on the printer; cut on the router; the board a machine runs on built for
-and heard; a deck's knobs on the machines; the site brought up through the family's hub,
+designed; made on the printer; cut on the router; the router calibrated by its 😮; the
+board a machine runs on built for and heard; a deck's knobs on the machines; the site brought up through the family's hub,
 then watched; a drawing photographed into shapes; and two ends joined by an
 adapter. At each stage the tour's box says what the page did to stand there, and the
 page stands there: its window in front, its subject chosen, what the stage needs made.
@@ -79,6 +79,18 @@ PICTURED = {
         "Status, where it says what it needs before it moves; Cut is the Machine and "
         "Jobs; Measure is the coupon's cabinet in Part › Feedback, its toolpath among its "
         "pieces and what it names to measure under measured. The picture is See.",
+    ),
+    "calibrate": (
+        "toolpath",
+        "Calibrate a router: its 😮's toolpath, saying what to measure",
+        "The router that cut a part is trued by a piece made to be measured. cnc_router's "
+        "Machine stays open and its Cut window names router_emoji under makes, a part no "
+        "piece of the garage stands for; Toolpath writes its cut where none is kept, draws "
+        "it on the table and says what a person measures of the piece: an eye, the mouth "
+        "and the face. Cut is the Machine and Jobs; Measure is the 😮's cabinet in Part › "
+        "Feedback, opened by its name, under measured what to type; Kept is the Cut window "
+        "again, where the next Toolpath takes the allowance. The picture is Toolpath: the "
+        "cut and the calipers are the person's.",
     ),
     "board": (
         "hear",
@@ -239,6 +251,22 @@ STANDS = {
     # The coupon's cabinet in Part › Feedback, what its toolpath names to measure under
     # measured, nothing filed.
     ("cut", "measure"): lambda page: _says(page, "part-feedback", "mm designed"),
+    ("calibrate", "choose"): lambda page: (
+        _on(ROUTER)(page),
+        expect(windows.panel(page, "machine-print").locator("#print-part")).to_have_value(
+            "router_emoji"
+        ),
+    ),
+    ("calibrate", "toolpath"): lambda page: (
+        _path_drawn_on("cnc_router")(page),
+        _says(page, "machine-print", "eye: the hole across, 10 mm"),
+    ),
+    ("calibrate", "cut"): lambda page: _shown(page, "machine-print"),
+    # The 😮's cabinet, opened by its name: what to type under measured, nothing filed.
+    ("calibrate", "measure"): lambda page: _says(
+        page, "part-feedback", "of eye 10 × mouth 20 × face 60 mm designed"
+    ),
+    ("calibrate", "kept"): lambda page: _says(page, "machine-print", "router_emoji toolpath"),
     ("board", "pin"): lambda page: (
         _on(DEVKIT)(page),
         _selected("esp32_blink")(page),
@@ -310,6 +338,11 @@ DID = {
         "router_coupon chosen",
         "router_coupon's toolpath written for cnc_router, as Toolpath does",
     ],
+    "calibrate": [
+        "router_emoji named under makes in cnc_router's Cut window",
+        "router_emoji's toolpath written for cnc_router, as Toolpath does",
+        "router_emoji's cabinet in Part › Feedback",
+    ],
     "board": [
         f"{DEVKIT} pinned to esp32_blink, as Pin in its Device section does",
         "esp32_blink's Machine opened",
@@ -362,7 +395,8 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
         intro=(
             "Every journey the page has, in the order of the chain it manages, the page "
             "taken to each stage by the [tour](34-the-tour.md): a part designed, made "
-            "on the printer, cut on the router; the board a machine runs on; a deck's "
+            "on the printer, cut on the router; the router calibrated by a piece it cut, "
+            "measured by hand; the board a machine runs on; a deck's "
             "knobs on the machines; the site brought up and watched; a drawing "
             "photographed into shapes, which stand up as parts to design; a printer's bed "
             "levelled by shims computed from its readings; and two ends joined by an "

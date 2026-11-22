@@ -3,8 +3,8 @@ eyes and a mouth bored through it. Its SCAD draws the face the cuts leave; this
 wrapper says the cuts that make it from its stock (``cuts``), each feature named,
 so its toolpath's record says what a person measures of the piece: the face across,
 an outside size; an eye and the mouth across, inside sizes. Measured with calipers
-and kept under measured in the Cut window, they give the router's tool allowance
-(``apothecary.cam.measured``, ``docs/cam.md``).
+and kept under measured in its cabinet's Feedback window, they give the router's tool
+allowance (``apothecary.cam.measured``, ``docs/cam.md``).
 """
 
 from __future__ import annotations

@@ -100,6 +100,17 @@ here: run `apothecary problems`.
   left edge, or scrolled sideways, with the caret in view either way. Which one a run
   gets does not follow the commit, so a picture of it past the drift tolerance is not
   a change to the page.
+- A checkout's first browser run builds every part's STL inside its first test's setup
+  (`every_stl_built`, `tests/e2e/conftest.py`), under the same phase cap as the test, so
+  where none is built yet -- a fresh worktree -- the build outlasts the cap and the run
+  ends in setup (seen: `Timeout (0:03:14)` in `_built`). Running
+  `tests/e2e/parts_built.py` first with an empty `APOTHECARY_TOOLS_DIR`, as the fixture
+  does, builds them; the fixture could build before the cap starts counting.
+- Page 39's picture of Read a drawing has two grey blanks where the whiteboard's mark
+  badges stand, or none, from run to run (0.36% of its pixels): its test blanks
+  `.world-badge` for that journey, and whether a badge is there when the picture is taken
+  does not follow the commit. A picture of it past the drift tolerance is not a change to
+  the page.
 - A check before a cut that its toolpath fits the travel from the work zero, in the
   Cut card, from the toolpath's recorded bounds and the controller's position: a cut
   zeroed too low or too high stops at its first move past the travel, with the

@@ -18,7 +18,8 @@ moves the box to it. The box closed, the journey is left, its windows where they
 
 The journeys are in the order of the chain the page manages, each handing the next
 what it made: a part designed; the part made on a printer, or cut on a router; the
-board that runs a machine built, flashed and heard; a deck's knobs on the machines;
+router trued by a piece it cut, measured by hand; the board that runs a machine built,
+flashed and heard; a deck's knobs on the machines;
 the site brought up a step at a time through the family's hub, then watched; a
 drawing photographed into pieces, which are parts to design; the shims that level a
 printer's bed, computed from its readings; and two ends joined by an adapter the server
@@ -83,7 +84,9 @@ class Step:
 #   file      the open Machine keeping a file for a part: sliced, or its toolpath
 #             written, where none is kept
 #   feedback  a part's cabinet in Part › Feedback, the piece chosen first, as its
-#             Part › View › Feedback does
+#             Part › View › Feedback does; a part no piece of the site stands for -- one
+#             a machine makes, as the router's 😮 -- by its name, as the window's pieces
+#             reach it
 #   fit       a piece chosen and framed in the world, as f does
 #   edit      a part's editor opened, as Part › Edit does
 #   scad      a part's SCAD in its window, as Part › SCAD does
@@ -409,6 +412,76 @@ CUT = Journey(
             owns=("part-feedback",),
             puts=(("file", "router_coupon"), ("feedback", "router_coupon")),
             shown_by=("20-a-part-through-the-router.md",),
+        ),
+    ),
+)
+
+
+# Calibrate a router: the piece made to be measured, cut, measured, and fed back. The 😮 of
+# parts/router_emoji is no piece of the site, a part the router makes: chosen under makes
+# in its Cut window, its toolpath written and drawn, saying what a person measures of the
+# piece; cut; its eye, mouth and face read across with calipers and typed in its cabinet,
+# Part › Feedback; and the tool's allowance they give kept for the router, which its next
+# toolpath takes (docs/cam.md, measured by hand, fed back).
+CALIBRATE = Journey(
+    id="calibrate",
+    title="Calibrate",
+    group="Machine",
+    requires="machine",
+    opened_by="the router's badge or its row in Site, then router_emoji under makes in its Cut window",
+    view=_machine_view("machine-print", "part-feedback", active="machine-print"),
+    name="Calibrate a router",
+    staged_on=(("machine", "cnc_router"), ("makes", "router_emoji")),
+    steps=(
+        Step(
+            "choose",
+            "Choose",
+            "the 😮 under makes in the router's Cut window: a face cut around, two eyes and a "
+            "mouth bored, each a circle calipers read across",
+            forward=("machine-print",),
+            owns=("machine-print",),
+            shown_by=("56-a-router-calibrated-by-a-face.md#1",),
+        ),
+        Step(
+            "toolpath",
+            "Toolpath",
+            "Toolpath writes its cut and draws it on the table, and says what to measure of "
+            "the piece: an eye, the mouth, the face",
+            forward=("machine-print",),
+            draws=True,
+            puts=(("file", "router_emoji"),),
+            shown_by=("56-a-router-calibrated-by-a-face.md#2",),
+        ),
+        Step(
+            "cut",
+            "Cut",
+            "control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs; at its end "
+            "the piece's drawer opens in Part › Feedback",
+            forward=("machine-print", "jobs"),
+            owns=("machine", "jobs"),
+            shown_by=("56-a-router-calibrated-by-a-face.md#3",),
+        ),
+        Step(
+            "measure",
+            "Measure",
+            "the 😮 cut, in its cabinet, Part › Feedback: an eye, the mouth and the face "
+            "across, typed under measured, Keep: each checked against what was designed, filed",
+            forward=("part-feedback",),
+            owns=("part-feedback",),
+            puts=(("file", "router_emoji"), ("feedback", "router_emoji")),
+            shown_by=(
+                "56-a-router-calibrated-by-a-face.md#4",
+                "20-a-part-through-the-router.md",
+            ),
+        ),
+        Step(
+            "kept",
+            "Kept",
+            "the tool's allowance kept for this router and its tool: Toolpath again takes it, "
+            "tool_allowance measured, the face's path a little further out",
+            forward=("machine-print", "part-feedback"),
+            puts=(("file", "router_emoji"),),
+            shown_by=("56-a-router-calibrated-by-a-face.md#5",),
         ),
     ),
 )
@@ -894,11 +967,23 @@ LEVEL = Journey(
 
 
 # In the order of the chain, each handing the next what it made; a view's cell on the
-# ring is the first's alone. Join a hose comes last: an adapter between two ends is a
-# part designed by the server, which hands it to Print a part as Design a part does. Level a
-# bed comes before it for the same reason: its shims are a part the server computes from a
-# printer's readings, handed to Print a part.
-JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, RUN, DRAWING, LEVEL, JOIN)
+# ring is the first's alone. Calibrate a router follows Cut a part: the router that cut
+# a part is trued by a piece made to be measured. Join a hose comes last: an adapter
+# between two ends is a part designed by the server, which hands it to Print a part as
+# Design a part does. Level a bed comes before it for the same reason: its shims are a
+# part the server computes from a printer's readings, handed to Print a part.
+JOURNEYS: Tuple[Journey, ...] = (
+    DESIGN,
+    MAKE,
+    CUT,
+    CALIBRATE,
+    BOARD,
+    HANDS,
+    RUN,
+    DRAWING,
+    LEVEL,
+    JOIN,
+)
 
 
 def by_id(journey_id: str) -> Journey:

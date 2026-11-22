@@ -105,7 +105,7 @@ Cut a part, chosen: its stages are on the router's Machine, and this server's ro
 ```
 cnc_router's Machine opened with no board connected: what it makes is planned there
 router_coupon chosen
-router_coupon named under makes in cnc_router's Print window
+router_coupon named under makes in cnc_router's Cut window
 Cut a part entered, its windows laid out
 Cut a part › 1 Choose (the tour): a part that says how it is cut, among the site's pieces
 ```

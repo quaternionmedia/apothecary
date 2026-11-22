@@ -9740,7 +9740,8 @@
                     // Nothing is sliced here: See does that.
                     const earlier = await print.fileOf(subject);
                     const said = [];
-                    if (partBefore !== subject) said.push(`${subject} named under makes in ${who}'s Print window`);
+                    const card = machine.handle.kind?.() === 'router' ? 'Cut' : 'Print';
+                    if (partBefore !== subject) said.push(`${subject} named under makes in ${who}'s ${card} window`);
                     if (earlier && file() !== fileBefore) said.push(`${earlier}, made from ${subject} before, chosen`);
                     return said.length ? { did: said.join('; ') } : {};
                 }
@@ -9765,9 +9766,14 @@
                     return { did: router ? `${subject}'s toolpath written for ${who}, as Toolpath does: ${kept.file}` : `${subject} sliced for ${who}, as Slice does: ${kept.file}` };
                 }
                 if (verb === 'feedback') {
-                    if (here(subject)) return { refused: here(subject) };
-                    await choose(subject);
-                    const part = this.nodeByPath(subject)?.part_ref;
+                    // A piece of the site is chosen first; a part none stands for -- one
+                    // the open Machine makes, as the router's 😮 -- is opened by its name,
+                    // as the Feedback window's pieces reach it.
+                    const madeHere = !this.renderNodeByKey[subject]
+                        && [...(document.querySelector('#print-part')?.options || [])].some((o) => o.value === subject);
+                    if (!madeHere && here(subject)) return { refused: here(subject) };
+                    if (!madeHere) await choose(subject);
+                    const part = madeHere ? subject : this.nodeByPath(subject)?.part_ref;
                     if (part && this.feedback?.part() === part && this.panels.isOpen('part-feedback')) return {};
                     const opened = await this.openFeedback(subject);
                     return opened.refused ? { refused: opened.refused } : { did: `${opened.said}, as Part › View › Feedback does` };

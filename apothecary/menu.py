@@ -2772,9 +2772,9 @@ def router_control_options(device: Device) -> List[Option]:
     (``firmware.grbl.CONTROL_CODES`` and the realtime characters), sent by the
     Machine's control chain as a printer's are. Home, Unlock and Jog first, as a
     person homes before anything else; the spindle; work zero and the probe
-    together, since a probe is how Z is zeroed; the cut's own verbs, the piece cut
-    measured among them; Stop is the soft reset, destructive as E-STOP is. Eight, as
-    a ring holds.
+    together, since a probe is how Z is zeroed; the cut's own verbs; Stop is the soft
+    reset, destructive as E-STOP is. Eight, as a ring holds. The piece cut is measured in
+    its part's cabinet, Part › Feedback, not here.
     """
     return [
         Option(

@@ -147,11 +147,15 @@ In the page it is the **measured** row of the part's Feedback window
 ([cabinet.md](cabinet.md)), under a piece whose toolpath names what to measure: the sizes
 typed in the order its placeholder shows (`eye × mouth × face mm`, any left out as `-`),
 then **Keep**, which files the measurement in the piece's drawer, or a part's piece's
-ring's Part › View › Feedback › Measure. A part that stands in no site, as the 😮 does, is
-reached from the Feedback window's pieces, where every part's kept toolpaths are listed.
+ring's Part › View › Feedback › Measure. A part that stands in no site, as the 😮 does, has
+its drawer opened there at the end of a cut of it, and is reached from the Feedback window's
+pieces, where every part's kept toolpaths are listed.
 The row says what was designed and the allowance kept; the next Toolpath shows
-`tool_allowance` with the origin `measured`. *Cut a part* ends on it, its sixth step. The
-Cut window measures nothing.
+`tool_allowance` with the origin `measured`. *Cut a part* ends on it, its sixth step, and
+*Calibrate a router* is the 😮 round it whole: chosen under makes, its toolpath written
+saying what to measure, cut, measured, and the allowance kept
+([walkthrough page 56](../walkthrough/56-a-router-calibrated-by-a-face.md)). The Cut
+window measures nothing.
 
 `POST /cam/cuts/{file_id}/measured` `{"sizes": {name: mm}}` measures the piece a
 kept toolpath cut; `GET /cam/corrections?site=&router=` reads what a router

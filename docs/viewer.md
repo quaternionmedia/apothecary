@@ -846,6 +846,7 @@ what it made:
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
 | **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print, 6 Measure | a job on the printer, and its correction |
 | **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut, 6 Measure | a job on the router, and its tool's allowance |
+| **Calibrate a router** (`calibrate`) | 1 Choose, 2 Toolpath, 3 Cut, 4 Measure, 5 Kept | the router's tool allowance from its 😮 (`parts/router_emoji`) measured by hand, which its next toolpaths take ([cam.md](cam.md#measured-by-hand-fed-back)) |
 | **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
 | **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
 | **Run a site** (`run`) | 1 Steps, 2 Members, 3 Audit, 4 Space, 5 Hour | a site in working order, and what each machine's hour held |

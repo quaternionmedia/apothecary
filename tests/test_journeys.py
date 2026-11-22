@@ -9,6 +9,7 @@ import re
 
 from apothecary.example_hierarchy import create_example_site
 from apothecary.journeys import JOURNEYS, PUTS, by_id, manifest
+from apothecary.machine_plans import kind_of_part, kinds_that_make
 from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.simulated import DEVKIT
@@ -59,22 +60,38 @@ def test_the_page_is_taken_to_a_stage_by_verbs_it_has_on_pieces_the_simulated_se
     """What the tour does to stand on a stage is from the page's own short list, and its
     subjects are pieces of the site each journey names -- the garage, or the universe,
     where every part stands -- each the simulated server's, so the tour opens it from
-    any other."""
+    any other. What a machine makes, its file and its cabinet may name a part no piece
+    stands for, where the machine the journey is staged on is of a kind that makes it:
+    the router's 😮, chosen under makes as a person chooses it."""
     garage = create_example_site()  # the simulated server's garage
     universe = create_universe_site()  # every part, and every other site, one piece each
     sites = {garage.name.lower(): garage, UNIVERSE: universe}
     for journey in JOURNEYS:
         assert journey.site in sites, journey.id
         pieces = {child.name for child in sites[journey.site].children}
+        machines = [subject for verb, subject in journey.staged_on if verb == "machine"]
+        kinds = {kind_of_part(_part_of(sites[journey.site], m)) for m in machines}
         for verb, subject in [*journey.staged_on, *(p for s in journey.steps for p in s.puts)]:
             assert verb in PUTS, (journey.id, verb)
             piece, _, what = subject.partition(":")
             if verb == "pin":
                 assert what == DEVKIT  # the simulated server's devkit, which stands unpinned
-            assert piece in pieces or (verb == "working" and not piece), (journey.id, subject)
+            made = verb in ("makes", "file", "feedback") and bool(
+                kinds & set(kinds_that_make(piece))
+            )
+            assert piece in pieces or made or (verb == "working" and not piece), (
+                journey.id,
+                subject,
+            )
     page = PAGE.read_text(encoding="utf-8")
     for verb in PUTS:
         assert f"verb === '{verb}'" in page, verb
+
+
+def _part_of(site, piece: str) -> str:
+    """The part a piece of the site is built from, by its name."""
+    node = next(child for child in site.children if child.name == piece)
+    return node.part_ref
 
 
 def test_every_window_a_journeys_view_lays_out_is_one_the_page_has():
@@ -181,6 +198,46 @@ def test_print_a_part_and_cut_a_part_name_the_same_act_the_same_way():
     # One line each in the Tour box: neither Measure is many times the other's length.
     lengths = sorted(len(j.steps[-1].hint) for j in (make, cut))
     assert lengths[1] < 1.5 * lengths[0], lengths
+
+
+def test_calibrate_a_router_goes_from_the_face_chosen_to_the_allowance_kept():
+    """The router's 😮, a part no piece of the garage stands for, chosen under makes in its
+    Cut window as a person chooses it; its toolpath written and drawn, saying what to
+    measure; cut as Cut a part cuts; measured in its cabinet; and the allowance kept, which
+    the next toolpath takes. It follows Cut a part in the chain."""
+    calibrate = by_id("calibrate")
+    assert (calibrate.name, calibrate.title, calibrate.group) == (
+        "Calibrate a router",
+        "Calibrate",
+        "Machine",
+    )
+    ids = [j.id for j in JOURNEYS]
+    assert ids.index("calibrate") == ids.index("cut") + 1
+    assert calibrate.staged_on == (("machine", "cnc_router"), ("makes", "router_emoji"))
+    assert [(s.id, s.label) for s in calibrate.steps] == [
+        ("choose", "Choose"),
+        ("toolpath", "Toolpath"),
+        ("cut", "Cut"),
+        ("measure", "Measure"),
+        ("kept", "Kept"),
+    ]
+    steps = {s.id: s for s in calibrate.steps}
+    assert "😮" in steps["choose"].hint and "makes" in steps["choose"].hint
+    assert [s.id for s in calibrate.steps if s.draws] == ["toolpath"]
+    for named in ("an eye", "the mouth", "the face"):
+        assert named in steps["toolpath"].hint, named
+    # The cut is Cut a part's act, said the same way and in the same windows.
+    cut = {s.id: s for s in by_id("cut").steps}["cut"]
+    assert steps["cut"].hint.startswith(cut.hint)
+    assert (steps["cut"].forward, steps["cut"].owns) == (cut.forward, cut.owns)
+    assert steps["measure"].puts == (("file", "router_emoji"), ("feedback", "router_emoji"))
+    assert steps["measure"].forward == ("part-feedback",)
+    assert "tool_allowance measured" in steps["kept"].hint
+    # Each stage has its step of the page the browser walks it on.
+    for step in calibrate.steps:
+        assert f"56-a-router-calibrated-by-a-face.md#{calibrate.steps.index(step) + 1}" in (
+            step.shown_by
+        ), step.id
 
 
 def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():

@@ -2006,7 +2006,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-slice-task").hidden = true;
         $("print-slice-said").innerHTML = toolpathSaid(r);
         const cut = r.operations.filter((o) => o.cut).length;
-        tell(`${r.name} kept and chosen: the toolpath of ${r.part}${r.variant ? `, the variant drawn (${r.variant.slice(0, 8)})` : ""} for ${r.router.name}, ${cut} of ${r.operations.length} operations, ${r.lines} lines, ${span(r.time_s)} at the feeds written${r.messages.length ? `; ${r.messages.length} said` : ""}; ▶ Cut cuts it`);
+        // A toolpath that names what to measure says so: the piece it cuts is measured in
+        // its part's cabinet, which opens on it at the cut's end.
+        const named = (r.features || []).map((f) => f.name);
+        const measure = named.length ? `, then measure its ${named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}` : named[0]} across, under measured in Part › Feedback` : "";
+        tell(`${r.name} kept and chosen: the toolpath of ${r.part}${r.variant ? `, the variant drawn (${r.variant.slice(0, 8)})` : ""} for ${r.router.name}, ${cut} of ${r.operations.length} operations, ${r.lines} lines, ${span(r.time_s)} at the feeds written${r.messages.length ? `; ${r.messages.length} said` : ""}; ▶ Cut cuts it${measure}`);
         $("print-card").scrollIntoView({ block: "nearest" });
         emit("apothecary:sliced", { port: state.port, file_id: r.file_id });
         return true;
@@ -2019,6 +2023,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             ["tool", `${r.tool.label}`], ["stock", `${r.stock.x} x ${r.stock.y} x ${r.stock.thickness} mm, zero at its front-left top corner`],
             ["feeds", `cut ${r.feeds.cut}, plunge ${r.feeds.plunge} mm/min, ${r.feeds.rpm} rpm`],
             ...r.operations.map((o) => [`op ${o.index}`, `${o.words}${o.cut ? ` · ${o.passes} pass${o.passes === 1 ? "" : "es"}` : " · not cut"}`]),
+            // What a person measures of the piece, as designed: Part › Feedback's measured.
+            ...((r.features || []).length ? [["measure", r.features.map((f) => f.words).join("; ")]] : []),
         ].map(([k, v]) => `<div class="declared"><span>${esc(k)}</span> <span>${esc(v)}</span> <span class="meta">part</span></div>`).join("")
             // The router's allowance every offset took, and the measurement it came from.
             + (r.allowance ? `<div title="${esc(r.allowance.source)}"><span>tool_allowance</span> <span>${esc(signed(r.allowance.value))}</span> <span class="meta">${esc(r.allowance.origin)}</span></div>` : "");
