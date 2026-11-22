@@ -334,6 +334,10 @@ def slicer_slice_measured(file_id: str, body: MeasuredRequest):
             doc, turn = tuning.add_turn(record, values, instrument, body.assume)
     except (tuning.Refused, cabinet.Refused) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if turn is None:  # a check alone, filed in the drawer: the last turn already reads it
+        at = record.printer
+        doc = tuning.load(at.site, at.path, tuning.applies_of(record), at.part)
+        return _tuned(doc) | {"turn": None, "said": drawer.filed[-1].said, **_filed_in(drawer)}
     return _tuned(doc) | {"turn": turn.id, "said": tuning.said(turn), **_filed_in(drawer)}
 
 

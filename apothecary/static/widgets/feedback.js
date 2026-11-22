@@ -16,8 +16,10 @@
  * its printer's Print window would with that chosen (`retry`, the page's). A fault seen on
  * it is filed on that layer.
  *
- * Under the piece chosen: a print's features to read, a row each as its slice's plan names
- * them (or its box), with Keep -- its printer's next turn of its tuning -- and Take turn
+ * Under the piece chosen: a print's features to read, a row each as the piece's dimensions
+ * name them (GET /cabinet/{part}/dimensions, its slice's plan or its box), each with its
+ * designed size and its newest reading checked against it, with Keep (or Enter in a row)
+ * -- its printer's next turn of its tuning -- and Take turn
  * and Undo turn for that printer, the filament and process the piece used; each fault seen,
  * none to bad, with Keep look -- the printer's next look; a cut's sizes in one field, with
  * Keep -- the router's tool allowance; a note, with Keep note; and what the drawer holds,
@@ -29,12 +31,19 @@
  *   verb(action)                   feedback:measure, feedback:note, feedback:tune-apply,
  *                                  feedback:tune-undo, feedback:try-probe, feedback:try-brim,
  *                                  feedback:try-raft: { said } or { refused }
+ *   pick(name)                     the row of the dimension `name` of the piece chosen marked
+ *                                  and its field given the caret, as a dimension clicked in
+ *                                  the world does: { said } or { refused }
  *   part()                         the part shown, or null
+ *   dimensions()                   the piece chosen's dimensions, as the server said them, or
+ *                                  null: what the world's Measure layer marks on the part
  *   redraw()                       its rows again, as the window comes to the front
  *   pairs()                        each control by the ring verb it is, for the addresses
  * `say(text, kind)` is the page's status line, "error" for a refusal. `retry(drawer, how)`
  * slices the drawer's piece again for the printer that made it, `how` "probe" (probe first),
- * "brim" or "raft": { said } or { refused }.
+ * "brim" or "raft": { said } or { refused }. Each piece chosen, and
+ * again after each filing, it says so on the window as "apothecary:feedback-shown"
+ * ({ part, drawer }), so what reads the same dimensions reads them again.
  */
 
 import { esc } from "/static/board_text.js";
@@ -66,7 +75,8 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
     // part: shown; pieces: every part's drawers then its loose kept files, the part shown's
     // first ({ key, part, label, drawer?, record?, made });
     // chosen: the key of the piece chosen; whole: the drawer chosen, whole, as the server said it.
-    const st = { part: null, pieces: [], chosen: null, whole: null, faults: null, asking: 0, want: null };
+    // dims: the piece chosen's dimensions (cabinet.dimensions), as the server said them.
+    const st = { part: null, pieces: [], chosen: null, whole: null, dims: null, faults: null, asking: 0, want: null };
 
     root.innerHTML = `<div class="cards feedback"><div class="card wide" id="feedback-card">
         <div class="k"><span id="feedback-title">Feedback</span></div>
@@ -163,12 +173,23 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         // A piece of another part chosen: that part's cabinet is the one shown.
         if (p) st.part = p.part;
         st.whole = null;
+        st.dims = null;
         if (p && p.drawer) {
             try { st.whole = await api(`${at()}/drawers/${encodeURIComponent(p.drawer.id)}`); }
             catch (e) { render(`drawer ${p.drawer.id}: ${e.message}`); return; }
+            st.dims = st.whole.dimensions || null;
+        } else if (p && p.record) {
+            try { st.dims = await api(`${at()}/dimensions?file=${encodeURIComponent(p.record.file_id)}`); }
+            catch (e) { render(`${p.record.name}: ${e.message}`); return; }
         }
         render();
+        shown();
     }
+    // The piece chosen, or its drawer filed in: what reads its dimensions reads them again.
+    function shown() {
+        window.dispatchEvent(new CustomEvent("apothecary:feedback-shown", { detail: { part: st.part, drawer: st.whole ? st.whole.id : null } }));
+    }
+    const dims = () => (st.dims && st.dims.dimensions) || [];
     // The drawer the piece chosen is filed in: its own, else one opened for its kept file.
     async function drawerOf() {
         const p = piece();
@@ -176,7 +197,7 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         if (p.drawer) return p.drawer.id;
         const opened = await post(`${at()}/drawers`, { file_id: p.record.file_id });
         st.want = { drawer: opened.id };
-        p.drawer = opened; p.key = `drawer:${opened.id}`; st.chosen = p.key; st.whole = opened;
+        p.drawer = opened; p.key = `drawer:${opened.id}`; st.chosen = p.key; st.whole = opened; st.dims = opened.dimensions || st.dims;
         return opened.id;
     }
     // What made the piece chosen: its slice's record or its toolpath's.
@@ -249,12 +270,17 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         $("feedback-tune-history").hidden = true;
         if (!r) { box.dataset.for = ""; return; }
         if (printer) {
-            const features = tuning.planOf(r);
-            if (box.dataset.for !== st.chosen) {
-                box.dataset.for = st.chosen;
-                box.innerHTML = features.map((f) => `<label class="measure-row" title="${esc(f.words)}: ${f.jaw} jaws">${esc(f.name)} <span class="s">${mmText(f.nominal)}</span>
-                    <input class="measure-read" data-feature="${esc(f.name)}" size="9" spellcheck="false" placeholder="${f.nominal}" title="What ${esc(f.name)} reads, mm: ${esc(f.words)}, ${f.jaw} jaws; repeats a space apart"></label>`).join(" ");
+            const features = dims(), tolerance = st.dims && st.dims.tolerance;
+            const rows = `${st.chosen}|${features.map((f) => f.name).join(",")}`;
+            if (box.dataset.for !== rows) {
+                box.dataset.for = rows;
+                box.innerHTML = features.map((f) => `<label class="measure-row" data-feature="${esc(f.name)}" title="${esc(f.words)}: ${f.jaw} jaws">${esc(f.name)} <span class="s">${mmText(f.designed)}</span>
+                    <input class="measure-read" data-feature="${esc(f.name)}" size="9" spellcheck="false" placeholder="${f.designed}" title="What ${esc(f.name)} reads, mm: ${esc(f.words)}, ${f.jaw} jaws; repeats a space apart; Enter keeps"><span class="measure-check s"></span></label>`).join(" ");
                 changed();
+            }
+            for (const f of features) {
+                const check = box.querySelector(`.measure-row[data-feature="${CSS.escape(f.name)}"] .measure-check`);
+                if (check) checkSaid(check, f, tolerance);
             }
             const entry = st.whole && st.whole.tuning;
             const apply = tuning.canApply(entry), undo = tuning.canUndo(entry);
@@ -267,7 +293,9 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             const held = entry ? Object.entries(entry.document.settings) : [];
             const where = (st.whole && st.whole.machine) || r.printer;
             $("feedback-measure-said").textContent = `of ${features.length} features ${r.plan ? "its plan names" : "of its box"}`
+                + (tolerance ? ` · tolerance ± ${tolerance.value.toFixed(2)} mm, ${tolerance.source === "default" ? "a default" : tolerance.said}` : "")
                 + (held.length ? ` · ${where.path || where.name} holds ${held.map(([k, h]) => `${k} ${h.unit === "%" ? `${h.value}%` : signed(h.value)}`).join(", ")}` : "");
+            $("feedback-measure-said").title = tolerance ? `Each reading is checked within ± ${tolerance.value} mm of its design: ${tolerance.said}` : "";
             return;
         }
         const names = (r.features || []).map((f) => f.name);
@@ -276,6 +304,18 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         $("feedback-measure-said").textContent = `of ${(r.features || []).map((f) => `${f.name} ${mmText(f.size).replace(" mm", "")}`).join(" × ")} mm designed`
             + (kept ? ` · ${kept.router}'s tool ${signed(kept.value)} mm` : "");
     }
+    // A dimension's newest reading beside its row: what was read, how far from its design,
+    // within its tolerance or outside it.
+    function checkSaid(el, f, tolerance) {
+        const reading = f.reading, c = reading && reading.checked;
+        el.classList.toggle("within", !!c && c.within);
+        el.classList.toggle("outside", !!c && !c.within);
+        if (!c) { el.textContent = ""; el.title = ""; return; }
+        el.textContent = `${c.measured.toFixed(2)} ${signed2(c.deviation)} ${c.within ? "✓" : "✗"}`;
+        el.title = `Read ${stamp(reading.at)} (${reading.filed}${reading.made ? `, ${reading.made}` : ""}): ${c.measured.toFixed(3)} mm against ${c.designed} designed, ${signed2(c.deviation)} mm, ${c.within ? "within" : "outside"} ± ${c.tolerance} mm`
+            + (tolerance && c.tolerance_from === tolerance.source ? ` (${tolerance.said})` : ` (${c.tolerance_from === "default" ? "a default" : `${c.tolerance_from}'s`})`);
+    }
+    const signed2 = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
     function renderSeen(r) {
         const row = $("feedback-seen-row");
         row.hidden = !r;
@@ -302,7 +342,12 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
     function renderFiled() {
         const list = $("feedback-filed"), filed = (st.whole && st.whole.filed) || [];
         list.hidden = !filed.length;
-        list.innerHTML = filed.map((f) => `<li class="${f.undone ? "undone" : ""}" title="${f.undone ? `undone ${stamp(f.undone)}` : esc(f.kind)}">${stamp(f.at)} · ${esc(f.kind)}${f.made ? ` (${esc(f.made)})` : ""}: ${esc(f.said)}</li>`).join("");
+        // A measured filing's checks under it, each within its tolerance or outside it; a
+        // check alone already says them in its line.
+        const checks = (f) => (f.made && f.checked && f.checked.length ? `<div class="feedback-checks">${f.checked.map((c) => (
+            `<div class="${c.within ? "within" : "outside"}">${esc(c.name)} ${c.measured.toFixed(2)} mm against ${c.designed.toFixed(2)} designed, ${signed2(c.deviation)}: ${c.within ? "within" : "outside"} ± ${c.tolerance.toFixed(2)}${c.tolerance_from === "default" ? " (a default)" : ""}</div>`
+        )).join("")}</div>` : "");
+        list.innerHTML = filed.map((f) => `<li class="${f.undone ? "undone" : ""}" title="${f.undone ? `undone ${stamp(f.undone)}` : esc(f.kind)}">${stamp(f.at)} · ${esc(f.kind)}${f.made ? ` (${esc(f.made)})` : ""}: ${esc(f.said)}${checks(f)}</li>`).join("");
     }
     // New rows: the ring writes its addresses on them again.
     function changed() { if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses(); }
@@ -337,6 +382,7 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         try { id = await drawerOf(); answer = await post(`${at()}/drawers/${encodeURIComponent(id)}/${path}`, body); }
         catch (e) { return refuse(`${what}: ${e.message}`); }
         st.whole = answer;
+        st.dims = answer.dimensions || st.dims;
         await load();
         return answer;
     }
@@ -354,11 +400,12 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         }
         const read = planReads();
         if (read.bad) return refuse(`measure: ${read.bad} is not sizes in mm, a space apart`);
-        if (!Object.keys(read.readings).length) return refuse(`measure: read one of ${tuning.planOf(r).map((f) => f.name).join(", ")}, in mm`);
+        if (!Object.keys(read.readings).length) return refuse(`measure: read one of ${dims().map((f) => f.name).join(", ")}, in mm`);
         const answer = await filed("measured", { readings: read.readings }, "measure");
         if (answer.refused) return answer;
         for (const field of $("feedback-measure-plan").querySelectorAll("input.measure-read")) field.value = "";
-        return tell(`${answer.turn} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`);
+        // A reading of a piece the printer's last turn already reads is a check alone.
+        return tell(`${answer.turn ?? "a check"} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`);
     }
     async function keepSeen() {
         if (!record() || !printed()) return noPiece("seen");
@@ -403,12 +450,33 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         if (!r) return noPiece("measure");
         const first = printed() ? $("feedback-measure-plan").querySelector("input.measure-read") : $("feedback-measure");
         if (first) first.focus();
-        const names = printed() ? tuning.planOf(r).map((f) => f.name) : (r.features || []).map((f) => f.name);
+        const names = printed() ? dims().map((f) => f.name) : (r.features || []).map((f) => f.name);
         return tell(printed()
             ? `read the piece: ${names.join(", ")}, each in mm in its row, then Keep`
             : `type what the piece measures, ${names.join(" × ")} in mm, then Keep`);
     }
 
+    // A dimension of the piece chosen picked, as a click on it in the world does: its row
+    // marked, its field given the caret, and what it is said.
+    function pick(name) {
+        const box = $("feedback-measure-plan");
+        const f = dims().find((d) => d.name === name);
+        for (const row of box.querySelectorAll(".measure-row")) row.classList.toggle("picked", row.dataset.feature === name);
+        const p = piece();
+        if (!p) return noPiece(`measure ${name}`);
+        if (!f) return refuse(`${name}: ${p.label} names ${dims().map((d) => d.name).join(", ") || "nothing to measure"}${st.dims && st.dims.why ? ` (${st.dims.why})` : ""}`);
+        const field = box.querySelector(`input.measure-read[data-feature="${CSS.escape(name)}"]`);
+        if (field) { field.focus(); field.scrollIntoView({ block: "nearest" }); }
+        const c = f.reading && f.reading.checked;
+        const was = c ? `; last read ${c.measured.toFixed(2)} mm, ${signed2(c.deviation)}, ${c.within ? "within" : "outside"} ± ${c.tolerance.toFixed(2)}` : "";
+        return tell(`${name}, ${f.words}: designed ${mmText(f.designed)}${was}. Type what calipers read of ${st.part}'s piece in its row under measured, then Enter`);
+    }
+
+    // Enter in a dimension's row keeps what is typed in the rows, as Keep does.
+    function keepOnEnter(ev) {
+        if (ev.key === "Enter" && ev.target.matches("input.measure-read")) { ev.preventDefault(); keepMeasured(); }
+    }
+    $("feedback-measure-plan").addEventListener("keydown", keepOnEnter);
     $("feedback-piece").onchange = () => choose($("feedback-piece").value || null);
     $("feedback-measure-keep").onclick = () => keepMeasured();
     $("feedback-seen-keep").onclick = () => keepSeen();
@@ -443,8 +511,10 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             if (action === "feedback:try-raft") return tryAgain("raft");
             return null;
         },
+        pick,
         part: () => st.part,
         drawer: () => (st.whole ? st.whole.id : null),
+        dimensions: () => st.dims,
         redraw: () => load(),
         pairs() {
             const out = [[$("feedback-measure-keep"), "feedback:measure"], [$("feedback-measure"), "feedback:measure"],

@@ -345,3 +345,192 @@ def test_the_cabinet_at_the_command_line_lists_drawers_and_shows_one(fake_orcasl
     assert lines[-1].endswith("note: first piece")
     out = CliRunner().invoke(cli, ["cabinet", CUBE, "20261120T120000.000"])
     assert out.exit_code != 0 and f"{CUBE} has no drawer 20261120T120000.000" in out.output
+
+
+def test_a_reading_is_checked_against_its_design_and_kept_in_the_piece_s_dimensions(
+    fake_orcaslicer, built
+):
+    """A printed cube's dimensions are its box's, each designed 10 mm, checked within the
+    0.1 mm its print settings declare. A reading files its check -- designed, the mean
+    read, the deviation, the tolerance and whose -- and the dimension carries it as its
+    newest reading. The piece read again is a check alone, no second turn; Undo turn takes
+    the first filing's reading back out of the dimensions."""
+    record = _slice()
+    drawer = client.post(f"/cabinet/{CUBE}/drawers", json={"file_id": record["file_id"]}).json()
+    assert drawer["dimensions"]["drawer"] == drawer["id"]
+    at = f"/cabinet/{CUBE}/drawers/{drawer['id']}"
+    dims = client.get(f"/cabinet/{CUBE}/dimensions", params={"drawer": drawer["id"]}).json()
+    assert [(d["name"], d["designed"], d["frame"], d["reading"]) for d in dims["dimensions"]] == [
+        ("x", 10.0, "box", None),
+        ("y", 10.0, "box", None),
+        ("z", 10.0, "box", None),
+    ]
+    assert dims["tolerance"] == {
+        "value": 0.1,
+        "source": "part",
+        "said": f"{CUBE}'s print settings",
+    }
+    assert (dims["made"], dims["machine"], dims["file_id"]) == (
+        "print",
+        "printer_1",
+        record["file_id"],
+    )
+    assert dims["size"] == record["size"] == [10.0, 10.0, 10.0]
+
+    r = client.post(f"{at}/measured", json={"readings": {"x": [10.04, 10.06]}})
+    assert r.status_code == 200, r.text
+    assert r.json()["turn"] == "turn-1"
+    (check,) = r.json()["filed"][0]["checked"]
+    assert check == {
+        "name": "x",
+        "designed": 10.0,
+        "measured": 10.05,
+        "deviation": pytest.approx(0.05),
+        "tolerance": 0.1,
+        "tolerance_from": "part",
+        "within": True,
+    }
+    x = r.json()["dimensions"]["dimensions"][0]
+    assert x["reading"]["filed"] == "filed-1" and x["reading"]["checked"]["within"] is True
+    assert x["reading"]["read"] == [10.04, 10.06] and x["reading"]["made"] == "turn-1"
+
+    # Read again: kept as a check, the printer's tuning unmoved.
+    r = client.post(f"{at}/measured", json={"readings": {"y": 10.25}})
+    assert r.status_code == 200, r.text
+    assert r.json()["turn"] is None
+    assert [t["id"] for t in r.json()["tuning"]["document"]["turns"]] == ["turn-1"]
+    assert r.json()["said"] == (
+        "y 10.25 mm against 10.00 designed, +0.25: outside ± 0.10: kept as a check of the "
+        "piece, and no turn: turn-1 already reads it for printer_1's tuning"
+    )
+    (filed,) = r.json()["filed"][1:]
+    assert (filed["kind"], filed["made"], filed["said"]) == ("measured", None, r.json()["said"])
+    y = r.json()["dimensions"]["dimensions"][1]
+    assert y["reading"]["checked"]["within"] is False and y["reading"]["filed"] == "filed-2"
+
+    # Undo turn: the first filing struck, its reading no longer the dimension's.
+    assert client.post(f"{at}/tune/undo").status_code == 200
+    names = {d["name"]: d["reading"] for d in client.get(at).json()["dimensions"]["dimensions"]}
+    assert names["x"] is None and names["y"]["filed"] == "filed-2"
+
+
+def test_the_tolerance_is_the_part_s_else_the_printer_s_profile_s_else_a_default(monkeypatch):
+    """The part's declared tolerance first; else what the printer's profile holds under
+    measured; else PrintSettings' own, said to be a default. A cut piece's is a default."""
+    from apothecary.slicer import profiles
+    from apothecary.slicer.models import Made, Setting, SlicedFor, SliceRecord
+
+    def record(declared=None):
+        settings = [Setting(name="layer_height", value="0.2", origin="printer", source="p")]
+        if declared is not None:
+            settings.append(
+                Setting(name="tolerance", value=declared, origin="declared", source="part x")
+            )
+        return SliceRecord(
+            file_id="f1",
+            name="x.gcode",
+            at=datetime(2026, 11, 22, tzinfo=timezone.utc),
+            slicer="orcaslicer",
+            made=Made(kind="part", name="footpedal"),
+            printer=SlicedFor(part="ender3", name="printer_1", site="garage", path="printer_1"),
+            settings=settings,
+            size=[30.0, 20.0, 10.0],
+        )
+
+    said = cabinet.tolerance_of("footpedal", record(0.15))
+    assert (said.value, said.source, said.said) == (0.15, "part", "footpedal's print settings")
+    said = cabinet.tolerance_of("footpedal", record())
+    assert (said.value, said.source) == (cabinet.DEFAULT_TOLERANCE, "default")
+    assert said.said == (
+        "a default, 0.2 mm: neither footpedal's print settings nor printer_1's profile states one"
+    )
+    real = profiles.load_profile
+
+    def held(name):
+        profile = real(name)
+        profile.measured["tolerance"] = profiles.Measured(
+            value=0.25, unit="mm", source="a bench's cube", used="a printed piece's check"
+        )
+        return profile
+
+    monkeypatch.setattr(profiles, "load_profile", held)
+    said = cabinet.tolerance_of("footpedal", record())
+    assert (said.value, said.source, said.said) == (
+        0.25,
+        "printer",
+        "printer_1's profile, parts/ender3/slicer.json",
+    )
+    assert cabinet.tolerance_of("footpedal", record(0.15)).source == "part"
+    cut = cabinet.tolerance_of("router_emoji", None)
+    assert (cut.source, cut.said) == (
+        "default",
+        "a default, 0.2 mm: nothing states one for a cut piece",
+    )
+
+
+def test_a_piece_s_dimensions_are_the_drawer_named_the_file_named_or_the_newest(
+    fake_orcaslicer, built
+):
+    """Nothing made: none, and why. A kept slice no drawer holds: its dimensions as
+    designed. A drawer: the newest, or the one named; a file of another part refused."""
+    none = client.get(f"/cabinet/{CUBE}/dimensions").json()
+    assert none["dimensions"] == [] and none["why"] == (
+        f"nothing made of {CUBE} yet: its print or its cut opens a drawer in Part › Feedback"
+    )
+    record = _slice()
+    kept = client.get(f"/cabinet/{CUBE}/dimensions").json()
+    assert (kept["drawer"], kept["file_id"]) == (None, record["file_id"])
+    assert [d["name"] for d in kept["dimensions"]] == ["x", "y", "z"]
+    by_file = client.get(f"/cabinet/{CUBE}/dimensions", params={"file": record["file_id"]})
+    assert by_file.json() == kept
+    drawer = client.post(f"/cabinet/{CUBE}/drawers", json={"file_id": record["file_id"]}).json()
+    assert client.get(f"/cabinet/{CUBE}/dimensions").json()["drawer"] == drawer["id"]
+    assert (
+        client.get(f"/cabinet/{CUBE}/dimensions", params={"file": record["file_id"]}).json()[
+            "drawer"
+        ]
+        == drawer["id"]
+    )
+    other = client.get("/cabinet/print_coupon/dimensions", params={"file": record["file_id"]})
+    assert other.status_code == 422
+    assert other.json()["detail"] == f"{record['file_id']} made {CUBE}, not print_coupon"
+    missing = client.get(f"/cabinet/{CUBE}/dimensions", params={"drawer": "20261120T120000.000"})
+    assert missing.status_code == 404
+
+
+def test_a_cut_piece_s_sizes_are_checked_with_a_default_tolerance():
+    record = cam_service.cut_into("router_emoji", ROUTER)
+    drawer = client.post("/cabinet/router_emoji/drawers", json={"file_id": record.file_id}).json()
+    dims = drawer["dimensions"]
+    assert dims["made"] == "cut" and dims["tolerance"]["source"] == "default"
+    face = next(d for d in dims["dimensions"] if d["name"] == "face")
+    assert face["frame"] == "none" and face["reading"] is None
+    r = client.post(
+        f"/cabinet/router_emoji/drawers/{drawer['id']}/measured",
+        json={"readings": {"face": face["designed"] - 0.1, "eye": None}},
+    )
+    assert r.status_code == 200, r.text
+    (check,) = r.json()["filed"][0]["checked"]
+    assert check["name"] == "face" and check["deviation"] == pytest.approx(-0.1)
+    face = next(d for d in r.json()["dimensions"]["dimensions"] if d["name"] == "face")
+    assert face["reading"]["checked"]["within"] is True
+
+
+def test_a_part_s_plan_gives_its_dimensions_in_its_own_frame(fake_orcaslicer, built):
+    """The print coupon names its plan: its dimensions are the plan's features, in the
+    order to read them, each with the line its jaws close along in the part's own frame."""
+    record = _slice("print_coupon")
+    dims = client.get("/cabinet/print_coupon/dimensions").json()
+    assert dims["file_id"] == record["file_id"] and dims["drawer"] is None
+    names = [d["name"] for d in dims["dimensions"]]
+    assert names[:3] == ["plate_x", "plate_y", "a_x"] and len(names) == len(
+        record["plan"]["features"]
+    )
+    first, planned = dims["dimensions"][0], record["plan"]["features"][0]
+    assert first["frame"] == "part"
+    assert (first["at"], first["faces"], first["axis"]) == (
+        planned["at"],
+        planned["faces"],
+        planned["axis"],
+    )
+    assert first["designed"] == planned["nominal"]

@@ -1156,6 +1156,7 @@ RING_BACKED: Dict[str, str] = {
     "feedback-try-brim": "feedback:try-brim",
     "feedback-try-raft": "feedback:try-raft",
     "feedback-note:keydown:keepNote": "feedback:note",
+    "feedback-measure-plan:keydown:keepOnEnter": "feedback:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
@@ -1810,6 +1811,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "filing the typed note in the piece's drawer, by Enter",
+    ),
+    "feedback-measure-plan:keydown:keepOnEnter": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "filing what is typed in a printed piece's dimensions' rows, by Enter in one",
     ),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),

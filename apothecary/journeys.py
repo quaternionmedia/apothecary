@@ -312,13 +312,15 @@ MAKE = Journey(
             "measure",
             "Measure",
             "the piece printed, in its part's cabinet, Part › Feedback: each feature it names "
-            "typed under measured, or each fault marked under seen, filed, and Take turn "
-            "takes either into the printer's next slices",
+            "typed under measured -- or its label clicked on the part, Measure shown in "
+            "Layers -- and checked against its design, or each fault marked under seen, "
+            "filed; Take turn takes either into the printer's next slices",
             forward=("part-feedback",),
             owns=("part-feedback",),
             shown_by=(
                 "46-a-printer-tuned-from-its-prints.md",
                 "50-a-printer-tuned-from-what-it-shows.md",
+                "55-a-printed-piece-checked-against-its-design.md",
             ),
             puts=(("file", "footpedal"), ("feedback", "footpedal")),
         ),

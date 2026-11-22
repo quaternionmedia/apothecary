@@ -326,7 +326,7 @@ then Kinds, each over its categories, then words.
 | A word | The pieces of a word neither facet holds, a picture's | Shown, Selectable |
 | Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
-| Measure | Dimension lines on the selection, and a click that drops a point to measure between and reads the diameter or the wall under it ([below](#measure)) | Shown (off at first) |
+| Measure | Dimension lines on the selection -- a part's piece's dimensions, each read against its design -- and a click that drops a point to measure between and reads the diameter or the wall under it, or picks a dimension by its label ([below](#measure)) | Shown (off at first) |
 | Bed mesh | A machine's bed reading, the relief laid over its bed: a printer's bed mesh, a router's table map ([A machine's frame](#a-machines-frame)). Hidden, a reading taken or shown afterwards is hidden too, until the tick is on again | Shown |
 
 **Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
@@ -377,7 +377,9 @@ Select walls and Measure, which are the page's session's.
 Ticking **Measure** (the Layers window's last row, or the ring's View › Layers › World ›
 Measure › Shown) lets a person read any dimension in the world. A
 measurement is a reading of the model and of the mesh drawn, not of the made part: a
-printed part differs by what the printer does. Every number says where it comes from.
+printed part differs by what the printer does, and what calipers read of a made piece is
+typed onto the part's dimensions ([below](#measure), *A made piece, against its design*).
+Every number says where it comes from.
 
 - **The selection reads its size.** The selected piece wears a dimension line along
   each of its own axes, a few pixels thick in the measurement's colour whatever the
@@ -454,6 +456,22 @@ printed part differs by what the printer does. Every number says where it comes 
     told. It says which, and gives no number.
   - *What a mesh cannot tell* is a printed part's real size: a printer closes a hole and
     swells a boss by what it does, and only the made part, measured, says by how much.
+- **A made piece, against its design.** A part's piece selected wears its dimensions, what
+  a person reads of a piece of it with calipers, as its cabinet says them
+  ([cabinet.md](cabinet.md#dimensions)): its box's x, y and z along the selection's own
+  lines, or, for a part that names a plan, each of the plan's features along the line its
+  jaws close on, in the part's own frame. They are of the piece Part › Feedback has chosen,
+  else the part's newest. A piece is the part as it prints, and the world may draw the part
+  as it rests ([parts-authoring.md](parts-authoring.md#how-it-rests)) or as another
+  variant: a side is marked as a dimension only where it is as long as that dimension was
+  designed, and a plan's lines only where the part is drawn in the box it was sliced in;
+  the reading names those read in Part › Feedback alone. A dimension's label clicked drops no point: Part › Feedback comes
+  in front on that piece, the dimension's row is marked and given the caret, and the status
+  line says what it is and its designed size. What calipers read is typed there and kept
+  with Enter or Keep; the label then carries the reading and how far it is from the design,
+  and the line and the label are drawn in the page's colour for within the piece's
+  tolerance, or for outside it. The reading under the Layers window's rows names the
+  piece, the tolerance and whose it is, and each dimension read.
 - **A click measures while the layer is shown.** Measure is a mode: the layer being
   shown is the whole of the choice, because a click that sometimes selected and sometimes
   measured would be a surprise at the moment it matters, and a modifier would be a
@@ -844,7 +862,7 @@ what it made:
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
 | 5 | **Print** | the Print window, then Jobs | the Machine, Jobs |
-| 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure | the Feedback window |
+| 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure, or a dimension clicked on the part with Measure shown | the Feedback window |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
 listed in ⚙ View › Views and has a cell on the ring's Panels › Windows, which is

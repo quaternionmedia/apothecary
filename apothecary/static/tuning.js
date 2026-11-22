@@ -4,8 +4,6 @@
  * answers, no DOM, so each can be held under node (tests/test_tuning_js.py). The server
  * computes every figure (apothecary/slicer/tuning.py); this only reads them.
  *
- *   planOf(record)              what a person reads of the piece a slice made: its part's
- *                               plan, else its box (x and y across at the base, its height)
  *   appliesOf(record)           the filament and process profiles the slice was made with
  *   parseReads(text)            "20.08 20.1" as [20.08, 20.1]; [] for nothing; null for
  *                               what is not sizes
@@ -20,18 +18,6 @@
  *                               each fault's over the looks
  *   seenOf(choices)             the severities a look sends, from the seen row's choices
  */
-
-/* A plan's features from a slice record: its own, else the box it sliced. */
-export function planOf(record) {
-    if (record && record.plan && record.plan.features && record.plan.features.length) return record.plan.features;
-    if (!record || !record.size) return [];
-    const [x, y, z] = record.size;
-    return [
-        { name: "x", kind: "outside", axis: "x", level: "base", jaw: "outside", nominal: x, words: "the part across X, at its widest" },
-        { name: "y", kind: "outside", axis: "y", level: "base", jaw: "outside", nominal: y, words: "the part across Y, at its widest" },
-        { name: "z", kind: "height", axis: "z", level: "above", jaw: "outside", nominal: z, words: "the part's height, bed face to top" },
-    ];
-}
 
 export function appliesOf(record) {
     const named = Object.fromEntries((record && record.settings || []).map((s) => [s.name, s.value]));

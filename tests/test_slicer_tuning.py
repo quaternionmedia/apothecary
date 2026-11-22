@@ -213,10 +213,17 @@ def test_a_box_separates_nothing_and_proposes_nothing(fake_orcaslicer, built):
     )
     refused = client.post("/slicer/tuning/apply", json={**WHERE, **PLA})
     assert refused.status_code == 422 and "proposes no change" in refused.json()["detail"]
-    # The same piece is read again only once its turn is undone.
+    # The same piece read again is a check alone, filed in its drawer: it makes a second
+    # turn only once its turn is undone.
     url = f"/slicer/slices/{record['file_id']}/measured"
     twice = client.post(url, json={"readings": {"x": 10.12}})
-    assert twice.status_code == 422 and "undo it to read it again" in twice.json()["detail"]
+    assert twice.status_code == 200, twice.text
+    assert twice.json()["turn"] is None and len(twice.json()["document"]["turns"]) == 1
+    # The cube's print settings declare its tolerance, 0.1 mm: the check's.
+    assert twice.json()["said"] == (
+        "x 10.12 mm against 10.00 designed, +0.12: outside ± 0.10: kept as a check of the "
+        "piece, and no turn: turn-1 already reads it for printer_1's tuning"
+    )
     client.post("/slicer/tuning/undo", json={**WHERE, **PLA})
     # The earlier rule, stated as an assumption: the walls are half the mean.
     r = client.post(

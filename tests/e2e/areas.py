@@ -208,6 +208,7 @@ AREAS = {
             "test_machine_plans.py",
             "test_projector_page.py",
             "test_make.py",
+            "test_a_piece_against_its_design.py",
             "test_bench.py",
             "test_deck.py",
             "test_deck_jog.py",

@@ -50,3 +50,6 @@ def cabinet(part: Optional[str], drawer: Optional[str]):
     for f in found.filed:
         undone = " (undone)" if f.undone else ""
         click.echo(f"{f.at:%Y-%m-%d %H:%M} {f.id} {f.kind}{undone}: {f.said}")
+        # A check alone says its checks in its line; a turn's or an allowance's under it.
+        for check in f.checked if f.made else ():
+            click.echo(f"  {check.said()}")

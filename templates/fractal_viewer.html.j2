@@ -1405,7 +1405,17 @@
                     raycaster: () => this.raycaster,
                     interfacesOf: (ref) => fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/interfaces`)
                         .then((r) => (r.ok ? r.json() : null)).then((body) => (body ? body.interfaces : null)).catch(() => null),
+                    // A part's piece's dimensions: the piece Part › Feedback has chosen, as it
+                    // read them, where it shows that part; else the part's newest piece's.
+                    dimensionsOf: (part) => (this.feedback && this.feedback.part() === part && this.feedback.dimensions()
+                        ? this.feedback.dimensions()
+                        : fetch(`${BASE_URL}/cabinet/${encodeURIComponent(part)}/dimensions`).then((r) => (r.ok ? r.json() : null)).catch(() => null)),
+                    pickDimension: (picked) => this.pickDimension(picked),
                 });
+                // A piece chosen or filed in Part › Feedback, a slice kept, a job begun or
+                // ended: the dimensions the world marks are asked for again.
+                window.addEventListener('apothecary:feedback-shown', (e) => this.measure.forgetDimensions(e.detail && e.detail.part));
+                for (const told of ['apothecary:sliced', 'apothecary:jobs-changed']) window.addEventListener(told, () => this.measure.forgetDimensions());
                 // What the layers do to what the world draws (layers_world.js).
                 this.layersWorld = mountLayersWorld({
                     scope: this.pickScope,
@@ -8840,6 +8850,15 @@
                     // The piece among those made of its part, in the Variants window.
                     if (found && this.scadTarget?.part === found.part) await this.loadMade(this.scadTarget);
                 } catch { /* the cabinet did not answer: the print's end is said all the same */ }
+            }
+
+            // A dimension's label clicked in the world (measure_world.js): Part › Feedback in
+            // front on the part's cabinet, the piece whose dimensions were marked chosen, and
+            // the dimension's row given the caret, said on the status line.
+            async pickDimension({ key, name, dims }) {
+                const opened = await this.openFeedback(key, { drawer: dims?.drawer || null });
+                if (opened.refused) { this.setStatus(`Measure: ${opened.refused}`, 'error'); return; }
+                this.feedback.pick(name);
             }
 
             // Part › Feedback in front on a part's cabinet -- a part's name, or a piece's

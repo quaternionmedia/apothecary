@@ -154,6 +154,7 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     assert make.steps[-1].shown_by == (
         "46-a-printer-tuned-from-its-prints.md",
         "50-a-printer-tuned-from-what-it-shows.md",
+        "55-a-printed-piece-checked-against-its-design.md",
     )
 
 

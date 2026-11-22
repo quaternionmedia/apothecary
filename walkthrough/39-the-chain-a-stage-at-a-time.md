@@ -54,7 +54,7 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
 5 Print: footpedal chosen
     Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it, as Part › View › Feedback does
-    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured, or each fault marked under seen, filed, and Take turn takes either into the printer's next slices
+    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured -- or its label clicked on the part, Measure shown in Layers -- and checked against its design, or each fault marked under seen, filed; Take turn takes either into the printer's next slices
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table

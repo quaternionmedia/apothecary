@@ -54,7 +54,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .. import print_faults as pf
 from .. import print_tuning as pt
-from ..models.measures import MeasurePlan, box_plan
+from ..models.measures import MeasuredFeature, MeasurePlan, box_plan
 from ..state_folder import state_dir, write_whole
 from .models import SliceRecord
 from .profiles import PrinterProfile
@@ -654,6 +654,29 @@ def plan_of(record: SliceRecord) -> MeasurePlan:
 # ---- a turn ---------------------------------------------------------------------------------
 
 
+def feature_read(plan: MeasurePlan, name: str, read: Sequence[float], part: str) -> MeasuredFeature:
+    """The feature ``name`` of ``plan``, ``read`` as these sizes: refused where the plan
+    names no such feature, a reading is no size, or one is further from its nominal
+    than ``WITHIN`` of it or ``NEAR`` mm, whichever is more."""
+    try:
+        feature = plan.feature(name)
+    except KeyError:
+        raise Refused(
+            f"{part} has no {name!r} to measure: it names {', '.join(plan.names)}"
+        ) from None
+    for v in read:
+        if not (math.isfinite(v) and v > 0):
+            raise Refused(f"{name} {v} mm is no size")
+        bound = max(WITHIN * feature.nominal, NEAR)
+        if abs(v - feature.nominal) > bound:
+            raise Refused(
+                f"{name} {v:g} mm against {feature.nominal:g} mm drawn is further off than "
+                f"{bound:g} mm: not this piece's {name}, or measured across something "
+                "else -- read it again, or choose the file it was printed from"
+            )
+    return feature
+
+
 def _readings(
     plan: MeasurePlan,
     values: Mapping[str, Sequence[float]],
@@ -666,25 +689,10 @@ def _readings(
     notes: Dict[str, List[str]] = {}
     out = []
     for name, read in values.items():
-        try:
-            feature = plan.feature(name)
-        except KeyError:
-            raise Refused(
-                f"{part} has no {name!r} to measure: it names {', '.join(plan.names)}"
-            ) from None
         read = [float(v) for v in read]
+        feature = feature_read(plan, name, read, part)
         if not read:
             continue
-        for v in read:
-            if not (math.isfinite(v) and v > 0):
-                raise Refused(f"{name} {v} mm is no size")
-            bound = max(WITHIN * feature.nominal, NEAR)
-            if abs(v - feature.nominal) > bound:
-                raise Refused(
-                    f"{name} {v:g} mm against {feature.nominal:g} mm drawn is further off than "
-                    f"{bound:g} mm: not this piece's {name}, or measured across something "
-                    "else -- read it again, or choose the file it was printed from"
-                )
         extra = 0.0
         notes[name] = []
         if feature.kind == "height":
@@ -949,6 +957,20 @@ def next_id(doc: TuningDocument, prefix: str = "turn") -> str:
     kept = doc.turns if prefix == "turn" else doc.looks
     n = max((int(t.id.split("-")[1]) for t in kept), default=0)
     return f"{prefix}-{n + 1}"
+
+
+def reads_last(record: SliceRecord) -> Optional[str]:
+    """The turn of its printer's tuning that already reads the piece ``record``'s slice
+    made, when that is the last: a second reading of it is no new turn. None where the
+    last turn is another piece's, or the printer keeps no tuning for it."""
+    at = record.printer
+    try:
+        doc = load(at.site, at.path, applies_of(record), at.part)
+    except Refused:
+        return None
+    if doc is None or not doc.turns or doc.turns[-1].slice.file_id != record.file_id:
+        return None
+    return doc.turns[-1].id
 
 
 def add_turn(

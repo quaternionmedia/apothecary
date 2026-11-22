@@ -23,6 +23,19 @@
  * sphere stands where the layout put it: a point on it is given in its part's own frame, and
  * its turn there is not read as its own.
  *
+ * A part's piece selected also wears its **dimensions**, what a person reads of a piece of
+ * it with calipers (apothecary/cabinet.py, GET /cabinet/{part}/dimensions; Part › Feedback's
+ * rows): its box's along the selection's own lines, a plan's each along the line its jaws
+ * close on, in the part's own frame, once a piece of it was made (a part with none has
+ * nothing to read). The piece is the part as it prints, and the world may draw it as it
+ * rests, or another variant: a line is a dimension's only where it is that dimension as
+ * drawn -- a box's side as long as the size designed, a plan's lines on a part drawn in the
+ * box it was sliced in -- and the readings say which are read in Part › Feedback alone.
+ * A dimension's label clicked picks it, dropping no point:
+ * Part › Feedback opens on its row for the piece chosen there (else the part's newest), to
+ * type what calipers read. Its newest reading kept there is on its label, the line and the
+ * label in the page's --ok within its tolerance, --bad outside it.
+ *
  *   sourceOf({ placeholder, moving, footprint, envelope })   where a selection's size comes
  *                                  from, in the words its reading says
  *   tokenOf(source)                the word a dimension line's label says of that source
@@ -38,9 +51,16 @@
  *                                  other readings, as the status line says them
  *   statusOf({ points, pair })     the status line's words for the points: short, the
  *                                  whole reading in Layers
+ *   dimensionLabel(name, mm, token, reading)   a dimension's label: its size, where that
+ *                                  comes from, and its newest reading
+ *   dimensionLines(key, dims, marked)   what the readings say of a piece's dimensions,
+ *                                  `marked` the names of those drawn on the part
+ *   drawnAs(designed, mm)          whether a line drawn `mm` long is a size designed
+ *   partToMesh(point, centredFrom)    a point of the part's own frame in its centred mesh's
+ *   pickAt(picks, x, y)            the dimension whose label is under the pointer, or null
  *   mountMeasureWorld(world)       the layer's state ({ points, group, lines, ... }) and what
  *                                  it does: on, click, snap, clear, soon, selection,
- *                                  readings, draw, place, layersApplied
+ *                                  readings, draw, place, layersApplied, forgetDimensions
  */
 
 import * as THREE from "three";
@@ -164,11 +184,66 @@ export function statusOf({ points, pair = {} }) {
     return null;
 }
 
+const signed = (v) => `${v >= 0 ? "+" : ""}${fixed(v)}`;
+
+export function dimensionLabel(name, mm, token, reading = null) {
+    const base = `${name} ${mmText(mm)} · ${token}`;
+    return reading ? `${base} · read ${fixed(reading.checked.measured)} ${signed(reading.checked.deviation)}` : base;
+}
+
+// A line drawn this near the size designed is that size: an STL's single precision, and
+// its box rounded to a thousandth as a slice records it.
+export const DRAWN_AS_MM = 0.01;
+
+export function drawnAs(designed, mm) {
+    return Math.abs(designed - mm) <= DRAWN_AS_MM + 1e-4 * Math.abs(designed);
+}
+
+/* `dims` as the server says a piece's dimensions (cabinet.Dimensions): a line for the piece
+ * and the tolerance its readings are checked with, one for those not drawn on the part, then
+ * one for each dimension read. Nothing where no piece of it was made. */
+export function dimensionLines(key, dims, marked = []) {
+    if (!dims || !(dims.drawer || dims.file_id) || !dims.dimensions || !dims.dimensions.length) return [];
+    const t = dims.tolerance;
+    const piece = dims.drawer ? `its piece ${dims.drawer}` : `its kept file ${dims.file_id}, no drawer yet`;
+    const tolerance = t ? `, each checked within ± ${fixed(t.value)} mm (${t.source === "default" ? t.said : `${t.source}'s: ${t.said}`})` : "";
+    const lines = [`${key}'s dimensions, as ${dims.made === "cut" ? "cut" : "printed"} on ${dims.machine}: ${piece}${tolerance}${marked.length ? "; a dimension's label clicked takes its reading in Part › Feedback" : ""}`];
+    const apart = dims.dimensions.map((d) => d.name).filter((name) => !marked.includes(name));
+    if (apart.length) {
+        lines.push(dims.made === "cut"
+            ? `${key}'s ${apart.join(", ")}: sizes the toolpath names, read in Part › Feedback`
+            : `${key}'s ${apart.join(", ")}: not drawn here, the part drawn not being as it was sliced (as it rests, or another variant); read in Part › Feedback`);
+    }
+    for (const d of dims.dimensions) {
+        const r = d.reading;
+        if (!r) continue;
+        const c = r.checked;
+        lines.push(`${key}'s ${d.name}, ${d.words}: designed ${mmText(c.designed)}, read ${mmText(c.measured)} (${r.filed}${r.made ? `, ${r.made}` : ""}), ${signed(c.deviation)} mm: ${c.within ? "within" : "outside"} ± ${fixed(c.tolerance)}${c.tolerance_from === "default" ? ", a default" : ""}`);
+    }
+    return lines;
+}
+
+/* `point` [x, y, z] in a part's own frame (z up), where it stands in the part's mesh as the
+ * page centres it on its box: the inverse of reading a point in its part's frame. */
+export function partToMesh(point, centredFrom) {
+    const [x, y, z] = point.map((v, i) => v - centredFrom[i]);
+    return [x, z, -y];
+}
+
+/* Of `picks` ([{ box: { l, t, r, b }, ... }]), the last laid whose box holds (x, y). */
+export function pickAt(picks, x, y) {
+    for (let i = picks.length - 1; i >= 0; i--) {
+        const b = picks[i].box;
+        if (x >= b.l && x <= b.r && y >= b.t && y <= b.b) return picks[i];
+    }
+    return null;
+}
+
 // Where a piece stands on the universe's sphere is the layout's, not its own: its points
 // are said in its part's frame, and its turn there is not said.
 const onTheSphere = (node) => Boolean(node && Number.isInteger(node.shell));
 
-export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf, frameOf, pair = {}, declaredOf = () => null }) {
+export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf, frameOf, pair = {}, declaredOf = () => null, dims = null, marked = [] }) {
     const lines = [], p = points;
     const own = (q) => onTheSphere(nodeOf(q.key));
     const at = (q) => (own(q) ? (q.own ? `${triple(q.own).slice(1, -1)} mm in its part's own frame` : "a place its part's frame cannot say")
@@ -215,6 +290,7 @@ export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf,
         if (node.footprint && source.startsWith("the drawn mesh")) lines.push(`${key} declares ${sized(ownExtents(node.footprint))} (declared footprint); the mesh above is what is drawn, and the two can differ`);
         const frame = frameOf(key, node);
         if (frame && frame.volume) lines.push(`${key}'s working volume ${frame.volume.map(mmText).join(" × ")} (its frame, from ${frame.volume_from === "controller" ? "the machine's controller" : "the site's declaration"})`);
+        lines.push(...dimensionLines(key, dims, marked));
     } else if (selectedKey && nodeOf(selectedKey)) {
         lines.push(`${selectedKey} is not drawn here, so there is nothing of it to measure`);
     }
@@ -236,12 +312,48 @@ export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf,
  *   raycaster()           the ray the last pick cast, to tell which of a machine's pieces a
  *                         face under it is
  *   interfacesOf(part)    a part's declared interfaces (GET /parts/{name}/interfaces), or null
+ *   dimensionsOf(part)    a piece of the part's dimensions (cabinet.Dimensions), or null
+ *   pickDimension({ part, key, name, dims })   a dimension's label clicked
  * Answers the layer's state -- points ({ site, kind, key, at, feature, ... }), group, lines,
  * and what is drawn of it -- with what it does. */
-export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, meshOf, selected, envelopeOf, frameOf, fallbackColour, dispose, setStatus, invalidate, refresh, raycaster = () => null, interfacesOf = () => null }) {
-    const m = { points: [], group: null, lines: [], pending: false, say: false, rods: [], labels: [], boxes: [], status: null };
+export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, meshOf, selected, envelopeOf, frameOf, fallbackColour, dispose, setStatus, invalidate, refresh, raycaster = () => null, interfacesOf = () => null, dimensionsOf = () => null, pickDimension = () => {} }) {
+    const m = { points: [], group: null, lines: [], pending: false, say: false, rods: [], labels: [], boxes: [], picks: [], picked: null, status: null };
     const shapes = new WeakMap();   // a geometry, read as measure_features reads a mesh
     const declared = new Map();     // a part's interfaces: { done, interfaces }
+    const measured = new Map();     // a part's piece's dimensions: { done, dims }
+
+    // A part's piece's dimensions, once they are in: asked for the first time its piece is
+    // selected, and drawn again when they come; asked again once forgotten.
+    function dimensionsFor(node) {
+        const part = node && node.part_ref;
+        if (!part) return null;
+        const entry = measured.get(part);
+        if (!entry) {
+            const asked = { done: false };
+            measured.set(part, asked);
+            Promise.resolve(dimensionsOf(part)).catch(() => null).then((dims) => {
+                // Forgotten meanwhile, and maybe asked again: the newer asking answers.
+                if (measured.get(part) !== asked) return;
+                measured.set(part, { done: true, dims: dims || null });
+                soon(false);
+            });
+            return null;
+        }
+        return entry.done ? entry.dims : null;
+    }
+    // A piece of `part` filed in or chosen (Part › Feedback): its dimensions asked again.
+    function forgetDimensions(part = null) {
+        if (part) measured.delete(part);
+        else measured.clear();
+        if (on()) soon(false);
+    }
+    // The page's own colours for within a tolerance and outside it (static/tokens.css).
+    const cssColour = (name, fallback) => {
+        try {
+            const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            return /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : fallback;
+        } catch (e) { return fallback; }
+    };
 
     const on = () => scope.isShown(MEASURE);
 
@@ -252,6 +364,10 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
     };
 
     function click(event) {
+        // A dimension's label: picked, and no point dropped.
+        const rect0 = canvas().getBoundingClientRect();
+        const label = pickAt(m.picks, event.clientX - rect0.left, event.clientY - rect0.top);
+        if (label) { choose(label); return; }
         const hit = pick(event).find((h) => nodeOf(h.object.userData.key));
         if (!hit) { setStatus("Measure: no piece under the pointer to measure from", "error"); return; }
         const rect = canvas().getBoundingClientRect();
@@ -272,6 +388,12 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         const own = local ? [local.x + from[0], -local.z + from[1], local.y + from[2]] : null;
         m.points = pointsAfter(m.points, { site: siteAt(point), own, kind, key: hit.object.userData.key, at: point, vertex, ...read });
         soon(true);
+    }
+
+    function choose(label) {
+        m.picked = { part: label.part, name: label.name };
+        soon(false);
+        pickDimension({ part: label.part, key: label.key, name: label.name, dims: label.dims });
     }
 
     function shapeOf(geometry) {
@@ -421,7 +543,7 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         return { key, node, edges, source, size: sizeFromSceneBox(sceneSize) };
     }
 
-    const readings = (sel) => readingsOf({ points: m.points, selection: sel, selectedKey: selected(), nodeOf, envelopeOf, frameOf, pair: pairOf(), declaredOf });
+    const readings = (sel, dims = null, marked = []) => readingsOf({ points: m.points, selection: sel, selectedKey: selected(), nodeOf, envelopeOf, frameOf, pair: pairOf(), declaredOf, dims, marked });
 
     // The dimension lines on the selection, the points and the line between them, each
     // number labelled with its source; and the readings, mirrored in Layers.
@@ -431,41 +553,47 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         m.rods = [];
         m.labels = [];
         m.boxes = [];
+        m.picks = [];
         m.status = null;
         if (on()) {
             const sel = selected() ? selection() : null;
+            const dims = sel ? dimensionsFor(sel.node) : null;
             const group = new THREE.Group();
             const colour = layerColour(MEASURE, fallbackColour);
+            const hex = layerHex(MEASURE) || "#ffffff";
+            const within = cssColour("--ok", "#6fdb75"), outside = cssColour("--bad", "#ff8080");
             // Drawn where it is seen, pulled a hair toward the eye so a line along a face
             // is not lost in it; and again faint over everything, so where it runs behind
             // something drawn it is seen to.
-            const seen = { color: colour, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 };
-            const hidden = { color: colour, depthTest: false, depthWrite: false, transparent: true, opacity: HIDDEN_OPACITY };
+            const seenIn = (c) => ({ color: c, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+            const hiddenIn = (c) => ({ color: c, depthTest: false, depthWrite: false, transparent: true, opacity: HIDDEN_OPACITY });
+            const seen = seenIn(colour), hidden = hiddenIn(colour);
             const twice = (object, faint) => { faint.userData.faint = true; object.add(faint); return object; };
             // A line a few pixels thick at any distance: a rod, its thickness set each frame
             // (place), with a point at each end.
-            const rod = (a, b) => {
+            const rod = (a, b, c = colour) => {
                 const geometry = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
-                const r = twice(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(seen)), new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(hidden)));
+                const r = twice(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(seenIn(c))), new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(hiddenIn(c))));
                 r.position.copy(a).lerp(b, 0.5);
                 r.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
                 r.userData.span = a.distanceTo(b);
                 group.add(r);
                 m.rods.push(r);
             };
-            const dots = (points, size) => {
+            const dots = (points, size, c = colour) => {
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                return twice(new THREE.Points(geometry, new THREE.PointsMaterial({ ...seen, size, sizeAttenuation: false })),
-                    new THREE.Points(geometry, new THREE.PointsMaterial({ ...hidden, size, sizeAttenuation: false })));
+                return twice(new THREE.Points(geometry, new THREE.PointsMaterial({ ...seenIn(c), size, sizeAttenuation: false })),
+                    new THREE.Points(geometry, new THREE.PointsMaterial({ ...hiddenIn(c), size, sizeAttenuation: false })));
             };
-            const line = (a, b) => {
-                rod(a, b);
-                group.add(dots([a, b], END_PX));
+            const line = (a, b, c = colour) => {
+                rod(a, b, c);
+                group.add(dots([a, b], END_PX, c));
             };
-            // A label on a dark ground, its text in the layer's colour, the size of the page's
-            // own text whatever the distance; where it stands is place's, past the far end of
-            // its line.
-            const label = (text, from, to) => {
+            // A label on a dark ground, its text in the layer's colour (a dimension read: in
+            // within's or outside's), the size of the page's own text whatever the distance;
+            // where it stands is place's, past the far end of its line. A dimension's label
+            // carries what picks it (`pick`), and the one picked last is ringed thicker.
+            const label = (text, from, to, { ink = hex, pick = null } = {}) => {
                 const board = document.createElement("canvas");
                 const ctx = board.getContext("2d");
                 const font = `600 ${LABEL_PX * 2}px sans-serif`;
@@ -473,21 +601,52 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
                 board.width = Math.ceil(ctx.measureText(text).width) + 20;
                 board.height = LABEL_PX * 2 + 14;
                 ctx.font = font;
+                const picked = pick && m.picked && m.picked.part === pick.part && m.picked.name === pick.name;
                 ctx.fillStyle = "rgba(16,18,16,0.88)"; ctx.fillRect(0, 0, board.width, board.height);
-                ctx.strokeStyle = layerHex(MEASURE) || "#ffffff"; ctx.lineWidth = 2; ctx.strokeRect(1, 1, board.width - 2, board.height - 2);
-                ctx.fillStyle = layerHex(MEASURE) || "#ffffff"; ctx.textBaseline = "middle"; ctx.fillText(text, 10, board.height / 2 + 1);
+                ctx.strokeStyle = ink; ctx.lineWidth = picked ? 6 : 2; ctx.strokeRect(picked ? 3 : 1, picked ? 3 : 1, board.width - (picked ? 6 : 2), board.height - (picked ? 6 : 2));
+                ctx.fillStyle = ink; ctx.textBaseline = "middle"; ctx.fillText(text, 10, board.height / 2 + 1);
                 const texture = new THREE.CanvasTexture(board);
                 texture.colorSpace = THREE.SRGBColorSpace;
                 const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, sizeAttenuation: false }));
-                sprite.userData = { from: from.clone(), to: to.clone(), w: board.width / 2, h: board.height / 2 };
+                sprite.userData = { from: from.clone(), to: to.clone(), w: board.width / 2, h: board.height / 2, pick, text, ink };
                 group.add(sprite);
                 m.labels.push(sprite);
             };
+            // A dimension read: its line and label in the colour of within or outside.
+            const inkOf = (d) => (d && d.reading ? (d.reading.checked.within ? within : outside) : null);
+            const part = sel && sel.node.part_ref;
+            const list = (dims && dims.dimensions) || [];
+            const planned = list.some((d) => d.frame === "part");
+            const marked = [];  // the dimensions drawn on the part
             if (sel) {
                 const token = tokenOf(sel.source);
                 for (const e of sel.edges) {
-                    line(e.from, e.to);
-                    label(`${e.letter} ${mmText(e.mm)} · ${token}`, e.from, e.to);
+                    // A part's box dimension, where a piece of it was made and it names no
+                    // plan: its x, y or z, where the side drawn is as long as designed.
+                    const found = part && !planned ? list.find((x) => x.frame === "box" && x.name === e.letter) : null;
+                    const d = found && drawnAs(found.designed, e.mm) ? found : null;
+                    if (d) marked.push(d.name);
+                    const ink = inkOf(d);
+                    line(e.from, e.to, ink ? parseInt(ink.slice(1), 16) : colour);
+                    label(dimensionLabel(e.letter, e.mm, token, d && d.reading), e.from, e.to,
+                        { ink: ink || hex, pick: d ? { part, key: sel.key, name: e.letter, dims } : null });
+                }
+                // A plan's dimensions, each along the line its jaws close on, in the part's
+                // own frame, where the mesh says where its box stood and is the box sliced.
+                const mesh = meshOf(sel.key), from = mesh && mesh.userData.centredFrom;
+                const asSliced = !!(dims && dims.size) && ["x", "y", "z"].every((k, i) => drawnAs(dims.size[i], sel.size[k]));
+                if (planned && from && !mesh.userData.isPlaceholder && asSliced) {
+                    mesh.updateWorldMatrix(true, false);
+                    const k = { x: 0, y: 1, z: 2 };
+                    for (const d of list.filter((x) => x.frame === "part" && x.at && x.faces && x.axis)) {
+                        const end = (face) => { const p = [...d.at]; p[k[d.axis]] = face; return mesh.localToWorld(new THREE.Vector3(...partToMesh(p, from))); };
+                        const [a, b] = [end(d.faces[0]), end(d.faces[1])];
+                        const ink = inkOf(d);
+                        marked.push(d.name);
+                        line(a, b, ink ? parseInt(ink.slice(1), 16) : colour);
+                        label(dimensionLabel(d.name, d.designed, "designed", d.reading), a, b,
+                            { ink: ink || hex, pick: { part, key: sel.key, name: d.name, dims } });
+                    }
                 }
             }
             const p = m.points;
@@ -540,7 +699,7 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
             group.traverse((o) => { o.renderOrder = o.userData.faint ? 11 : o.isSprite ? 12 : 10; o.raycast = () => {}; });
             scene().add(group);
             m.group = group;
-            m.lines = readings(sel);
+            m.lines = readings(sel, dims, marked);
             // The status line says the points' reading short; Layers has it whole.
             m.status = statusOf({ points: p, pair });
             place();
@@ -554,6 +713,7 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
     // the size of the page's text.
     function place() {
         if (!m.group) return;
+        m.picks = [];
         const cam = camera(), h = canvas().clientHeight || 1, w = canvas().clientWidth || 1;
         for (const rod of m.rods) {
             const r = (ROD_PX / 2) * perPixel(rod.position);
@@ -571,8 +731,12 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
             const at = laid[i], z = Math.min(0.999, ends[i].z);
             sprite.position.copy(new THREE.Vector3((at.cx / w) * 2 - 1, 1 - (at.cy / h) * 2, z).unproject(cam));
             sprite.scale.set(sprite.userData.w * k, sprite.userData.h * k, 1);
-            const { w: lw, h: lh } = sprite.userData;
-            if (z < 1) m.boxes.push({ l: at.cx - lw / 2, r: at.cx + lw / 2, t: at.cy - lh / 2, b: at.cy + lh / 2 });
+            const { w: lw, h: lh, pick: picks } = sprite.userData;
+            if (z < 1) {
+                const box = { l: at.cx - lw / 2, r: at.cx + lw / 2, t: at.cy - lh / 2, b: at.cy + lh / 2 };
+                m.boxes.push(box);
+                if (picks) m.picks.push({ ...picks, box });
+            }
         });
     }
 
@@ -589,5 +753,5 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         soon(false);
     }
 
-    return Object.assign(m, { on, click, snap, clear, soon, selection, readings, draw, place, layersApplied, labelBoxes });
+    return Object.assign(m, { on, click, snap, clear, soon, selection, readings, draw, place, layersApplied, labelBoxes, forgetDimensions, pickAt: (x, y) => pickAt(m.picks, x, y) });
 }

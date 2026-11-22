@@ -11,3 +11,10 @@
 #feedback-tune-history { white-space: pre-line; }
 .feedback-filed { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 0.74rem; color: var(--ink-2); }
 .feedback-filed li.undone { text-decoration: line-through; color: var(--ink-3); }
+/* A dimension's newest reading: within its tolerance, or outside it (tokens' --ok, --bad). */
+#feedback-card .measure-check { margin-left: 0.25rem; }
+#feedback-card .within { color: var(--ok); }
+#feedback-card .outside { color: var(--bad); }
+/* The row of a dimension picked in the world. */
+#feedback-card .measure-row.picked { outline: 1px solid var(--ink-2); outline-offset: 2px; border-radius: 3px; }
+.feedback-checks { margin: 0.15rem 0 0.2rem 0.6rem; }
