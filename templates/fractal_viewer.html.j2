@@ -9653,10 +9653,11 @@
                 if (!journey) return;
                 this.journey = null;
                 this.keepJourneyInAddress();
-                // A site the tour opened gives way to the one the page was on before it.
+                // A site the tour opened gives way to the one the page was on before it. A
+                // page no longer on the journey's site was moved by a person, and stays.
                 const back = this.siteBeforeTour;
                 this.siteBeforeTour = null;
-                if (back && back !== this.siteName && SITE_NAMES.includes(back)) {
+                if (back && back !== this.siteName && this.siteName === journey.site && SITE_NAMES.includes(back)) {
                     this.setStatus(`Left ${journey.name}: opening ${back} again, where the page was before the tour`, 'success');
                     return this.chooseSite(back).then(() => {
                         if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are`, 'success');

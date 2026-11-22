@@ -327,6 +327,32 @@ def test_the_box_closed_after_a_journey_in_another_site_opens_the_first_site_aga
 
 
 @pytest.mark.e2e
+def test_a_site_a_person_chose_during_a_journey_stays_when_the_box_is_closed(page: Page, url: str):
+    """Join a hose chosen in the box from the garage opens the universe; theatre then
+    selected in Site and stepped into: the box closed leaves the page on theatre, the
+    site the person chose, and does not open the garage again."""
+    open_garage(page, url, settle=False)
+    page.locator("#tour-pop-open").click()
+    expect(page.locator(BOX)).to_be_visible()
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Join a hose")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.siteName !== 'garage'", timeout=30000)
+    # Site opened lays its stack out again: its rows are pressed once they stand still.
+    windows.open_window(page, "site")
+    windows.remembered(page)
+    _select(page, "site-theatre")
+    page.locator("#viewer-canvas").focus()
+    page.keyboard.press("PageDown")
+    page.wait_for_function("() => window.fractalViewer.siteName === 'theatre'", timeout=30000)
+    page.locator(f"{BOX} .tour-pop-close").click()
+    expect(status(page)).to_contain_text("Left Join a hose: its windows stay where they are")
+    assert page.evaluate("() => window.fractalViewer.siteName") == "theatre"
+    assert page.evaluate("() => window.fractalViewer.siteBeforeTour") is None
+
+
+@pytest.mark.e2e
 def test_print_a_part_s_shape_shows_its_numbers_and_each_whole(page: Page, url: str):
     """Print a part at Shape, at 1280 by 800: Parameters shows two of the footpedal's
     numbers whole; and in Design a part's view, Selected's position fields hold every
