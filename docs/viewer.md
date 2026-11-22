@@ -64,7 +64,10 @@ Left to right, one row:
   another. Pressed, it opens that
   site, the machine's Machine with its Print or Cut window in front, chooses the
   part under **makes** (in another site, by its name) and slices it or writes its
-  toolpath, as the variant drawn where one is applied; then it lays out the
+  toolpath, as the variant drawn where one is applied. That variant goes with
+  the part to the machine's site, whose address then names it, so the Machine's
+  **Slice** or **Toolpath** pressed there again makes the same variant, not the
+  part as saved; then it lays out the
   Machine view round the machine, framed in the world, so the Machine's head
   stands beside its Print or Cut and nothing a site opened on the way is left
   taking the world's room (in a journey, the journey's step lays out its own

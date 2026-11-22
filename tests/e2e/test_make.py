@@ -258,6 +258,76 @@ def test_make_opens_the_board_s_machine_though_the_universe_s_boards_answer_late
 
 
 @pytest.mark.e2e
+def test_make_takes_the_variant_drawn_to_the_printer_s_site_and_its_slice_again_keeps_it(
+    page: Page, url: str
+):
+    """In the universe, hose_adapter drawn as a variant: ⚒ Make opens the garage, where
+    printer_1's board is connected, and slices that variant there. The garage's address
+    names the variant, so the Print window's Slice, pressed again, slices the variant
+    too, not the part as saved; Back returns to the universe, still drawing it."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    params = {"a_d": 36, "a_length": 20, "a_socket": True, "b_d": 33, "b_length": 15,
+              "step": False, "step_d": 33}
+    with httpx.Client(base_url=url, timeout=120.0) as http:
+        rendered = http.post(
+            "/parts/hose_adapter/stl/generate?pose=rest", json={"params": params}
+        )
+        rendered.raise_for_status()
+        variant = rendered.json()["variant"]
+        assert variant and not rendered.json()["saved"]
+        http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
+        http.put(
+            f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}
+        ).raise_for_status()
+        try:
+            page.goto(f"{url}/viewer/sites/apothecary?variant=hose_adapter:{variant}")
+            page.wait_for_function(
+                "(key) => window.fractalViewer.variantByPart.hose_adapter === key",
+                arg=variant,
+                timeout=15000,
+            )
+            row(page, "hose_adapter").dblclick()
+            page.wait_for_function(
+                "() => window.fractalViewer.focusPath.join('.') === 'hose_adapter'"
+            )
+            make = page.locator("#make-here")
+            expect(make).to_have_text("⚒ Make hose_adapter on printer_1 in garage", timeout=15000)
+            make.click()
+            page.wait_for_function(
+                "() => window.fractalViewer.siteName === 'garage'", timeout=15000
+            )
+            expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+            said = windows.in_machine(page, "#print-slice-said")
+            expect(said).to_contain_text(f"hose_adapter (the variant {variant[:8]}) sliced")
+            windows.in_machine(page, "#print-slice").click()
+            expect(page.locator("#status")).to_contain_text("slicing hose_adapter", timeout=10000)
+            expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+            # The file chosen for ▶ Print is of the variant. (The scripted slicer writes the
+            # same G-code for any STL, so both slices are one kept file: its record is the
+            # newest slice's.)
+            chosen = windows.in_machine(page, "#print-pick").input_value()
+            made = http.get(f"/slicer/slices/{chosen}").json()["made"]
+            assert (made["name"], made["variant"]) == ("hose_adapter", variant)
+            assert made["params"]["b_d"] == pytest.approx(33)
+            expect(said).to_contain_text(f"hose_adapter (the variant {variant[:8]}) sliced")
+            # The garage drew it from the universe: its address names the variant made.
+            assert f"variant=hose_adapter%3A{variant}" in page.url
+            page.go_back()
+            page.wait_for_function(
+                "() => window.fractalViewer.siteName === 'apothecary'", timeout=15000
+            )
+            page.wait_for_function(
+                "(key) => window.fractalViewer.variantByPart.hose_adapter === key",
+                arg=variant,
+                timeout=15000,
+            )
+        finally:
+            http.delete(f"/sites/garage/nodes/{BOARD}/device")
+    assert errors == []
+
+
+@pytest.mark.e2e
 def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: str):
     """The footpedal made on printer_1, then read in its part's cabinet: its ring's
     Part › View › Feedback brings the Feedback window, where its slice is listed as a piece

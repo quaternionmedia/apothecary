@@ -2762,13 +2762,20 @@
             // names it (/viewer/sites/<name>), so a reload or a link lands on it and
             // Back returns to the one before. The old site's focus, Machine and
             // variants are its own, and stay behind in its entry of the history.
-            chooseSite(name) {
+            // `carried`, {part: variant}, are variants this tab applied that go with it
+            // all the same, the new site's address naming them: a part made in another
+            // site is made there as it was drawn (makePiece).
+            chooseSite(name, carried = {}) {
                 if (!name) return null;
                 const url = new URL(location.href);
                 url.pathname = `/viewer/sites/${encodeURIComponent(name)}`;
                 for (const key of ['focus', 'machine', 'variant']) url.searchParams.delete(key);
                 if (url.href !== location.href) history.pushState({ site: name }, '', url);
+                const kept = Object.entries(carried)
+                    .filter(([ref, key]) => key && this.variantByPart[ref] === key)
+                    .map(([ref, key]) => [ref, key, this.variantRecords[ref]]);
                 this.forgetVariants();
+                for (const [ref, key, record] of kept) this.useVariant(ref, key, record);
                 return this.loadSite(name);
             }
 
@@ -9055,7 +9062,9 @@
                 return done;
             }
             // A piece made on the first machine that makes it (makersOf). In another site,
-            // that site is opened first, as the banner's ▾ does. The machine's Machine opened, its Print or Cut in front (makingWith),
+            // that site is opened first, as the banner's ▾ does, the variant drawn going with
+            // it, so a Slice or Toolpath there again makes that variant and not the part as
+            // saved. The machine's Machine opened, its Print or Cut in front (makingWith),
             // the piece chosen under makes -- in another site, the part by its name -- and
             // sliced, or its toolpath written, as the drawn variant where one is applied.
             // Nothing is armed, started or sent: ▶ is the person's. What it says, or why not.
@@ -9072,7 +9081,7 @@
                 const variant = ref ? this.variantByPart[ref] ?? null : null;
                 const away = chosen.site !== this.siteName;
                 if (away) {
-                    await this.chooseSite(chosen.site);
+                    await this.chooseSite(chosen.site, variant ? { [ref]: variant } : {});
                     if (this.siteName !== chosen.site) return say({ refused: `${chosen.site} did not open` });
                 }
                 await until(() => this.bindingsLoaded && (this.bindingFor(chosen.path).row?.device?.port || this.plannedMachineOf(chosen.path)), 15000);
