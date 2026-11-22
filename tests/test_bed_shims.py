@@ -190,6 +190,8 @@ def test_the_part_takes_the_shell_s_words_and_gives_the_scad_a_list():
     p = PART.validate_overrides({"thicknesses": "0.8,0.3,1.1", "labels": "FL BR BL"})
     assert p["thicknesses"] == [0.8, 0.3, 1.1]
     assert PART.scad_overrides(p)["labels"] == ["FL", "BR", "BL"]
+    # The SCAD's list, as its text in the page reads it, is the same words.
+    assert Params(labels=["FL", "BR", "BL"]).labels == "FL BR BL"
 
 
 @pytest.mark.parametrize(
@@ -387,13 +389,25 @@ def test_a_mount_no_shim_fits_is_refused_and_nothing_kept(tmp_path, monkeypatch,
         bs.keep_mount("garage", "nowhere", screw="M4")
 
 
-def test_the_part_s_presets_are_the_screws(tmp_path):
+def test_the_screw_sets_the_hole_and_a_hole_typed_goes_over_it_in_python_and_in_scad():
     from apothecary.projects.parts.bed_shims import SCREW_HOLES
 
-    assert {name: PART.preset(name)["hole_d"] for name in PART.presets} == {
-        screw.lower(): hole for screw, hole in SCREW_HOLES.items()
-    }
-    assert all(len(p.label) <= 12 for p in PART.presets.values())
+    assert (Params().hole, Params(screw="M3").hole, Params(screw="M3", hole_d=3.6).hole) == (
+        4.6,
+        3.4,
+        3.6,
+    )
+    scad = (ROOT / "parts" / "bed_shims" / "bed_shims.scad").read_text(encoding="utf-8")
+    line = re.search(
+        r"^hole = hole_d > 0 \? hole_d : \(screw == \"M3\" \? ([\d.]+) : ([\d.]+)\);", scad, re.M
+    )
+    assert line and (float(line.group(1)), float(line.group(2))) == (
+        SCREW_HOLES["M3"],
+        SCREW_HOLES["M4"],
+    )
+    with pytest.raises(ValueError, match="2 mm or more"):
+        Params(hole_d=1.0)
+    assert PART.scad_overrides(PART.validate_overrides({"screw": "M3"})) == {"screw": "M3"}
 
 
 def test_the_command_says_and_keeps_the_mount(tmp_path, monkeypatch):
@@ -408,3 +422,84 @@ def test_the_command_says_and_keeps_the_mount(tmp_path, monkeypatch):
         True,
     )
     assert "M5" in _run("mount", "--screw", "M5").output  # click names the choice refused
+
+
+# --- what the page draws: GET /bed/{site}/{printer}, PUT .../mount ---------------------
+
+
+def _four(state: Path):
+    """Two heated pairs, the first tilted and the second level after shims, and a cold
+    probe before both: what the page's windows draw."""
+    _bench(
+        state,
+        [
+            ("20260920T100000.000-cold", "2026-09-20T10:00:00Z", 15.0, TILTED),
+            ("20260921T100000.000-before-1", "2026-09-21T10:00:00Z", 60.1, TILTED),
+            ("20260921T100500.000-before-2", "2026-09-21T10:05:00Z", 60.3, nudged(TILTED, 0.02)),
+            ("20260922T100000.000-after-1", "2026-09-22T10:00:00Z", 60.2, LEVEL),
+            ("20260922T100500.000-after-2", "2026-09-22T10:05:00Z", 60.0, nudged(LEVEL, 0.01)),
+        ],
+    )
+
+
+def test_the_story_is_the_runs_their_pairs_their_differences_and_the_shims(tmp_path, monkeypatch):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    _four(tmp_path / "state")
+    told = bs.story("garage", "printer_1")
+    assert [r["id"].split("-", 1)[1] for r in told["runs"]] == [
+        "after-2", "after-1", "before-2", "before-1", "cold"
+    ]  # fmt: skip
+    assert [r["heated"] for r in told["runs"]] == [True, True, True, True, False]
+    assert told["pairs"] == [
+        ["20260922T100000.000-after-1", "20260922T100500.000-after-2"],
+        ["20260921T100000.000-before-1", "20260921T100500.000-before-2"],
+    ]
+    rep = told["differences"]["repeatability"]
+    assert rep["of"] == told["pairs"][0] and rep["floor"] == pytest.approx(0.01)
+    after = told["differences"]["after"]
+    assert (after["before"], after["after"]) == (told["pairs"][1], told["pairs"][0])
+    assert min(v for row in after["mesh"] for v in row) < -0.5  # the tilt taken out
+    assert told["differences"]["bow"]["bound"] == 0.3
+    assert [r["id"] for r in told["shims"]["runs"]] == [
+        "20260922T100500.000-after-2", "20260922T100000.000-after-1"
+    ]  # fmt: skip
+    assert told["mount"]["hole_kept"] is False and told["volume"] == [220, 220]
+    assert [s["label"] for s in told["screws"]] == ["FL", "FR", "BR", "BL"]
+
+
+def test_a_pair_needs_two_heated_probes_one_after_the_other():
+    def rec(rid, method, bed_c):
+        return type(
+            "R",
+            (),
+            {"id": rid, "method": method, "bed_c": bed_c, "mesh": LEVEL, "at": None, "note": None},
+        )()
+
+    found = [
+        rec("e", "probe", 60),
+        rec("d", "probe", 15),
+        rec("c", "probe", 60),
+        rec("b", "probe", 60),
+        rec("a", "read", 60),
+    ]
+    assert [[r.id for r in p] for p in bs.heated_pairs(found)] == [["c", "b"]]
+
+
+def test_the_routes_answer_the_story_and_keep_a_mount(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    _four(tmp_path / "state")
+    client = TestClient(app)
+    told = client.get("/bed/garage/printer_1").json()
+    assert told["shims"]["mount"]["hole_kept"] is False
+    kept = client.put("/bed/garage/printer_1/mount", json={"screw": "M3", "outer_d": 11.8})
+    assert kept.status_code == 200 and kept.json()["said"].startswith("screw hole 3.4 mm (M3)")
+    told = client.get("/bed/garage/printer_1").json()
+    assert (told["mount"]["hole_d"], told["mount"]["outer_d"]) == (3.4, 11.8)
+    refused = client.put("/bed/garage/printer_1/mount", json={"outer_d": 5})
+    assert refused.status_code == 422 and "not a mount a shim fits" in refused.json()["detail"]
+    assert client.get("/bed/garage/nowhere").status_code == 404
+    assert client.put("/bed/garage/printer_1/mount", json={"screw": "M5"}).status_code == 422

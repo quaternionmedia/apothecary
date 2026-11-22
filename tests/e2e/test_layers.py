@@ -437,6 +437,7 @@ def test_the_layers_are_the_systems_and_the_kinds_over_their_categories(page: Pa
         "category:electrical",
         "category:electronics",
         "kind:test-pieces",
+        "category:calibration",
         "category:coupon",
         "kind:things",
         "category:furniture",

@@ -22,8 +22,8 @@ Its wrapper, `apothecary/projects/parts/bed_shims.py`, declares a layer height o
 first layer of 0.2 mm, so each shim's top lands on a layer. Print them in a filament
 that holds its shape at the bed's temperature: a shim sits under the heated plate.
 
-The ring's size and the screw's hole are parameters (`outer_d`, `hole_d`), and the
-part's presets are the bed screws, `m3` and `m4`, each setting the hole. Their defaults,
+The ring's size and the bed screw are parameters: `outer_d`, and `screw`, M3 or M4,
+which sets the hole, with `hole_d` typed over it where the screw needs another. Their defaults,
 a hole for an M4 and a 12 mm ring, are defaults awaiting a caliper reading: they are not
 printer_1's measured screw and mount. What a machine's mounts are found to be is kept
 for that machine (`apothecary bed mount`), and its shims are sliced at it.

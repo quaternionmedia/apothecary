@@ -177,6 +177,7 @@ def test_the_garage_has_its_systems_its_loose_parts_kinds_and_the_worlds_layers_
         "category:electrical",
         "category:electronics",
         "kind:test-pieces",
+        "category:calibration",
         "category:coupon",
         "kind:things",
         "category:furniture",

@@ -108,6 +108,10 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
         "family-deliveries",
         "layers",  # the Layers window, beside the world, closed until asked for
         "loops",  # the Loops window, a machine's heater loops, closed until asked for
+        "bed-runs",  # a printer's bed: Runs, Differences, Fixes, History, closed until asked for
+        "bed-differences",
+        "bed-fixes",
+        "bed-history",
         "working",  # the Workspace, closed until asked for
         "procedure",  # the Procedure, closed until asked for
         "deck",  # the Deck, closed until asked for

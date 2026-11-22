@@ -883,6 +883,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/layers.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/loops.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/bed_shims.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/feedback.css">
     <script type="importmap">
     {
@@ -936,6 +937,7 @@
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountLayers, layerLabel } from '/static/widgets/layers.js';
         import { mountLoops } from '/static/widgets/loops.js';
+        import { mountBedShims } from '/static/widgets/bed_shims.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
@@ -1697,7 +1699,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'motion', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'bed-runs', 'bed-differences', 'bed-fixes', 'bed-history', 'motion', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
@@ -2028,6 +2030,46 @@
                         window.apothecaryLoops = this.loopsWidget;
                     },
                     onOpen: () => { if (this.loopsWidget) this.loopsWidget.load(); },
+                });
+                // Bed: a printer's bed readings and the shims that level it
+                // (widgets/bed_shims.js), four windows of the Machine's group beside the
+                // world, closed until asked for, of the printer whose Machine is open: Runs,
+                // Differences, Fixes and History, one widget in four bodies. Panels ›
+                // Machine › Bed opens each; its Make these and Keep are Fixes' buttons. A run
+                // chosen is drawn over the printer's bed in the world, and Fixes' shims at
+                // their screws, on the bed mesh layer. Keep takes the screw hole and the ring
+                // from bed_shims' Parameters (the garage's piece on printer_1's bed).
+                const bedBodies = {};
+                for (const k of ['runs', 'differences', 'fixes', 'history']) {
+                    bedBodies[k] = document.createElement('div');
+                    bedBodies[k].className = `bed-window bed-${k}`;
+                }
+                this.bedShims = mountBedShims(bedBodies, {
+                    base: BASE_URL,
+                    printer: () => (this.machine && this.machine.path ? { site: this.siteName, path: this.machine.path } : null),
+                    say: (text, kind) => this.setStatus(text, kind),
+                    draw: (record, newest) => this.drawReading(this.machine?.path, record, newest),
+                    shims: (list, mount) => this.drawShims(this.machine?.path, list, mount),
+                    make: (params) => this.makeShims(params),
+                    measured: () => this.shimsMeasured(),
+                });
+                window.apothecaryBedShims = this.bedShims;
+                const bedLoad = () => this.bedShims.load();
+                this.panels.register('bed-runs', {
+                    title: 'Runs', group: 'Machine', home: 'beside', open: false, body: bedBodies.runs, onOpen: bedLoad,
+                    hint: "The bed readings of the printer whose Machine is open, newest first: each heated or cold, its range and note; one chosen is drawn over the bed",
+                });
+                this.panels.register('bed-differences', {
+                    title: 'Differences', group: 'Machine', home: 'bed-runs', open: false, body: bedBodies.differences, onOpen: bedLoad,
+                    hint: 'Two runs one after the other, the floor a shim must clear; the newest pair less the pair before; the bow no shim fixes',
+                });
+                this.panels.register('bed-fixes', {
+                    title: 'Fixes', group: 'Machine', home: 'bed-runs', open: false, body: bedBodies.fixes, onOpen: bedLoad,
+                    hint: 'The shims that level the bed, each at its screw, and what they fit: Keep takes the screw and the mount from Parameters, Make these slices them',
+                });
+                this.panels.register('bed-history', {
+                    title: 'History', group: 'Machine', home: 'bed-runs', open: false, body: bedBodies.history, onOpen: bedLoad,
+                    hint: "Each reading's range over the readings, cold and heated told apart, against the bound for a stored mesh",
                 });
                 // Workspace: the site as every kind of evidence has it, and a
                 // printer's hour in it (widgets/working_space.js) -- a tab of Site's ring,
@@ -9098,6 +9140,55 @@
                 const started = await machine.handle.print.slice(subject, variant);
                 return started.refused ? say({ refused: started.refused }) : done;
             }
+            // A bed reading drawn over the bed of the printer at `path` in the world, and the
+            // shims Fixes says drawn at its screws (widgets/bed_shims.js), on the bed mesh
+            // layer; nothing where the printer's marks are not drawn.
+            drawReading(path, record, newest) {
+                const m = path && this.marks[path];
+                if (!m || !m.marks || !record) return;
+                m.readingChosen = { id: record.id, newest: m.readingId ?? newest ?? null };
+                m.marks.setMesh(record);
+            }
+            // Kept for the printer, so marks made after Fixes drew -- a site still
+            // loading, a page reloaded -- stand them all the same; called with the path
+            // alone, as its marks are made.
+            drawShims(path, ...given) {
+                if (!path) return;
+                this.shimsFor ??= {};
+                if (given.length) this.shimsFor[path] = given;
+                const m = this.marks[path];
+                if (m && m.marks && this.shimsFor[path]) m.marks.setShims(...this.shimsFor[path]);
+            }
+            // What Parameters holds for bed_shims, which Fixes' Keep keeps as the printer's:
+            // the bed screw, a hole typed over the screw's (none where it is 0, the screw's
+            // own) and the ring, staged over what is drawn; null where bed_shims was never
+            // shown in Parameters here.
+            shimsMeasured() {
+                const stage = this.partStages['part:bed_shims'];
+                if (!stage) return null;
+                const at = { ...(stage.committed || {}), ...(stage.staged || {}) };
+                if (at.outer_d == null) return null;
+                const screw = at.screw === 'M3' || at.screw === 'M4' ? at.screw : null;
+                const hole = Number(at.hole_d) > 0 ? Number(at.hole_d) : null;
+                return { screw, hole_d: hole, outer_d: Number(at.outer_d) };
+            }
+            // Fixes' Make these: bed_shims rendered at the shims' thicknesses and the mount
+            // kept, and that variant chosen and sliced in the open Machine's Print window, as
+            // ⚒ Make does a part. Nothing is armed, started or sent: ▶ Print is the person's.
+            async makeShims(params) {
+                const machine = this.machine;
+                if (!machine || !machine.handle) throw new Error("open a printer's Machine: the shims are sliced for it");
+                const response = await fetch(`${BASE_URL}/parts/bed_shims/stl/generate`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params }),
+                });
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `bed_shims was not rendered (${response.status})`);
+                const variant = body.saved ? null : body.variant;
+                this.makingWith(machine);
+                const started = await machine.handle.print.slice('bed_shims', variant);
+                if (started && started.refused) throw new Error(started.refused);
+                return `bed_shims at ${params.thicknesses.map((t) => Number(t).toFixed(1)).join(', ')} mm (${params.labels}) chosen in ${machine.path}'s Print window and sliced; then ▶ Print with control armed`;
+            }
             // A board's Machine (widgets/machine.js): a printer's cards and controls or
             // a devkit's sketch and serial output, with the board's one log, a tab
             // beside Pictures and the Bench, in front -- every way into a Machine comes
@@ -9979,6 +10070,7 @@
                 marks.group.userData.key = planned.path;
                 this.scene.add(marks.group);
                 this.marks[planned.path] = { marks, port: null, where: { printer: view }, kind: planned.kind, plan: true, readingAt: 0, readingId: null };
+                this.drawShims(planned.path);
                 // A path told while the marks were on their way is drawn on them now.
                 const told = this.toolpathByPath[planned.path];
                 if (told && told.preview) marks.setToolpath(told.preview, told);
@@ -10192,6 +10284,7 @@
                     // The kind of machine the board answered as: a bed reading is a printer's.
                     const kind = (row.device.printer && row.device.printer.machine) || null;
                     this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
+                    this.drawShims(path);
                     this.followBed(path);
                     const toolpath = this.toolpathByPort[port];
                     if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
@@ -10343,7 +10436,12 @@
                     .then((r) => (r.ok ? r.json() : []))
                     .then((records) => {
                         const newest = records[0];
-                        if (this.marks[path] !== m || !newest || newest.id === m.readingId || !readingOfKind(newest, m.kind)) return;
+                        if (this.marks[path] !== m || !newest || !readingOfKind(newest, m.kind)) return;
+                        // A run chosen in Runs stays drawn until a reading newer than it was
+                        // then is taken.
+                        if (m.readingChosen && newest.id === m.readingChosen.newest) return;
+                        if (!m.readingChosen && newest.id === m.readingId) return;
+                        m.readingChosen = null;
                         m.readingId = newest.id;
                         m.marks.setMesh(newest);
                     })
@@ -11744,6 +11842,17 @@
                     if (!viewer.loopsWidget) await new Promise((r) => setTimeout(r, 0));  // mounted as it is first shown
                     if (viewer.loopsWidget) await viewer.loopsWidget.act(action.slice('loops:'.length), { label: intent.label, tail });
                     else refuse('the Loops window did not open');
+                    return;
+                }
+                // A Bed verb: Fixes shown, and its act done on the open Machine's printer --
+                // the mount kept from Parameters, the shims sliced in its Print window; what
+                // came of it, or why not, is said here.
+                if (action.startsWith('bed:')) {
+                    viewer.panels.open('bed-fixes');
+                    try {
+                        await viewer.bedShims.load();
+                        viewer.setStatus(`${intent.label}${tail}: ${await viewer.bedShims.act(action.slice('bed:'.length))}`, 'success');
+                    } catch (e) { refuse(e.message); }
                     return;
                 }
                 // A Procedure verb: the window shown, and GO or Start over done; what came

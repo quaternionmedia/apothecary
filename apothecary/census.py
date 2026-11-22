@@ -486,6 +486,22 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a button that puts depth and every layer back as they began",
     ),
+    # ---- Bed, apothecary/static/widgets/bed_shims.js -----------------------------------
+    # A printer's bed readings and the shims that level it, in four windows: Fixes' two
+    # acts, each a cell of Panels › Machine › Bed (RING_BACKED). A run chosen in Runs is a
+    # row of a list, LISTENING's.
+    "bed-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps the screw hole and the ring Parameters holds for bed_shims as "
+        "the printer's mount",
+    ),
+    "bed-make": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that renders the shims at their thicknesses and slices them for the "
+        "printer in its Print window",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -1198,6 +1214,10 @@ RING_BACKED: Dict[str, str] = {
     "loops-set": "loops:set",
     "root:click:onLoopsClick": "loops:start",
     "root:change:onLoopsChange": "loops:loop:hotend",
+    # Fixes' Keep and Make these are the cells of Panels › Machine › Bed.
+    "bed-keep": "bed:keep",
+    "bed-make": "bed:make",
+    "fixes:click:onFixesClick": "bed:make",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1825,6 +1845,23 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "the depth stepper's - and +, or Reset, in the Layers window",
+    ),
+    # ---- Bed (widgets/bed_shims.js): a run chosen in Runs, by a click or Enter on its ----
+    # row, and Fixes' buttons, by one listener on its window.
+    "runs:click:onRunsClick": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a run chosen in Runs, drawn over the printer's bed in the world",
+    ),
+    "runs:keydown:onRunsKey": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a run chosen in Runs with Enter, drawn over the printer's bed in the world",
+    ),
+    "fixes:click:onFixesClick": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "Keep or Make these in Fixes, told which by its id",
     ),
     # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
     # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the

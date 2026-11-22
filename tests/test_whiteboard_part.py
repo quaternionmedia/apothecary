@@ -62,4 +62,6 @@ def test_the_garage_hangs_it_on_the_south_wall_clear_of_everything():
         WHITEBOARD_POSITION.z + OVERALL.z,
     ]
     overlaps = [v.structures for v in site.validate().violations if v.kind == "overlap"]
-    assert overlaps == [["cnc_router", "router_coupon"]]
+    # Stock standing in a machine's working area, which the garage's own check lets be:
+    # the router coupon on the router's table, printer_1's bed shims on its bed.
+    assert overlaps == [["printer_1", "bed_shims"], ["cnc_router", "router_coupon"]]

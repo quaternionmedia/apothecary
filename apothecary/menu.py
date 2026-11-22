@@ -886,6 +886,14 @@ PANELS: Sequence[Tuple[str, str]] = (
     # window of the Machine's group registered at start and closed until asked for. Its
     # acts are a ring of their own under Panels › Machine (_loops).
     ("loops", "Loops"),
+    # Bed: a printer's bed readings and the shims that level it (widgets/bed_shims.js),
+    # four windows of the Machine's group registered at start and closed until asked for,
+    # of the printer whose Machine is open. Their cells and acts are a ring of their own
+    # under Panels › Machine (_bed).
+    ("bed-runs", "Runs"),
+    ("bed-differences", "Differences"),
+    ("bed-fixes", "Fixes"),
+    ("bed-history", "History"),
     # Motion: the selected part's pieces moved through its motion (widgets/motion.js), a
     # window in the column registered at start and closed until asked for: Panels ›
     # Part's, beside Selected, and the part's own Part › View › Motion, on a part whose
@@ -919,6 +927,10 @@ PANEL_GROUPS = {
     "deck": "Tools",
     "airgap": "Airgap",
     "loops": "Machine",
+    "bed-runs": "Machine",
+    "bed-differences": "Machine",
+    "bed-fixes": "Machine",
+    "bed-history": "Machine",
     "motion": "Part",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
@@ -1011,6 +1023,7 @@ def _panels(rig: bool = False) -> Option:
                 toggle("machine", labels["machine"]),
                 Option(id="panel:pad", label="Control pad", action="panel:pad"),
                 _loops(toggle("loops", labels["loops"])),
+                _bed([toggle(pid, labels[pid]) for pid in BED_WINDOWS]),
             ],
         ),
     }
@@ -1381,6 +1394,27 @@ RULE_LABELS = {
     "imc": "IMC",
     "amigo": "AMIGO",
 }
+
+
+BED_WINDOWS = ("bed-runs", "bed-differences", "bed-fixes", "bed-history")
+
+
+def _bed(toggles: List[Option]) -> Option:
+    """Panels › Machine › Bed: the windows of the printer's bed whose Machine is open --
+    Runs, Differences, Fixes, History (widgets/bed_shims.js) -- then Fixes' acts, which the
+    page hands to it: Keep mount, the screw hole and the ring Parameters holds for bed_shims kept
+    as the printer's mount, and Make these, the shims sliced for it in its Print window.
+    Seated after Loops, so no cell of the Machine's moves."""
+    return Option(
+        id="panels:bed",
+        label="Bed",
+        group=PANEL_GROUPS["bed-runs"],
+        children=[
+            *toggles,
+            Option(id="bed:keep", label="Keep mount", action="bed:keep"),
+            Option(id="bed:make", label="Make these", action="bed:make"),
+        ],
+    )
 
 
 def _loops(toggle: Option) -> Option:
@@ -2559,6 +2593,14 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "loops:loop:": None,
     "loops:kind:": None,
     "loops:rule:": None,
+    # The bed's windows, and Fixes' Keep mount and Make these: a mount kept in the state
+    # folder and a slice, neither of which the board's latch or a job stands in the way of.
+    "panel:toggle:bed-runs": None,
+    "panel:toggle:bed-differences": None,
+    "panel:toggle:bed-fixes": None,
+    "panel:toggle:bed-history": None,
+    "bed:keep": None,
+    "bed:make": None,
 }
 # What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
 NEVER_GREYED = frozenset({"estop"})
@@ -2859,6 +2901,10 @@ CARRIED_BY: Dict[str, Carries] = {
     # open (POST /firmware/printers/loops/read, start, cancel, set), never the intent
     # route, and greys what the server would refuse.
     "loops": Carries.VIEWER,
+    # Fixes' acts (widgets/bed_shims.js), which keep a printer's mount (PUT
+    # /bed/{site}/{printer}/mount) and slice its shims in its Print window, never the
+    # intent route.
+    "bed": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

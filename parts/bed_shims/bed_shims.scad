@@ -18,7 +18,8 @@
 thicknesses = [0.5, 0.5, 0.5];      // each shim's thickness, mm, in the order of labels
 labels = ["FL", "BR", "BL"];        // each shim's label, cut into its tab
 outer_d = 12;       // [6:0.5:40] the ring across: at least the mount's face it bears on
-hole_d = 4.6;       // [2:0.1:10] the hole the screw passes
+screw = "M4";       // [M3, M4] the bed screw a shim goes round, which sets its hole
+hole_d = 0;         // [0:0.1:10] the hole, typed over the screw's; 0 is the screw's own
 slot = true;        // an open slot from the hole to the rim
 gap = 4;            // [2:0.5:20] between two shims on the bed
 
@@ -34,6 +35,7 @@ label_depth = 0.6;  // [0.2:0.1:2] how deep a label is cut into the tab
 $fn = 72;
 eps = 0.01;
 r = outer_d / 2;
+hole = hole_d > 0 ? hole_d : (screw == "M3" ? 3.4 : 4.6);  // as SCREW_HOLES in the wrapper
 
 assert(len(thicknesses) == len(labels), "a thickness for each label, and a label for each thickness");
 
@@ -48,9 +50,9 @@ module shim(t, label) {
             translate([-r - tab_length, -tab_width / 2, 0])
                 cube([tab_length - tab_clear, tab_width, thick]);
         }
-        translate([0, 0, -eps]) cylinder(d = hole_d, h = thick + 2 * eps);
+        translate([0, 0, -eps]) cylinder(d = hole, h = thick + 2 * eps);
         if (slot)
-            translate([0, -hole_d / 2, -eps]) cube([r + eps, hole_d, thick + 2 * eps]);
+            translate([0, -hole / 2, -eps]) cube([r + eps, hole, thick + 2 * eps]);
         translate([-r - (tab_length + tab_clear) / 2, 0, thick - label_depth])
             linear_extrude(height = label_depth + eps)
                 text(label, size = label_size, halign = "center", valign = "center",

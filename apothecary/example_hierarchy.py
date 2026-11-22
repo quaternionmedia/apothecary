@@ -58,7 +58,7 @@ from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder
 from .projects.parts import anolex_4060_evo_ultra_2 as anolex
-from .projects.parts import ender3, stream_deck_plus, whiteboard
+from .projects.parts import bed_shims, ender3, stream_deck_plus, whiteboard
 from .transforms import Translate
 
 # Bench dimensions (mm)
@@ -890,6 +890,30 @@ def _build_router_coupon() -> Assembly:
     )
 
 
+# printer_1's bed shims (parts/bed_shims) on its bed, where they are printed: stock in its
+# working volume, as the router coupon is on the router's table, near its front and in
+# from its left so the bed stays clear where a part's path is drawn, and the shims stay
+# in the volume when the layout nudges the printer along the bench. Their numbers are set
+# here, in Parameters, as the Level a bed tour's Measure does: the bed screw and the ring
+# a mount's outer diameter needs.
+BED_SHIMS_AT = Vector3D(x=60.0, y=5.0, z=0.0)  # in printer_1's working volume, from its (0, 0, 0)
+
+
+def _build_bed_shims() -> Assembly:
+    """printer_1's bed shims on its bed, at the part's defaults. ``part_ref`` gives the
+    viewer the real STL; the Cube is the envelope the layout checks need."""
+    size = bed_shims.DEFAULT.get_bounds().max_point
+    printer = Vector3D(x=PRINTER_X_POSITIONS[0], y=PRINTER_Y_POSITION, z=BENCH_TOP_Z)
+    return Assembly(
+        name="bed_shims",
+        role="structure",
+        position=printer + ender3.BUILD_ORIGIN + BED_SHIMS_AT,
+        base=Cube(size=size, comment="bed shims envelope (real STL in the viewer)"),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=size),
+        part_ref="bed_shims",
+    )
+
+
 def _build_footpedal() -> Assembly:
     """The footpedal part on the bench. ``part_ref`` gives the viewer the real
     STL and gives the firmware seam the sketch in the same folder; the Cube
@@ -956,6 +980,7 @@ def create_example_site() -> Assembly:
             _build_cnc_stand(),
             _build_cnc_router(),
             _build_router_coupon(),
+            _build_bed_shims(),
             _build_esp32_blink(),
             _build_footpedal(),
             *(_build_bench_board(*board) for board in BENCH_BOARDS),

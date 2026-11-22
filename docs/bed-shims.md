@@ -11,7 +11,8 @@ recorded reading.
 printer_1's bed stands on four solid mounts, the springs swapped for them. A
 shim stacks on a mount and raises its corner by its thickness. The code is
 `apothecary/bed_shims.py`, the command `apothecary bed`, the part
-[`bed_shims`](../parts/bed_shims/README.md).
+[`bed_shims`](../parts/bed_shims/README.md), and in the page four windows of the
+printer's Machine ([below](#in-the-page)).
 
 ## On the bench
 
@@ -46,6 +47,31 @@ kept, so the shims fit them ([below](#what-a-shim-fits)).
    each shim in place says whether another set would do better. That set is
    one to fit in place of these, not on top of them.
 
+## In the page
+
+Four windows of the Machine's group show it for the printer whose Machine is open,
+each beside the world and closed until asked for: ⊞ Windows, or the ring's Panels ›
+Machine › Bed (`widgets/bed_shims.js`). Everything in them is the server's answer to
+`GET /bed/{site}/{printer}`, the same computation as `apothecary bed`.
+
+| Window | What it shows |
+|---|---|
+| **Runs** | The readings of the printer's pinned board, newest first: each a small heatmap of its grid, the back row on top as the bed lies, blue low and amber high; its bed temperature, marked *heated* or *cold*; its range and its note. A run chosen is drawn over the bed in the world, on the Bed mesh layer |
+| **Differences** | The newest heated pair's second run less its first, the repeatability floor; the newest pair less the pair before it, what was done between them; and what the plane leaves, the bow, set against the bound for a stored mesh. Each a heatmap of the difference, blue below none and amber above |
+| **Fixes** | The bed from above, the probed grid dashed, each screw where the profile puts it with its shim, *none* at the highest and *skipped* where a layer or the floor leaves it out; each corner in words. The shims are drawn at their screws in the world, on the Bed mesh layer, as tall as the relief stretches them and as wide as the mount's ring. Under them, what each shim fits: the screw hole and the ring, each marked *default* until it is kept. **⇩ Keep from Parameters** (Panels › Machine › Bed › Keep mount) keeps the hole and the ring Parameters holds for `bed_shims` as the printer's (`PUT /bed/{site}/{printer}/mount`). **⚒ Make these** (Panels › Machine › Bed › Make these) renders `bed_shims` at the shims' thicknesses and the mount kept, and slices it for the printer in its Print window, where Print a part goes on |
+| **History** | Each reading's range, oldest on the left, heated filled and cold hollow, a read of the stored mesh ringed, with the profile's bound drawn as a line |
+
+The newest pair and the pair before it are told by their order: heated probes taken
+two at a time, newest first. A probe taken cold, or heated beside a cold one, is in
+no pair. Fixes' shims are those of the newest pair as the bed stands in it, shims
+already fitted and all: a set to add, where `bed shims --fitted` says a set to fit in
+their place.
+
+The garage holds a `bed_shims` piece on printer_1's bed, where shims are printed, as
+the router coupon stands on the router's table. Its Parameters are where the bed screw
+(`screw`, M3 or M4, a hole typed over it where it needs another) and the mount's outer
+diameter are set before Keep.
+
 ## What is computed
 
 | | |
@@ -68,7 +94,7 @@ machine's. These two figures are measured at the bench:
 
 | | Kept as | With |
 |---|---|---|
-| The bed screw | `hole_d`, the clearance hole its preset gives (`M3`, `M4`), and a hole typed over it where the screw needs another | the screw, read off the printer or measured across its thread |
+| The bed screw | `screw`, M3 or M4, which sets the clearance hole, and `hole_d`, a hole typed over it where the screw needs another | the screw, read off the printer or measured across its thread |
 | A mount's outer diameter, where it meets the bed | `outer_d`, the ring at least that across | calipers |
 
 Each is kept per machine, in the state folder's `bed/mounts.json` under the machine's

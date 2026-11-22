@@ -71,6 +71,11 @@ class ShimError(ValueError):
     """What stops shims being computed: no screws said, no reading, grids that differ."""
 
 
+class NotAMount(ShimError):
+    """A mount no shim fits, or nothing said of one to keep: the person's figures, not
+    the printer's or its readings'."""
+
+
 @dataclass(frozen=True)
 class Screw:
     """A levelling screw: its name, the label its shim carries, and where the nozzle
@@ -344,6 +349,16 @@ class Shims:
         """How far apart the plane leaves the bed's highest and lowest points: the range
         no shim takes out, and the least a level bed's reading spans."""
         return self.residual[1] - self.residual[0]
+
+    def bow_mesh(self) -> List[List[float]]:
+        """What the plane leaves at each point of the grid: the readings' mean less the
+        plane, rows from the front."""
+        if not self.mesh:
+            return []
+        points = grid_points(self.mesh, self.area)
+        cols = len(self.mesh[0])
+        flat = [round(z - self.plane.at(x, y), 4) for x, y, z in points]
+        return [flat[j * cols : (j + 1) * cols] for j in range(len(self.mesh))]
 
     @property
     def left(self) -> float:
@@ -640,8 +655,8 @@ def _mounts() -> Dict[str, dict]:
 def _defaults() -> Tuple[float, float]:
     from .projects.parts.bed_shims import Params
 
-    fields = Params.model_fields
-    return float(fields["hole_d"].default), float(fields["outer_d"].default)
+    at = Params()
+    return float(at.hole), float(at.outer_d)
 
 
 def mount(site: str, printer: str) -> Mount:
@@ -667,7 +682,7 @@ def keep_mount(
     outer_d: Optional[float] = None,
 ) -> Mount:
     """Keep what a person measured of ``printer``'s mounts: the bed screw (``screw``,
-    which sets the hole as its preset does), the hole typed over it (``hole_d``) and the
+    which sets the hole as the part's ``screw`` does), the hole typed over it (``hole_d``) and the
     mount's outer diameter (``outer_d``). What is not given stays as it was kept, or the
     part's default. Checked as the part checks its parameters; ShimError says why not."""
     from pydantic import ValidationError
@@ -676,9 +691,9 @@ def keep_mount(
 
     printer_part(site, printer)  # a printer of the site, or ShimError
     if screw is not None and screw not in SCREW_HOLES:
-        raise ShimError(f"a bed screw is {' or '.join(SCREW_HOLES)}, not {screw!r}")
+        raise NotAMount(f"a bed screw is {' or '.join(SCREW_HOLES)}, not {screw!r}")
     if screw is None and hole_d is None and outer_d is None:
-        raise ShimError("nothing to keep: the bed screw, the hole or the mount's outer diameter")
+        raise NotAMount("nothing to keep: the bed screw, the hole or the mount's outer diameter")
     held = _mounts()
     now = dict(held.get(f"{site}/{printer}") or {})
     if screw is not None:
@@ -687,14 +702,14 @@ def keep_mount(
     if hole_d is not None:
         now["hole_d"] = float(hole_d)
         if screw is None:
-            now.pop("screw", None)  # a hole typed over is no longer the screw's preset
+            now.pop("screw", None)  # a hole typed alone is no longer the screw's own
     if outer_d is not None:
         now["outer_d"] = float(outer_d)
     hole, outer = _defaults()
     try:
         Params(hole_d=now.get("hole_d", hole), outer_d=now.get("outer_d", outer))
     except ValidationError as exc:
-        raise ShimError(f"not a mount a shim fits: {exc.errors()[0]['msg']}") from None
+        raise NotAMount(f"not a mount a shim fits: {exc.errors()[0]['msg']}") from None
     now["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     held[f"{site}/{printer}"] = now
     write_whole(mounts_file(), json.dumps(held, indent=2) + "\n")
@@ -764,3 +779,156 @@ def for_printer(
         bound=range_bound(profile),
         mount=mount(site, printer),
     )
+
+
+# --- as JSON: what `bed shims --json-out` says, and the page draws ----------------------
+
+
+def mesh_range(mesh) -> float:
+    flat = [v for row in mesh for v in row]
+    return max(flat) - min(flat)
+
+
+def run_json(run: Run) -> dict:
+    return {
+        "id": run.id,
+        "at": run.at.isoformat() if run.at else None,
+        "method": run.method,
+        "bed_c": run.bed_c,
+        "heated": run.heated,
+        "note": run.note,
+    }
+
+
+def mount_json(found: Mount) -> dict:
+    return {
+        "hole_d": found.hole_d,
+        "outer_d": found.outer_d,
+        "hole_kept": found.hole_kept,
+        "outer_kept": found.outer_kept,
+        "screw": found.screw,
+        "at": found.at,
+        "said": found.said(),
+    }
+
+
+def as_json(found: Shims) -> dict:
+    """What ``bed shims --json-out`` says, and the page draws."""
+    least, most, rms = found.residual
+    return {
+        "runs": [run_json(r) for r in found.runs],
+        "screws_from": found.screws_from,
+        "grid": {
+            "x": [found.area.x0, found.area.x1],
+            "y": [found.area.y0, found.area.y1],
+            "from": found.area.source,
+        },
+        "mesh": found.mesh,
+        "range": mesh_range(found.mesh),
+        "tilt": {"x_per_100mm": found.plane.a * 100, "y_per_100mm": found.plane.b * 100},
+        "floor": found.floor,
+        "shims": [
+            {
+                "name": s.screw.name,
+                "label": s.screw.label,
+                "x": s.screw.x,
+                "y": s.screw.y,
+                "plane": s.height,
+                "fitted": s.fitted,
+                "thickness": s.thickness,
+                "printed": s.printed,
+                "none": s.none,
+            }
+            for s in found.shims
+        ],
+        "residual": {"min": least, "max": most, "rms": rms, "range": round(found.bow, 4)},
+        "bow": found.bow_mesh(),
+        "bound": found.bound,
+        "left": round(found.left, 4),
+        "outside": round(found.outside, 2),
+        "mount": mount_json(found.mount) if found.mount else None,
+        "params": found.params(),
+        "slice": found.slice_command(),
+    }
+
+
+# --- what the page draws: a printer's readings, their differences, its shims ----------
+
+
+def heated_pairs(found) -> list:
+    """The heated pairs among a board's probes, newest first: two heated probes one after
+    the other, of one grid. A probe that is cold, or heated beside a cold one, is in
+    none."""
+    probes = [r for r in found if r.method == "probe" and r.mesh]
+    out, i = [], 0
+    while i + 1 < len(probes):
+        a, b = probes[i], probes[i + 1]
+        if run_of(a).heated and run_of(b).heated and _shape(a.mesh) == _shape(b.mesh):
+            out.append((a, b))
+            i += 2
+        else:
+            i += 1
+    return out
+
+
+def story(site: str, printer: str) -> dict:
+    """A printer's readings, their differences and its shims, as the page's windows draw
+    them: every reading of its pinned board, newest first; the shims from the newest
+    heated pair (else the newest probe); that pair's newer less its older, the floor; the
+    newest pair less the pair before it, what was done between them; and the bow."""
+    profile = printer_profile(site, printer)
+    bed = bed_screws(profile)
+    board = pinned_board(site, printer)
+    found = readings(board)
+    pairs = heated_pairs(found)
+    runs = [
+        {
+            **run_json(run_of(r)),
+            "range": r.stats.get("range") if r.mesh else None,
+            "mesh": r.mesh,
+            "machine": r.machine,
+            "port": r.port,
+            "probe_offset": r.probe_offset,
+            "area": r.area,
+        }
+        for r in found
+    ]
+    try:
+        shims = as_json(for_printer(site, printer))
+    except ShimError as exc:
+        shims = {"error": str(exc)}
+    differences: dict = {}
+    if pairs:
+        newer, older = pairs[0]
+        moved = difference([older.mesh], [newer.mesh])
+        differences["repeatability"] = {
+            "of": [older.id, newer.id],
+            "mesh": moved,
+            "floor": spread([older.mesh, newer.mesh]),
+        }
+    if len(pairs) >= 2:
+        differences["after"] = {
+            "before": [r.id for r in reversed(pairs[1])],
+            "after": [r.id for r in reversed(pairs[0])],
+            "mesh": difference([r.mesh for r in pairs[1]], [r.mesh for r in pairs[0]]),
+        }
+    if "error" not in shims:
+        differences["bow"] = {
+            "mesh": shims["bow"],
+            "range": shims["residual"]["range"],
+            "bound": shims["bound"],
+        }
+    volume = profile.measured.get("build_volume")
+    return {
+        "site": site,
+        "printer": printer,
+        "board": board,
+        "runs": runs,
+        "pairs": [[r.id for r in reversed(p)] for p in pairs],
+        "shims": shims,
+        "differences": differences,
+        "bound": range_bound(profile),
+        "volume": list(volume.value[:2]) if volume is not None else None,
+        "screws": [{"name": s.name, "label": s.label, "x": s.x, "y": s.y} for s in bed.screws],
+        "mount": mount_json(mount(site, printer)),
+    }

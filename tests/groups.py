@@ -142,6 +142,8 @@ GROUPS = {
             "apothecary/print_tuning.py",
             "apothecary/bed_shims.py",
             "apothecary/cli/bed.py",
+            "apothecary/routes/bed.py",
+            "apothecary/static/widgets/bed_shims.*",
             "parts/bed_shims/*",
             "apothecary/print_faults.py",
             "apothecary/static/tuning.js",

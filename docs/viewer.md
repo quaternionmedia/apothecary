@@ -635,7 +635,9 @@ site, a target no longer in it or nothing at its level, Site with no site regist
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back) and
   Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
-  Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
+  Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)) and
+  Bed (Runs, Differences, Fixes and History, then Keep mount and Make these, on the
+  printer whose Machine is open, [bed-shims.md](bed-shims.md#in-the-page)); Windows › World alone (as
   `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view;
   Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
   slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
@@ -906,6 +908,11 @@ stage.
   experiment's plots and figures -- a window of the Machine's group beside the
   world, closed until asked for (⊞ Windows › Loops, or Panels › Machine › Loops;
   [control-loops.md](control-loops.md#the-loops-window)).
+- **Runs**, **Differences**, **Fixes** and **History**: the bed of the printer whose
+  Machine is open -- its readings, how they differ, the shims that level it and what
+  they fit, its range over the readings -- four windows of the Machine's group beside
+  the world, closed until asked for (⊞ Windows, or Panels › Machine › Bed;
+  [bed-shims.md](bed-shims.md#in-the-page)).
 - **The control pad**: an armed printer's pad opens as a window of its own
   beside the world, its tab (*🔓 Control pad*, as the ring names it, so it is
   never a second tab named for the machine) and frame red, its frame pulsing as it opens, and

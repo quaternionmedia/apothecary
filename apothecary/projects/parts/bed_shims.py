@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Literal, Mapping, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
-from .base import BasePart, Preset
+from .base import BasePart
 from .skeleton import ROOT
 
 MM = {"unit": "mm"}
@@ -31,17 +31,8 @@ FLOOR_UNDER_A_LABEL = 0.2  # what a label's cut leaves of the tab: one first lay
 
 SCREW_HOLES = {"M3": 3.4, "M4": 4.6}
 """The hole each bed screw a shim may go round is given, mm: a clearance hole a little
-over the screw, as its preset sets it. What a mount is found to need is typed over it."""
-
-PRESETS = {
-    screw.lower(): Preset(
-        params={"hole_d": hole},
-        description=f"the hole for an {screw} bed screw, {hole:g} mm; type over it what the "
-        "screw needs",
-        label=f"{screw} screw",
-    )
-    for screw, hole in SCREW_HOLES.items()
-}
+over the screw. The part's ``screw`` chooses one; ``hole_d`` types another over it. The
+SCAD holds the same two (its ``hole``)."""
 
 
 class Params(BaseModel):
@@ -70,12 +61,17 @@ class Params(BaseModel):
         "default until calipers read the mount",
         json_schema_extra=MM,
     )
+    screw: Literal["M3", "M4"] = Field(
+        "M4",
+        description="The bed screw a shim goes round, which sets its hole: M4 is a default "
+        "until the screw is known",
+    )
     hole_d: float = Field(
-        4.6,
-        ge=2,
+        0.0,
+        ge=0,
         le=10,
-        description="The hole the bed screw passes: 4.6 mm, an M4's, is a default until the "
-        "screw is known (a preset, M3 or M4)",
+        description="The hole, typed over the screw's where it needs another; 0 is the "
+        "screw's own",
         json_schema_extra=MM,
     )
     slot: bool = Field(True, description="An open slot from the hole to the rim")
@@ -107,6 +103,11 @@ class Params(BaseModel):
         0.6, ge=0.2, le=2, description="How deep a label is cut into the tab", json_schema_extra=MM
     )
 
+    @property
+    def hole(self) -> float:
+        """The hole the screw passes, mm: what is typed, else the screw's own."""
+        return self.hole_d if self.hole_d > 0 else SCREW_HOLES[self.screw]
+
     @field_validator("thicknesses", mode="before")
     @classmethod
     def _from_words(cls, value: Any) -> Any:
@@ -117,6 +118,15 @@ class Params(BaseModel):
                 return [float(w) for w in words]
             except ValueError as exc:
                 raise ValueError(f"thicknesses are numbers, mm: {value!r}") from exc
+        return value
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def _labels_as_words(cls, value: Any) -> Any:
+        """A list of labels, as the SCAD holds them and its text in the page reads them,
+        is the same words."""
+        if isinstance(value, (list, tuple)):
+            return " ".join(str(v) for v in value)
         return value
 
     @field_validator("thicknesses")
@@ -138,7 +148,9 @@ class Params(BaseModel):
             raise ValueError(f"each shim's label is its own: {words}")
         if any(not w.isalnum() for w in words):
             raise ValueError(f"a label is letters and digits: {words}")
-        if self.hole_d >= self.outer_d - 2:
+        if self.hole_d and self.hole_d < 2:
+            raise ValueError("a hole typed is 2 mm or more; 0 is the screw's own")
+        if self.hole >= self.outer_d - 2:
             raise ValueError("the hole leaves under 1 mm of ring: a smaller hole or a wider ring")
         if self.tab_clear >= self.tab_length - 4:
             raise ValueError(
@@ -160,7 +172,7 @@ class BedShimsPart(BasePart):
         n = len(p.thicknesses)
         r = p.outer_d / 2
         # Each ring's slot opens toward +X, so its rim there ends where the slot's edge meets it.
-        right = math.sqrt(r * r - (p.hole_d / 2) ** 2) if p.slot else r
+        right = math.sqrt(r * r - (p.hole / 2) ** 2) if p.slot else r
         return BoundingBox3D(
             min_point=Vector3D(x=0.0, y=0.0, z=0.0),
             max_point=Vector3D(
@@ -185,12 +197,11 @@ def create(root: Path) -> BasePart:
         description="A shim for each levelling screw whose corner stands low, as thick as "
         "lifts it to the highest, stacked on the bed's solid mounts; its label on a tab",
         params_model=Params,
-        category="hardware",
+        category="calibration",
         tags=["printer", "bed", "levelling", "shim"],
         readme_path=root / "parts" / "bed_shims" / "README.md",
         preview_color=Color.from_hex("#c9a227"),
         print_settings=PrintSettings(nozzle_diameter=0.4, layer_height=0.1),
-        presets=PRESETS,
     )
 
 

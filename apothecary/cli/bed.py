@@ -67,7 +67,7 @@ def bed_runs(site: str, printer: str, json_out: bool):
     found = bs.readings(board)
     rows = [
         {
-            **_run_json(bs.run_of(r)),
+            **bs.run_json(bs.run_of(r)),
             "range": r.stats.get("range"),
             "rows": len(r.mesh),
             "cols": len(r.mesh[0]) if r.mesh else 0,
@@ -119,7 +119,7 @@ def bed_shims(
     """
     found = _or_die(bs.for_printer, site, printer, reading_ids=reading_ids, fitted=_fitted(fitted))
     if json_out:
-        click.echo(json.dumps(shims_json(found), indent=2))
+        click.echo(json.dumps(bs.as_json(found), indent=2))
         return
     for line in found.said():
         click.echo(line)
@@ -141,7 +141,7 @@ def bed_shims(
     "--screw",
     type=click.Choice(["M3", "M4"]),
     default=None,
-    help="The bed screw: the hole its preset gives.",
+    help="The bed screw: the hole it sets.",
 )
 @click.option("--hole", type=float, default=None, help="The screw's hole, mm, over the screw's.")
 @click.option(
@@ -165,7 +165,7 @@ def bed_mount(
     else:
         found = _or_die(bs.keep_mount, site, printer, screw=screw, hole_d=hole, outer_d=outer)
     if json_out:
-        click.echo(json.dumps(mount_json(found), indent=2))
+        click.echo(json.dumps(bs.mount_json(found), indent=2))
         return
     click.echo(f"{printer}'s shims fit a {found.said()}")
 
@@ -192,8 +192,8 @@ def bed_compare(
         click.echo(
             json.dumps(
                 {
-                    "before": shims_json(before),
-                    "after": shims_json(after),
+                    "before": bs.as_json(before),
+                    "after": bs.as_json(after),
                     "difference": {"mesh": moved, "min": min(flat), "max": max(flat)},
                 },
                 indent=2,
@@ -203,7 +203,7 @@ def bed_compare(
     for word, found in (("before", before), ("after", after)):
         click.echo(f"{word}: " + "; ".join(r.id for r in found.runs))
         click.echo(
-            f"  range {_range(found.mesh):.3f} mm, the plane leaving {found.bow:.3f}; tilt "
+            f"  range {bs.mesh_range(found.mesh):.3f} mm, the plane leaving {found.bow:.3f}; tilt "
             f"{found.plane.a * 100:+.3f} / {found.plane.b * 100:+.3f} mm per 100 mm along X / Y"
         )
     for b, a in zip(before.shims, after.shims, strict=True):
@@ -211,70 +211,3 @@ def bed_compare(
             f"  {b.screw.label:>3} needed {b.thickness:.3f} mm before, {a.thickness:.3f} after"
         )
     click.echo(f"after less before: {min(flat):+.3f}..{max(flat):+.3f} mm at any point")
-
-
-def _range(mesh) -> float:
-    flat = [v for row in mesh for v in row]
-    return max(flat) - min(flat)
-
-
-def _run_json(run: bs.Run) -> dict:
-    return {
-        "id": run.id,
-        "at": run.at.isoformat() if run.at else None,
-        "method": run.method,
-        "bed_c": run.bed_c,
-        "heated": run.heated,
-        "note": run.note,
-    }
-
-
-def mount_json(found: bs.Mount) -> dict:
-    return {
-        "hole_d": found.hole_d,
-        "outer_d": found.outer_d,
-        "hole_kept": found.hole_kept,
-        "outer_kept": found.outer_kept,
-        "screw": found.screw,
-        "at": found.at,
-        "said": found.said(),
-    }
-
-
-def shims_json(found: bs.Shims) -> dict:
-    """What ``bed shims --json-out`` says, and the page draws."""
-    least, most, rms = found.residual
-    return {
-        "runs": [_run_json(r) for r in found.runs],
-        "screws_from": found.screws_from,
-        "grid": {
-            "x": [found.area.x0, found.area.x1],
-            "y": [found.area.y0, found.area.y1],
-            "from": found.area.source,
-        },
-        "mesh": found.mesh,
-        "range": _range(found.mesh),
-        "tilt": {"x_per_100mm": found.plane.a * 100, "y_per_100mm": found.plane.b * 100},
-        "floor": found.floor,
-        "shims": [
-            {
-                "name": s.screw.name,
-                "label": s.screw.label,
-                "x": s.screw.x,
-                "y": s.screw.y,
-                "plane": s.height,
-                "fitted": s.fitted,
-                "thickness": s.thickness,
-                "printed": s.printed,
-                "none": s.none,
-            }
-            for s in found.shims
-        ],
-        "residual": {"min": least, "max": most, "rms": rms, "range": round(found.bow, 4)},
-        "bound": found.bound,
-        "left": round(found.left, 4),
-        "outside": round(found.outside, 2),
-        "mount": mount_json(found.mount) if found.mount else None,
-        "params": found.params(),
-        "slice": found.slice_command(),
-    }
