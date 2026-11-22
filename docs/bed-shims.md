@@ -1,0 +1,98 @@
+# Bed shims
+
+A printer's bed made level on its mounts, so a print does not lean on mesh
+compensation to follow a tilted plate. The bed is probed heated, twice. The tilt
+of the plane through those readings is taken at each levelling screw, and the
+least shims that lift the low corners to the highest are printed and fitted
+between each mount and the bed. Then the bed is probed again.
+[Walkthrough page 52](../walkthrough/52-shims-that-level-a-bed.md) runs it on a
+recorded reading.
+
+printer_1's bed stands on four solid mounts, the springs swapped for them. A
+shim stacks on a mount and raises its corner by its thickness. The code is
+`apothecary/bed_shims.py`, the command `apothecary bed`, the part
+[`bed_shims`](../parts/bed_shims/README.md).
+
+## On the bench
+
+Heating and probing are a person's acts, done at the printer from its Machine.
+`apothecary bed` reads what the bench kept and sends nothing to the printer.
+
+1. **Heat and soak.** Bed on, at the temperature the loaded filament prints at,
+   then about ten minutes once it gets there. The plate and the probe both move
+   while they warm, and the bed is levelled as it prints. Every reading keeps the
+   bed's temperature, and one read at `HEATED_C` or above is heated
+   (`apothecary bed runs` says which).
+2. **Probe twice.** **▤ Probe bed** on the Bed level card, or Control › Level ›
+   Probe (⌗748), then again at once. The two differ only by how well the probe
+   repeats, and that difference is the floor a shim must clear.
+3. **Compute.** `uv run apothecary bed shims --site garage --printer printer_1`
+   takes the newest pair of heated probes and their mean. It says each shim,
+   what the plane leaves that shims cannot fix, and the command that slices
+   them.
+4. **Print** them in a filament that holds its shape at the bed's temperature,
+   PETG or ASA. A shim sits directly under the heated plate, and PLA softens
+   near the temperatures a bed prints PLA at. The filament is the one loaded
+   in the printer's Print window ([the slicer](slicer.md)).
+5. **Fit.** Over each corner its label names: loosen the knob, lift the corner
+   enough to slide the shim onto the mount, slot first, with its tab out past
+   the mount, then tighten the knob again.
+6. **Heat, soak and probe twice again**, then set the two pairs side by side:
+   `uv run apothecary bed compare --site garage --printer printer_1 --before A
+   --before B --after C --after D`. `bed shims` with `--fitted LABEL=MM` for
+   each shim in place says whether another set would do better. That set is
+   one to fit in place of these, not on top of them.
+
+## What is computed
+
+| | |
+|---|---|
+| The readings | Their mean, point by point. When none is named, the newest probe and the probe before it when both are heated. A read of the mesh the board stores (`M420 V`) is never chosen unnamed, since it is not known to be the bed |
+| The floor | The most the readings differ at any one point of the grid. A single reading has none, and says so |
+| The tilt | The least-squares plane through the mean, placed on the bed as the grid lies (below) |
+| At each screw | The plane's height where the nozzle stands over the screw. The screws sit outside the probed grid, so the plane is carried past its points, and the result says how far |
+| Each shim | The highest corner, its fitted shim taken out, gets none. Each other gets what lifts it to that height, plus the shim it already has. It is rounded to a 0.1 mm layer over a 0.2 mm first layer, and it is none when that is under one layer or under the floor |
+| What is left | The plane's residual, which no shim changes, set against the profile's bound for a stored mesh; and the tilt that rounding and the corners left without a shim leave between corners |
+
+A shim stack only raises a corner, so the rule never lowers one: the highest
+stays where it is. The part draws only the shims to print, as many as the
+corners that get one.
+
+## Where the screws are
+
+The printer's profile holds them as `measured.bed_screws` in
+`parts/<printer>/slicer.json`. Each screw has its name, the label its shim
+carries, and where the nozzle stands over it, in the reading's bed coordinates.
+Another printer says its own, three screws or five, and gets as many shims.
+
+printer_1's are where `parts/ender3/ender3.scad` draws the bed's mounts, the
+frame model's figure, which its `source` says, and are not measured on the
+machine. A screw placed a distance off along X moves its shim by that distance
+times the tilt along X, and the same along Y. A measured position goes in the
+profile in place of the model's, with where it was measured.
+
+## Where the grid lies
+
+Marlin prints a mesh without its positions. A printer's grid is placed by the
+estimate the viewer draws the Bed mesh layer by: the volume less what the probe's
+offset puts out of reach, Marlin's default inset inside that
+(`grid_area_estimate`, `meshBounds` in `static/machine_marks.js`). A profile that
+holds `measured.mesh_area`, the grid's first and last points with their source,
+is placed by that instead, and the result names which it used.
+
+## What shims cannot fix
+
+What the plane leaves is the plate's own shape, a bow or a twist. A level
+bed's reading spans at least that much. When it is over the profile's
+`measured.mesh_range_bound`, the `stored-mesh` start piece stays refused however
+well the shims are cut ([the slicer](slicer.md)). The bow is then a mesh's to
+follow, `probe-each-print`, or the plate's to replace.
+
+## Commands
+
+| | |
+|---|---|
+| `apothecary bed runs --site S --printer P` | The readings of the printer's pinned board, newest first: bed temperature, heated or cold, range and note |
+| `apothecary bed shims --site S --printer P` | The shims, from the newest heated pair, or from `--reading ID` repeated; `--fitted LABEL=MM` for the shims in place; `--json-out` |
+| `apothecary bed compare --site S --printer P --before ID --after ID` | What each corner needs before and after, the range and the residual of each, and how far the mean moved |
+| `apothecary slicer slice bed_shims -p thicknesses=... -p 'labels=...'` | The shims sliced for the printer, as `bed shims` prints it |

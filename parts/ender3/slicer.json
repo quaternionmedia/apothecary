@@ -60,6 +60,19 @@
       "source": "docs/validation/2026-09-20-ender-bench.md: M420 V, the stored mesh as it was last probed",
       "used": "held, and nothing is applied: the start is home alone; the start piece stored-mesh (M420 S1 after G28) is refused while the board's newest reading is not a probe under mesh_range_bound, and the bench says to tram the bed before trusting it"
     },
+    "bed_screws": {
+      "value": {
+        "screws": [
+          {"name": "front_left", "label": "FL", "x": 7.5, "y": 7.5},
+          {"name": "front_right", "label": "FR", "x": 212.5, "y": 7.5},
+          {"name": "back_right", "label": "BR", "x": 212.5, "y": 212.5},
+          {"name": "back_left", "label": "BL", "x": 7.5, "y": 212.5}
+        ]
+      },
+      "unit": "mm",
+      "source": "where parts/ender3/ender3.scad draws the bed's four mounts, 15 mm in from each edge of the 235 mm plate, whose (7.5, 7.5) is the nozzle's (0, 0): the frame model's figure, not measured on printer_1; the mounts are solid, the springs swapped for them (the owner's word of 2026-11-22)",
+      "used": "apothecary bed shims: the plane through the bed readings is taken at each screw, and a shim stacked on a low corner's mount lifts it to the highest (docs/bed-shims.md)"
+    },
     "mesh_range_bound": {
       "value": 0.3,
       "unit": "mm",

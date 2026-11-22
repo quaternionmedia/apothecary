@@ -185,6 +185,26 @@ one machine on the number another held; nothing in them moves a machine.
 - [ ] The world: the relief over `printer_1`'s bed is the newest reading, and
       nothing of the printer's lies over the router's table.
 
+Shims, once the bed's tilt is to be taken out at its mounts
+([docs/bed-shims.md](bed-shims.md)):
+
+- [ ] Bed on at the loaded filament's printing temperature, about ten minutes'
+      soak once it gets there, then **▤ Probe bed** twice, one after the other:
+      `uv run apothecary bed runs --site garage --printer printer_1` lists both
+      newest, each *heated*.
+- [ ] `uv run apothecary bed shims --site garage --printer printer_1`: the two
+      readings named first, their floor, a shim or *none* for each corner, and
+      the bow said against `measured.mesh_range_bound`. Keep its output in the
+      dated record.
+- [ ] The shims sliced with the command it prints, printed in PETG or ASA, and
+      fitted, each on the mount its label names, slot first, its tab out past
+      the mount.
+- [ ] Heated, soaked and probed twice again, then `uv run apothecary bed compare
+      --site garage --printer printer_1` with `--before` each of the first pair
+      and `--after` each of the second: the tilt smaller, each corner needing
+      under a layer. `bed shims` with `--fitted` for each shim in place says
+      whether a set should replace them.
+
 ## E. Print from here
 
 - [ ] *Print from here* → **Choose File** → `docs/validation/dry-run-square.gcode`
