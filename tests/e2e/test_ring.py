@@ -760,6 +760,32 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
 
 
 @pytest.mark.e2e
+def test_on_a_short_page_the_view_menu_ends_at_the_page_and_scrolls_to_settings(
+    page: Page, ring_url: str
+):
+    """A page shorter than ⚙ View's list: the menu ends at the page's foot and scrolls
+    by itself, so Settings, its last row, is reached and pressed."""
+    _open_panels(page, ring_url)
+    page.set_viewport_size({"width": 1280, "height": 260})
+    page.locator("#view-menu > summary").click()
+    body = page.locator(windows.VIEW_MENU)
+    expect(body.locator(".view-item").first).to_be_visible()
+    box = body.evaluate(
+        """(el) => ({ bottom: el.getBoundingClientRect().bottom, page: window.innerHeight,
+            held: el.scrollHeight, shown: el.clientHeight })"""
+    )
+    assert box["bottom"] <= box["page"], box
+    assert box["held"] > box["shown"], box
+    settings = body.locator("#settings-open")
+    settings.scroll_into_view_if_needed()
+    rect = settings.bounding_box()
+    assert rect["y"] + rect["height"] <= box["page"], (rect, box)
+    settings.click()
+    expect(body).to_be_hidden()
+    assert windows.state(page, "settings")["shown"] is True
+
+
+@pytest.mark.e2e
 def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows_out(
     page: Page, ring_url: str
 ):

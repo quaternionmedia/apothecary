@@ -81,6 +81,8 @@
             padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.55);
         }
+        /* ⚙ View's own: no taller than the page under the header, scrolled past that. */
+        #view-menu > .view-menu-body { max-height: calc(100vh - 3.5rem); overflow-y: auto; }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
             font-weight: 600;
@@ -2164,8 +2166,13 @@
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
                     stage: async (journey, stage, how) => {
-                        const done = await this.stageJourney(journey, stage, how);
+                        this.chosenOnTheWay = null;
+                        this.onTheWay = true;
+                        let done;
+                        try { done = await this.stageJourney(journey, stage, how); }
+                        finally { this.onTheWay = false; }
                         if (!this.tourPop.isOpen()) this.leaveJourney();
+                        else if (this.chosenOnTheWay) this.onWindowChosen(this.chosenOnTheWay, { again: true });
                         return done;
                     },
                     onShown: (open) => {
@@ -9556,8 +9563,12 @@
                 this.setStatus(`Left ${journey.name}: its windows stay where they are`, 'success');
             }
             // A window a person chose moves the Tour box to the step that owns it, and
-            // moves nothing else.
-            onWindowChosen(id) {
+            // moves nothing else. One chosen while the page is on its way to a stage is
+            // kept until it arrives (`again`): the stage's windows have come forward by
+            // then, so the chosen one is put in front again and the box moved to its step.
+            onWindowChosen(id, { again = false } = {}) {
+                if (this.onTheWay) { this.chosenOnTheWay = id; return; }
+                if (again) this.panels.open(id);
                 const journey = this.journey && JOURNEYS.find((j) => j.id === this.journey.id);
                 const step = journey && journey.steps.find((s) => s.owns.includes(id));
                 if (!step || step.id === this.journey.step) return;

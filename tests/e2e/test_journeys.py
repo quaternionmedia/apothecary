@@ -271,6 +271,42 @@ def test_a_window_chosen_moves_the_box_and_the_box_closed_leaves_the_journey(pag
 
 
 @pytest.mark.e2e
+def test_a_window_chosen_while_the_page_is_on_its_way_is_followed_once_it_is_there(
+    page: Page, url: str
+):
+    """Slice gone to in the box, and Parameters' tab pressed before the page is there:
+    the page arrives at Slice, its Print window brought forward, and then Parameters is
+    in front again, the box and the page's journey on Shape, the stage that owns it."""
+    _machine_open_and_the_part_chosen(page, url)
+    _choose_print_a_part(page, url)
+    # The page held on its way: a stage is not gone to until the test lets it.
+    page.evaluate(
+        """() => {
+            const viewer = window.fractalViewer, real = viewer.stageJourney.bind(viewer);
+            viewer.stageJourney = async (...given) => {
+                await new Promise((go) => { window.letThePageGo = go; });
+                return real(...given);
+            };
+        }"""
+    )
+    box = page.locator(BOX)
+    box.locator(".tour-pop-stages button").nth(2).click()
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
+    expect(box).to_have_class(re.compile(r"\bbusy\b"))
+    page.locator(".lm_tab .lm_title", has_text=re.compile(r"^Parameters$")).click()
+    page.wait_for_function("() => window.fractalViewer.chosenOnTheWay === 'part-parameters'")
+    # Nothing has moved yet: the box is on the stage it was sent to.
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
+    page.evaluate("() => window.letThePageGo()")
+    _on(page, "shape")
+    expect(page.locator(TITLE)).to_have_text("Print a part · 2. Shape")
+    expect(page).to_have_url(re.compile(r"[?&]step=shape\b"))
+    assert windows.state(page, "part-parameters")["shown"] is True
+    # The page did arrive at Slice on the way: its window was brought forward.
+    assert windows.state(page, "machine-print")["shown"] is True
+
+
+@pytest.mark.e2e
 def test_an_address_naming_a_journey_and_a_stage_opens_the_box_there_and_starts_no_job(
     page: Page, url: str
 ):

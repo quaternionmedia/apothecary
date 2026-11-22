@@ -72,7 +72,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     document.body.append(box);
     const $ = (sel) => box.querySelector(sel);
     // Every stage in the journeys' order, each knowing its journey.
-    const state = { journeys: [], stages: [], at: 0, busy: false, did: null };
+    const state = { journeys: [], stages: [], at: 0, busy: false, did: null, after: null };
 
     // What the page did and what to try, folded or open as a person left it.
     const more = $('.tour-pop-more');
@@ -178,10 +178,14 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     async function put({ reload = false } = {}) {
         const at = here();
         if (!at || state.busy) return;
-        state.busy = true; state.did = null; render();
+        state.busy = true; state.did = null; state.after = null; render();
         try { state.did = await stage(at.journey, at.stage, { reload }); }
         catch (e) { state.did = { did: [], said: `The page did not get here: ${e.message || e}`, refused: true }; }
         state.busy = false; render();
+        // A window chosen on the way was another stage's: followed now the page is here.
+        const after = state.after;
+        state.after = null;
+        if (after) api.follow(after.journey, after.stage);
     }
 
     async function go(at, { putOn = true } = {}) {
@@ -264,9 +268,10 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
             if (verb === 'page') { const page = here().tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
         },
         // A window chosen in the page is another stage's: the box shows that stage, and
-        // puts nothing on.
+        // puts nothing on. While the page is on its way to a stage, it is kept until then.
         follow(journeyId, stageId) {
-            if (!api.isOpen() || state.busy) return;
+            if (!api.isOpen()) return;
+            if (state.busy) { state.after = { journey: journeyId, stage: stageId }; return; }
             const at = state.stages.findIndex((s) => s.journey === journeyId && s.stage === stageId);
             if (at >= 0 && at !== state.at) { state.at = at; state.did = null; keep({ stage: here().id }); render(); }
         },

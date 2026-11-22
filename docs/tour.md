@@ -109,7 +109,9 @@ found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and P
 Make are a person's.
 
 A window chosen in the page that another stage of the journey owns -- its tab, ⊞
-Windows or a stack's + -- moves the box to that stage, and takes the page nowhere.
+Windows or a stack's + -- moves the box to that stage, and takes the page nowhere. One chosen while the page is
+on its way to a stage is kept until it arrives: the window is put in front again, over
+the stage's own, and the box moved then.
 
 ## Saying how a stage is
 
@@ -136,8 +138,9 @@ A word is a line of `tour/feedback.jsonl` under the state folder
 stage (`make/slice`), `works` or `off`, what is off, who said it, the moment, and the
 commit the server ran, with whether its tree had changes beside it. A line is never
 rewritten; the latest for a stage is its feedback. A word on a stage no journey has
-is kept as it is: shown on no stage, and given back by `GET /tour/feedback` with the
-rest.
+is kept as it is and given back by `GET /tour/feedback` with the rest. Where its
+journey went into another that kept the stage's id (Start a site's and Watch a site's
+into Run a site, `Journey.made_of`), it is shown on that stage; otherwise on none.
 
 ## The routes
 

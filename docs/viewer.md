@@ -854,7 +854,8 @@ stage.
   on a part's ring.
 - **A window chosen moves the box** to the step that owns it -- its tab, ⊞
   Windows or a stack's + -- and moves nothing else. A window the page brings
-  forward by itself moves nothing.
+  forward by itself moves nothing. One chosen while the page is on its way to a
+  stage is put in front again once it is there, and the box moved then.
 - **The address keeps the journey and its step** (`?journey=make&step=slice`),
   so a reload or a link opens the box on that step, the windows as the browser
   remembers them and the step's brought forward. No one pressed anything then,

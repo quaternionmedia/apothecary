@@ -113,7 +113,8 @@ SITE = "garage"
 class Journey:
     id: str
     title: str
-    # The colour it wears where it is listed: the group of windows it is mostly in.
+    # The group of windows it is mostly in, whose colour its view's cell on the ring
+    # wears; a journey with no cell there is drawn in no colour.
     group: str
     # The window its view needs open first, the page's own for a subject, and how
     # that subject is opened: until it is, the view is greyed and says so.
@@ -131,6 +132,9 @@ class Journey:
     # its entry in ⚙ View › Views. That ring is full, so only Print a part has
     # one: the others' views are laid out by the tour alone.
     cell: str = ""
+    # The ids of the journeys it was made of, whose stages it keeps under their own
+    # ids: a word kept on one of theirs is this journey's stage's (tour.feedback).
+    made_of: Tuple[str, ...] = ()
     # The site its subjects stand in -- the pieces and machines its puts name -- which
     # the tour opens first where another is open: the garage, or the universe, where
     # every part stands.
@@ -558,6 +562,7 @@ RUN = Journey(
         ]
     },
     name="Run a site",
+    made_of=("bring-up", "watch"),
     steps=(
         Step(
             "steps",

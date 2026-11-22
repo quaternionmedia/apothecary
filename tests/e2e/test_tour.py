@@ -418,6 +418,41 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         ),
     )
 
+    # 12. The box closed: the journey left, its windows where they are.
+    before = windows.state(page, "selected")["shown"]
+    box.locator(".tour-pop-close").click()
+    expect(box).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+    expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
+    expect(page.locator("#status")).to_contain_text(
+        "Left Flash a board: its windows stay where they are"
+    )
+    assert windows.state(page, "selected")["shown"] == before
+    story.says(
+        "The box closed leaves the journey",
+        "The box's ✕, or Tour in the header pressed again: the journey is left. Its "
+        "windows stay where they are, the address names no journey, and the status "
+        "line says so. Tour opens the box again on the stage it showed, and the page "
+        "is on no journey until ↻ or a stage takes it to one.",
+        shown=_words(page.locator("#status").inner_text()),
+    )
+
+    # 13. An address that names a journey and a stage: the box opened there.
+    page.goto(f"{url}/viewer/sites/garage?journey=make&step=shape")
+    expect(box).to_be_visible(timeout=30000)
+    expect(title).to_have_text("Print a part · 2. Shape")
+    _taken_to(page, "shape")
+    expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
+    expect(page).to_have_url(re.compile(r"[?&]step=shape\b"))
+    story.says(
+        "An address that names a journey and a stage opens the box on it",
+        "`?journey=make&step=shape` at the end of the page's address, as a link or a "
+        "bookmark holds it: the box opens on that stage and the page is taken there "
+        "as a reload takes it, so no job is started on the way and the windows stand "
+        "as this browser has them.",
+        shown=_words(title.inner_text()),
+    )
+
 
 @pytest.mark.e2e
 def test_a_reload_takes_the_page_to_its_stage_and_starts_no_job(page, url):

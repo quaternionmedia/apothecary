@@ -131,6 +131,22 @@ make/see	off	Ada	the job's row is cut off at the window's foot
 make/see	works	Ada
 ```
 
+## 12. The box closed leaves the journey
+
+The box's ✕, or Tour in the header pressed again: the journey is left. Its windows stay where they are, the address names no journey, and the status line says so. Tour opens the box again on the stage it showed, and the page is on no journey until ↻ or a stage takes it to one.
+
+```
+Left Flash a board: its windows stay where they are
+```
+
+## 13. An address that names a journey and a stage opens the box on it
+
+`?journey=make&step=shape` at the end of the page's address, as a link or a bookmark holds it: the box opens on that stage and the page is taken there as a reload takes it, so no job is started on the way and the windows stand as this browser has them.
+
+```
+Print a part · 2. Shape
+```
+
 ## What this page does not show
 
 - **A stage armed or started.** Print's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.

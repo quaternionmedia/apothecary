@@ -240,8 +240,16 @@ def said(path: Optional[Path] = None) -> List[dict]:
 
 
 def feedback(path: Optional[Path] = None) -> Dict[str, dict]:
-    """Each stage's feedback: the latest word on it."""
-    return {record["stage"]: record for record in said(path)}
+    """Each stage's feedback: the latest word on it. A word kept on a stage of a
+    journey another was made of (``Journey.made_of``) is that journey's stage's, where
+    it has one of the id; the line kept is as it was said."""
+    now = {
+        stage_id(old, s.id): stage_id(j.id, s.id)
+        for j in journeys.JOURNEYS
+        for old in j.made_of
+        for s in j.steps
+    }
+    return {now.get(record["stage"], record["stage"]): record for record in said(path)}
 
 
 def document(root: Path = WALKTHROUGH_ROOT) -> dict:
