@@ -852,8 +852,16 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # its field says), under the name its other field holds. The header's Tour opens
     # it. All but the journeys' drop-down and the field for what is off are cells of
     # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too.
-    "tour-pop-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the tour's box, or closes it"),
-    "tour-pop-close": (WIDGET, WHAT_YOU_SEE, "a button that closes the tour's box"),
+    "tour-pop-open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that opens the tour's box, or closes it and leaves its journey",
+    ),
+    "tour-pop-close": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that closes the tour's box and leaves its journey",
+    ),
     "tour-pop-journeys": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -1705,12 +1713,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the trail's crumb for the site: up to its own level, and there the other sites",
     ),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
-    # the rail of the journey entered (apothecary/journeys.py)
-    "journeyRailEl:click:closest": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "the journey's rail: a step entered, Next, or the journey left",
-    ),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),

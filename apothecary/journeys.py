@@ -10,11 +10,11 @@ A view is written as a system's is (systems.py's ``Layout``): window ids, a
 ``{"world": True}``. A window the page has not got when the view is laid out --
 a board's Machine while none is open -- is left out of it.
 
-A journey's steps are numbered on a rail in the header while it is entered, the step
-a person is on filled and Next naming the one after (codecartographer's step rail,
-after alfred's stage rail). A step brings its windows forward, the one it is about
-first; choosing a window it owns -- its tab, ⊞ Windows or a stack's + -- says a
-person is on it.
+A journey is chosen and stepped in the Tour box (static/widgets/tour_popover.js,
+tour.py), and nowhere else: its steps numbered there, the one a person is on marked,
+‹ and › going to the one before and after. A step brings its windows forward, the one
+it is about first; choosing a window it owns -- its tab, ⊞ Windows or a stack's + --
+moves the box to it. The box closed, the journey is left, its windows where they are.
 
 The journeys are in the order of the chain the page manages, each handing the next
 what it made: a part designed; the part made on a printer, or cut on a router; the
@@ -45,9 +45,9 @@ from .systems import FAMILY, PART, Layout
 @dataclass(frozen=True)
 class Step:
     id: str
-    # Its name on the rail, after its number.
+    # Its name in the Tour box, after its number.
     label: str
-    # The rail's tooltip, what Next says is coming, and the tour's words for the stage.
+    # The tour's words for the stage, and the status line's as it is entered.
     hint: str
     # The windows entering it brings forward, the one it is about first: that one is
     # in front where two share a stack. A closed one is opened again.
@@ -120,8 +120,8 @@ class Journey:
     requires: str
     opened_by: str
     view: Layout
-    # What the rail, ⊞ Windows › Journeys and the tour call it: what a person does and
-    # to what, the title's verb and one thing (Design a part, Print a part).
+    # What the tour calls it: what a person does and to what, the title's verb and one
+    # thing (Design a part, Print a part).
     name: str = ""
     steps: Tuple[Step, ...] = ()
     # What the tour does for every stage of it, before the stage's own ``puts``: the
@@ -129,7 +129,7 @@ class Journey:
     staged_on: Tuple[Tuple[str, str], ...] = ()
     # Its view's cell under the ring's Panels › Windows, as a system's view's is, and
     # its entry in ⚙ View › Views. That ring is full, so only the first journey has
-    # one: the others are entered from ⊞ Windows › Journeys and the tour.
+    # one: the others' views are laid out by the tour alone.
     cell: str = ""
     # The site its subjects stand in -- the pieces and machines its puts name -- which
     # the tour opens first where another is open: the garage, or the universe, where

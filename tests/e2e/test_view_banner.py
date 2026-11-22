@@ -46,7 +46,6 @@ def test_the_header_is_one_banner_and_what_stood_beside_it_stands(page: Page, ba
     _at(page, base_url)
     assert page.evaluate(HEADER) == [
         "view-banner",
-        "journey-rail",
         "make-here",
         "spacer",
         "view-menu",

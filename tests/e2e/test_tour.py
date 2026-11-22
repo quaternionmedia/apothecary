@@ -55,7 +55,7 @@ NO_BOARD = (
 # any stage added to a journey, how many the tour holds.
 STAGES = r"(?<=\d/)\d+"
 CHANGING = ((BOX, MOMENT), (BOX, STAGES), ("#status", MOMENT))
-STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
+STEP_ON = "() => window.fractalViewer.journey?.step"
 
 
 def _words(text: str) -> str:
@@ -103,7 +103,7 @@ def _feedback(url: str) -> dict:
 
 
 def _taken_to(page, step: str) -> None:
-    """The box done taking the page to ``step``, and the rail there."""
+    """The box done taking the page to ``step``, and the page's journey on it."""
     expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
     page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
 
@@ -126,8 +126,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "The page's journeys a stage at a time, in a box over the page: going to a "
             "stage takes the page there, a person explores it where it stands, and one "
             "word is kept on the stage -- it works, or it is off, with what is off. The "
-            "box says nothing of its own: a stage's words are the ones its journey's "
-            "rail shows. [docs/tour.md](../docs/tour.md) is the reference."
+            "box is the one place a journey is chosen and stepped, and says nothing of "
+            "its own: a stage's words are its step's. [docs/tour.md](../docs/tour.md) is "
+            "the reference."
         ),
         runtime=(
             "It drives a real browser against a real server of its own, its printer a "
@@ -172,7 +173,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "of an earlier build (0000000): this stage waits for a word again"
     )
     expect(box.locator(".tour-pop-stages button").first).to_have_class(re.compile(r"\bearlier\b"))
-    expect(page.locator("#journey-rail")).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
     assert page.evaluate("() => window.fractalViewer.machine") is None
     settled(page)
     story.shows(
@@ -208,9 +209,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "A journey chosen takes the page to its first stage",
         "Print a part, chosen in the box's drop-down. The page is taken to its first "
         "stage: printer_1's Machine opened and the footpedal chosen, as a person would "
-        "do each, and the journey entered at Choose, its windows laid out and its rail "
-        "in the header. The box keeps what the page did, then what the page said, "
-        "folded under one line, opened here. The stage is there to explore.",
+        "do each, and the journey entered at Choose, its windows laid out. The box "
+        "keeps what the page did, then what the page said, folded under one line, "
+        "opened here. The stage is there to explore.",
         shown="\n".join(_words(t) for t in did.all_inner_texts()),
         blank=CHANGING,
     )

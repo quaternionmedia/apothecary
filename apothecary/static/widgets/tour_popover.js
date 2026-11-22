@@ -1,10 +1,11 @@
 // The tour: the page's journeys (apothecary/journeys.py) a stage at a time, in a box over
-// the page. Going to a stage takes the page there -- what it needs opened and chosen, the
-// stage entered -- and a person explores it; one word is kept on the stage, under the
-// name they give once: it works, or it is off with what is off (POST /tour/feedback,
-// apothecary/tour.py). A word is of the build it was said of: said of an earlier one,
-// it is shown as that and the stage waits again. The box has no words of its own: a
-// stage's are the ones its journey's rail shows.
+// the page, and the one place a journey is chosen and stepped. Going to a stage takes the
+// page there -- what it needs opened and chosen, the stage entered -- and a person
+// explores it; one word is kept on the stage, under the name they give once: it works, or
+// it is off with what is off (POST /tour/feedback, apothecary/tour.py). A word is of the
+// build it was said of: said of an earlier one, it is shown as that and the stage waits
+// again. The box has no words of its own: a stage's are its step's in journeys.py.
+// Closed, its journey is left (`onShown(false)`); folded to its head, it is not.
 //
 // The box is in the browser's top layer, so no view or journey lays it out or covers
 // it; it is dragged by its head, and folded to it by a double-click there. It stands
@@ -13,7 +14,7 @@
 //
 // `stage(journey, stageId, { reload })` is the page's: it resolves to `{ did: [...], said,
 // refused }`. `reload` is true where no one pressed anything -- a reload found the box
-// open -- and the page then starts nothing: a slice, a toolpath or shapes found are a
+// open, or the address named a stage -- and the page then starts nothing: a slice, a toolpath or shapes found are a
 // person's press, and the stage says so.
 
 import { setReason } from '/static/can.js';
@@ -25,7 +26,7 @@ const MARKUP = `
 <header class="tour-pop-head" title="Drag to move; double-click to fold to this bar, or unfold">
   <span class="tour-pop-title"></span>
   <span class="tour-pop-name"></span>
-  <button type="button" class="tour-pop-close" data-do="close" title="Close the tour: the page stays as it is">✕</button>
+  <button type="button" class="tour-pop-close" data-do="close" title="Close the tour and leave its journey: the windows stay where they are">✕</button>
 </header>
 <div class="tour-pop-body">
   <select class="tour-pop-journeys" aria-label="Journeys"></select>
@@ -218,12 +219,23 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     // Where a reload finds the box open, the page is taken to its stage as the stage's
     // ↻ does: the box holds what a person was doing, the page does not, and the box
     // never stands over a page it is not true of. No one pressed anything, so nothing is
-    // started on the way: what only a job brings, the box says ↻ does.
+    // started on the way: what only a job brings, the box says ↻ does. An address that
+    // names a journey's stage opens the box on it the same way (`openOn`).
     let opening = Promise.resolve();
     const api = {
         isOpen: () => box.matches(':popover-open'),
         open() { return (opening = api.opened()); },
         restage: async () => { await opening; if (api.isOpen()) await put({ reload: true }); },
+        async openOn(journeyId, stageId) {
+            await opening;
+            if (!api.isOpen()) await api.open();
+            const at = state.stages.findIndex((s) => s.journey === journeyId && s.stage === stageId);
+            if (at < 0) return;
+            state.at = at; state.did = null;
+            keep({ stage: here().id });
+            render();
+            await put({ reload: true });
+        },
         async opened() {
             await read();
             const was = state.stages.findIndex((s) => s.id === kept().stage);
@@ -251,7 +263,8 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
             if (verb === 'by') return void who.focus();
             if (verb === 'page') { const page = here().tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
         },
-        // The rail moved in the page: the box shows that stage, and puts nothing on.
+        // A window chosen in the page is another stage's: the box shows that stage, and
+        // puts nothing on.
         follow(journeyId, stageId) {
             if (!api.isOpen() || state.busy) return;
             const at = state.stages.findIndex((s) => s.journey === journeyId && s.stage === stageId);

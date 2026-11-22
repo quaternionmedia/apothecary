@@ -22,7 +22,7 @@ from slicer_helpers import write_fake_orcaslicer
 
 BOX = "#tour-pop"
 SLICED_MS = 30000
-STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
+STEP_ON = "() => window.fractalViewer.journey?.step"
 
 
 @pytest.fixture(scope="module")

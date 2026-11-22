@@ -97,7 +97,7 @@ def test_the_make_view_holds_the_window_set_a_part_is_made_through():
 
 def test_the_ring_has_a_cell_for_the_first_journey_s_view_after_the_systems():
     """Panels › Windows is full, so Print a part's view alone has a cell there; the other
-    journeys are entered from ⊞ Windows › Journeys and the tour."""
+    journeys' views are laid out by the tour alone."""
     assert VIEWS[len(SYSTEMS) :] == (("make", "Print view"),)
     assert [j.id for j in JOURNEYS if j.cell] == ["make"]
 
@@ -127,7 +127,7 @@ def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
         assert len(owned) == len(set(owned)), journey.id
         for step in journey.steps:
             assert re.fullmatch(r"[a-z][a-z0-9-]*", step.id)
-            assert 0 < len(step.label) <= 8, step.label  # on the rail, after its number
+            assert 0 < len(step.label) <= 8, step.label  # in the Tour box, after its number
             assert step.hint and step.forward, step.id
             assert set(step.forward) | set(step.owns) <= named, (journey.id, step.id)
 

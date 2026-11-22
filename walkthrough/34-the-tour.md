@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-The page's journeys a stage at a time, in a box over the page: going to a stage takes the page there, a person explores it where it stands, and one word is kept on the stage -- it works, or it is off, with what is off. The box says nothing of its own: a stage's words are the ones its journey's rail shows. [docs/tour.md](../docs/tour.md) is the reference.
+The page's journeys a stage at a time, in a box over the page: going to a stage takes the page there, a person explores it where it stands, and one word is kept on the stage -- it works, or it is off, with what is off. The box is the one place a journey is chosen and stepped, and says nothing of its own: a stage's words are its step's. [docs/tour.md](../docs/tour.md) is the reference.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, its printer a simulation pinned to printer_1's mainboard, its router's controller not pinned, and its slicer a script that answers as OrcaSlicer's command line does. Its state folder is this test's, so the feedback it keeps is its own.
 
@@ -29,7 +29,7 @@ Tour in the header: a box above the windows, on the first stage with no word on 
 
 ## 2. A journey chosen takes the page to its first stage
 
-Print a part, chosen in the box's drop-down. The page is taken to its first stage: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box keeps what the page did, then what the page said, folded under one line, opened here. The stage is there to explore.
+Print a part, chosen in the box's drop-down. The page is taken to its first stage: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out. The box keeps what the page did, then what the page said, folded under one line, opened here. The stage is there to explore.
 
 ![A journey chosen takes the page to its first stage](screenshots/34-02-a-journey-chosen-takes-the-page-to-its-first-stage.png)
 
@@ -38,7 +38,7 @@ printer_1's Machine opened
 footpedal chosen
 footpedal named under makes in printer_1's Print window
 Print a part entered, its windows laid out
-Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
+Print a part › 1 Choose (the tour): the part, among the site's pieces
 ```
 
 ## 3. ✓ Works keeps the word and takes the page to the next stage, with what to try
@@ -107,7 +107,7 @@ cnc_router's Machine opened with no board connected: what it makes is planned th
 router_coupon chosen
 router_coupon named under makes in cnc_router's Print window
 Cut a part entered, its windows laid out
-Cut a part › 1 Choose (⊞ Windows › Cut a part): a part that says how it is cut, among the site's pieces
+Cut a part › 1 Choose (the tour): a part that says how it is cut, among the site's pieces
 ```
 
 ## 10. A stage that needs what only a person brings says what it needs

@@ -815,7 +815,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         viewsHead.textContent = "Views";
         into.append(viewsHead);
         for (const [id, v] of views) {
-            if (v.listed === false) continue;  // a journey's, laid out by entering it
+            if (v.listed === false) continue;  // a journey's, laid out by the Tour box going to it
             const b = document.createElement("button");
             b.type = "button";
             b.className = "window-item view-item";
@@ -834,28 +834,9 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         }
     }
 
-    function fillMenu(into, done, journeys, look) {
+    function fillMenu(into, done, look) {
         into.replaceChildren();
         if (look) into.append(seeThroughRow(look));
-        // The page's journeys, each entered by its name: its view laid out, the rail of
-        // its steps in the header. The one entered now is marked.
-        if (journeys && journeys.list.length) {
-            const head = document.createElement("div");
-            head.className = "spawn-group";
-            head.textContent = "Journeys";
-            into.append(head);
-            for (const j of journeys.list) {
-                const b = document.createElement("button");
-                b.type = "button";
-                b.className = "window-item journey-item";
-                b.dataset.journey = j.id;
-                b.textContent = j.name;
-                b.title = j.title;
-                if (j.current) b.setAttribute("aria-current", "true");
-                b.addEventListener("click", () => { journeys.press(j.id); if (done) done(); });
-                into.append(b);
-            }
-        }
         for (const [group, rs] of windowsByGroup()) {
             const head = document.createElement("div");
             head.className = "spawn-group";
@@ -1072,12 +1053,11 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         },
         /* The header's Windows menu, drawn into `into` each time it opens: every window
          * by its group, each opened (or brought in front) by a press. `done()` is called
-         * after a press. `journeys`, the page's: { list: [{ id, name, title, current }],
-         * press(id) }, listed before the windows. `seeThrough`, the page's: { on, opacity
+         * after a press. `seeThrough`, the page's: { on, opacity
          * (a fraction), min, max, step (per cent), key (its shortcut, as said),
          * set({ on, opacity }) }, a row above them: its switch, and a slider of how
          * opaque a window is. */
-        fillMenu(into, { done = null, journeys = null, seeThrough: look = null } = {}) { fillMenu(into, done, journeys, look); },
+        fillMenu(into, { done = null, seeThrough: look = null } = {}) { fillMenu(into, done, look); },
         /* The views, drawn into `into` each time the menu that holds them opens: a
          * heading, then an entry a view (`.view-item[data-view]`), its windows laid out
          * by a press. `done()` is called after a press. `views` is the page's own way

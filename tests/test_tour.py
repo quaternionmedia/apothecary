@@ -70,8 +70,8 @@ def test_a_page_written_by_hand_is_read_whole_from_its_first_words():
 def test_the_tour_is_the_journeys_in_the_chain_s_order_a_stage_at_a_time():
     """The document the box reads: every journey in the registry's order -- a part
     designed, made, cut, its board, hands on it, the site brought up and watched, a
-    drawing to pieces, and two ends joined by an adapter last -- each stage with the
-    rail's own words."""
+    drawing to pieces, and two ends joined by an adapter last -- each stage with its
+    step's own words."""
     doc = tour.document()
     assert [j["id"] for j in doc["journeys"]] == [j.id for j in journeys.JOURNEYS]
     assert doc["journeys"][0]["id"] == "design" and doc["journeys"][-1]["id"] == "join"

@@ -45,7 +45,7 @@ CHANGING = (
         for pid in ("machine", "machine-status", "machine-sketch", "machine-log", "machine-print", "deck", "working", "procedure", "marks", "jobs")
     ),
 )  # fmt: skip
-STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
+STEP_ON = "() => window.fractalViewer.journey?.step"
 VIEWER = "window.fractalViewer"
 
 # The stage of each journey its picture is taken on, and the page's words for the
@@ -160,7 +160,7 @@ def simulated(base_url):
 
 
 def _taken_to(page, step: str) -> None:
-    """The box done taking the page to ``step``, and the rail there."""
+    """The box done taking the page to ``step``, and the page's journey on it."""
     expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=90000)
     try:
         page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
@@ -188,7 +188,7 @@ def _drawn(page) -> dict:
 
 
 # What stands at each stage once it is put on, beyond its first window in front and the
-# rail on it: (journey, stage) -> a check of the page.
+# page's journey on it: (journey, stage) -> a check of the page.
 def _selected(name):
     return lambda page: page.wait_for_function(
         f"(n) => {VIEWER}.selectedName === n", arg=name, timeout=10000

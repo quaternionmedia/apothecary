@@ -6,11 +6,12 @@ windows, Selected, Parameters, and the Machine sharing a stack with its Print wi
 Print in front, the Machine's sections open before it kept behind them. Greyed while
 no Machine is open and the piece chosen has no board.
 
-Print a part, its journey: entered from ⊞ Windows › Journeys, its rail in the header
-at Choose, walked Next by Next to Measure, each step's windows brought forward and the
-address holding the step; a window's tab chosen moves the rail and nothing else, a
-reload lands on the step the address names, and ✕ leaves it, the windows where they
-are.
+Print a part, its journey: chosen and stepped in the Tour box and nowhere else -- the
+header holds no rail of it and ⊞ Windows no entry -- each stage's windows brought
+forward and the address holding the stage; a window's tab chosen moves the box and
+nothing else, a reload opens the box on the stage the address names, and the box
+closed leaves the journey, the windows where they are. An address that names a stage
+opens the box on it, and starts no job on the way.
 """
 
 from __future__ import annotations
@@ -26,9 +27,17 @@ from garage import select as _select
 from playwright.sync_api import Page, expect
 
 MAINBOARD = "printer_1.frame_system.mainboard"
-MAKE_A_THING = ".windows-menu-body .journey-item[data-journey='make']"
-RAIL = "#journey-rail"
-STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
+BOX = "#tour-pop"
+TITLE = f"{BOX} .tour-pop-title"
+# The journey the page is on, and the stage the box marks as the one a person is on.
+STEP_ON = "() => window.fractalViewer.journey?.step"
+STAGE_ON = (
+    "() => document.querySelector('#tour-pop .tour-pop-stages [aria-current=step]')?.dataset.stage"
+)
+NO_SLICE = (
+    "No slice of footpedal is kept for printer_1, and a reload starts none: "
+    "↻ slices it, as Slice does"
+)
 
 
 @pytest.fixture(scope="module")
@@ -83,25 +92,29 @@ def _machine_open_and_the_part_chosen(page: Page, url: str) -> None:
 
 
 def _on(page: Page, step: str) -> None:
+    """The box done taking the page anywhere, the page's journey and the box on ``step``."""
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
     page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=10000)
+    page.wait_for_function(f"(s) => ({STAGE_ON})() === s", arg=f"make/{step}", timeout=10000)
 
 
-def _rail(page: Page) -> list:
-    """The rail's steps as it shows them: number, name, whether a person is on it."""
+def _stages(page: Page) -> list:
+    """The journey's stages as the box shows them: each one's number and name, and
+    whether a person is on it."""
     return page.evaluate(
-        """() => [...document.querySelectorAll('#journey-rail .journey-steps button')].map((b) =>
-            [b.querySelector('.journey-num').textContent, b.querySelector('.journey-label').textContent,
-             b.getAttribute('aria-current') === 'step'])"""
+        """() => [...document.querySelectorAll('#tour-pop .tour-pop-stages button')].map((b) =>
+            [b.textContent, b.getAttribute('aria-current') === 'step'])"""
     )
 
 
-def _enter_make_a_thing(page: Page) -> None:
-    page.locator("#windows-menu > summary").click()
-    entry = page.locator(MAKE_A_THING)
-    expect(entry).to_have_text("Print a part")
-    expect(entry).to_have_attribute("title", re.compile(r"^Print a part: 1 Choose, 2 Shape"))
-    entry.click(timeout=5000)
-    expect(page.locator(RAIL)).to_be_visible(timeout=10000)
+def _choose_print_a_part(page: Page, url: str) -> None:
+    """Tour, in the header, and Print a part chosen in its box's drop-down."""
+    page.locator("#tour-pop-open").click()
+    expect(page.locator(BOX)).to_be_visible()
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Print a part")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    _on(page, "choose")
 
 
 @pytest.mark.e2e
@@ -136,110 +149,176 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
 
 
 @pytest.mark.e2e
-def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
-    """Its view laid out and its rail at Choose; Next by Next to Measure, each step's
-    window in front and the address holding the step; Start has no Next."""
+def test_print_a_part_is_chosen_and_stepped_in_the_tour_box_and_nowhere_else(page: Page, url: str):
+    """The header holds no rail and ⊞ Windows no journey; chosen in the box, its view is
+    laid out and it is entered at Choose; › by › to Slice, then Start chosen by its
+    number, each stage's window in front and the address holding the stage. (See and
+    Measure need a slice: tests/e2e/test_tour.py goes through them, with a slicer.)"""
     _machine_open_and_the_part_chosen(page, url)
-    expect(page.locator(RAIL)).to_be_hidden()
-    _enter_make_a_thing(page)
-    _on(page, "choose")
-    expect(page.locator(f"{RAIL} .journey-name")).to_have_text("Print a part")
-    assert _rail(page) == [
-        ["1", "Choose", True],
-        ["2", "Shape", False],
-        ["3", "Slice", False],
-        ["4", "See", False],
-        ["5", "Start", False],
-        ["6", "Measure", False],
+    expect(
+        page.locator("#journey-rail, .journey-rail, .journey-next, .journey-leave")
+    ).to_have_count(0)
+    page.locator("#windows-menu > summary").click()
+    body = page.locator(".windows-menu-body")
+    expect(body.locator(".window-item[data-window]").first).to_be_visible()
+    expect(body.locator(".journey-item, [data-journey]")).to_have_count(0)
+    assert "journeys" not in [g.lower() for g in body.locator(".spawn-group").all_inner_texts()]
+    page.keyboard.press("Escape")
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+
+    _choose_print_a_part(page, url)
+    expect(page.locator(TITLE)).to_have_text("Print a part · 1. Choose")
+    assert _stages(page) == [
+        ["1 Choose", True],
+        ["2 Shape", False],
+        ["3 Slice", False],
+        ["4 See", False],
+        ["5 Start", False],
+        ["6 Measure", False],
     ]
-    expect(status(page)).to_contain_text("Print a part › 1 Choose (⊞ Windows › Print a part)")
+    expect(status(page)).to_contain_text("Print a part › 1 Choose (the tour)")
     assert windows.state(page, "site")["shown"] is True
     assert windows.state(page, "machine")["stack"][:2] == ["machine", "machine-print"]
     expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
     expect(page).to_have_url(re.compile(r"[?&]step=choose\b"))
+    # Still no rail, with a journey entered.
+    expect(
+        page.locator("#journey-rail, .journey-rail, .journey-next, .journey-leave")
+    ).to_have_count(0)
 
     for step, window, number, label in (
         ("shape", "part-parameters", 2, "Shape"),
         ("slice", "machine-print", 3, "Slice"),
-        ("see", "machine-print", 4, "See"),
-        ("print", "machine-print", 5, "Start"),
-        ("measure", "part-feedback", 6, "Measure"),
     ):
-        nxt = page.locator(f"{RAIL} .journey-next")
-        expect(nxt).to_have_attribute("data-next", step)
-        expect(nxt).to_contain_text(f"Next {number}{label}")
-        nxt.click()
+        page.locator(f"{BOX} .tour-pop-next").click()
         _on(page, step)
+        expect(page.locator(TITLE)).to_have_text(f"Print a part · {number}. {label}")
         page.wait_for_function("(w) => window.apothecaryPanels.state(w).shown", arg=window)
         expect(page).to_have_url(re.compile(f"[?&]step={step}\\b"))
-        expect(status(page)).to_contain_text(f"Print a part › {number} {label} (Next)")
-        if step == "print":
-            assert windows.state(page, "jobs")["shown"] is True
-    expect(page.locator(f"{RAIL} .journey-next")).to_have_count(0)
+        expect(status(page)).to_contain_text(f"Print a part › {number} {label} (the tour)")
+    page.locator(f"{BOX} .tour-pop-stages button", has_text="5 Start").click()
+    _on(page, "print")
+    page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
+    assert windows.state(page, "jobs")["shown"] is True
+    expect(page).to_have_url(re.compile(r"[?&]step=print\b"))
+    expect(status(page)).to_contain_text("Print a part › 5 Start (the tour)")
 
 
 @pytest.mark.e2e
-def test_a_window_chosen_moves_the_rail_and_a_reload_lands_on_its_step(page: Page, url: str):
-    """Parameters' tab pressed says Shape and moves no window; Print's says Slice; a
-    reload lands on Slice with Print in front; ✕ leaves, the windows where they are."""
+def test_a_window_chosen_moves_the_box_and_the_box_closed_leaves_the_journey(page: Page, url: str):
+    """Parameters' tab pressed moves the box to Shape and no window; Print's to Slice; a
+    reload opens the box on Slice with Print in front; folded, the journey stays; ✕
+    leaves it, the windows where they are and the address without it; and so does Tour
+    pressed again."""
     _machine_open_and_the_part_chosen(page, url)
-    _enter_make_a_thing(page)
-    _on(page, "choose")
+    _choose_print_a_part(page, url)
     site_shown = windows.state(page, "site")["shown"]
     page.locator(".lm_tab .lm_title", has_text=re.compile(r"^Parameters$")).click()
     _on(page, "shape")
+    expect(page.locator(TITLE)).to_have_text("Print a part · 2. Shape")
     assert windows.state(page, "site")["shown"] == site_shown
     expect(page).to_have_url(re.compile(r"[?&]step=shape\b"))
     page.locator(".lm_tab .lm_title", has_text=re.compile(r"^Print$")).click()
     _on(page, "slice")
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
+    expect(page).to_have_url(re.compile(r"[?&]step=slice\b"))
 
     page.reload()
-    expect(page.locator(RAIL)).to_be_visible(timeout=20000)
+    box = page.locator(BOX)
+    expect(box).to_be_visible(timeout=20000)
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
     _on(page, "slice")
     page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
-    expect(status(page)).to_contain_text("Print a part › 3 Slice (the address)")
+    expect(status(page)).to_contain_text("Print a part › 3 Slice (the tour)")
 
-    page.locator(f"{RAIL} .journey-leave").click()
-    expect(page.locator(RAIL)).to_be_hidden()
+    # Folded to its head, the box is open still and the journey is not left.
+    box.locator(".tour-pop-head .tour-pop-title").dblclick()
+    expect(box).to_have_class(re.compile(r"\bfolded\b"))
+    assert page.evaluate(STEP_ON) == "slice"
+    expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
+    box.locator(".tour-pop-head .tour-pop-title").dblclick()
+    expect(box).not_to_have_class(re.compile(r"\bfolded\b"))
+
+    # Its ✕: the journey left.
+    box.locator(".tour-pop-close").click()
+    expect(box).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
     expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
-    expect(status(page)).to_contain_text("Left Print a part")
+    expect(status(page)).to_contain_text("Left Print a part: its windows stay where they are")
     assert windows.state(page, "machine-print")["shown"] is True
 
+    # Opened again it enters nothing; ↻ takes the page to its stage, and Tour pressed
+    # again leaves that journey as ✕ did.
+    opener = page.locator("#tour-pop-open")
+    opener.click()
+    expect(box).to_be_visible()
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+    expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
+    box.locator(".tour-pop-put").click()
+    _on(page, "slice")
+    expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
+    opener.click()
+    expect(box).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+    expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
+    expect(status(page)).to_contain_text("Left Print a part")
+    # And a reload finds no box and no journey.
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    expect(box).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+
 
 @pytest.mark.e2e
-def test_at_1280_the_rail_names_the_step_a_person_is_on_and_next_and_make_stay_in_view(
+def test_an_address_naming_a_journey_and_a_stage_opens_the_box_there_and_starts_no_job(
     page: Page, url: str
 ):
-    """Six steps, Next and ⚒ Make in one row: the other steps show their numbers alone,
-    so Next and ⚒ Make are in view, Make naming what it makes."""
-    page.set_viewport_size({"width": 1280, "height": 800})
-    _machine_open_and_the_part_chosen(page, url)
-    _enter_make_a_thing(page)
-    _on(page, "choose")
-    shown = page.evaluate(
-        """() => [...document.querySelectorAll('#journey-rail .journey-steps button')].map((b) =>
-            getComputedStyle(b.querySelector('.journey-label')).display !== 'none')"""
+    """``?journey=make&step=see`` in a browser that has not taken the tour: the box opens
+    on Print a part's See, the page taken there as a reload with the box open takes it
+    -- printer_1's Machine opened, the footpedal chosen, the stage's window in front --
+    and, no slice of the footpedal being kept, none is started: the box says ↻ slices
+    it. The journey's view is not laid out: the windows stay as the browser has them."""
+    jobs = []
+
+    def asked(request):
+        if request.method == "POST" and (
+            "/cam/cut" in request.url or "/slicer/slice" in request.url
+        ):
+            jobs.append(request.url)
+
+    page.on("request", asked)
+    page.goto(f"{url}/viewer/sites/garage?journey=make&step=see")
+    box = page.locator(BOX)
+    expect(box).to_be_visible(timeout=30000)
+    expect(page.locator(TITLE)).to_have_text("Print a part · 4. See")
+    page.wait_for_function(
+        "() => window.fractalViewer.machine?.handle?.kind() === 'printer'"
+        " && window.fractalViewer.selectedName === 'footpedal'",
+        timeout=60000,
     )
-    assert shown == [True, False, False, False, False, False]
-    expect(page.locator(f"{RAIL} .journey-next")).to_be_in_viewport(ratio=1)
-    expect(page.locator("#make-here")).to_have_text(re.compile(r"^⚒ Make footpedal on "))
-    expect(page.locator("#make-here")).to_be_in_viewport(ratio=1)
+    _on(page, "see")
+    page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
+    expect(box.locator(".tour-pop-needs")).to_have_text(NO_SLICE)
+    assert jobs == []
+    did = [t.strip() for t in box.locator(".tour-pop-did li").all_text_contents()]
+    assert not any("its windows laid out" in d for d in did), did
+    expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
+    expect(page).to_have_url(re.compile(r"[?&]step=see\b"))
+    # Its ✕ leaves it, and the address forgets it, as for a journey chosen in the box.
+    box.locator(".tour-pop-close").click()
+    expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
+    expect(status(page)).to_contain_text("Left Print a part")
 
 
 @pytest.mark.e2e
-def test_on_a_narrow_page_the_rail_gives_way_and_the_banner_stays_whole(page: Page, url: str):
-    """At a page 1000 px wide the rail drops its name and its steps' names, and is never
-    drawn over the banner: the site's crumb and its ▾ stay whole."""
-    page.set_viewport_size({"width": 1000, "height": 800})
+def test_at_1280_with_a_journey_entered_make_names_what_it_makes_and_stays_in_view(
+    page: Page, url: str
+):
+    """A journey takes no room in the header: at a page 1280 px wide ⚒ Make is whole in
+    its row, naming what it makes, with Print a part entered."""
+    page.set_viewport_size({"width": 1280, "height": 800})
     _machine_open_and_the_part_chosen(page, url)
-    _enter_make_a_thing(page)
-    _on(page, "choose")
-    laid = page.evaluate(
-        """() => { const box = (s) => document.querySelector(s).getBoundingClientRect();
-            const rail = document.querySelector('#journey-rail');
-            return { rail: box('#journey-rail').left, crumb: box('#site-menu').right,
-                     name: getComputedStyle(rail.querySelector('.journey-name')).display,
-                     label: getComputedStyle(rail.querySelector('.journey-steps .journey-label')).display }; }"""
-    )
-    assert laid["rail"] >= laid["crumb"], laid
-    assert laid["name"] == laid["label"] == "none", laid
+    _choose_print_a_part(page, url)
+    expect(page.locator("#make-here")).to_have_text(re.compile(r"^⚒ Make footpedal on "))
+    expect(page.locator("#make-here")).to_be_in_viewport(ratio=1)

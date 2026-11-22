@@ -739,13 +739,15 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     assert windows.state(page, "gather")["stack"][-1] == "gather"
     assert windows.state(page, "gather")["stack"][0] == "site"
 
-    # ⊞ Windows: the windows, and no view; its first entry focused, the arrows moving.
+    # ⊞ Windows: the windows, and no view or journey; its first entry focused, the
+    # arrows moving.
     page.locator("#windows-menu > summary").click()
     body = page.locator(".windows-menu-body")
     expect(body.locator(".view-item, [data-view]")).to_have_count(0)
     assert "views" not in [g.lower() for g in body.locator(".spawn-group").all_inner_texts()]
     expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
-    entries = body.locator(".journey-item, .window-item[data-window]")
+    expect(body.locator(".journey-item, [data-journey]")).to_have_count(0)
+    entries = body.locator(".window-item[data-window]")
     focused = "(el) => el === document.activeElement"
     assert entries.nth(0).evaluate(focused)
     page.keyboard.press("ArrowDown")
