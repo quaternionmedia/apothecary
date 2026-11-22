@@ -75,7 +75,8 @@ diameter are set before Keep, and the tour's Level a bed chooses it at Measure.
 The tour's **Level a bed** takes the page through it a stage at a time: Heat, Probe,
 Compare, Measure, Shims, Print, Fit and After. Heating, probing, measuring and fitting
 are the person's: a stage brings forward the window where each is done or seen, and
-does none of them ([the tour](tour.md)).
+does none of them ([the tour](tour.md)). [Walkthrough page 53](../walkthrough/53-a-bed-levelled-in-the-page.md)
+walks it on a simulated printer.
 
 ## What is computed
 

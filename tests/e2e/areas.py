@@ -176,6 +176,8 @@ AREAS = {
             "apothecary/bed_shims.py",
             "apothecary/routes/bed.py",
             "parts/bed_shims/*",
+            "walkthrough/53-*",
+            "walkthrough/screenshots/53-*",
             "apothecary/static/loop_plots.js",
             "apothecary/control_loops.py",
             "apothecary/loop_document.py",
@@ -218,6 +220,7 @@ AREAS = {
             "test_steps_firmware.py",
             "test_steps_one_machine.py",
             "test_loops_window.py",
+            "test_level_a_bed.py",
         ),
     },
     "parts": {

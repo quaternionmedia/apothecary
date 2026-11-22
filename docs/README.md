@@ -67,6 +67,7 @@ at page 00.
 | [50 — A printer tuned from what its prints show](../walkthrough/50-a-printer-tuned-from-what-it-shows.md) | The faults a person sees and the settings that govern each; a cube's stringing looked at and kept as a look of the printer's tuning, its one change applied, a piece sliced before it saying nothing, a lever that did not govern put back and the next stepped, and the fault shrinking |
 | [51 — A part's cabinet](../walkthrough/51-a-part-s-cabinet.md) | A cube's print opening its drawer and its end told there, the parameters and STL it was made from kept, a look and a note filed in the drawer, the same file printed again a drawer of its own, an undone look saying so, and `apothecary cabinet` |
 | [52 — Shims that level a bed](../walkthrough/52-shims-that-level-a-bed.md) | printer_1's recorded probe at its four screws, the low corners lifted to the highest and a corner under a layer left out, the bow no shim fixes set against the bound for a stored mesh, a made-up heated pair's floor, the part and its slice, a made-up after pair, and `apothecary bed` |
+| [53 — A bed levelled in the page](../walkthrough/53-a-bed-levelled-in-the-page.md) | The tour's Level a bed on a simulated printer_1: two heated runs in Runs, one drawn over the bed, the floor and the bow in Differences, the bed screw and a mount's diameter set in Parameters and kept, the shims at their screws as wide as the mount after a reload, sliced in the Print window, and the pair after them against the pair before; written by the browser suite |
 
 ## The checklists
 

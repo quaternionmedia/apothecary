@@ -823,7 +823,7 @@ LEVEL = Journey(
             forward=("bed-runs", "machine"),
             owns=("bed-runs",),
             puts=(("fit", "printer_1"),),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#1",),
         ),
         Step(
             "compare",
@@ -832,7 +832,7 @@ LEVEL = Journey(
             "bow, which no shim fixes",
             forward=("bed-differences",),
             owns=("bed-differences",),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#2",),
         ),
         Step(
             "measure",
@@ -844,7 +844,7 @@ LEVEL = Journey(
             forward=("part-parameters", "bed-fixes"),
             owns=("part-parameters", "selected"),
             puts=(("part", "bed_shims"),),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#3",),
         ),
         Step(
             "shims",
@@ -854,7 +854,7 @@ LEVEL = Journey(
             forward=("bed-fixes",),
             owns=("bed-fixes",),
             puts=(("fit", "printer_1"),),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#4",),
         ),
         Step(
             "print",
@@ -864,7 +864,7 @@ LEVEL = Journey(
             "▶ Print is a person's",
             forward=("machine-print", "bed-fixes"),
             owns=("machine-print",),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#5",),
         ),
         Step(
             "fit",
@@ -881,7 +881,7 @@ LEVEL = Journey(
             "the bound for a stored mesh",
             forward=("bed-history", "bed-differences"),
             owns=("bed-history",),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#6",),
         ),
     ),
 )
