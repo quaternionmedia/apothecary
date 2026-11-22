@@ -168,7 +168,7 @@ A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat a
 6 Print: nothing more to do
     Level a bed › 6 Print (the tour): Make these in Fixes: the shims rendered at their thicknesses and the mount kept, and sliced for the printer in its Print window, where Print a part goes on; ▶ Print is a person's
 7 Fit: nothing more to do
-    Level a bed › 7 Fit (the tour): each shim on the mount its label names, slot first, its tab out past the mount; then the bed heated, soaked and probed twice again
+    Level a bed › 7 Fit (the tour): each shim's thickness checked against its design, where the part's Feedback measures a printed piece; each on the mount its label names, slot first, its tab out past the mount; then the bed heated, soaked and probed twice again
 8 After: nothing more to do
     Level a bed › 8 After (the tour): after less before in Differences, and each reading's range in History against the bound for a stored mesh
 ```

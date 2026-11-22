@@ -869,8 +869,9 @@ LEVEL = Journey(
         Step(
             "fit",
             "Fit",
-            "each shim on the mount its label names, slot first, its tab out past the mount; "
-            "then the bed heated, soaked and probed twice again",
+            "each shim's thickness checked against its design, where the part's Feedback "
+            "measures a printed piece; each on the mount its label names, slot first, its tab "
+            "out past the mount; then the bed heated, soaked and probed twice again",
             forward=("bed-runs",),
             shown_by=("52-shims-that-level-a-bed.md",),
         ),
