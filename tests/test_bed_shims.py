@@ -172,6 +172,22 @@ def test_the_estimate_is_the_viewer_s():
     assert bs.grid_area_estimate([220, 220], {"x": 30, "y": 0}).x0 == 40
 
 
+def test_a_probe_that_said_its_points_places_the_grid():
+    """A printer's reading whose probe said where each point lies (G29 V3) is placed
+    there, not by the estimate, and the shims say so."""
+    from apothecary.firmware.models import BedReading
+
+    probed = BedReading(
+        method="probe",
+        mesh=[[0.0, 0.1], [0.2, 0.3]],
+        points=[[10.0, 10.0, 0.0], [176.0, 10.0, 0.1], [176.0, 210.0, 0.3], [10.0, 210.0, 0.2]],
+        area={"min": {"x": 10.0, "y": 10.0}, "max": {"x": 176.0, "y": 210.0}},
+    )
+    area = bs.grid_area(None, probed)
+    assert (area.x0, area.y0, area.x1, area.y1) == (10.0, 10.0, 176.0, 210.0)
+    assert area.source == "the points its probe said it touched"
+
+
 def test_a_run_says_whether_it_was_heated():
     at = datetime(2026, 9, 26, 21, 8, tzinfo=timezone.utc)
     cold = bs.Run("r1", at, "probe", 15.04)

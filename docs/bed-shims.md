@@ -128,12 +128,19 @@ profile in place of the model's, with where it was measured.
 
 ## Where the grid lies
 
-Marlin prints a mesh without its positions. A printer's grid is placed by the
-estimate the viewer draws the Bed mesh layer by: the volume less what the probe's
-offset puts out of reach, Marlin's default inset inside that
-(`grid_area_estimate`, `meshBounds` in `static/machine_marks.js`). A profile that
-holds `measured.mesh_area`, the grid's first and last points with their source,
-is placed by that instead, and the result names which it used.
+Marlin prints a stored mesh without its positions, but its probe says where each
+point lies as it probes it, at `G29 V3`, which is how **Probe bed** probes. A
+reading so probed keeps where its first and last points lie (its `area`), and the
+plane is fitted there and the Bed mesh layer drawn there. A reading without one (a
+read of the stored mesh, or a probe kept before the probe said its points) is placed
+by a profile's `measured.mesh_area`, the grid's first and last points with their
+source, and otherwise by the estimate the viewer draws the Bed mesh layer by: the
+volume less what the probe's offset puts out of reach, Marlin's default inset inside
+that (`grid_area_estimate`, `meshBounds` in `static/machine_marks.js`). The result
+names which it used. The estimate insets the probe's reach as well as the bed's
+edge, where Marlin insets only the edge, so it can stand short of the probed grid.
+On printer_1's first heated pair the placements Marlin's rules allow move a shim by
+up to 0.2 mm.
 
 ## What shims cannot fix
 

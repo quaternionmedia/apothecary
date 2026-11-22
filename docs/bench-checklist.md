@@ -167,7 +167,10 @@ one machine on the number another held; nothing in them moves a machine.
       state card reads `leveling: homing`, then `probing`; the temperatures
       keep updating; a jog pressed meanwhile is refused (*a bed reading holds
       the port*). When it reads `saved`, the heatmap redraws and the history
-      has a *probe* row: compare its range with the last one.
+      has a *probe* row: compare its range with the last one. Its line says
+      *probed X a–b, Y c–d mm*: where the board said its points lie (`G29 V3`).
+      No such words, and the board's `G29` said no `Bed X:` lines: the
+      reading's ⤓ log shows what it said.
 - [ ] **Mesh on**, then **Read mesh** (⌗746): the record says *leveling on*.
       Apothecary never writes the printer's EEPROM; to keep a mesh across a
       power cycle, store it from the printer's own screen.

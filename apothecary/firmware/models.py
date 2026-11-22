@@ -635,10 +635,14 @@ class BedReading(BaseModel):
     probe_offset: Optional[dict] = None  # Marlin's: M851
     hotend_c: Optional[float] = None
     bed_c: Optional[float] = None
-    # A router's: where the grid lies in the working area, min and max x and y in mm
-    # from its front-left corner (mpos + travel), so the relief is drawn where it was
-    # probed; a printer's grid has no positions and is placed by estimate.
+    # Where the grid lies, min and max x and y in mm from the front-left corner, so the
+    # relief is drawn and the plane fitted where it was probed: a router's in its working
+    # area (mpos + travel); a printer's from the points its probe said it touched
+    # (`points`), and without them none, its grid placed by estimate.
     area: Optional[dict] = None
+    # A printer's probe's points as Marlin said them (G29 V3): x and y where the probe
+    # stood, in bed coordinates, and the height read; none for a read of the stored mesh.
+    points: Optional[List[List[float]]] = None
     lines: List[str] = Field(default_factory=list)  # everything the firmware said, for the log
 
 

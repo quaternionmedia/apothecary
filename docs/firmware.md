@@ -804,7 +804,7 @@ drawn the same way whichever took it.
 A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
 probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
-(`G28`, `G29`) and then reads; it is offered once the latch is armed, and runs as a job that
+(`G28`, `G29 V3`) and then reads; it is offered once the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
@@ -813,7 +813,12 @@ relief over the printer's bed in the world. The corner buttons, offered with
 the probe once the latch is armed, move the nozzle to paper height at each
 corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
-the `G29 W` points an `M503` prints.
+the `G29 W` points an `M503` prints. At verbosity 3 Marlin's probe says where
+each point lies as it probes it (`Bed X: .. Y: .. Z: ..`), and a probe's
+reading keeps those points (`points`) and, when they are the grid's, the
+first and last of them as where the grid lies (`area`, `gcode.probed_area`):
+the relief is drawn there and a printer's shims are fitted there. A read of
+the stored mesh says no place, and its grid is placed by estimate.
 A print's start turns a stored mesh on only through the `stored-mesh` start
 piece (`M420 S1` after `G28`; whether `G28` leaves a mesh on is the
 firmware's, the bench checklist's D), named in the printer's slicer profile and refused unless the board's
@@ -999,7 +1004,7 @@ port list and monitor -- is an engine slot:
 | Engine | What it is |
 |---|---|
 | `pyserial` | the default: any baud, every platform |
-| `simulated` | an in-process pretend Marlin for `serve --simulated` and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
+| `simulated` | an in-process pretend Marlin for `serve --simulated` and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29` (at `V3`, with each point's place), `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
 
 `apothecary serve --simulated` is the way to try all of this with no board: an
 idle simulated Ender pinned to printer_1's mainboard, a simulated ESP32

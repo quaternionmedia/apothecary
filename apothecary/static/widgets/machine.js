@@ -1381,11 +1381,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             meshEl.innerHTML = [...rows].reverse().map((row) => row.map((v) => `<div class="cell" style="background:${heat(v, st.min, st.max)}" title="${v.toFixed(3)} mm">${v.toFixed(2)}</div>`).join("")).join("");
             const c = st.corners || {};
             // A router's map says where its points lie (record.area) and reads in machine
-            // coordinates; a printer's mesh is its firmware's, with the leveling state.
-            const a = rec.area;
+            // coordinates; a printer's mesh is its firmware's, with the leveling state, and
+            // where its probe said the points lie when it said (G29 V3).
+            const a = rec.area, table = rec.method === "G38.2";
             statsEl.innerHTML = `${esc(rec.method)} · ${stamp(rec.at)} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm ${esc(w.across)}<br>`
                 + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b>`
-                + (a ? ` · Z in machine coordinates · X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm from the front-left corner` : ` · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`)
+                + (table && a ? ` · Z in machine coordinates · X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm from the front-left corner` : ` · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`)
+                + (!table && a ? ` · probed X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm, where the probe said` : "")
                 + (rec.probe_offset ? ` · probe offset X${rec.probe_offset.x} Y${rec.probe_offset.y} Z${rec.probe_offset.z}` : "")
                 + (rec.bed_c != null ? ` · bed ${degrees(rec.bed_c)}` : "") + (rec.hotend_c != null ? ` hotend ${degrees(rec.hotend_c)}` : "")
                 + (rec.note ? `<br>note: ${esc(rec.note)}` : "");

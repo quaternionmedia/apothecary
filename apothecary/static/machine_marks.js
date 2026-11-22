@@ -243,7 +243,8 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         const range = hi - lo;
         const exaggeration = meshExaggeration(range);
         // Where the points lie: a router's map says (record.area, from the working area's
-        // front-left corner, where its probe went); a printer's grid is placed by estimate.
+        // front-left corner, where its probe went), and so does a printer's probe that said
+        // where each point lies (G29 V3); any other printer's grid is placed by estimate.
         const bounds = record.area
             ? { min: { x: record.area.min.x, y: record.area.min.y }, max: { x: record.area.max.x, y: record.area.max.y } }
             : meshBounds(frame.volume, record.probe_offset);

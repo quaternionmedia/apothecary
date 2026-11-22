@@ -720,7 +720,15 @@ class SimulatedPrinter:
             time.sleep(min(2.0, ms / 1000) * self.dwell_scale)
         elif code == "G29":
             # A probe takes a while; the busy lines are what Marlin prints while it does.
-            return ["echo:busy: processing", "echo:busy: processing", *self._grid_lines(), "ok"]
+            # At verbosity 3 or more each point probed is said, where the probe stood.
+            said = self._probed_lines() if float(args.get("V") or 0) >= 3 else []
+            return [
+                "echo:busy: processing",
+                *said,
+                "echo:busy: processing",
+                *self._grid_lines(),
+                "ok",
+            ]
         elif code == "G30":
             x = float(args.get("X", self.pos["X"]))
             y = float(args.get("Y", self.pos["Y"]))
@@ -742,6 +750,23 @@ class SimulatedPrinter:
         bow = -0.05 * ((i - 2) ** 2 + (j - 2) ** 2) / 4
         rough = random.Random(f"{self.port}:{i:.4f}:{j:.4f}").uniform(-0.01, 0.01)
         return tilt + bow + rough
+
+    # Where the simulated probe's five by five points lie, in bed coordinates: Marlin's
+    # bounds for its 220 mm bed and the probe 44 mm left of the nozzle and 10 mm in
+    # front (M851), 10 mm in from the bed's edges and up to where the probe reaches.
+    PROBED_X = (10.0, 176.0)
+    PROBED_Y = (10.0, 210.0)
+
+    def _probed_lines(self) -> List[str]:
+        """``Bed X: .. Y: .. Z: ..`` for each point, column by column and each column
+        back and forth along Y, as Marlin's G29 probes and says them at verbosity 3."""
+        (x0, x1), (y0, y1) = self.PROBED_X, self.PROBED_Y
+        lines = []
+        for i in range(5):
+            for j in range(5) if i % 2 == 0 else reversed(range(5)):
+                x, y = x0 + (x1 - x0) * i / 4, y0 + (y1 - y0) * j / 4
+                lines.append(f"Bed X: {x:.2f} Y: {y:.2f} Z: {self._bed_z(i, j):.2f}")
+        return lines
 
     def _grid_lines(self) -> List[str]:
         lines = ["Bilinear Leveling Grid:", "      0      1      2      3      4"]
@@ -1856,6 +1881,11 @@ GRID_HEADER_RE = re.compile(r"^\s*(\d+(?:\s+\d+)+)\s*$")
 GRID_ROW_RE = re.compile(r"^\s*(\d+)((?:\s+[-+]?\d+\.\d+)+)\s*$")
 G29_POINT_RE = re.compile(r"G29 W I(\d+) J(\d+) Z([-+]?\d+\.\d+)")
 PROBE_OFFSET_RE = re.compile(r"M851 X([-+]?\d+\.?\d*) Y([-+]?\d+\.?\d*) Z([-+]?\d+\.?\d*)")
+# A point the probe touched, as Marlin says it at G29's verbosity 3 or more (probe.cpp):
+# where the probe stood, in bed coordinates, and the height it read.
+PROBED_POINT_RE = re.compile(
+    r"Bed X:\s*([-+]?\d+(?:\.\d+)?)\s+Y:\s*([-+]?\d+(?:\.\d+)?)\s+Z:\s*([-+]?\d+(?:\.\d+)?)"
+)
 LEVELING_STATE_RE = re.compile(r"Bed Leveling (ON|OFF)")
 
 
@@ -1946,6 +1976,27 @@ def parse_probe_offset(lines: List[str]) -> Optional[dict]:
     return None
 
 
+def parse_probed_points(lines: List[str]) -> List[List[float]]:
+    """Each point a probe said it touched, in the order said: x and y where the probe
+    stood, in bed coordinates, and the height it read."""
+    found = (PROBED_POINT_RE.search(line) for line in lines)
+    return [[float(m.group(1)), float(m.group(2)), float(m.group(3))] for m in found if m]
+
+
+def probed_area(points: List[List[float]], mesh: List[List[float]]) -> Optional[dict]:
+    """Where ``mesh``'s first and last points lie, from the points its probe said it
+    touched: min and max x and y, in the form a router's map keeps (``BedReading.area``).
+    None unless the points are the grid's: as many places along X as it has columns and
+    along Y as it has rows, each point at one of each."""
+    if not points or not mesh or not mesh[0]:
+        return None
+    xs = sorted({round(p[0], 1) for p in points})
+    ys = sorted({round(p[1], 1) for p in points})
+    if len(xs) != len(mesh[0]) or len(ys) != len(mesh) or len(points) != len(xs) * len(ys):
+        return None
+    return {"min": {"x": xs[0], "y": ys[0]}, "max": {"x": xs[-1], "y": ys[-1]}}
+
+
 def parse_leveling_state(lines: List[str]) -> Optional[bool]:
     for line in lines:
         m = LEVELING_STATE_RE.search(line)
@@ -1957,6 +2008,9 @@ def parse_leveling_state(lines: List[str]) -> Optional[bool]:
 # The stored mesh's line: what Read mesh asks for, and what a board without one (a
 # GRBL controller) cannot be asked.
 STORED_MESH = "M420 V"
+# The probe: Marlin's G29 at verbosity 3, which says where each point lies as it probes
+# it (`Bed X: .. Y: .. Z: ..`); a plain G29 prints the grid without its positions.
+PROBE_BED = "G29 V3"
 LEVELING_PROBE_TIMEOUT_S = 900.0  # a five-by-five probe on a slow bed
 
 
@@ -1968,17 +2022,22 @@ def read_bed(
     stage: Callable[..., None] = lambda word, points=None: None,
 ) -> BedReading:
     """A printer's bed reading, Marlin's: with ``probe``, home (``G28``) and probe
-    (``G29``) first; then the stored mesh (``M420 V``), the probe offset (``M851``)
+    (``G29 V3``) first; then the stored mesh (``M420 V``), the probe offset (``M851``)
     and the temperatures (``M105``). ``stage`` is told each step as it starts;
     ``grid`` is a router's and means nothing here, the mesh being the firmware's.
+    A probe keeps the points it said it touched, and where they say the grid lies
+    (``probed_area``); a read of the stored mesh has neither.
     This dialect's ``Dialect.bed_reading``; the router's is ``grbl.probe_table``."""
+    lines: List[str] = []
+    probed: List[List[float]] = []
     if probe:
         stage("homing")
         link.command("G28", timeout=120.0, origin="control")
         stage("probing")
-        link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
+        probe_lines = link.command(PROBE_BED, timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
+        probed = parse_probed_points(probe_lines)
+        lines += [line for line in probe_lines if not line.startswith("echo:busy")]
     stage("reading")
-    lines: List[str] = []
     mesh_lines = link.command(STORED_MESH, timeout=15.0, origin="query")
     lines += mesh_lines
     offset_lines = link.command("M851", timeout=10.0, origin="query")
@@ -1987,15 +2046,18 @@ def read_bed(
     lines += temp_lines
     grids = parse_meshes(mesh_lines)
     temps = parse_m105(next((ln for ln in temp_lines if is_temperature_line(ln)), ""))
+    mesh = grids[0] if grids else []
     return BedReading(
         method="probe" if probe else "read",
-        mesh=grids[0] if grids else [],
+        mesh=mesh,
         subdivided=grids[1] if len(grids) > 1 else None,
         stats=mesh_stats(grids[0]) if grids else {},
         leveling_on=parse_leveling_state(mesh_lines),
         probe_offset=parse_probe_offset(offset_lines),
         hotend_c=temps["hotends"][0].actual if temps["hotends"] else None,
         bed_c=temps["bed"].actual if temps["bed"] else None,
+        points=probed or None,
+        area=probed_area(probed, mesh),
         lines=lines[-400:],
     )
 

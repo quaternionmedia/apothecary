@@ -546,12 +546,14 @@ def bed_screws(profile) -> BedScrews:
 
 
 def grid_area(profile, reading) -> Area:
-    """Where ``reading``'s grid lies: its own ``area`` (a router's), else the profile's
+    """Where ``reading``'s grid lies: its own ``area`` (a router's map, or a printer's
+    probe that said where each point lies), else the profile's
     ``measured.mesh_area``, else the estimate from the profile's volume and the
     reading's probe offset."""
     if reading.area:
         a = reading.area
-        return Area(a["min"]["x"], a["min"]["y"], a["max"]["x"], a["max"]["y"], "the reading")
+        said = "the points its probe said it touched" if reading.points else "the reading"
+        return Area(a["min"]["x"], a["min"]["y"], a["max"]["x"], a["max"]["y"], said)
     held = profile.measured.get("mesh_area")
     if held is not None:
         v = held.value

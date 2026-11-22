@@ -1403,13 +1403,44 @@ MESH_REPORT = [
     "ok",
 ]
 
+# What Marlin's G29 at verbosity 3 says of each point as it probes it (probe.cpp): where
+# the probe stood, column by column, each column back and forth along Y.
+GRID = [[-0.15, 0.0, 0.15], [-0.1, 0.05, 0.2], [-0.05, 0.1, 0.25]]  # MESH_REPORT's
+PROBED_X, PROBED_Y = (10.0, 93.0, 176.0), (10.0, 110.0, 210.0)
+PROBED = [
+    f"Bed X: {PROBED_X[i]:.2f} Y: {PROBED_Y[j]:.2f} Z: {GRID[j][i]:.2f}"
+    for i in range(3)
+    for j in (range(3) if i % 2 == 0 else reversed(range(3)))
+]
+
 LEVELING = {
     **REPLIES,
     "G28": ["ok"],
-    "G29": ["echo:busy: processing", "echo:busy: processing", *MESH_REPORT[:6], "ok"],
+    gcode.PROBE_BED: [
+        "echo:busy: processing",
+        *PROBED,
+        "echo:busy: processing",
+        *MESH_REPORT[:6],
+        "ok",
+    ],
     "M420 V": MESH_REPORT,
     "M851": ["echo:  M851 X-44.00 Y-10.00 Z-3.15 ; (mm)", "ok"],
 }
+
+
+def test_a_probe_that_says_its_points_places_the_grid_and_one_that_does_not_is_estimated():
+    points = gcode.parse_probed_points(["echo:busy: processing", *PROBED, "ok"])
+    assert len(points) == 9 and points[0] == [10.0, 10.0, -0.15]
+    mesh = gcode.parse_meshes(MESH_REPORT)[0]
+    assert gcode.probed_area(points, mesh) == {
+        "min": {"x": 10.0, "y": 10.0},
+        "max": {"x": 176.0, "y": 210.0},
+    }
+    # Points that are not the grid's place nothing: one missing, or another grid's.
+    assert gcode.probed_area(points[:-1], mesh) is None
+    assert gcode.probed_area(points, [row[:2] for row in mesh]) is None
+    assert gcode.probed_area([], mesh) is None
+    assert gcode.parse_probed_points(MESH_REPORT) == []
 
 
 def test_parse_meshes_reads_the_grid_and_the_subdivided_one():
@@ -1470,6 +1501,13 @@ def test_simulator_answers_the_leveling_codes(monkeypatch):
     link = gcode.GcodeLink("/dev/ttySIM", 115200, gcode.SimulatedPrinter("/dev/ttySIM", 115200))
     probed = gcode.control_printer(link, "G29")
     assert probed[0].startswith("echo:busy") and probed[-1] == "ok"
+    assert gcode.parse_probed_points(probed) == []  # a plain G29 says no place
+    said = gcode.parse_probed_points(link.command(gcode.PROBE_BED))
+    assert len(said) == 25
+    assert gcode.probed_area(said, gcode.parse_meshes(probed)[0]) == {
+        "min": {"x": 10.0, "y": 10.0},
+        "max": {"x": 176.0, "y": 210.0},
+    }
     grids = gcode.parse_meshes(link.command("M420 V"))
     assert len(grids) == 1 and len(grids[0]) == 5 and len(grids[0][0]) == 5
     stats = gcode.mesh_stats(grids[0])
@@ -1486,7 +1524,7 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
 
     class SlowProbe(ScriptedTransport):
         def write(self, data):
-            if data.decode().strip() == "G29":
+            if data.decode().strip() == gcode.PROBE_BED:
                 gate.wait(5)  # a probe takes minutes; the test says when it is done
             super().write(data)
 
@@ -1517,7 +1555,7 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
     job.thread.join(5)
     assert job.stage == "saved" and job.error is None and job.record is not None
     sent = ScriptedTransport.instances[0].sent
-    assert sent.index("G28") < sent.index("G29") < sent.index("M420 V") < sent.index("M851")
+    assert sent.index("G28") < sent.index("G29 V3") < sent.index("M420 V") < sent.index("M851")
     rec = job.record
     assert rec.method == "probe" and rec.note == "after new springs"
     assert rec.mesh == [[-0.15, 0.0, 0.15], [-0.1, 0.05, 0.2], [-0.05, 0.1, 0.25]]
@@ -1525,6 +1563,10 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
     assert rec.stats["range"] == 0.4 and rec.leveling_on is True
     assert rec.probe_offset == {"x": -44.0, "y": -10.0, "z": -3.15}
     assert rec.hotend_c == 22.3 and rec.bed_c == 23.59
+    # Where the probe said each point lies, and so where the grid does.
+    assert len(rec.points) == 9 and [10.0, 10.0, -0.15] in rec.points
+    assert rec.area == {"min": {"x": 10.0, "y": 10.0}, "max": {"x": 176.0, "y": 210.0}}
+    assert PROBED[0] in rec.lines and "echo:busy: processing" not in rec.lines
     assert rec.firmware == "Marlin TH3D UFW 2.94a (Jan 17 2025 11:35:34)"
     assert "echo:Bed Leveling ON" in rec.lines
     saved = devices.leveling_records(port)
@@ -1538,7 +1580,8 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
     job = devices.start_leveling(port, probe=False, links=scripted_links)
     job.thread.join(5)
     assert job.stage == "saved" and job.record.method == "read"
-    assert sent.count("G29") == 1 and sent.count("G28") == 1
+    assert job.record.points is None and job.record.area is None  # the stored mesh says no place
+    assert sent.count("G29 V3") == 1 and sent.count("G28") == 1
     assert len(devices.leveling_records(port)) == 2
 
 
@@ -1582,7 +1625,7 @@ def test_leveling_job_reports_a_board_that_will_not_probe(fake_arduino_cli, scri
     port = "/dev/ttyFAKE1"
     scripted_links.control.arm(port)
     devices.printer_status(port, links=scripted_links)
-    ScriptedTransport.instances[0].replies = {**LEVELING, "G29": ["Error:Probing failed"]}
+    ScriptedTransport.instances[0].replies = {**LEVELING, gcode.PROBE_BED: ["Error:Probing failed"]}
     job = devices.start_leveling(port, probe=True, links=scripted_links)
     job.thread.join(5)
     assert job.stage == "failed" and "Probing failed" in job.error
