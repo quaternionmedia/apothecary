@@ -103,7 +103,7 @@ box opens on what the stage needs, in the page's own words for it -- *esp32_blin
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
 section*. With that done, ↻ takes the page the rest of the way.
 
-**Nothing is armed, started, sent or made.** Start's stage brings the Print window, where ▶ Print is, and Jobs
+**Nothing is armed, started, sent or made.** Print's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
 Make are a person's.
@@ -135,7 +135,9 @@ A word is a line of `tour/feedback.jsonl` under the state folder
 (`APOTHECARY_STATE_DIR`, [configuration](configuration.md#apothecary_-variables)): the
 stage (`make/slice`), `works` or `off`, what is off, who said it, the moment, and the
 commit the server ran, with whether its tree had changes beside it. A line is never
-rewritten; the latest for a stage is its feedback.
+rewritten; the latest for a stage is its feedback. A word on a stage no journey has
+is kept as it is: shown on no stage, and given back by `GET /tour/feedback` with the
+rest.
 
 ## The routes
 

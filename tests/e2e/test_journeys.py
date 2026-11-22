@@ -151,7 +151,7 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
 @pytest.mark.e2e
 def test_print_a_part_is_chosen_and_stepped_in_the_tour_box_and_nowhere_else(page: Page, url: str):
     """The header holds no rail and ⊞ Windows no journey; chosen in the box, its view is
-    laid out and it is entered at Choose; › by › to Slice, then Start chosen by its
+    laid out and it is entered at Choose; › by › to Slice, then Print chosen by its
     number, each stage's window in front and the address holding the stage. (See and
     Measure need a slice: tests/e2e/test_tour.py goes through them, with a slicer.)"""
     _machine_open_and_the_part_chosen(page, url)
@@ -173,7 +173,7 @@ def test_print_a_part_is_chosen_and_stepped_in_the_tour_box_and_nowhere_else(pag
         ["2 Shape", False],
         ["3 Slice", False],
         ["4 See", False],
-        ["5 Start", False],
+        ["5 Print", False],
         ["6 Measure", False],
     ]
     expect(status(page)).to_contain_text("Print a part › 1 Choose (the tour)")
@@ -196,12 +196,12 @@ def test_print_a_part_is_chosen_and_stepped_in_the_tour_box_and_nowhere_else(pag
         page.wait_for_function("(w) => window.apothecaryPanels.state(w).shown", arg=window)
         expect(page).to_have_url(re.compile(f"[?&]step={step}\\b"))
         expect(status(page)).to_contain_text(f"Print a part › {number} {label} (the tour)")
-    page.locator(f"{BOX} .tour-pop-stages button", has_text="5 Start").click()
+    page.locator(f"{BOX} .tour-pop-stages button", has_text="5 Print").click()
     _on(page, "print")
     page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
     assert windows.state(page, "jobs")["shown"] is True
     expect(page).to_have_url(re.compile(r"[?&]step=print\b"))
-    expect(status(page)).to_contain_text("Print a part › 5 Start (the tour)")
+    expect(status(page)).to_contain_text("Print a part › 5 Print (the tour)")
 
 
 @pytest.mark.e2e

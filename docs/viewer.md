@@ -821,12 +821,11 @@ what it made:
 | Journey | Its steps | What it hands on |
 |---|---|---|
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
-| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Start, 6 Measure | a job on the printer, and its correction |
+| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print, 6 Measure | a job on the printer, and its correction |
 | **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut, 6 Measure | a job on the router, and its tool's allowance |
 | **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
 | **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
-| **Start a site** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
-| **Watch a site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
+| **Run a site** (`run`) | 1 Steps, 2 Members, 3 Audit, 4 Space, 5 Hour | a site in working order, and what each machine's hour held |
 | **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
 | **Join a hose** (`join`) | 1 Ends, 2 Adapter, 3 Ready | the adapter between two ends, for Print a part: it stands in the universe, where the port part and the adapter are ([above](#presets-and-the-adapter-between-two-ends)) |
 
@@ -838,7 +837,7 @@ what it made:
 | 2 | **Shape** | Parameters, then Selected | Selected, Parameters |
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
-| 5 | **Start** | the Machine, then Jobs | the Machine, Jobs |
+| 5 | **Print** | the Print window, then Jobs | the Machine, Jobs |
 | 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure | the Feedback window |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also

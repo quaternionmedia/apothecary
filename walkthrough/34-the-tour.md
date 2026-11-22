@@ -38,7 +38,7 @@ printer_1's Machine opened
 footpedal chosen
 footpedal named under makes in printer_1's Print window
 Print a part entered, its windows laid out
-Print a part › 1 Choose (the tour): the part, among the site's pieces
+Print a part › 1 Choose (the tour): a part, among the site's pieces
 ```
 
 ## 3. ✓ Works keeps the word and takes the page to the next stage, with what to try
@@ -66,10 +66,10 @@ Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 
 
 ## 5. ✗ Off keeps what is off, and only with it
 
-✗ Off with the field empty is refused, the box saying what it needs and staying on the stage; with what is off typed, it is kept, and the box goes to Start and takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.
+✗ Off with the field empty is refused, the box saying what it needs and staying on the stage; with what is off typed, it is kept, and the box goes to Print and takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.
 
 ```
-Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 ```
 
 ## 6. A view laid out moves the windows, and not the box
@@ -87,7 +87,7 @@ The Default view laid out: every window goes where that view has it, and the box
 The canvas ring's Panels › Windows › Tour: Back goes to See, the page taken there again, where the box shows what was said of it; Works says otherwise now, and the latest word is the stage's. Off, Next, Take me here, Its page and Who, the name's field, are cells there too, and Tour opens and closes the box.
 
 ```
-Print a part · 5. Start
+Print a part · 5. Print
 ```
 
 ## 8. Reloaded, it is open where it was
@@ -95,7 +95,7 @@ Print a part · 5. Start
 The page reloaded: the box is open again on the stage it showed, where it was left; this browser keeps where it was, the server what was said.
 
 ```
-Print a part · 5. Start
+Print a part · 5. Print
 ```
 
 ## 9. A machine with no board connected is taken as the site plans it
@@ -133,7 +133,7 @@ make/see	works	Ada
 
 ## What this page does not show
 
-- **A stage armed or started.** Start's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.
+- **A stage armed or started.** Print's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.
 - **What changes on every run.** Moments are blanked in the pictures and left out of the words, and so is how many stages the tour holds, which any stage added to a journey changes.
 
 Run it yourself:

@@ -1,8 +1,8 @@
 """Every stage of every journey, the page taken there by the tour: the chain the page
 manages, a stage at a time, on simulated machines as a person starts them. A part
 designed; made on the printer; cut on the router; the board a machine runs on built for
-and heard; a deck's knobs on the machines; the site brought up through the family's hub;
-the site watched; a drawing photographed into shapes; and two ends joined by an
+and heard; a deck's knobs on the machines; the site brought up through the family's hub,
+then watched; a drawing photographed into shapes; and two ends joined by an
 adapter. At each stage the tour's box says what the page did to stand there, and the
 page stands there: its window in front, its subject chosen, what the stage needs made.
 Walkthrough page 39 is what it writes.
@@ -66,8 +66,8 @@ PICTURED = {
         "The part goes to a machine. printer_1's Machine is opened and the footpedal "
         "chosen; Slice's stage is the Machine's Print window with the part under makes; "
         "See needs a file, so the page slices the footpedal for printer_1 where none is "
-        "kept, and its path is drawn on the bed; Start's stage is the Print window and Jobs. "
-        "The picture is Start: the tour arms nothing and starts nothing.",
+        "kept, and its path is drawn on the bed; Print's stage is the Print window and Jobs. "
+        "The picture is Print: the tour arms nothing and starts nothing.",
     ),
     "cut": (
         "see",
@@ -100,21 +100,17 @@ PICTURED = {
         "control is armed before a knob moves anything. The picture is Knobs, the "
         "printer disarmed.",
     ),
-    "bring-up": (
+    "run": (
         "steps",
-        "Start a site: the procedure, the family's members, the hub's audit",
-        "The machines one at a time become a site brought up in order. No machine is "
-        "in this journey, so the one open is closed. Steps is the Procedure, each step "
-        "a member's of the family and fired through the hub on GO; Members is each "
-        "member and its door; Audit is the hub's deliveries. The picture is Steps: GO "
-        "is a person's.",
-    ),
-    "watch": (
-        "space",
-        "Watch a site: the Workspace, then one machine's hour",
-        "A site that is up is watched. Space is the Workspace on the garage; Hour "
-        "chooses printer_1 and opens its hour there: its state poll by poll, and where "
-        "a camera over it would keep its frames. The picture is Space.",
+        "Run a site: its procedure, the family's members, the hub's audit, then its Workspace",
+        "The machines one at a time become a site brought up in order, then watched. No "
+        "machine's window is in this journey, so each one open is closed. Steps is the "
+        "Procedure, each step a member's of the family and fired through the hub on GO; "
+        "Members is each member and its door; Audit is the hub's deliveries. A site that "
+        "is up is watched: Space is the Workspace on the garage, in front of the "
+        "Procedure; Hour chooses printer_1 and opens its hour there: its state poll by "
+        "poll, and where a camera over it would keep its frames. The picture is Steps: "
+        "GO is a person's.",
     ),
     "drawing": (
         "marks",
@@ -240,14 +236,15 @@ STANDS = {
     ("board", "hear"): lambda page: _says(page, "machine-sketch", "should run"),
     ("hands", "deck"): lambda page: (_selected("stream_deck")(page), _says(page, "deck", DECK)),
     ("hands", "knobs"): lambda page: (_on(PRINTER)(page), _says(page, "machine", "Control")),
-    ("bring-up", "steps"): lambda page: (
+    # The procedure it says is the simulated garage's own, which is named bring-up.
+    ("run", "steps"): lambda page: (
         page.wait_for_function(f"() => {VIEWER}.machine === null"),
         _says(page, "procedure", "bring-up"),
     ),
-    ("bring-up", "members"): lambda page: _says(page, "family-members", "board"),
-    ("bring-up", "audit"): lambda page: _shown(page, "family-deliveries"),
-    ("watch", "space"): lambda page: _says(page, "working", "Choose a machine"),
-    ("watch", "hour"): lambda page: (
+    ("run", "members"): lambda page: _says(page, "family-members", "board"),
+    ("run", "audit"): lambda page: _shown(page, "family-deliveries"),
+    ("run", "space"): lambda page: _says(page, "working", "Choose a machine"),
+    ("run", "hour"): lambda page: (
         _selected("printer_1")(page),
         _says(page, "working", "printer_1"),
     ),
@@ -292,11 +289,9 @@ DID = {
         "the Bench opened on esp32_blink@arduino",
     ],
     "hands": ["stream_deck chosen", "printer_1's Machine opened"],
-    "bring-up": [
-        "printer_1's, cnc_router's and esp32_blink's Machines closed: Start a site has no "
-        "machine in it"
-    ],
-    "watch": [
+    "run": [
+        "printer_1's, cnc_router's and esp32_blink's Machines closed: Run a site has no "
+        "machine in it",
         "the Workspace opened: the Workspace of garage",
         "printer_1 framed in the world, as f does",
         "the Workspace opened: printer_1's hour in the Workspace",

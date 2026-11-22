@@ -137,7 +137,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "does. Its state folder is this test's, so the feedback it keeps is its own."
         ),
         does_not_show=[
-            "**A stage armed or started.** Start's stage brings the Print window and Jobs "
+            "**A stage armed or started.** Print's stage brings the Print window and Jobs "
             "forward; arming control and starting a print are a person's.",
             "**What changes on every run.** Moments are blanked in the pictures and "
             "left out of the words, and so is how many stages the tour holds, which any "
@@ -278,7 +278,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     assert _feedback(url)["make/see"] is None
     box.locator(".tour-pop-note").fill(NOTE)
     box.get_by_role("button", name="✗ Off").click()
-    expect(title).to_have_text("Print a part · 5. Start")
+    expect(title).to_have_text("Print a part · 5. Print")
     _taken_to(page, "print")
     see = _feedback(url)["make/see"]
     assert (see["verdict"], see["note"]) == ("off", NOTE)
@@ -286,7 +286,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     story.says(
         "✗ Off keeps what is off, and only with it",
         "✗ Off with the field empty is refused, the box saying what it needs and staying "
-        "on the stage; with what is off typed, it is kept, and the box goes to Start and "
+        "on the stage; with what is off typed, it is kept, and the box goes to Print and "
         "takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.",
         shown=_words(did.last.inner_text()),
     )
@@ -319,7 +319,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     expect(box.locator(".tour-pop-feedback")).to_contain_text(f"✗ Off: {NOTE} -- said by {BY} ")
     open_from_key(page)
     press(page, "Panels", "Windows", "Tour", "Works")
-    expect(title).to_have_text("Print a part · 5. Start")
+    expect(title).to_have_text("Print a part · 5. Print")
     assert _feedback(url)["make/see"]["verdict"] == "works"  # the latest is its feedback
     _taken_to(page, "print")
     story.says(
@@ -334,7 +334,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     # 8. Reloaded: open again, where it was.
     page.reload()
     expect(box).to_be_visible(timeout=30000)
-    expect(title).to_have_text("Print a part · 5. Start")
+    expect(title).to_have_text("Print a part · 5. Print")
     # And the page is taken to that stage again, not left bare under a box that says
     # where it was: its machine open, its part chosen.
     page.wait_for_function(
