@@ -30,7 +30,12 @@ small, since it stands over the world: its head names the stage and how many hav
 word on them. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
 windows stay where they are, the address forgets the journey and its stage, and the
-status line says so. Folded, it leaves nothing. Where it stands, whether it is open and the stage
+status line says so. Folded, it leaves nothing. What a stage frames is framed in the
+room of the world the box leaves, the largest beside it or above or below it, and
+framed again once the box shows what the stage said; a path a stage would draw and
+cannot leaves the world on the machine it is for. A journey entered with a world so
+narrow that the box leaves less than half of it folds the box to its head, and says so
+among what the page did. Where it stands, whether it is open and the stage
 it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
 it where it was: the page is then taken to that stage as ↻ does, so the box is not left
 over a page it is not true of. No one pressed anything then, so nothing is started on
@@ -174,7 +179,7 @@ seated after the views, so no cell before it moves.
 - It does not bring about a state only a fault brings: a router in alarm, a board not
   heard for ten minutes. Those are at their stage as steps to read.
 - It does not arm, start, send or make anything.
-- The box stands over the world, so what a stage frames there can lie under it until
-  the box is dragged or folded.
+- The box stands over the world: what a stage frames is kept clear of it, and the rest
+  of the world under it is seen once the box is dragged or folded.
 - Nothing leaves the machine: the feedback is under the state folder, and the server
   answers this machine only.

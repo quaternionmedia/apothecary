@@ -63,7 +63,7 @@ const el = (tag, props = {}, ...kids) => {
     return node;
 };
 
-export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
+export function mountTourPopover({ base = '', stage, onShown = () => {}, settled = () => {} }) {
     const box = el('div', { className: 'tour-pop', id: 'tour-pop' });
     box.setAttribute('popover', 'manual');
     box.setAttribute('role', 'dialog');
@@ -182,6 +182,8 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         try { state.did = await stage(at.journey, at.stage, { reload }); }
         catch (e) { state.did = { did: [], said: `The page did not get here: ${e.message || e}`, refused: true }; }
         state.busy = false; render();
+        // The box at the size what it says gives it: the page frames around it again.
+        settled();
         // A window chosen on the way was another stage's: followed now the page is here.
         const after = state.after;
         state.after = null;
@@ -276,6 +278,9 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
             if (at >= 0 && at !== state.at) { state.at = at; state.did = null; keep({ stage: here().id }); render(); }
         },
         wasOpen: () => Boolean(kept().open),
+        isFolded: () => box.classList.contains('folded'),
+        // Folded to its head (`on`) or not, kept as a person's double-click keeps it.
+        fold(on) { box.classList.toggle('folded', on); keep({ folded: on }); place(); },
     };
 
     box.addEventListener('click', (e) => {

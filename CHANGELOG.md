@@ -276,6 +276,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- A tour stage frames what it shows where the Tour box leaves the world clear, again once the box says what the stage said; a path that cannot be drawn leaves the world on its machine and not the last one shown, and a stage's refusal is in the box as well as the status line. ([doc](docs/tour.md))
 - A Print or Cut window's file follows the part under makes: one made of another part gives way to the newest made of this one, or to none, and ▶ says when a person's own choice was made of another part. ([doc](docs/firmware.md))
 - A Machine left open on a board that does not answer asks it less often, up to once a minute, instead of opening its port at every interval. ([doc](docs/firmware.md))
 - A board being identified keeps its port: a stream may not open on it meanwhile (409), so a devkit's Machine listening, whose stream reconnects by itself, no longer closes the link the board's answer comes on, and a printer taken for a devkit until it answers is heard. ([doc](docs/firmware.md#printers-boards-that-already-run-a-g-code-firmware))

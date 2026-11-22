@@ -2165,7 +2165,13 @@
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
+                    // What a stage framed is framed again once the box shows what the
+                    // stage said, which can make it taller over the world.
+                    settled: () => {
+                        if (this.lastFrame && this.lastFrame.at >= this.stagedAt) this.frameBox(this.lastFrame.bounds, this.lastFrame.along);
+                    },
                     stage: async (journey, stage, how) => {
+                        this.stagedAt = performance.now();
                         this.chosenOnTheWay = null;
                         this.onTheWay = true;
                         let done;
@@ -2576,6 +2582,37 @@
                         this.setStatus(this.seeThroughSaid(), 'success');
                     },
                 };
+            }
+            // The room of the world's window the Tour box leaves: the largest of the room
+            // beside it and above or below it, as fractions of the window from its top
+            // left ({ x, y, w, h }); the whole window where the box is closed or lies
+            // elsewhere.
+            freeOfTheBox() {
+                const whole = { x: 0, y: 0, w: 1, h: 1 }, v = this.viewRect();
+                const el = this.tourPop?.isOpen() ? document.getElementById('tour-pop') : null;
+                if (!el || !v.width || !v.height) return whole;
+                const box = el.getBoundingClientRect(), gap = 8;
+                const l = Math.max(v.left, box.left), r = Math.min(v.left + v.width, box.right);
+                const t = Math.max(v.top, box.top), b = Math.min(v.top + v.height, box.bottom);
+                if (r <= l || b <= t) return whole;
+                const rooms = [
+                    { x: r + gap - v.left, y: 0, w: v.left + v.width - r - gap, h: v.height },
+                    { x: 0, y: 0, w: l - gap - v.left, h: v.height },
+                    { x: 0, y: 0, w: v.width, h: t - gap - v.top },
+                    { x: 0, y: b + gap - v.top, w: v.width, h: v.top + v.height - b - gap },
+                ].filter((m) => m.w > 0 && m.h > 0);
+                if (!rooms.length) return whole;
+                const best = rooms.reduce((a, m) => (m.w * m.h > a.w * a.h ? m : a));
+                return { x: best.x / v.width, y: best.y / v.height, w: best.w / v.width, h: best.h / v.height };
+            }
+            // A piece of the site framed by its key, as f frames the selected one.
+            frameNode(key) {
+                const node = this.renderNodeByKey[key];
+                if (!node) return false;
+                const mesh = this.meshByName[key];
+                const box = mesh ? new THREE.Box3().setFromObject(mesh) : null;
+                this.frameBox(box && !box.isEmpty() ? siteBox(box) : this.boundsFor(node, 0));
+                return true;
             }
             // Where the world's window stands on the page: the canvas, or, see-through,
             // the part of the canvas under the whole layout that its window shows.
@@ -7565,13 +7602,16 @@
             // from (or along `along`, three.js's frame), near enough that the whole box fits;
             // the level's reach left as it was.
             frameBox(bounds, along = null) {
+                this.lastFrame = { bounds, along: along && along.clone(), at: performance.now() };
                 const sizes = bounds.max.map((v, i) => v - bounds.min[i]);
                 const span = Math.max(20, ...sizes);
                 const centre = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2));
                 // Far enough that the piece's whole extent fits the narrower of the two
-                // angles of the view, with a margin round it.
+                // angles of the room the Tour box leaves (the whole view where it leaves
+                // all of it), with a margin round it.
+                const free = this.freeOfTheBox();
                 const tan = Math.tan(this.camera.fov * Math.PI / 360);
-                const half = Math.atan(tan * Math.min(1, this.camera.aspect));
+                const half = Math.min(Math.atan(tan * free.h), Math.atan(tan * this.camera.aspect * free.w));
                 const distance = Math.max(30, (Math.hypot(...sizes) / 2) / Math.sin(half) * 1.25);
                 // From the side the view is on, at the distance that frames it.
                 const from = along ? along.clone() : this.camera.position.clone().sub(this.orbitControls.target);
@@ -7579,6 +7619,19 @@
                 from.normalize().multiplyScalar(distance);
                 this.orbitControls.target.copy(centre);
                 this.camera.position.copy(centre).add(from);
+                // Drawn in the middle of that room: the camera and what it turns about moved
+                // across the view, so the box's centre lands there.
+                if (free.w < 1 || free.h < 1) {
+                    const ndcX = (free.x + free.w / 2) * 2 - 1, ndcY = 1 - (free.y + free.h / 2) * 2;
+                    const halfH = distance * tan, halfW = halfH * this.camera.aspect;
+                    this.camera.lookAt(centre);
+                    this.camera.updateMatrixWorld();
+                    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+                    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+                    const shift = right.multiplyScalar(-ndcX * halfW).add(up.multiplyScalar(-ndcY * halfH));
+                    this.orbitControls.target.add(shift);
+                    this.camera.position.add(shift);
+                }
                 if (this.reach) this.reach.fitSpan = Math.min(this.reach.fitSpan ?? Infinity, span);
                 this.orbitControls.minDistance = Math.min(this.orbitControls.minDistance, Math.max(1, span * this.settings.get('dollyIn')));
                 const near = Math.min(1, Math.max(0.05, span * 0.0004));
@@ -9317,7 +9370,7 @@
                 // The world has the room its view left it: framed at that size.
                 this.onResize();
                 this.frameBox(siteBox(box));
-                return { said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
+                return { drawn: true, said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
             }
             // ---- journeys (apothecary/journeys.py) ----------------------------------
             // A step of the journey the Tour box is on entered, the one on included: its
@@ -9337,15 +9390,21 @@
                     const opened = subject && this.bindingFor(subject).row?.device?.port && this.openMachine(subject);
                     if (!opened) {
                         for (const w of [...step.forward].reverse()) if (!machines.includes(w)) this.panels.open(w);
-                        this.setStatus(`${head}: no Machine is open: ${journey.opened_by} opens one`, 'error');
-                        return true;
+                        return this.said(`${head}: no Machine is open: ${journey.opened_by} opens one`, true);
                     }
                 }
                 for (const w of [...step.forward].reverse()) this.panels.open(w);
                 const landed = step.draws ? await this.landOnPath() : null;
-                if (landed) this.setStatus(`${head}: ${landed.said}`, landed.refused ? 'error' : 'success');
-                else this.setStatus(`${head}: ${step.hint}`, 'success');
-                return true;
+                // A path that is not drawn leaves the world on the machine it is for, not
+                // on whatever the world showed before.
+                if (step.draws && !landed?.drawn && this.machine?.path) this.frameNode(this.machine.path);
+                if (landed) return this.said(`${head}: ${landed.said}`, !!landed.refused);
+                return this.said(`${head}: ${step.hint}`, false);
+            }
+            // The status line set, and what it says given back: `{ said, refused }`.
+            said(text, refused) {
+                this.setStatus(text, refused ? 'error' : 'success');
+                return { said: text, refused };
             }
             // The page taken to a stage of a journey for the tour (widgets/tour_popover.js):
             // what its journey is staged on and then its own puts done, each as a person
@@ -9366,7 +9425,7 @@
                 const journey = JOURNEYS.find((j) => j.id === id);
                 if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
                 const step = journey.steps.find((x) => x.id === stepId) || journey.steps[0];
-                const did = [];
+                const did = [], started = performance.now();
                 // The site its subjects stand in, opened where another is, as the banner's ▾
                 // does: a stage is the same from wherever the tour is opened.
                 if (journey.site && this.siteName !== journey.site) {
@@ -9393,12 +9452,22 @@
                 }
                 const entered = this.journey?.id !== id;
                 if (entered && !this.viewRefusal(id)) await this.openView(id, { label: journey.name });
+                // The world laid out at its new size: a box over most of it is folded to its
+                // head, and what a put framed before the layout is framed again in it.
+                if (entered) {
+                    await new Promise((go) => requestAnimationFrame(() => requestAnimationFrame(go)));
+                    this.onResize();
+                    if (this.tourPop?.isOpen() && !this.tourPop.isFolded()) {
+                        const free = this.freeOfTheBox();
+                        if (free.w * free.h < 0.5) { this.tourPop.fold(true); did.push('the box folded to its head, the world beside it being narrow: its title unfolds it'); }
+                    }
+                    if (this.lastFrame && this.lastFrame.at >= started) this.frameBox(this.lastFrame.bounds, this.lastFrame.along);
+                }
                 this.journey = { id, step: step.id };
-                await this.enterStep(step.id);
+                const entry = await this.enterStep(step.id);
                 if (entered) did.push(`${journey.name} entered, its windows laid out`);
-                const status = document.getElementById('status');
                 if (needs) return { did, said: needs, refused: true };
-                return { did, said: status.textContent, refused: status.classList.contains('error') };
+                return { did, said: entry.said, refused: entry.refused };
             }
             // One thing that takes the page to a stage (journeys.py's PUTS): `{ did }` saying what
             // was done, `{}` where it was so already, `{ refused }` saying why not. On a
