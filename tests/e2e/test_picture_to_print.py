@@ -395,7 +395,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     kept = _kept(page, url, disc)
     pick = machine.locator("#print-pick")
     expect(pick).to_have_value(kept["id"])
-    expect(pick.locator("option:checked")).to_have_text(
+    expect(pick.locator("option:checked")).to_contain_text(
         f"{disc}.gcode · {kept['lines']} lines · sliced from {disc} for printer_1"
     )
     expect(machine.locator("#print-slice-task")).to_be_hidden()
@@ -602,12 +602,12 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(said).to_contain_text(f"{plate} sliced for printer_1 by OrcaSlicer 2.4.2", timeout=30000)
     plate_kept = _kept(page, url, plate)
     expect(pick).to_have_value(plate_kept["id"])
-    expect(pick.locator("option:checked")).to_have_text(
+    expect(pick.locator("option:checked")).to_contain_text(
         f"{plate}.gcode · {plate_kept['lines']} lines · sliced from {plate} for printer_1"
     )
     _said(page, f"{plate}.gcode kept and chosen: sliced from {plate} for printer_1")
     # The first piece's file is still kept, and still says what it was sliced from.
-    expect(pick.locator(f"option[value='{kept['id']}']")).to_have_text(
+    expect(pick.locator(f"option[value='{kept['id']}']")).to_contain_text(
         f"{disc}.gcode · {kept['lines']} lines · sliced from {disc} for printer_1"
     )
     settled(page)

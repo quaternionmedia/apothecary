@@ -69,8 +69,9 @@ Readiness (`widgets/feedback.js`). It opens:
 - from ⊞ Windows › Feedback, on the selected piece's part.
 
 Its **piece** drop-down holds the part's pieces first -- its drawers, the newest first,
-then each kept slice or toolpath of it no drawer holds yet -- then every other part's, a
-group each; a piece of another part chosen there shows that part's cabinet, which is how a
+then each kept slice or toolpath of it no drawer holds yet, which says it was not
+printed or cut from here, for a piece made from it elsewhere -- then every other part's,
+a group each; a piece of another part chosen there shows that part's cabinet, which is how a
 part standing in no site is reached. Under the piece chosen: **measured**, a row for each
 feature a print's plan names (or its box), or one field of a cut's sizes, with **Keep**;
 **seen**, each fault none to bad, with **Keep look**; **note**, with **Keep note**; Take

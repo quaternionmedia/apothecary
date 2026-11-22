@@ -27,10 +27,18 @@ at the command line (`shown_by`, in `apothecary/journeys.py`).
 **Tour**, in the header, or the canvas ring's **Panels › Windows › Tour › Tour**. The box
 opens above the windows, so a view or a journey laid out moves them and not it. It is
 small, since it stands over the world: its head names the stage and how many have a
-word on them. It is dragged by its head, folded to its head by a double-click there,
+word on them, on any build, with how many of those were said of an earlier build and
+so wait for a word again. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
 windows stay where they are, the address forgets the journey and its stage, and the
-status line says so. Folded, it leaves nothing. Where it stands, whether it is open and the stage
+status line says so. A journey that opened another site (Join a hose, in the universe)
+is left on the site the page was on before the tour, opened again; a site a person
+has opened since is where the page stays. Folded, it leaves nothing. What a stage frames is framed in the
+room of the world the box leaves, the largest beside it or above or below it, and
+framed again once the box shows what the stage said; a path a stage would draw and
+cannot leaves the world on the machine it is for. A journey entered with a world so
+narrow that the box leaves less than half of it folds the box to its head, and says so
+among what the page did. Where it stands, whether it is open and the stage
 it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
 it where it was: the page is then taken to that stage as ↻ does, so the box is not left
 over a page it is not true of. No one pressed anything then, so nothing is started on
@@ -101,7 +109,16 @@ photograph taken: where a stage needs one that is not there, the page leaves the
 rest and enters the stage all the same, so a person stands where it is done, and the
 box opens on what the stage needs, in the page's own words for it -- *esp32_blink's
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
-section*. With that done, ↻ takes the page the rest of the way.
+section*. With that done, ↻ takes the page the rest of the way. A stage that stands
+without what its journey is staged on is not stopped by it: Flash a board's Bench
+builds a sketch with no board connected, so it opens on the sketch whatever the board.
+A picture that is not there is named inside the pictures folder, as a person names
+it, never by where the server keeps that folder.
+
+Design a part's Ready is the part's Readiness. The header's **Layout valid** and the
+Problems window speak of the site's layout -- pieces that overlap, a wall a door
+cannot pass -- and say nothing of whether a part is ready to make, so a part can be
+not ready while the layout is valid; the stage says which is which.
 
 **Nothing is armed, started, sent or made.** Print's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
@@ -109,7 +126,9 @@ found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and P
 Make are a person's.
 
 A window chosen in the page that another stage of the journey owns -- its tab, ⊞
-Windows or a stack's + -- moves the box to that stage, and takes the page nowhere.
+Windows or a stack's + -- moves the box to that stage, and takes the page nowhere. One chosen while the page is
+on its way to a stage is kept until it arrives: the window is put in front again, over
+the stage's own, and the box moved then.
 
 ## Saying how a stage is
 
@@ -136,8 +155,9 @@ A word is a line of `tour/feedback.jsonl` under the state folder
 stage (`make/slice`), `works` or `off`, what is off, who said it, the moment, and the
 commit the server ran, with whether its tree had changes beside it. A line is never
 rewritten; the latest for a stage is its feedback. A word on a stage no journey has
-is kept as it is: shown on no stage, and given back by `GET /tour/feedback` with the
-rest.
+is kept as it is and given back by `GET /tour/feedback` with the rest. Where its
+journey went into another that kept the stage's id (Start a site's and Watch a site's
+into Run a site, `Journey.made_of`), it is shown on that stage; otherwise on none.
 
 ## The routes
 
@@ -171,7 +191,7 @@ seated after the views, so no cell before it moves.
 - It does not bring about a state only a fault brings: a router in alarm, a board not
   heard for ten minutes. Those are at their stage as steps to read.
 - It does not arm, start, send or make anything.
-- The box stands over the world, so what a stage frames there can lie under it until
-  the box is dragged or folded.
+- The box stands over the world: what a stage frames is kept clear of it, and the rest
+  of the world under it is seen once the box is dragged or folded.
 - Nothing leaves the machine: the feedback is under the state folder, and the server
   answers this machine only.

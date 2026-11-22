@@ -64,7 +64,10 @@ Left to right, one row:
   another. Pressed, it opens that
   site, the machine's Machine with its Print or Cut window in front, chooses the
   part under **makes** (in another site, by its name) and slices it or writes its
-  toolpath, as the variant drawn where one is applied; then it lays out the
+  toolpath, as the variant drawn where one is applied. That variant goes with
+  the part to the machine's site, whose address then names it, so the Machine's
+  **Slice** or **Toolpath** pressed there again makes the same variant, not the
+  part as saved; then it lays out the
   Machine view round the machine, framed in the world, so the Machine's head
   stands beside its Print or Cut and nothing a site opened on the way is left
   taking the world's room (in a journey, the journey's step lays out its own
@@ -854,7 +857,8 @@ stage.
   on a part's ring.
 - **A window chosen moves the box** to the step that owns it -- its tab, ⊞
   Windows or a stack's + -- and moves nothing else. A window the page brings
-  forward by itself moves nothing.
+  forward by itself moves nothing. One chosen while the page is on its way to a
+  stage is put in front again once it is there, and the box moved then.
 - **The address keeps the journey and its step** (`?journey=make&step=slice`),
   so a reload or a link opens the box on that step, the windows as the browser
   remembers them and the step's brought forward. No one pressed anything then,

@@ -185,10 +185,11 @@ def test_a_line_that_does_not_read_is_left_out(kept):
     assert [r["stage"] for r in tour.said()] == [SHAPE]
 
 
-def test_a_word_kept_on_a_stage_no_journey_has_is_given_back_and_shown_on_no_stage(kept):
+def test_a_word_kept_on_a_stage_no_journey_has_is_given_back_and_shown_where_it_went(kept):
     """The file is never rewritten, so it can hold a word on a stage the journeys have
-    not got: `GET /tour` answers with every stage as it is and that word on none, `GET
-    /tour/feedback` gives it back with the rest, and no new word is taken on it."""
+    not got. One on a stage of a journey Run a site was made of is shown on Run a site's
+    stage of that id, as it was said; one on no such stage is shown on none. `GET
+    /tour/feedback` gives each back with the rest, and no new word is taken on one."""
     tour.say(SHAPE, "works", by=BY)
     gone = [
         {**tour.said()[0], "stage": "bring-up/steps", "verdict": "off", "note": "GO is greyed"},
@@ -203,7 +204,25 @@ def test_a_word_kept_on_a_stage_no_journey_has_is_given_back_and_shown_on_no_sta
     assert answered.status_code == 200
     stages = [s for j in answered.json()["journeys"] for s in j["stages"]]
     assert [s["id"] for s in stages] == tour.stage_ids()
-    assert [s["id"] for s in stages if s["feedback"]] == [SHAPE]
+    shown = {s["id"]: s["feedback"] for s in stages if s["feedback"]}
+    assert list(shown) == [SHAPE, "run/steps", "run/hour"]
+    assert (shown["run/steps"]["stage"], shown["run/steps"]["note"]) == (
+        "bring-up/steps",
+        "GO is greyed",
+    )
+    assert shown["run/hour"]["stage"] == "watch/hour"
+    # A word said on the stage since is the later one, and so its feedback.
+    tour.say("run/steps", "works", by=BY)
+    steps = next(
+        s
+        for j in client.get("/tour").json()["journeys"]
+        for s in j["stages"]
+        if s["id"] == "run/steps"
+    )
+    assert (steps["feedback"]["stage"], steps["feedback"]["verdict"]) == ("run/steps", "works")
+    kept.write_text(
+        "".join(kept.read_text(encoding="utf-8").splitlines(keepends=True)[:4]), encoding="utf-8"
+    )
     given = client.get("/tour/feedback")
     assert given.status_code == 200
     assert [r["stage"] for r in given.json()["feedback"]] == [

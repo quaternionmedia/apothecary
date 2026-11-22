@@ -270,6 +270,171 @@ def test_a_window_chosen_moves_the_box_and_the_box_closed_leaves_the_journey(pag
     assert page.evaluate("() => window.fractalViewer.journey") is None
 
 
+# Where a piece is drawn on the page, from its world bounds' eight corners projected,
+# and where the Tour box stands: whether they meet, and the piece's middle.
+DRAWN_AND_BOX = """(key) => {
+    const v = window.fractalViewer, node = v.renderNodeByKey[key], b = node.world_bounds;
+    const r = v.viewRect(), box = document.getElementById('tour-pop').getBoundingClientRect();
+    const xs = [], ys = [];
+    for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]]) for (const z of [b.min[2], b.max[2]]) {
+        const s = v.sceneAt(x, y, z).project(v.camera);
+        xs.push(r.left + (s.x + 1) / 2 * r.width); ys.push(r.top + (1 - s.y) / 2 * r.height);
+    }
+    const drawn = { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
+    const meet = drawn.left < box.right && drawn.right > box.left && drawn.top < box.bottom && drawn.bottom > box.top;
+    const inView = drawn.left >= r.left - 1 && drawn.right <= r.left + r.width + 1 && drawn.top >= r.top - 1 && drawn.bottom <= r.top + r.height + 1;
+    return { meet, inView, drawn, box: box.toJSON(), view: { left: r.left, top: r.top, width: r.width, height: r.height } };
+}"""
+
+
+@pytest.mark.e2e
+def test_a_stage_frames_what_it_shows_where_the_box_does_not_cover_it(page: Page, url: str):
+    """Design a part chosen in the Tour box: its first stage frames the footpedal, and
+    the footpedal is drawn whole in the world's window, clear of the box."""
+    open_garage(page, url, settle=False)
+    page.locator("#tour-pop-open").click()
+    expect(page.locator(BOX)).to_be_visible()
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Design a part")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.journey?.step === 'choose'", timeout=10000)
+    page.wait_for_timeout(300)
+    seen = page.evaluate(DRAWN_AND_BOX, "footpedal")
+    assert seen["inView"], seen
+    assert not seen["meet"], seen
+
+
+@pytest.mark.e2e
+def test_the_box_closed_after_a_journey_in_another_site_opens_the_first_site_again(
+    page: Page, url: str
+):
+    """Join a hose stands in the universe: chosen in the box from the garage, the page
+    opens it; the box closed, the garage is opened again and the status line says so."""
+    open_garage(page, url, settle=False)
+    page.locator("#tour-pop-open").click()
+    expect(page.locator(BOX)).to_be_visible()
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Join a hose")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.siteName !== 'garage'", timeout=30000)
+    page.locator(f"{BOX} .tour-pop-close").click()
+    page.wait_for_function("() => window.fractalViewer.siteName === 'garage'", timeout=30000)
+    expect(status(page)).to_contain_text(
+        "Left Join a hose: garage opened again, where the page was before the tour"
+    )
+
+
+@pytest.mark.e2e
+def test_a_site_a_person_chose_during_a_journey_stays_when_the_box_is_closed(page: Page, url: str):
+    """Join a hose chosen in the box from the garage opens the universe; theatre then
+    selected in Site and stepped into: the box closed leaves the page on theatre, the
+    site the person chose, and does not open the garage again."""
+    open_garage(page, url, settle=False)
+    page.locator("#tour-pop-open").click()
+    expect(page.locator(BOX)).to_be_visible()
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Join a hose")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.siteName !== 'garage'", timeout=30000)
+    # Site opened lays its stack out again: its rows are pressed once they stand still.
+    windows.open_window(page, "site")
+    windows.remembered(page)
+    _select(page, "site-theatre")
+    page.locator("#viewer-canvas").focus()
+    page.keyboard.press("PageDown")
+    page.wait_for_function("() => window.fractalViewer.siteName === 'theatre'", timeout=30000)
+    page.locator(f"{BOX} .tour-pop-close").click()
+    expect(status(page)).to_contain_text("Left Join a hose: its windows stay where they are")
+    assert page.evaluate("() => window.fractalViewer.siteName") == "theatre"
+    assert page.evaluate("() => window.fractalViewer.siteBeforeTour") is None
+
+
+@pytest.mark.e2e
+def test_print_a_part_s_shape_shows_its_numbers_and_each_whole(page: Page, url: str):
+    """Print a part at Shape, at 1280 by 800: Parameters shows two of the footpedal's
+    numbers whole; and in Design a part's view, Selected's position fields hold every
+    digit of theirs."""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    _machine_open_and_the_part_chosen(page, url)
+    _choose_print_a_part(page, url)
+    page.locator(f"{BOX} .tour-pop-stages button").nth(1).click()
+    _on(page, "shape")
+    shown = page.evaluate(
+        """() => {
+            const body = document.querySelector(".panel[data-panel='part-parameters']").closest('.lm_content') || document.querySelector(".panel[data-panel='part-parameters']");
+            const r = body.getBoundingClientRect();
+            return [...body.querySelectorAll('input[type=range]')].filter((i) => {
+                const b = i.getBoundingClientRect();
+                return b.height > 0 && b.top >= r.top && b.bottom <= r.bottom;
+            }).length;
+        }"""
+    )
+    geo = page.evaluate(
+        """() => { const p = document.querySelector(".panel[data-panel='part-parameters']"); const c = p.closest('.lm_content') || p; const r = c.getBoundingClientRect();
+          return { win: [r.top, r.height, innerHeight], ranges: [...p.querySelectorAll('input[type=range]')].slice(0, 3).map((i) => Math.round(i.getBoundingClientRect().top)) }; }"""
+    )
+    assert shown >= 2, (shown, geo)
+    # Design a part's view, where Selected is a narrow column beside the world.
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Design a part")
+    page.locator(f"{BOX} .tour-pop-journeys").select_option(value=str(at))
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    page.wait_for_function("() => window.fractalViewer.journey?.id === 'design'", timeout=10000)
+    expect(page.locator("#pos-x")).to_be_visible()
+    cut = page.evaluate(
+        """() => {
+            const c = document.createElement('canvas').getContext('2d');
+            return ['pos-x', 'pos-y', 'pos-z'].map((id) => document.getElementById(id)).filter((i) => {
+                const s = getComputedStyle(i);
+                c.font = `${s.fontSize} ${s.fontFamily}`;
+                const room = i.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - 14;
+                return c.measureText(i.value).width > room;
+            }).map((i) => [i.id, i.value, i.clientWidth]);
+        }"""
+    )
+    assert cut == [], cut
+    page.set_viewport_size({"width": 1280, "height": 720})
+
+
+@pytest.mark.e2e
+def test_a_window_chosen_while_the_page_is_on_its_way_is_followed_once_it_is_there(
+    page: Page, url: str
+):
+    """Slice gone to in the box, and Parameters' tab pressed before the page is there:
+    the page arrives at Slice, its Print window brought forward, and then Parameters is
+    in front again, the box and the page's journey on Shape, the stage that owns it."""
+    _machine_open_and_the_part_chosen(page, url)
+    _choose_print_a_part(page, url)
+    # The page held on its way: a stage is not gone to until the test lets it.
+    page.evaluate(
+        """() => {
+            const viewer = window.fractalViewer, real = viewer.stageJourney.bind(viewer);
+            viewer.stageJourney = async (...given) => {
+                await new Promise((go) => { window.letThePageGo = go; });
+                return real(...given);
+            };
+        }"""
+    )
+    box = page.locator(BOX)
+    box.locator(".tour-pop-stages button").nth(2).click()
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
+    expect(box).to_have_class(re.compile(r"\bbusy\b"))
+    page.locator(".lm_tab .lm_title", has_text=re.compile(r"^Parameters$")).click()
+    page.wait_for_function("() => window.fractalViewer.chosenOnTheWay === 'part-parameters'")
+    # Nothing has moved yet: the box is on the stage it was sent to.
+    expect(page.locator(TITLE)).to_have_text("Print a part · 3. Slice")
+    page.evaluate("() => window.letThePageGo()")
+    _on(page, "shape")
+    expect(page.locator(TITLE)).to_have_text("Print a part · 2. Shape")
+    expect(page).to_have_url(re.compile(r"[?&]step=shape\b"))
+    assert windows.state(page, "part-parameters")["shown"] is True
+    # The page did arrive at Slice on the way: its window was brought forward.
+    assert windows.state(page, "machine-print")["shown"] is True
+
+
 @pytest.mark.e2e
 def test_an_address_naming_a_journey_and_a_stage_opens_the_box_there_and_starts_no_job(
     page: Page, url: str
@@ -301,6 +466,10 @@ def test_an_address_naming_a_journey_and_a_stage_opens_the_box_there_and_starts_
     page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
     expect(box.locator(".tour-pop-needs")).to_have_text(NO_SLICE)
     assert jobs == []
+    # No path is drawn, so the world is on the printer it would be drawn on, clear of
+    # the box.
+    seen = page.evaluate(DRAWN_AND_BOX, "printer_1")
+    assert seen["inView"] and not seen["meet"], seen
     did = [t.strip() for t in box.locator(".tour-pop-did li").all_text_contents()]
     assert not any("its windows laid out" in d for d in did), did
     expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))

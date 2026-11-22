@@ -111,9 +111,9 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
             return [
                 ...drawers[i].map((d) => ({ key: `drawer:${d.id}`, part, drawer: d, made: d.made, label: `${stamp(d.at)} · ${d.line}` })),
                 ...slices.filter((r) => r.made.kind === "part" && r.made.name === part && !held.has(r.file_id))
-                    .map((r) => ({ key: `file:${r.file_id}`, part, record: r, made: "print", label: `${stamp(r.at)} · ${r.name}, sliced for ${r.printer.name}: made elsewhere` })),
+                    .map((r) => ({ key: `file:${r.file_id}`, part, record: r, made: "print", label: `${stamp(r.at)} · ${r.name}, sliced for ${r.printer.name}: not printed from here` })),
                 ...cuts.filter((r) => r.part === part && !held.has(r.file_id))
-                    .map((r) => ({ key: `file:${r.file_id}`, part, record: r, made: "cut", label: `${stamp(r.at)} · ${r.name}, a toolpath for ${r.router.name}: made elsewhere` })),
+                    .map((r) => ({ key: `file:${r.file_id}`, part, record: r, made: "cut", label: `${stamp(r.at)} · ${r.name}, a toolpath for ${r.router.name}: not cut from here` })),
             ];
         });
         const want = st.want;

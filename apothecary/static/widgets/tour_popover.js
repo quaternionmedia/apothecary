@@ -63,7 +63,7 @@ const el = (tag, props = {}, ...kids) => {
     return node;
 };
 
-export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
+export function mountTourPopover({ base = '', stage, onShown = () => {}, settled = () => {} }) {
     const box = el('div', { className: 'tour-pop', id: 'tour-pop' });
     box.setAttribute('popover', 'manual');
     box.setAttribute('role', 'dialog');
@@ -72,7 +72,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     document.body.append(box);
     const $ = (sel) => box.querySelector(sel);
     // Every stage in the journeys' order, each knowing its journey.
-    const state = { journeys: [], stages: [], at: 0, busy: false, did: null };
+    const state = { journeys: [], stages: [], at: 0, busy: false, did: null, after: null };
 
     // What the page did and what to try, folded or open as a person left it.
     const more = $('.tour-pop-more');
@@ -102,20 +102,24 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     // dimmed, and its stage is among those still waiting.
     const now = (s) => (s.feedback?.current ? s.feedback : null);
     const mark = (s) => (s.feedback ? `${s.feedback.verdict === 'off' ? 'off' : 'works'}${s.feedback.current ? '' : ' earlier'}` : '');
+    // Each stage with a word on any build counts, so a deploy loses no progress; those
+    // said of an earlier build are counted apart, and wait for a word again.
     const count = (stages) => {
-        const said = stages.filter(now).length, off = stages.filter((s) => now(s)?.verdict === 'off').length;
-        return `${said}/${stages.length}${off ? ` · ${off} off` : ''}`;
+        const said = stages.filter((s) => s.feedback).length;
+        const earlier = stages.filter((s) => s.feedback && !s.feedback.current).length;
+        const off = stages.filter((s) => s.feedback?.verdict === 'off').length;
+        return `${said}/${stages.length}${earlier ? ` · ${earlier} earlier` : ''}${off ? ` · ${off} off` : ''}`;
     };
 
     function render() {
         const at = here();
         if (!at) return;
         const journey = journeyOf(at);
-        const said = state.stages.filter(now).length, off = state.stages.filter((s) => now(s)?.verdict === 'off').length;
+        const said = state.stages.filter((s) => s.feedback).length, off = state.stages.filter((s) => s.feedback?.verdict === 'off').length;
         const earlier = state.stages.filter((s) => s.feedback && !s.feedback.current).length;
         const name = $('.tour-pop-name');
         name.textContent = count(state.stages);
-        name.title = `${said} of ${state.stages.length} stages have a word on this build, ${off} off${earlier ? `; ${earlier} more were said of an earlier build` : ''}`;
+        name.title = `${said} of ${state.stages.length} stages have a word, ${off} off${earlier ? `; ${earlier} of them said of an earlier build, each waiting for a word on this one` : ''}`;
 
         const journeys = $('.tour-pop-journeys');
         journeys.replaceChildren(...state.journeys.map((j, i) => el('option', { value: String(i), textContent: `${j.name} · ${count(j.stages)}` })));
@@ -178,10 +182,16 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     async function put({ reload = false } = {}) {
         const at = here();
         if (!at || state.busy) return;
-        state.busy = true; state.did = null; render();
+        state.busy = true; state.did = null; state.after = null; render();
         try { state.did = await stage(at.journey, at.stage, { reload }); }
         catch (e) { state.did = { did: [], said: `The page did not get here: ${e.message || e}`, refused: true }; }
         state.busy = false; render();
+        // The box at the size what it says gives it: the page frames around it again.
+        settled();
+        // A window chosen on the way was another stage's: followed now the page is here.
+        const after = state.after;
+        state.after = null;
+        if (after) api.follow(after.journey, after.stage);
     }
 
     async function go(at, { putOn = true } = {}) {
@@ -264,13 +274,17 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
             if (verb === 'page') { const page = here().tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
         },
         // A window chosen in the page is another stage's: the box shows that stage, and
-        // puts nothing on.
+        // puts nothing on. While the page is on its way to a stage, it is kept until then.
         follow(journeyId, stageId) {
-            if (!api.isOpen() || state.busy) return;
+            if (!api.isOpen()) return;
+            if (state.busy) { state.after = { journey: journeyId, stage: stageId }; return; }
             const at = state.stages.findIndex((s) => s.journey === journeyId && s.stage === stageId);
             if (at >= 0 && at !== state.at) { state.at = at; state.did = null; keep({ stage: here().id }); render(); }
         },
         wasOpen: () => Boolean(kept().open),
+        isFolded: () => box.classList.contains('folded'),
+        // Folded to its head (`on`) or not, kept as a person's double-click keeps it.
+        fold(on) { box.classList.toggle('folded', on); keep({ folded: on }); place(); },
     };
 
     box.addEventListener('click', (e) => {

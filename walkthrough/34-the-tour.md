@@ -79,7 +79,7 @@ The Default view laid out: every window goes where that view has it, and the box
 ![A view laid out moves the windows, and not the box](screenshots/34-06-a-view-laid-out-moves-the-windows-and-not-the-box.png)
 
 ```
-2/… · 1 off
+3/… · 1 earlier · 1 off
 ```
 
 ## 7. Panels › Windows › Tour: its cells are its buttons
@@ -129,6 +129,22 @@ design/choose	works	Grace
 make/choose	works	Ada
 make/see	off	Ada	the job's row is cut off at the window's foot
 make/see	works	Ada
+```
+
+## 12. The box closed leaves the journey
+
+The box's ✕, or Tour in the header pressed again: the journey is left. Its windows stay where they are, the address names no journey, and the status line says so. Tour opens the box again on the stage it showed, and the page is on no journey until ↻ or a stage takes it to one.
+
+```
+Left Flash a board: its windows stay where they are
+```
+
+## 13. An address that names a journey and a stage opens the box on it
+
+`?journey=make&step=shape` at the end of the page's address, as a link or a bookmark holds it: the box opens on that stage and the page is taken there as a reload takes it, so no job is started on the way and the windows stand as this browser has them.
+
+```
+Print a part · 2. Shape
 ```
 
 ## What this page does not show

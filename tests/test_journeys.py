@@ -234,3 +234,19 @@ def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():
     assert join.steps[1].puts == (("edit", "dust_port"),)
     assert join.steps[2].puts == (("edit", "hose_adapter"),)
     assert JOURNEYS[-1] is join  # last in the chain: no other journey's place moves
+
+
+def test_design_s_ready_says_readiness_is_the_part_s_and_layout_valid_the_site_s():
+    """The header's Layout valid and Problems are the site's layout; Ready's words say
+    so, so a part not ready beside a valid layout reads as two things."""
+    ready = next(s for s in by_id("design").steps if s.id == "ready")
+    assert "Readiness" in ready.hint and "Layout valid" in ready.hint, ready.hint
+    assert ready.forward[0] == "part-readiness"
+
+
+def test_only_flash_a_board_s_bench_stands_without_its_journey_s_staging():
+    """A board missing stops Pin, Flash and Hear, which need it, and not the Bench,
+    which builds a sketch with none."""
+    alone = [(j.id, s.id) for j in JOURNEYS for s in j.steps if s.stands_alone]
+    assert alone == [("board", "bench")]
+    assert all("stands_alone" in s for j in manifest() for s in j["steps"])

@@ -156,7 +156,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     page.locator("#tour-pop-open").click()
     expect(box).to_be_visible()
     assert page.evaluate("() => document.querySelector('#tour-pop').matches(':popover-open')")
-    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^0/\d+$"))
+    # The earlier build's word counts, apart: no progress is lost to a deploy.
+    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^1/\d+ · 1 earlier$"))
     expect(title).to_have_text("Design a part · 1. Choose")
     expect(box.locator(".tour-pop-put")).to_be_enabled()
     # On the first stage ‹ is greyed as every control of the page is, saying why.
@@ -231,7 +232,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     said = _feedback(url)["make/choose"]
     assert (said["verdict"], said["by"], said["current"]) == ("works", BY, True)
     page.wait_for_function("() => window.apothecaryPanels.state('part-parameters').shown")
-    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^1/\d+$"))
+    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^2/\d+ · 1 earlier$"))
     tries = box.locator(".tour-pop-tries li")
     expect(tries).to_have_text(
         [
@@ -397,6 +398,15 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         blank=CHANGING,
     )
 
+    # Its Bench stands without the board: the sketch is built with none there, so the
+    # missing board is not what it needs, and the Bench opens on its sketch.
+    box.locator(".tour-pop-stages button").nth(1).click()
+    expect(title).to_have_text("Flash a board · 2. Bench")
+    _taken_to(page, "bench")
+    expect(box.locator(".tour-pop-needs")).to_be_empty()
+    expect(did).to_contain_text([re.compile(r"the Bench opened on")])
+    assert windows.state(page, "bench")["shown"] is True
+
     # 11. Every word kept is the server's to give back, oldest first.
     kept = httpx.get(f"{url}/tour/feedback", timeout=15.0).json()["feedback"]
     assert [(r["stage"], r["verdict"], r["note"], r["by"]) for r in kept] == [
@@ -416,6 +426,41 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             f"{r['stage']}\t{r['verdict']}\t{r['by']}" + (f"\t{r['note']}" if r["note"] else "")
             for r in kept
         ),
+    )
+
+    # 12. The box closed: the journey left, its windows where they are.
+    before = windows.state(page, "selected")["shown"]
+    box.locator(".tour-pop-close").click()
+    expect(box).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+    expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
+    expect(page.locator("#status")).to_contain_text(
+        "Left Flash a board: its windows stay where they are"
+    )
+    assert windows.state(page, "selected")["shown"] == before
+    story.says(
+        "The box closed leaves the journey",
+        "The box's ✕, or Tour in the header pressed again: the journey is left. Its "
+        "windows stay where they are, the address names no journey, and the status "
+        "line says so. Tour opens the box again on the stage it showed, and the page "
+        "is on no journey until ↻ or a stage takes it to one.",
+        shown=_words(page.locator("#status").inner_text()),
+    )
+
+    # 13. An address that names a journey and a stage: the box opened there.
+    page.goto(f"{url}/viewer/sites/garage?journey=make&step=shape")
+    expect(box).to_be_visible(timeout=30000)
+    expect(title).to_have_text("Print a part · 2. Shape")
+    _taken_to(page, "shape")
+    expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
+    expect(page).to_have_url(re.compile(r"[?&]step=shape\b"))
+    story.says(
+        "An address that names a journey and a stage opens the box on it",
+        "`?journey=make&step=shape` at the end of the page's address, as a link or a "
+        "bookmark holds it: the box opens on that stage and the page is taken there "
+        "as a reload takes it, so no job is started on the way and the windows stand "
+        "as this browser has them.",
+        shown=_words(title.inner_text()),
     )
 
 

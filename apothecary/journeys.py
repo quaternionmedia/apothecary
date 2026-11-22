@@ -64,6 +64,10 @@ class Step:
     # What the tour does to take the page to it, after its journey's ``staged_on``: (verb,
     # subject) pairs, in order.
     puts: Tuple[Tuple[str, str], ...] = ()
+    # Whether it stands without what its journey is staged on: Flash a board's Bench
+    # builds a sketch with no board there, so a board missing is not its need, and its
+    # own puts are done all the same.
+    stands_alone: bool = False
 
 
 # What takes the page to a stage, each as a person would do it (the template's stagePut):
@@ -113,7 +117,8 @@ SITE = "garage"
 class Journey:
     id: str
     title: str
-    # The colour it wears where it is listed: the group of windows it is mostly in.
+    # The group of windows it is mostly in, whose colour its view's cell on the ring
+    # wears; a journey with no cell there is drawn in no colour.
     group: str
     # The window its view needs open first, the page's own for a subject, and how
     # that subject is opened: until it is, the view is greyed and says so.
@@ -131,6 +136,9 @@ class Journey:
     # its entry in ⚙ View › Views. That ring is full, so only Print a part has
     # one: the others' views are laid out by the tour alone.
     cell: str = ""
+    # The ids of the journeys it was made of, whose stages it keeps under their own
+    # ids: a word kept on one of theirs is this journey's stage's (tour.feedback).
+    made_of: Tuple[str, ...] = ()
     # The site its subjects stand in -- the pieces and machines its puts name -- which
     # the tour opens first where another is open: the garage, or the universe, where
     # every part stands.
@@ -147,11 +155,11 @@ def _machine_view(*beside_the_machine: str, active: str) -> Layout:
                 "column": [
                     {
                         "stack": ["site", "problems", "pinned", "jobs", "scad"],
-                        "size": 22,
+                        "size": 16,
                         "active": "site",
                     },
-                    {"stack": ["selected"], "size": 26},
-                    {"stack": ["part-parameters"], "size": 22},
+                    {"stack": ["selected"], "size": 18},
+                    {"stack": ["part-parameters"], "size": 36},
                     {"stack": ["machine", *beside_the_machine], "size": 30, "active": active},
                 ],
                 "size": 38,
@@ -226,7 +234,8 @@ DESIGN = Journey(
         Step(
             "ready",
             "Ready",
-            "whether it is ready to make, and what the site says is wrong",
+            "whether the part is ready to make, in its Readiness; the header's Layout valid "
+            "and Problems speak of the site's layout, not of the part",
             forward=("part-readiness", "problems"),
             owns=("part-readiness", "problems"),
             puts=(("edit", "footpedal"),),
@@ -454,6 +463,7 @@ BOARD = Journey(
             forward=("bench",),
             owns=("bench",),
             puts=(("bench", "esp32_blink"),),
+            stands_alone=True,
             shown_by=("05-firmware.md#1", "05-firmware.md#2", "05-firmware.md#6"),
         ),
         Step(
@@ -558,6 +568,7 @@ RUN = Journey(
         ]
     },
     name="Run a site",
+    made_of=("bring-up", "watch"),
     steps=(
         Step(
             "steps",
@@ -803,6 +814,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
                     "owns": list(s.owns),
                     "draws": s.draws,
                     "puts": [list(put) for put in s.puts],
+                    "stands_alone": s.stands_alone,
                 }
                 for s in j.steps
             ],

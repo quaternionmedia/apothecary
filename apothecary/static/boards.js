@@ -148,6 +148,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
             try {
                 const st = await api(`/firmware/printers/status?port=${encodeURIComponent(port)}`);
                 if (st.held) model.links.add(port); else model.links.delete(port);
+                quietOrHeard(b, st.state === "offline");
                 takeStatus(b, st, asked);
                 // The link came or went (a failed poll drops it): the board card follows.
                 if (!b.info || !!b.info.link !== !!st.held) await loadInfo(port).catch(() => {});
@@ -172,11 +173,33 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         const ms = polled(b).map((w) => w.interval);
         return ms.length ? Math.min(...ms) : null;
     }
+    // A board that does not answer is asked less often: each poll that finds it quiet
+    // after the first doubles the wait, up to QUIET_MAX_MS, and one that answers asks at
+    // the interval again. Each poll of a quiet board opens its port, which can reset
+    // it, so a Machine left open on one is not a port opened every few seconds. Quiet is
+    // the server's answer (`offline`); a request that failed (the server away, a port
+    // that would not open) opened nothing, and the next poll is an interval off.
+    const QUIET_MAX_MS = 60000;
+    function quietOrHeard(b, quiet) {
+        const was = b.quiet || 0;
+        b.quiet = quiet ? was + 1 : 0;
+        if (b.quiet === 2) note(b.port, `${b.port} is quiet: asked again less often, up to every ${QUIET_MAX_MS / 1000} s, and at once by Poll`);
+        else if (!quiet && was >= 2) {
+            note(b.port, `${b.port} answered: polled every ${(interval(b) || 0) / 1000} s again`);
+            // The long wait set while it was quiet gives way: the next poll is an interval off.
+            schedule(b);
+        }
+    }
+    function waitFor(b) {
+        const ms = interval(b);
+        if (ms === null || !(b.quiet > 1)) return ms;
+        return Math.min(QUIET_MAX_MS, ms * 2 ** (b.quiet - 1));
+    }
     // Self-scheduled, never overlapping: the next poll is asked for only once the
     // last has answered, and not while the page is hidden.
     function schedule(b) {
         clearTimeout(b.timer); b.timer = null;
-        const gen = ++b.gen, ms = interval(b);
+        const gen = ++b.gen, ms = waitFor(b);
         if (ms === null || document.hidden) return;
         b.timer = setTimeout(async () => {
             if (gen !== b.gen) return;

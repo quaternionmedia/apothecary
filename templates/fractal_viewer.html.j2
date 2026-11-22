@@ -81,6 +81,8 @@
             padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.55);
         }
+        /* ⚙ View's own: no taller than the page under the header, scrolled past that. */
+        #view-menu > .view-menu-body { max-height: calc(100vh - 3.5rem); overflow-y: auto; }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
             font-weight: 600;
@@ -499,8 +501,10 @@
         }
         .zoom-in-btn:hover { background: #33403a; }
         /* X, Y and Z on one line, whatever the column's width: each box gives way. */
-        .pos-row { gap: 0.3rem; }
-        .pos-row input[type="number"] { width: 0; min-width: 0; padding: 0.3rem 0.3rem; font-size: 0.78rem; }
+        .pos-row { gap: 0.3rem; flex-wrap: wrap; }
+        /* Wide enough for a coordinate's digits and the spinner beside them: a narrow
+           Selected wraps the row, never cuts a number short. */
+        .pos-row input[type="number"] { width: 0; min-width: 9ch; padding: 0.3rem 0.3rem; font-size: 0.78rem; }
         .pos-row .axis { font-size: 0.72rem; color: #777; flex: 0 0 auto; }
 
         /* ⚒ Make, in the header after the banner: what is selected, else what is in view,
@@ -838,7 +842,7 @@
                 <div class="panel-section" data-panel="problems" data-home="site" data-group="Site" title="The site's problems (the header's count opens them); each row selects its piece">
                     <div class="panel-header">Problems</div>
                     <div class="panel-body site-problems">
-                        <p id="site-problems-none" class="empty-note">No problems: the layout is valid.</p>
+                        <p id="site-problems-none" class="empty-note">No problems in the site's layout. Whether a part is ready to make is its Readiness, under Part.</p>
                         <ul id="problem-list" class="problem-list"></ul>
                     </div>
                 </div>
@@ -2163,9 +2167,20 @@
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
+                    // What a stage framed is framed again once the box shows what the
+                    // stage said, which can make it taller over the world.
+                    settled: () => {
+                        if (this.lastFrame && this.lastFrame.at >= this.stagedAt) this.frameBox(this.lastFrame.bounds, this.lastFrame.along);
+                    },
                     stage: async (journey, stage, how) => {
-                        const done = await this.stageJourney(journey, stage, how);
+                        this.stagedAt = performance.now();
+                        this.chosenOnTheWay = null;
+                        this.onTheWay = true;
+                        let done;
+                        try { done = await this.stageJourney(journey, stage, how); }
+                        finally { this.onTheWay = false; }
                         if (!this.tourPop.isOpen()) this.leaveJourney();
+                        else if (this.chosenOnTheWay) this.onWindowChosen(this.chosenOnTheWay, { again: true });
                         return done;
                     },
                     onShown: (open) => {
@@ -2570,6 +2585,37 @@
                     },
                 };
             }
+            // The room of the world's window the Tour box leaves: the largest of the room
+            // beside it and above or below it, as fractions of the window from its top
+            // left ({ x, y, w, h }); the whole window where the box is closed or lies
+            // elsewhere.
+            freeOfTheBox() {
+                const whole = { x: 0, y: 0, w: 1, h: 1 }, v = this.viewRect();
+                const el = this.tourPop?.isOpen() ? document.getElementById('tour-pop') : null;
+                if (!el || !v.width || !v.height) return whole;
+                const box = el.getBoundingClientRect(), gap = 8;
+                const l = Math.max(v.left, box.left), r = Math.min(v.left + v.width, box.right);
+                const t = Math.max(v.top, box.top), b = Math.min(v.top + v.height, box.bottom);
+                if (r <= l || b <= t) return whole;
+                const rooms = [
+                    { x: r + gap - v.left, y: 0, w: v.left + v.width - r - gap, h: v.height },
+                    { x: 0, y: 0, w: l - gap - v.left, h: v.height },
+                    { x: 0, y: 0, w: v.width, h: t - gap - v.top },
+                    { x: 0, y: b + gap - v.top, w: v.width, h: v.top + v.height - b - gap },
+                ].filter((m) => m.w > 0 && m.h > 0);
+                if (!rooms.length) return whole;
+                const best = rooms.reduce((a, m) => (m.w * m.h > a.w * a.h ? m : a));
+                return { x: best.x / v.width, y: best.y / v.height, w: best.w / v.width, h: best.h / v.height };
+            }
+            // A piece of the site framed by its key, as f frames the selected one.
+            frameNode(key) {
+                const node = this.renderNodeByKey[key];
+                if (!node) return false;
+                const mesh = this.meshByName[key];
+                const box = mesh ? new THREE.Box3().setFromObject(mesh) : null;
+                this.frameBox(box && !box.isEmpty() ? siteBox(box) : this.boundsFor(node, 0));
+                return true;
+            }
             // Where the world's window stands on the page: the canvas, or, see-through,
             // the part of the canvas under the whole layout that its window shows.
             viewRect() {
@@ -2716,13 +2762,20 @@
             // names it (/viewer/sites/<name>), so a reload or a link lands on it and
             // Back returns to the one before. The old site's focus, Machine and
             // variants are its own, and stay behind in its entry of the history.
-            chooseSite(name) {
+            // `carried`, {part: variant}, are variants this tab applied that go with it
+            // all the same, the new site's address naming them: a part made in another
+            // site is made there as it was drawn (makePiece).
+            chooseSite(name, carried = {}) {
                 if (!name) return null;
                 const url = new URL(location.href);
                 url.pathname = `/viewer/sites/${encodeURIComponent(name)}`;
                 for (const key of ['focus', 'machine', 'variant']) url.searchParams.delete(key);
                 if (url.href !== location.href) history.pushState({ site: name }, '', url);
+                const kept = Object.entries(carried)
+                    .filter(([ref, key]) => key && this.variantByPart[ref] === key)
+                    .map(([ref, key]) => [ref, key, this.variantRecords[ref]]);
                 this.forgetVariants();
+                for (const [ref, key, record] of kept) this.useVariant(ref, key, record);
                 return this.loadSite(name);
             }
 
@@ -7558,13 +7611,16 @@
             // from (or along `along`, three.js's frame), near enough that the whole box fits;
             // the level's reach left as it was.
             frameBox(bounds, along = null) {
+                this.lastFrame = { bounds, along: along && along.clone(), at: performance.now() };
                 const sizes = bounds.max.map((v, i) => v - bounds.min[i]);
                 const span = Math.max(20, ...sizes);
                 const centre = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2));
                 // Far enough that the piece's whole extent fits the narrower of the two
-                // angles of the view, with a margin round it.
+                // angles of the room the Tour box leaves (the whole view where it leaves
+                // all of it), with a margin round it.
+                const free = this.freeOfTheBox();
                 const tan = Math.tan(this.camera.fov * Math.PI / 360);
-                const half = Math.atan(tan * Math.min(1, this.camera.aspect));
+                const half = Math.min(Math.atan(tan * free.h), Math.atan(tan * this.camera.aspect * free.w));
                 const distance = Math.max(30, (Math.hypot(...sizes) / 2) / Math.sin(half) * 1.25);
                 // From the side the view is on, at the distance that frames it.
                 const from = along ? along.clone() : this.camera.position.clone().sub(this.orbitControls.target);
@@ -7572,6 +7628,19 @@
                 from.normalize().multiplyScalar(distance);
                 this.orbitControls.target.copy(centre);
                 this.camera.position.copy(centre).add(from);
+                // Drawn in the middle of that room: the camera and what it turns about moved
+                // across the view, so the box's centre lands there.
+                if (free.w < 1 || free.h < 1) {
+                    const ndcX = (free.x + free.w / 2) * 2 - 1, ndcY = 1 - (free.y + free.h / 2) * 2;
+                    const halfH = distance * tan, halfW = halfH * this.camera.aspect;
+                    this.camera.lookAt(centre);
+                    this.camera.updateMatrixWorld();
+                    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+                    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+                    const shift = right.multiplyScalar(-ndcX * halfW).add(up.multiplyScalar(-ndcY * halfH));
+                    this.orbitControls.target.add(shift);
+                    this.camera.position.add(shift);
+                }
                 if (this.reach) this.reach.fitSpan = Math.min(this.reach.fitSpan ?? Infinity, span);
                 this.orbitControls.minDistance = Math.min(this.orbitControls.minDistance, Math.max(1, span * this.settings.get('dollyIn')));
                 const near = Math.min(1, Math.max(0.05, span * 0.0004));
@@ -8724,7 +8793,7 @@
                 this.panels.open('part-feedback');
                 const chosen = await this.feedback.show(name, { drawer, job });
                 this.showPartSections();
-                const which = !chosen ? 'nothing made of it yet' : chosen.drawer ? 'a drawer chosen' : 'a piece made elsewhere chosen';
+                const which = !chosen ? 'nothing made of it yet' : chosen.drawer ? 'a drawer chosen' : 'its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it';
                 return { said: `${name}'s cabinet in Part › Feedback, ${which}` };
             }
 
@@ -8993,7 +9062,9 @@
                 return done;
             }
             // A piece made on the first machine that makes it (makersOf). In another site,
-            // that site is opened first, as the banner's ▾ does. The machine's Machine opened, its Print or Cut in front (makingWith),
+            // that site is opened first, as the banner's ▾ does, the variant drawn going with
+            // it, so a Slice or Toolpath there again makes that variant and not the part as
+            // saved. The machine's Machine opened, its Print or Cut in front (makingWith),
             // the piece chosen under makes -- in another site, the part by its name -- and
             // sliced, or its toolpath written, as the drawn variant where one is applied.
             // Nothing is armed, started or sent: ▶ is the person's. What it says, or why not.
@@ -9010,7 +9081,7 @@
                 const variant = ref ? this.variantByPart[ref] ?? null : null;
                 const away = chosen.site !== this.siteName;
                 if (away) {
-                    await this.chooseSite(chosen.site);
+                    await this.chooseSite(chosen.site, variant ? { [ref]: variant } : {});
                     if (this.siteName !== chosen.site) return say({ refused: `${chosen.site} did not open` });
                 }
                 await until(() => this.bindingsLoaded && (this.bindingFor(chosen.path).row?.device?.port || this.plannedMachineOf(chosen.path)), 15000);
@@ -9310,7 +9381,7 @@
                 // The world has the room its view left it: framed at that size.
                 this.onResize();
                 this.frameBox(siteBox(box));
-                return { said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
+                return { drawn: true, said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
             }
             // ---- journeys (apothecary/journeys.py) ----------------------------------
             // A step of the journey the Tour box is on entered, the one on included: its
@@ -9330,15 +9401,21 @@
                     const opened = subject && this.bindingFor(subject).row?.device?.port && this.openMachine(subject);
                     if (!opened) {
                         for (const w of [...step.forward].reverse()) if (!machines.includes(w)) this.panels.open(w);
-                        this.setStatus(`${head}: no Machine is open: ${journey.opened_by} opens one`, 'error');
-                        return true;
+                        return this.said(`${head}: no Machine is open: ${journey.opened_by} opens one`, true);
                     }
                 }
                 for (const w of [...step.forward].reverse()) this.panels.open(w);
                 const landed = step.draws ? await this.landOnPath() : null;
-                if (landed) this.setStatus(`${head}: ${landed.said}`, landed.refused ? 'error' : 'success');
-                else this.setStatus(`${head}: ${step.hint}`, 'success');
-                return true;
+                // A path that is not drawn leaves the world on the machine it is for, not
+                // on whatever the world showed before.
+                if (step.draws && !landed?.drawn && this.machine?.path) this.frameNode(this.machine.path);
+                if (landed) return this.said(`${head}: ${landed.said}`, !!landed.refused);
+                return this.said(`${head}: ${step.hint}`, false);
+            }
+            // The status line set, and what it says given back: `{ said, refused }`.
+            said(text, refused) {
+                this.setStatus(text, refused ? 'error' : 'success');
+                return { said: text, refused };
             }
             // The page taken to a stage of a journey for the tour (widgets/tour_popover.js):
             // what its journey is staged on and then its own puts done, each as a person
@@ -9359,7 +9436,7 @@
                 const journey = JOURNEYS.find((j) => j.id === id);
                 if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
                 const step = journey.steps.find((x) => x.id === stepId) || journey.steps[0];
-                const did = [];
+                const did = [], started = performance.now();
                 // The site its subjects stand in, opened where another is, as the banner's ▾
                 // does: a stage is the same from wherever the tour is opened.
                 if (journey.site && this.siteName !== journey.site) {
@@ -9367,8 +9444,12 @@
                     const from = this.siteName;
                     await this.chooseSite(journey.site);
                     if (this.siteName !== journey.site) return { did, said: `${journey.site} did not open: ${document.getElementById('status').textContent}`, refused: true };
+                    // The site the page was on before the tour first moved it: leaving the
+                    // journey opens it again.
+                    this.siteBeforeTour ??= from;
                     did.push(`${journey.site} opened, where ${journey.name} stands (${from} was open)`);
                 }
+                if (this.siteName === this.siteBeforeTour) this.siteBeforeTour = null;
                 // The site's own level: a piece is chosen and opened among the site's.
                 if (this.focusPath.length) { this.goUpTo(0, 'the tour'); did.push(`stepped out to ${this.siteName}`); }
                 // A journey with no machine in it: the one open is closed, as its tab's ✕ does.
@@ -9378,20 +9459,39 @@
                     const named = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]} Machines` : `${who[0]} Machine`;
                     did.push(`${named} closed: ${journey.name} has no machine in it`);
                 }
+                // What the journey is staged on, then the stage's own puts; a stage that
+                // stands alone (stands_alone) goes on to its own past what the journey's
+                // could not do, which is not its need.
                 let needs = null;
-                for (const [verb, subject] of [...(journey.staged_on || []), ...(step.puts || [])]) {
+                for (const [verb, subject] of journey.staged_on || []) {
+                    const done = await this.stagePut(verb, subject, { reload });
+                    if (done.refused && step.stands_alone) continue;
+                    if (done.refused) { needs = done.refused; break; }
+                    if (done.did) did.push(done.did);
+                }
+                for (const [verb, subject] of needs ? [] : step.puts || []) {
                     const done = await this.stagePut(verb, subject, { reload });
                     if (done.refused) { needs = done.refused; break; }
                     if (done.did) did.push(done.did);
                 }
                 const entered = this.journey?.id !== id;
                 if (entered && !this.viewRefusal(id)) await this.openView(id, { label: journey.name });
+                // The world laid out at its new size: a box over most of it is folded to its
+                // head, and what a put framed before the layout is framed again in it.
+                if (entered) {
+                    await new Promise((go) => requestAnimationFrame(() => requestAnimationFrame(go)));
+                    this.onResize();
+                    if (this.tourPop?.isOpen() && !this.tourPop.isFolded()) {
+                        const free = this.freeOfTheBox();
+                        if (free.w * free.h < 0.5) { this.tourPop.fold(true); did.push('the box folded to its head, the world beside it being narrow: its title unfolds it'); }
+                    }
+                    if (this.lastFrame && this.lastFrame.at >= started) this.frameBox(this.lastFrame.bounds, this.lastFrame.along);
+                }
                 this.journey = { id, step: step.id };
-                await this.enterStep(step.id);
+                const entry = await this.enterStep(step.id);
                 if (entered) did.push(`${journey.name} entered, its windows laid out`);
-                const status = document.getElementById('status');
                 if (needs) return { did, said: needs, refused: true };
-                return { did, said: status.textContent, refused: status.classList.contains('error') };
+                return { did, said: entry.said, refused: entry.refused };
             }
             // One thing that takes the page to a stage (journeys.py's PUTS): `{ did }` saying what
             // was done, `{}` where it was so already, `{ refused }` saying why not. On a
@@ -9553,11 +9653,25 @@
                 if (!journey) return;
                 this.journey = null;
                 this.keepJourneyInAddress();
+                // A site the tour opened gives way to the one the page was on before it. A
+                // page no longer on the journey's site was moved by a person, and stays.
+                const back = this.siteBeforeTour;
+                this.siteBeforeTour = null;
+                if (back && back !== this.siteName && this.siteName === journey.site && SITE_NAMES.includes(back)) {
+                    this.setStatus(`Left ${journey.name}: opening ${back} again, where the page was before the tour`, 'success');
+                    return this.chooseSite(back).then(() => {
+                        if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are`, 'success');
+                    });
+                }
                 this.setStatus(`Left ${journey.name}: its windows stay where they are`, 'success');
             }
             // A window a person chose moves the Tour box to the step that owns it, and
-            // moves nothing else.
-            onWindowChosen(id) {
+            // moves nothing else. One chosen while the page is on its way to a stage is
+            // kept until it arrives (`again`): the stage's windows have come forward by
+            // then, so the chosen one is put in front again and the box moved to its step.
+            onWindowChosen(id, { again = false } = {}) {
+                if (this.onTheWay) { this.chosenOnTheWay = id; return; }
+                if (again) this.panels.open(id);
                 const journey = this.journey && JOURNEYS.find((j) => j.id === this.journey.id);
                 const step = journey && journey.steps.find((s) => s.owns.includes(id));
                 if (!step || step.id === this.journey.step) return;

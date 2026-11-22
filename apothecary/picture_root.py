@@ -117,5 +117,8 @@ def picture_within_root(where: Path) -> Path:
     except OSError as exc:
         raise CannotLook(f"{settled} cannot be looked at: {exc}") from None
     if not real:
-        raise NoPicture(f"there is no picture at {settled}, or it is not an ordinary file")
+        # Named inside the root, as a person names it: where the server's own folder
+        # is is not theirs to read in a page.
+        named = settled.relative_to(root).as_posix()
+        raise NoPicture(f"there is no picture {named} in the pictures folder, or it is not an ordinary file")
     return settled
