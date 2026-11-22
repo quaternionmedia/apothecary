@@ -29,8 +29,9 @@ from its parameters as `Params` reads them:
 - **The operations**, in the order they are made: a `Pocket` (a rectangle at
   a corner, a depth), a `Hole` (a centre, a diameter, a depth), an `Outline`
   (a rectangle cut around from outside), a `Disc` (a circle cut around from
-  outside: a round part's edge). A depth per pass, a stepover and a safe height
-  complete it.
+  outside: a round part's edge), a `Groove` (the tool's centre along two or more
+  points, closed where the last is the first: a stroke engraved). A depth per
+  pass, a stepover and a safe height complete it.
 - **Names**, where a person measures it: an operation may carry a `name`, and
   each named one that is cut is a feature of the piece -- inside for a pocket
   or a hole bored, outside for an outline or a disc -- which the toolpath's
@@ -42,7 +43,10 @@ column of holes, every size a parameter, standing on the router's table in the
 garage where its toolpath cuts it; its pocket, its holes and its plate are
 named. `parts/router_emoji` is the piece made for calibrating the router: a 😮,
 its face a disc and its eyes and mouth holes bored through it, each a circle
-measured across.
+measured across. `parts/badge` engraves a face: its eyes bored, its smile or
+frown a groove ([walkthrough page 57](../walkthrough/57-a-badge-composed.md)).
+A part whose `cuts` raises a `ValueError` at the numbers asked -- a badge's word,
+which no end mill follows -- is refused with its words, and no toolpath written.
 
 ## What the toolpath does
 
@@ -64,6 +68,10 @@ the tool up and back over the zero, and `M30`.
 - An outline is cut around from outside, the tool's radius beyond its edge, to
   its depth; one asking for more than the stock's thickness stops a millimetre
   into the spoilboard, and says so. A disc is the same around a circle.
+- A groove is the tool's centre along its points, each pass to its depth: an
+  open one back the way it came on the next pass, a closed one round again. It is
+  the tool's width, so it is never a size to measure, and stops a millimetre into
+  the spoilboard as an outline does.
 - A circle -- a hole bored, a disc -- is written as chords, 36 of them or as
   many more as keep each within a hundredth of a millimetre of the circle, so
   the piece measures its size across wherever the calipers sit.

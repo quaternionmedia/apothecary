@@ -24,6 +24,8 @@ parts/
 │   └── router_coupon.scad   a plate with a pocket and holes, cut on the router (its cuts in the wrapper)
 ├── router_emoji/
 │   └── router_emoji.scad    a 😮 cut on the router, measured to calibrate it (its cuts in the wrapper)
+├── badge/
+│   └── badge.scad           a face or a word engraved in a plate, composed in the Badge window (a face's cuts in the wrapper)
 ├── print_coupon/
 │   └── print_coupon.scad   a plate, blocks, pockets, a window and a fin, measured to tune a printer (its plan in the wrapper)
 ├── bed_shims/

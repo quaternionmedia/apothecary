@@ -100,6 +100,9 @@ here: run `apothecary problems`.
   left edge, or scrolled sideways, with the caret in view either way. Which one a run
   gets does not follow the commit, so a picture of it past the drift tolerance is not
   a change to the page.
+- `tests/test_firmware_gcode.py::test_release_reconnect_reset_and_upload_are_refused_mid_print`
+  read a cancel already `cancelled` where it asks for `cancelling`, once, in a whole unit
+  run at a load near 9 on four cores; it passed alone three times at that load.
 - A checkout's first browser run builds every part's STL inside its first test's setup
   (`every_stl_built`, `tests/e2e/conftest.py`), under the same phase cap as the test, so
   where none is built yet -- a fresh worktree -- the build outlasts the cap and the run

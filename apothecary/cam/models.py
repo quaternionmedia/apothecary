@@ -13,7 +13,7 @@ allowance (``measured.py``).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
 
@@ -99,7 +99,19 @@ class Disc(BaseModel):
     name: Optional[str] = Field(None, pattern=FEATURE_NAME)
 
 
-Operation = Union[Pocket, Hole, Outline, Disc]
+class Groove(BaseModel):
+    """A groove the tool's width, its centre along ``points`` -- two or more (x, y), a
+    closed one ending where it began -- cut ``depth`` down: a stroke engraved, a smile's
+    or a line's. Its width is the tool's whatever the router's allowance, so it is never
+    a size a person measures."""
+
+    kind: Literal["groove"] = "groove"
+    points: List[Tuple[float, float]] = Field(..., min_length=2)
+    depth: float = Field(..., gt=0)
+    name: Optional[str] = Field(None, pattern=FEATURE_NAME)
+
+
+Operation = Union[Pocket, Hole, Outline, Disc, Groove]
 
 
 class Cuts(BaseModel):

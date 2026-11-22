@@ -153,6 +153,7 @@ GROUPS = {
             "apothecary/static/widgets/feedback.js",
             "parts/router_coupon/*",
             "parts/router_emoji/*",
+            "parts/badge/*",
             "parts/ender3/*",
             "tests/slicer_helpers.py",
             "walkthrough/20-*",
@@ -160,6 +161,7 @@ GROUPS = {
             "walkthrough/46-*",
             "walkthrough/50-*",
             "walkthrough/52-*",
+            "walkthrough/57-*",
         ),
         "tests": (
             "test_bed_shims.py",
@@ -169,6 +171,7 @@ GROUPS = {
             "test_slicer_installer.py",
             "test_cam.py",
             "test_cam_measured.py",
+            "test_badge.py",
             "test_preview.py",
             "test_print_tuning.py",
             "test_print_faults.py",

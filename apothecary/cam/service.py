@@ -28,7 +28,8 @@ def cuts_dir() -> Path:
 def part_cuts(name: str, variant: Optional[str] = None):
     """The part named, and its cuts at its defaults or at the parameters of the
     cached variant ``variant`` (the one a page drew). CamError when the part does
-    not say how it is cut, or the variant is not cached."""
+    not say how it is cut, the variant is not cached, or the part refuses to be cut at
+    those numbers (a ValueError from its ``cuts``, its words kept)."""
     part = load_part(name)
     params: Dict[str, object] = {}
     if variant is not None:
@@ -42,7 +43,11 @@ def part_cuts(name: str, variant: Optional[str] = None):
         params = dict(record.get("params") or {})
     if not part.has_cuts:
         raise CamError(f"the part {name} does not say how it is cut: it has no cuts to write")
-    return part, params, part.cuts(params)
+    try:
+        cuts = part.cuts(params)
+    except ValueError as exc:  # the part refuses these numbers, saying why
+        raise CamError(f"{name}: {exc}") from exc
+    return part, params, cuts
 
 
 def cut_into(name: str, router: CutFor, variant: Optional[str] = None) -> CutRecord:
