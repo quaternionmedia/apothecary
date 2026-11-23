@@ -54,7 +54,7 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
 5 Print: footpedal chosen
     Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it, as Part › View › Feedback does
-    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured, or each fault marked under seen, filed, and Take turn takes either into the printer's next slices
+    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured -- or its label clicked on the part, Measure shown in Layers -- and checked against its design, or each fault marked under seen, filed; Take turn takes either into the printer's next slices
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table
@@ -177,7 +177,7 @@ A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat a
 1 Heat: printer_1's Machine opened; Level a bed entered, its windows laid out
     Level a bed › 1 Heat (the tour): the bed on at the loaded filament's printing temperature, control armed in the Machine, then about ten minutes' soak: the plate and the probe move as they warm
 2 Probe: printer_1 framed in the world, as f does
-    Level a bed › 2 Probe (the tour): ▤ Probe bed in the Machine's Bed level, twice, one after the other: each run in Runs, heated or cold, and the one chosen drawn over the bed
+    Level a bed › 2 Probe (the tour): ▤ Probe hot in Runs: the bed heated, held and probed twice; each run in Runs, heated or cold, the one chosen drawn over the bed
 3 Compare: nothing more to do
     Level a bed › 3 Compare (the tour): the second run less the first in Differences: the floor a shim must clear, and the bow, which no shim fixes
 4 Measure: bed_shims chosen
@@ -186,8 +186,8 @@ A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat a
     Level a bed › 5 Shims (the tour): each corner's shim in Fixes, drawn at its screw in the world as wide as the mount: the highest none, one under a layer or under the floor skipped
 6 Print: nothing more to do
     Level a bed › 6 Print (the tour): Make these in Fixes: the shims rendered at their thicknesses and the mount kept, and sliced for the printer in its Print window to probe first, the bed not yet level; ▶ Print is a person's
-7 Fit: nothing more to do
-    Level a bed › 7 Fit (the tour): each shim's thickness checked against its design, where the part's Feedback measures a printed piece; each on the mount its label names, slot first, its tab out past the mount; then the bed heated, soaked and probed twice again
+7 Fit: bed_shims's cabinet in Part › Feedback, nothing made of it yet, as Part › View › Feedback does
+    Level a bed › 7 Fit (the tour): each shim's thickness clicked on bed_shims, Measure shown in Layers, what calipers read typed in its row in Part › Feedback and checked against its design; each on the mount its label names, slot first, its tab out past the mount; then the bed heated, soaked and probed twice again
 8 After: nothing more to do
     Level a bed › 8 After (the tour): after less before in Differences, and each reading's range in History against the bound for a stored mesh
 ```
