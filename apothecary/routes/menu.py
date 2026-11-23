@@ -196,6 +196,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
         end=len(round_ends) == 1,
         motion=part.has_motion,
         deck="streamdeck" in part.tags,
+        badge="badge" in part.tags,
     )
 
 

@@ -221,6 +221,9 @@ class PartSeen(BaseModel):
     # Whether it is a Stream Deck + (tagged ``streamdeck``): its ring's Deck opens the Deck
     # window, as Open Deck in its Selected does.
     deck: bool = False
+    # Whether it is composed in the Badge window (tagged ``badge``): Part › View › Badge
+    # is offered, its faces and the word the window's buttons.
+    badge: bool = False
 
 
 class PictureContext(BaseModel):
@@ -899,6 +902,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     # Part's, beside Selected, and the part's own Part › View › Motion, on a part whose
     # pieces move.
     ("motion", "Motion"),
+    # Badge: parts/badge composed, a face or the word, and made on a printer or the router
+    # (widgets/badge.js), a window in the column registered at start and closed until
+    # asked for: Panels › Part's, after Motion, so no cell before it moves.
+    ("badge", "Badge"),
     # Lighting: a rig's legend and its console's levels (static/lighting.js), registered
     # while the site has a rig: Panels › Site's, greyed on a site without one.
     ("lighting", "Lighting"),
@@ -932,6 +939,7 @@ PANEL_GROUPS = {
     "bed-fixes": "Machine",
     "bed-history": "Machine",
     "motion": "Part",
+    "badge": "Part",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
@@ -998,13 +1006,17 @@ def _panels(rig: bool = False) -> Option:
             group="Site",
             children=[of_site(each) for each in _RINGS["site"]],
         ),
-        # Part: Selected, the Part system's main window, and Motion; the part's own
-        # sections are its ring's (Part › Edit, View, History, Variants).
+        # Part: Selected, the Part system's main window, Motion and the Badge; the part's
+        # own sections are its ring's (Part › Edit, View, History, Variants).
         "part": Option(
             id="panels:part",
             label="Part",
             group="Part",
-            children=[toggle("selected", labels["selected"]), toggle("motion", labels["motion"])],
+            children=[
+                toggle("selected", labels["selected"]),
+                toggle("motion", labels["motion"]),
+                toggle("badge", labels["badge"]),
+            ],
         ),
         "pictures": Option(
             id="panels:pictures",
@@ -1593,6 +1605,35 @@ def _motion() -> Option:
             Option(id="part:motion:step", label="Step", action="part:motion:step"),
             Option(id="part:motion:reset", label="Reset", action="part:motion:reset"),
             Option(id="part:motion:bought", label="Bought", action="part:motion:bought"),
+        ],
+    )
+
+
+# The badge's faces, each drawn after its emoji, in the Badge window's order
+# (parts/badge, widgets/badge.js).
+BADGE_FACES: Tuple[Tuple[str, str], ...] = (
+    ("open", "😮 Open"),
+    ("smile", "🙂 Smile"),
+    ("neutral", "😐 Neutral"),
+    ("wink", "😉 Wink"),
+    ("frown", "🙁 Frown"),
+    ("grin", "😀 Grin"),
+)
+
+
+def _badge() -> Option:
+    """Part › View › Badge: the Badge window opened on the badge, then its buttons, which
+    the page hands to it (widgets/badge.js): each face staged and drawn, and the word."""
+    return Option(
+        id="part:badge",
+        label="Badge",
+        children=[
+            Option(id="part:badge:open", label="Badge", action="part:badge:open"),
+            *(
+                Option(id=f"part:badge:face:{face}", label=label, action=f"part:badge:face:{face}")
+                for face, label in BADGE_FACES
+            ),
+            Option(id="part:badge:word", label="✎ Word", action="part:badge:word"),
         ],
     )
 
@@ -2320,6 +2361,10 @@ def _node_ring(
         # moves.
         if part and not in_a_printer:
             view.append(_feedback())
+        # The badge: its Badge window and the window's buttons (widgets/badge.js). After
+        # Feedback, so no cell of View moves.
+        if seen is not None and seen.badge:
+            view.append(_badge())
         verbs.append(Option(id="part:view", label="View", children=view))
         verbs.append(
             Option(

@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the router calibrated by a piece it cut, measured by hand; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; a drawing photographed into shapes, which stand up as parts to design; a printer's bed levelled by shims computed from its readings; and two ends joined by an adapter the server derives between them. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
+Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the router calibrated by a piece it cut, measured by hand; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; a drawing photographed into shapes, which stand up as parts to design; a printer's bed levelled by shims computed from its readings; a badge composed in a window, a face or a word; and two ends joined by an adapter the server derives between them. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
 
 **Runtime-bound.** It drives a real browser against `apothecary serve --simulated`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of that server refuses a real serial port.
 
@@ -192,14 +192,29 @@ A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat a
     Level a bed › 8 After (the tour): after less before in Differences, and each reading's range in History against the bound for a stored mesh
 ```
 
-## 10. Join a hose: two ends, each one part at its numbers, and the adapter between them
+## 10. Compose a badge: a face or a word, in the Badge window
 
-A part can be made between two others. The universe opens, where every part stands; the dust port is chosen and its editor opened, its presets above its numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's numbers it asks the server for the adapter between them. Adapter is the adapter's editor, where each end's fit is said; Ready is whether it can be printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the numbers measured, are the person's.
+A part composed in a window of its own. The universe opens, where every part stands, and the badge's editor is opened, as Part › Edit opens it. Pick is the Badge window: six faces, each drawn after its emoji, and the word, each staged in the badge's editor and drawn; Shape is its word and font, or its face's size, there, and its other numbers in Parameters; Make is ⚒ Print or ⚒ Cut, which takes the badge drawn to the garage, where Print a part or Cut a part goes on. The picture is Pick: a face chosen is the person's.
 
-![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-10-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
+![Compose a badge: a face or a word, in the Badge window](screenshots/39-10-compose-a-badge-a-face-or-a-word-in-the-badge-wind.png)
 
 ```
-1 Ends: apothecary opened, where Join a hose stands (garage was open); dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
+1 Pick: apothecary opened, where Compose a badge stands (garage was open); badge's editor opened, as Part › Edit does; Compose a badge entered, its windows laid out
+    Compose a badge › 1 Pick (the tour): a face drawn after its emoji, or the word, in the Badge window: each a cell of the badge's ring, Part › View › Badge, staged and drawn
+2 Shape: nothing more to do
+    Compose a badge › 2 Shape (the tour): the word typed and its font chosen, or the face's size, in the Badge window; its depth and plate in Parameters; drawn once the controls rest
+3 Make: nothing more to do
+    Compose a badge › 3 Make (the tour): ⚒ Print takes the badge drawn to the first printer that makes it, ⚒ Cut a face to the router: there Print a part or Cut a part goes on
+```
+
+## 11. Join a hose: two ends, each one part at its numbers, and the adapter between them
+
+A part can be made between two others. In the universe, where every part stands, the dust port is chosen and its editor opened, its presets above its numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's numbers it asks the server for the adapter between them. Adapter is the adapter's editor, where each end's fit is said; Ready is whether it can be printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the numbers measured, are the person's.
+
+![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-11-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
+
+```
+1 Ends: dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
     Join a hose › 1 Ends (the tour): each end one part at its numbers: a preset chosen in Parameters, what calipers read typed over it; ⇄ Adapter in Selected keeps the first
 2 Adapter: nothing more to do
     Join a hose › 2 Adapter (the tour): ⇄ Adapter again at the other end's numbers: the adapter between them derived, drawn, and each end's fit said in Selected

@@ -901,6 +901,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a tick-box that draws what is bought -- pins, inserts -- in a colour of its own",
     ),
+    # ---- the Badge, apothecary/static/widgets/badge.js ----------------------------
+    # A badge composed through its part's editor: a face or the word, each a cell of its
+    # ring's Part › View › Badge, and made on a machine as ⚒ Make makes a part. Its word,
+    # font and size are the Parameters window's own controls.
+    "badge-face": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that stages a face of the badge, or the word, and draws it",
+    ),
+    "badge-make": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that makes the badge drawn on the first printer or router that makes it:"
+        " chosen there and sliced, or its toolpath written",
+    ),
     # ---- the Tour, apothecary/static/widgets/tour_popover.js -------------------
     # The journeys a stage at a time, in a box over the page: a journey chosen, Back and
     # Next, the page taken to a stage, and a person's word on the stage (Off with what
@@ -1024,6 +1039,12 @@ RING_BACKED: Dict[str, str] = {
     "motion-step": "part:motion:step",
     "motion-reset": "part:motion:reset",
     "motion-bought": "part:motion:bought",
+    # A face or the word is its cell of Part › View › Badge; ⚒ Print and ⚒ Cut do what a
+    # part's Slice and Toolpath cells do on the first machine of their kind that makes it,
+    # as ⚒ Make does across sites.
+    "badge-face": "part:badge:face:smile",
+    "badge-make": "slice:piece:printer_1",
+    "badgeEl:click:clicked": "part:badge:face:smile",
     "motionEl:click:clicked": "part:motion:play",
     "motionEl:input:scrubbed": "part:motion:step",
     "motionEl:change:ticked": "part:motion:bought",
@@ -2058,6 +2079,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "Bought ticked or not, what is bought shown or hidden",
+    ),
+    # ---- Badge (widgets/badge.js): one listener on the window ----
+    "badgeEl:click:clicked": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a face, the word, ⚒ Print or ⚒ Cut, each doing what its cell or ⚒ Make does",
     ),
     # ---- the Workspace ------------------------------------------------------
     "root:click:closest": (

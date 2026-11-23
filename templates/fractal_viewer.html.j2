@@ -951,6 +951,7 @@
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
         import { mountMotion } from '/static/widgets/motion.js';
+        import { mountBadge } from '/static/widgets/badge.js';
         import { mountFeedback } from '/static/widgets/feedback.js';
         import { knownWindows, transientWindows, mountSystems, defineJourneyViews, openFor } from '/static/systems.js';
         import { mountScadEditor, variantChoices, historyRows, trashRows, madeOf, madeApart } from '/static/widgets/scad_editor.js';
@@ -1709,7 +1710,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'bed-runs', 'bed-differences', 'bed-fixes', 'bed-history', 'motion', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'bed-runs', 'bed-differences', 'bed-fixes', 'bed-history', 'motion', 'badge', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
@@ -2192,6 +2193,88 @@
                         this.motion.follow();
                     },
                     onOpen: () => this.motion?.act('open'),
+                });
+                // The Badge (widgets/badge.js): a face or a word engraved in a plate,
+                // parts/badge, composed through its editor and made by ⚒ Print or ⚒ Cut; a
+                // window of the Part group in the column, closed until asked for: ⊞ Windows,
+                // or Compose a badge's stages. It follows the selection.
+                this.badge = null;
+                // The editor opened or applied brings Parameters forward, a tab of the same
+                // stack where no view has laid them apart: the Badge, in front before, is put
+                // in front again.
+                const badgeInFront = async (work) => {
+                    const shown = this.panels.isShown('badge');
+                    const out = await work();
+                    if (shown && !this.panels.isShown('badge')) this.panels.open('badge');
+                    return out;
+                };
+                // The badge's editor: the one open on it, else opened on it without the cursor.
+                const badgeEditor = async (key) => {
+                    if (this.editorTarget && this.selectedName === key && this.editorOpenFor === key) {
+                        await this.editorLoading;
+                        if (this.editorTarget && this.selectedName === key) return this.editorTarget;
+                    }
+                    return badgeInFront(() => this.editorOn(key, { focus: false }));
+                };
+                this.panels.register('badge', {
+                    title: 'Badge', group: 'Part', home: 'column', after: 'selected', open: false,
+                    hint: 'The badge selected composed: a face drawn after its emoji, or a word in a font, and made on a printer or the router',
+                    body: (slot) => {
+                        this.badge = mountBadge(slot, {
+                            selected: () => {
+                                const key = this.selectedName, node = key && this.renderNodeByKey[key];
+                                return node ? { key, ref: node.part_ref || null } : null;
+                            },
+                            editor: async (key) => {
+                                const target = await badgeInFront(() => this.editorOn(key, { focus: false }));
+                                const stage = target && this.partStages[target.key];
+                                return stage ? { fields: stage.spec?.fields ?? [], staged: { ...stage.staged } } : null;
+                            },
+                            // What the badge's editor has staged now, where it is open on it:
+                            // read, never opened, so the window brought forward opens nothing.
+                            staged: (key) => {
+                                const target = this.editorTarget;
+                                const stage = target && this.selectedName === key ? this.partStages[target.key] : null;
+                                return stage ? { ...stage.staged } : null;
+                            },
+                            // A value staged once the editor, and the text it is staged into
+                            // where the part's SCAD is its source, are there to take it: the
+                            // editor open on the badge is staged into as it stands, so a word
+                            // typed keeps its keys in the Badge window; else it is opened,
+                            // the cursor left where it is.
+                            stage: async (key, name, value) => {
+                                const target = await badgeEditor(key);
+                                if (!target || this.selectedName !== key) return;
+                                if (target.part && target.scadUrl) await this.scadLoading;
+                                this.stageValue(target, name, value);
+                                this.showStaged(target);
+                            },
+                            // Apply: what is staged drawn. Nothing staged is what is drawn
+                            // already. A render that failed is refused in the status line's
+                            // words; one a newer Apply stopped says so, and nothing is drawn.
+                            apply: async (key) => {
+                                const target = await badgeEditor(key);
+                                if (!target || this.selectedName !== key) return { refused: `${key} is not the badge selected: nothing drawn` };
+                                const refused = await badgeInFront(() => this.applyNow(target, key));
+                                if (refused && !refused.includes('nothing is staged')) return { refused };
+                                if (refused) return { said: `${key}: drawn already` };
+                                const said = this.statusEl.textContent;
+                                if (this.statusType === 'error') return { refused: said };
+                                if (this.statusType === 'loading') return { superseded: true, said };
+                                return { said };
+                            },
+                            make: (key, kind) => this.makePiece(key, { kind }),
+                            controlFor: (field, value, onStage) => buildParamControl(field, value, { onStage }),
+                            addressOf: (action) => (this.badgeTaught ? this.badgeTaught[action] || null : null),
+                            say: (text, kind) => text && this.setStatus(text, kind),
+                        });
+                        window.apothecaryBadge = this.badge;
+                        // The selection followed while the window is in front; brought
+                        // forward again, it follows what was selected meanwhile.
+                        new MutationObserver(() => { if (this.panels.isShown('badge')) this.badge.follow(); }).observe(this.selectedBodyEl, { childList: true });
+                        this.badge.follow();
+                    },
+                    onOpen: async () => { await this.badge?.follow(); this.badge?.refresh(); },
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
@@ -5573,19 +5656,20 @@
             // Part › Edit: the editor in Selected, its Parameters window open under it,
             // the cursor in its first control. A machine drawn as a part shows the one
             // row that says so until it is asked for; asked for, its editor opens under
-            // the machine's panel.
-            openEditor(path) {
+            // the machine's panel. `focus: false` leaves the cursor where it is, for a
+            // window that opens the editor to stage into it (the Badge window).
+            openEditor(path, { focus = true } = {}) {
                 const node = this.renderNodeByKey[path];
                 const made = this.pictureMarks.madeRecord(path);
                 if (!node || !(node.part_ref || made)) return false;
                 this.editorOpenFor = path;
-                this.editorFocusWanted = this.isCameraNode(node) ? `camera:${this.siteName}:${path}`
+                this.editorFocusWanted = !focus ? null : this.isCameraNode(node) ? `camera:${this.siteName}:${path}`
                     : made ? `made:${this.siteName}:${path}` : `part:${node.part_ref}`;
                 this.editorFocusFrom = document.activeElement;
                 if (this.selectedName !== path) this.selectPath(path); else this.renderSelectedPanel();
                 this.panels.open('selected');
                 this.systems.part.showSection('parameters');
-                this.focusEditor();
+                if (focus) this.focusEditor();
                 return true;
             }
 
@@ -5983,8 +6067,8 @@
 
             // The editor for what `path` is, opened and its numbers read: what
             // Part › Apply and Part › Revert act on, as its buttons do.
-            async editorOn(path) {
-                if (!this.openEditor(path)) return null;
+            async editorOn(path, { focus = true } = {}) {
+                if (!this.openEditor(path, { focus })) return null;
                 await this.editorLoading;
                 return this.editorTarget;
             }
@@ -9140,14 +9224,16 @@
                 if (this.panels.applyView('machine') && machine.path) this.frameArmed(machine.path);
                 return done;
             }
-            // A piece made on the first machine that makes it (makersOf). In another site,
+            // A piece made on the first machine that makes it (makersOf), or the first of
+            // ``kind`` (a printer, a router) where one is asked for, a site's before the
+            // universe's. In another site,
             // that site is opened first, as the banner's ▾ does, the variant drawn going with
             // it, so a Slice or Toolpath there again makes that variant and not the part as
             // saved. The machine's Machine opened, its Print or Cut in front (makingWith),
             // the piece chosen under makes -- in another site, the part by its name -- and
             // sliced, or its toolpath written, as the drawn variant where one is applied.
             // Nothing is armed, started or sent: ▶ is the person's. What it says, or why not.
-            async makePiece(path) {
+            async makePiece(path, { kind = null } = {}) {
                 const until = async (test, ms) => {
                     const end = Date.now() + ms;
                     while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
@@ -9155,7 +9241,11 @@
                 };
                 const say = (done) => { this.setStatus(done.refused ? `Make: ${done.refused}` : done.said, done.refused ? 'error' : 'success'); return done; };
                 const node = this.nodeByPath(path), ref = node && node.part_ref;
-                const [chosen] = await this.makersOf(path);
+                const makers = (await this.makersOf(path)).filter((m) => !kind || m.kind === kind);
+                // Asked for a kind (the Badge window's ⚒ Print and ⚒ Cut), a site's machine
+                // comes before the universe's piece of a machine's part, which no board drives.
+                const [chosen] = kind ? [...makers.filter((m) => m.site !== UNIVERSE), ...makers.filter((m) => m.site === UNIVERSE)] : makers;
+                if (!chosen && kind) return say({ refused: `no ${kind} of any site makes ${ref || path}` });
                 if (!chosen) return say({ refused: `no machine of any site makes ${ref || path}${ref ? '' : `: a piece made from a picture is made on ${this.siteName}'s printers, and it has none`}` });
                 const variant = ref ? this.variantByPart[ref] ?? null : null;
                 const away = chosen.site !== this.siteName;
@@ -12006,6 +12096,17 @@
                     else refuse('select a machine with a board pinned to it first');
                     return;
                 }
+                // Part › View › Badge: the Badge window shown on the badge, and the button
+                // pressed there (widgets/badge.js); what it did, or refused, is said.
+                if (action.startsWith('part:badge:')) {
+                    if (viewer.selectedName !== path && viewer.renderNodeByKey[path]) viewer.selectPath(path);
+                    viewer.panels.open('badge');
+                    await viewer.badge.follow();
+                    const verb = action.slice('part:badge:'.length);
+                    const done = verb === 'open' ? { said: `${path}'s Badge window: a face or the word, then ⚒ Print or ⚒ Cut` } : await viewer.badge.act(verb);
+                    if (done.refused) refuse(done.refused); else if (!done.superseded) viewer.setStatus(`${done.said}${tail}`, 'success');
+                    return;
+                }
                 // Part › View › Motion: the Motion window shown on the piece, and the verb done
                 // there (widgets/motion.js); what it did, or refused, is said.
                 if (action.startsWith('part:motion:')) {
@@ -12247,6 +12348,9 @@
             if (viewer.feedback) pairs.push(...viewer.feedback.pairs());
             // The Motion window's controls are the cells of Part › View › Motion.
             viewer.motionTaught = addresses(ring);
+            // The Badge window's faces and word are the cells of Part › View › Badge.
+            viewer.badgeTaught = viewer.motionTaught;
+            for (const el of document.querySelectorAll('.badge-face[data-face]')) pairs.push([el, el.dataset.face === 'word' ? 'part:badge:word' : `part:badge:face:${el.dataset.face}`]);
             for (const [selector, action] of MOTION_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             // The Preset drop-down is Part › Presets, the ring of the part's presets; the
             // Stream Deck +'s Open Deck, its ring's Deck.

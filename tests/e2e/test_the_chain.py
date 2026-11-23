@@ -1,9 +1,9 @@
 """Every stage of every journey, the page taken there by the tour: the chain the page
 manages, a stage at a time, on simulated machines as a person starts them. A part
 designed; made on the printer; cut on the router; the router calibrated by its 😮; the
-board a machine runs on built for and heard; a deck's knobs on the machines; the site brought up through the family's hub,
-then watched; a drawing photographed into shapes; and two ends joined by an
-adapter. At each stage the tour's box says what the page did to stand there, and the
+board a machine runs on built for and heard; a deck's knobs on the machines; the site
+brought up through the family's hub, then watched; a drawing photographed into shapes;
+a badge composed; and two ends joined by an adapter. At each stage the tour's box says what the page did to stand there, and the
 page stands there: its window in front, its subject chosen, what the stage needs made.
 Walkthrough page 39 is what it writes.
 
@@ -148,11 +148,22 @@ PICTURED = {
         "Shims draws each at its screw; Print slices them for the printer, where Print a part "
         "goes on. The picture is Measure: what is measured is the person's.",
     ),
+    "compose": (
+        "pick",
+        "Compose a badge: a face or a word, in the Badge window",
+        "A part composed in a window of its own. The universe opens, where every part "
+        "stands, and the badge's editor is opened, as Part › Edit opens it. Pick is the "
+        "Badge window: six faces, each drawn after its emoji, and the word, each staged in "
+        "the badge's editor and drawn; Shape is its word and font, or its face's size, "
+        "there, and its other numbers in Parameters; Make is ⚒ Print or ⚒ Cut, which takes "
+        "the badge drawn to the garage, where Print a part or Cut a part goes on. The "
+        "picture is Pick: a face chosen is the person's.",
+    ),
     "join": (
         "ends",
         "Join a hose: two ends, each one part at its numbers, and the adapter between them",
-        "A part can be made between two others. The universe opens, where every part "
-        "stands; the dust port is chosen and its editor opened, its presets above its "
+        "A part can be made between two others. In the universe, where every part "
+        "stands, the dust port is chosen and its editor opened, its presets above its "
         "numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with "
         "what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's "
         "numbers it asks the server for the adapter between them. Adapter is the "
@@ -314,6 +325,12 @@ STANDS = {
     ("level", "print"): lambda page: _shown(page, "machine-print"),
     ("level", "fit"): lambda page: _shown(page, "bed-runs"),
     ("level", "after"): lambda page: _shown(page, "bed-history"),
+    ("compose", "pick"): lambda page: (
+        _selected("badge")(page),
+        _says(page, "badge", "printed, or cut on the router"),
+    ),
+    ("compose", "shape"): lambda page: _shown(page, "part-parameters"),
+    ("compose", "make"): lambda page: _says(page, "badge", "⚒ Print"),
     ("join", "ends"): lambda page: (
         _selected("dust_port")(page),
         expect(windows.panel(page, "part-parameters").locator("#part-preset")).to_be_visible(),
@@ -367,8 +384,11 @@ DID = {
         "bed_shims chosen",
         "bed_shims's cabinet in Part › Feedback",
     ],
+    "compose": [
+        "apothecary opened, where Compose a badge stands (garage was open)",
+        "badge's editor opened, as Part › Edit does",
+    ],
     "join": [
-        "apothecary opened, where Join a hose stands (garage was open)",
         "dust_port's editor opened, as Part › Edit does",
         "hose_adapter's editor opened, as Part › Edit does",
     ],
@@ -399,8 +419,9 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
             "measured by hand; the board a machine runs on; a deck's "
             "knobs on the machines; the site brought up and watched; a drawing "
             "photographed into shapes, which stand up as parts to design; a printer's bed "
-            "levelled by shims computed from its readings; and two ends joined by an "
-            "adapter the server derives between them. Each journey "
+            "levelled by shims computed from its readings; a badge composed in a window, a "
+            "face or a word; and two ends joined by an adapter the server derives between "
+            "them. Each journey "
             "hands the next what it made. Under each is what the tour's box said the "
             "page did to stand on each stage, then what the page said of it. "
             "[docs/tour.md](../docs/tour.md) is the reference."

@@ -152,3 +152,32 @@ def test_a_face_s_toolpath_is_written_and_a_word_s_refused_in_its_words(tmp_path
     )
     assert refused.status_code == 400
     assert refused.json()["detail"].startswith("badge: a word is printed, not cut")
+
+
+def test_a_variant_drawn_from_its_text_is_cut_at_the_text_s_numbers(tmp_path, monkeypatch):
+    """The page edits the badge through its SCAD text, so a variant it draws carries its
+    numbers in that text and none on the side: the toolpath reads them from the draft, a
+    frown drawn is a frown cut, and a word drawn is refused."""
+    from apothecary.cam import service
+    from apothecary.projects.parts import variants
+
+    own = DEFAULT.source_file.read_text(encoding="utf-8")
+    drafts = {
+        "0123456789abcdef01234567": own.replace('face = "smile";', 'face = "frown";'),
+        "76543210fedcba9876543210": own.replace('kind = "face";', 'kind = "word";'),
+    }
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setattr(variants, "read_variant", lambda part, key, *a, **k: {"params": {}})
+    monkeypatch.setattr(variants, "read_variant_draft", lambda part, key, *a, **k: drafts.get(key))
+    _, params, cuts = service.part_cuts("badge", "0123456789abcdef01234567")
+    assert params["face"] == "frown"
+    (frown,) = [o for o in cuts.operations if isinstance(o, Groove)]
+    assert (
+        frown.points
+        == [o for o in DEFAULT.cuts({"face": "frown"}).operations if isinstance(o, Groove)][
+            0
+        ].points
+    )
+    assert frown.points != [o for o in DEFAULT.cuts().operations if isinstance(o, Groove)][0].points
+    with pytest.raises(service.CamError, match="badge: a word is printed, not cut"):
+        service.part_cuts("badge", "76543210fedcba9876543210")

@@ -22,8 +22,9 @@ router trued by a piece it cut, measured by hand; the board that runs a machine 
 flashed and heard; a deck's knobs on the machines;
 the site brought up a step at a time through the family's hub, then watched; a
 drawing photographed into pieces, which are parts to design; the shims that level a
-printer's bed, computed from its readings; and two ends joined by an adapter the server
-derives between them, each a part to print.
+printer's bed, computed from its readings, a part to print; a badge composed in a
+window, a face or a word, to print or cut; and two ends joined by an adapter the server
+derives between them, a part to print.
 
 The tour takes the page to a stage by its ``puts``: what the page does to stand where
 the stage is, each a verb the page already has and its subject, done only where it is
@@ -809,6 +810,67 @@ DRAWING = Journey(
 )
 
 
+# Compose a badge: a face drawn after its emoji, or a word in a font, engraved in a plate
+# (parts/badge), in the Badge window; its numbers in Parameters, drawn in the world; then
+# ⚒ Print or ⚒ Cut takes the badge drawn to the first printer or router that makes it, in
+# the garage, where Print a part or Cut a part goes on. It stands in the universe, where
+# every part stands.
+COMPOSE = Journey(
+    id="compose",
+    title="Compose",
+    group="Part",
+    requires="selected",
+    opened_by="the badge's row in the universe's Site, and ⊞ Windows › Badge",
+    view={
+        "row": [
+            {"world": True, "size": 58},
+            {
+                "column": [
+                    {"stack": ["badge"], "size": 42},
+                    {"stack": ["selected", "site"], "size": 22, "active": "selected"},
+                    {
+                        "stack": ["part-parameters", "part-readiness"],
+                        "size": 36,
+                        "active": "part-parameters",
+                    },
+                ],
+                "size": 42,
+            },
+        ]
+    },
+    name="Compose a badge",
+    site=UNIVERSE,
+    staged_on=(("edit", "badge"),),
+    steps=(
+        Step(
+            "pick",
+            "Pick",
+            "a face drawn after its emoji, or the word, in the Badge window: each a cell of "
+            "the badge's ring, Part › View › Badge, staged and drawn",
+            forward=("badge", "selected"),
+            owns=("badge", "selected"),
+            shown_by=("57-a-badge-composed.md",),
+        ),
+        Step(
+            "shape",
+            "Shape",
+            "the word typed and its font chosen, or the face's size, in the Badge window; "
+            "its depth and plate in Parameters; drawn once the controls rest",
+            forward=("badge", "part-parameters"),
+            owns=("part-parameters", "part-readiness"),
+        ),
+        Step(
+            "make",
+            "Make",
+            "⚒ Print takes the badge drawn to the first printer that makes it, ⚒ Cut a face "
+            "to the router: there Print a part or Cut a part goes on",
+            forward=("badge",),
+            owns=("site",),
+        ),
+    ),
+)
+
+
 # Join a hose: two ends, each one part at its numbers -- a preset chosen, what calipers
 # read typed over it -- and the adapter between them derived by the server, drawn, and
 # each end's fit said; its numbers adjusted, each fit said again. It stands in the
@@ -968,10 +1030,11 @@ LEVEL = Journey(
 
 # In the order of the chain, each handing the next what it made; a view's cell on the
 # ring is the first's alone. Calibrate a router follows Cut a part: the router that cut
-# a part is trued by a piece made to be measured. Join a hose comes last: an adapter
-# between two ends is a part designed by the server, which hands it to Print a part as
-# Design a part does. Level a bed comes before it for the same reason: its shims are a
-# part the server computes from a printer's readings, handed to Print a part.
+# a part is trued by a piece made to be measured. Level a bed, Compose a badge and Join a
+# hose come last, each a part made and handed back to a machine: the shims a printer's
+# readings compute, to Print a part; a badge composed in a window, to Print a part or Cut
+# a part; an adapter between two ends, designed by the server, to Print a part as Design
+# a part does. Join a hose is the last of all.
 JOURNEYS: Tuple[Journey, ...] = (
     DESIGN,
     MAKE,
@@ -982,6 +1045,7 @@ JOURNEYS: Tuple[Journey, ...] = (
     RUN,
     DRAWING,
     LEVEL,
+    COMPOSE,
     JOIN,
 )
 

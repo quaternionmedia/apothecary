@@ -177,7 +177,8 @@ here: run `apothecary problems`.
     Marlin, GRBL, a port's task) and the tool finder every installer uses; `slicer`,
     `cam`, `evidence` and `openscad_installer` depend on it for the last two.
   - What is cut can differ from what is drawn: `part_cuts` reads a variant's
-    `params`, so an edit of its SCAD's body is drawn and not cut, and the router
+    `params`, or a draft's top-level values where its record has none, so an edit
+    of its SCAD's body is drawn and not cut, and the router
     coupon's cuts restate its SCAD's 20 mm offsets as constants. No test compares
     a toolpath with the SCAD.
   - A router's travel has two sources: the page draws the tool at its position plus

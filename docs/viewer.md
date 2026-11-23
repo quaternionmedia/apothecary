@@ -827,6 +827,19 @@ Play, Back, Step, Reset, a slider -- each gap the server measured drawn where
 it is least and read with its unit, and what is bought drawn in a colour of
 its own while Bought is ticked ([airgap.md](airgap.md#the-motion-view)).
 
+**A badge composed.** The Badge window, in the Part group and the column beside
+the world, closed until asked for (⊞ Windows, or *Compose a badge*'s stages),
+composes the badge selected, `parts/badge` -- in the universe, where every part
+stands. Its buttons are six faces, each drawn after its emoji (😮 🙂 😐 😉 🙁 😀),
+and the word, each a cell of the badge's ring, Part › View › Badge: the face, or the
+word, staged in its editor and drawn at once. Under them are the word's
+text, font and size, or the face's diameter: the Parameters window's own
+controls, staging there too, the badge drawn once they rest. **⚒ Print** and
+**⚒ Cut** make the badge drawn on the first printer or router of any site that
+makes it, as ⚒ Make does, that site opened with the variant drawn; ⚒ Cut is
+greyed for a word, which the router does not cut, its tip the part's own words
+([parts/badge](../parts/badge/README.md)).
+
 ### Journeys
 
 A journey is a path a person takes through the windows, a step at a time
@@ -852,6 +865,7 @@ what it made:
 | **Run a site** (`run`) | 1 Steps, 2 Members, 3 Audit, 4 Space, 5 Hour | a site in working order, and what each machine's hour held |
 | **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
 | **Level a bed** (`level`) | 1 Heat, 2 Probe, 3 Compare, 4 Measure, 5 Shims, 6 Print, 7 Fit, 8 After | the shims that level printer_1's bed on its mounts, for Print a part: heating, probing, measuring and fitting are the person's ([bed-shims.md](bed-shims.md#in-the-page)) |
+| **Compose a badge** (`compose`) | 1 Pick, 2 Shape, 3 Make | a badge, a face or a word, for Print a part or Cut a part: it stands in the universe ([above](#the-windows)) |
 | **Join a hose** (`join`) | 1 Ends, 2 Adapter, 3 Ready | the adapter between two ends, for Print a part: it stands in the universe, where the port part and the adapter are ([above](#presets-and-the-adapter-between-two-ends)) |
 
 *Print a part* in full, as each is written in `apothecary/journeys.py`:

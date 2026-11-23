@@ -1,6 +1,6 @@
 """A badge composed in the page: a round face drawn from circles and strokes, or a word
 in a font, engraved in a plate. The Badge window picks one and types the word; the faces
-and the word are the part's presets, so the ring's Part › Presets picks them too.
+and the word are also the part's presets, each its numbers over the part's defaults.
 
 A face is made on either machine: printed, or cut on the router -- its eyes and an open
 mouth bored, a smile, a frown, a line or a wink a groove the tool's width, then the face
@@ -19,7 +19,7 @@ import math
 from pathlib import Path
 from typing import Dict, List, Literal, Mapping, Optional, Tuple
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 
@@ -126,11 +126,7 @@ class Params(BaseModel):
     kind: Literal["face", "word"] = Field("face", description="A face, or a word")
     face: Face = Field("smile", description="The face, drawn after its emoji")
     text: str = Field(
-        "HELLO",
-        min_length=1,
-        max_length=24,
-        pattern=r'^[^"\\\n]+$',
-        description="The word, on a word's plate",
+        "HELLO", min_length=1, max_length=24, description="The word, on a word's plate"
     )
     font: Font = Field("Liberation Sans:style=Bold", description="The word's font")
     diameter: float = Field(
@@ -169,6 +165,18 @@ class Params(BaseModel):
         description="Stock beyond the face on every side (the router's)",
         json_schema_extra=MM,
     )
+
+    @field_validator("text")
+    @classmethod
+    def _one_line_of_plain_words(cls, text: str) -> str:
+        # Checked here, not as the schema's pattern, which the page reads as a choice.
+        bad = [c for c in ('"', "\\", "\n") if c in text]
+        if bad or not text.strip():
+            raise ValueError(
+                "a word is one line, with no double quote or backslash: "
+                + (f"it has {', '.join(repr(c) for c in bad)}" if bad else "it is blank")
+            )
+        return text
 
     @model_validator(mode="after")
     def _engraved_not_through(self) -> "Params":

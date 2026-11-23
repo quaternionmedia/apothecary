@@ -8,8 +8,10 @@ A word is drawn in a font's outlines, `text` in `font`, one of OpenSCAD's own
 Liberation family, on a rounded plate `width` by `height`. Either is engraved
 `depth` into a plate `thickness` thick.
 
-The faces and the word are the part's presets (`apothecary parts info
-badge`; on the ring, Part › Presets), each staged over its defaults.
+In the page the Badge window composes it: a face picked, or the word typed
+and its font chosen, and ⚒ Print or ⚒ Cut; on the badge's ring, Part › View ›
+Badge. The faces and the word are also the part's presets, each its numbers
+over the part's defaults, which `apothecary parts info badge` lists.
 
 A face is printed, or cut on the router. The wrapper,
 `apothecary/projects/parts/badge.py`, places every eye, mouth and stroke as

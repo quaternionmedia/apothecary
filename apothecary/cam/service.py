@@ -27,20 +27,34 @@ def cuts_dir() -> Path:
 
 def part_cuts(name: str, variant: Optional[str] = None):
     """The part named, and its cuts at its defaults or at the parameters of the
-    cached variant ``variant`` (the one a page drew). CamError when the part does
+    cached variant ``variant`` (the one a page drew) -- its record's, or where it has none
+    the top-level values of the draft it was drawn from. CamError when the part does
     not say how it is cut, the variant is not cached, or the part refuses to be cut at
     those numbers (a ValueError from its ``cuts``, its words kept)."""
     part = load_part(name)
     params: Dict[str, object] = {}
     if variant is not None:
-        from ..projects.parts.variants import KEY_PATTERN, read_variant
+        from ..projects.parts import variants
 
-        record = read_variant(part, variant) if KEY_PATTERN.match(variant) else None
+        record = (
+            variants.read_variant(part, variant) if variants.KEY_PATTERN.match(variant) else None
+        )
         if record is None:
             raise CamError(
                 f"no variant {variant!r} of the part {name} is cached: Apply it again, then Toolpath"
             )
         params = dict(record.get("params") or {})
+        if not params and part.params_model is not None:
+            # A variant drawn from a draft of the part's text carries its values in that
+            # text, not on the side: those the part's model names are read from it, so a
+            # number changed in the text is the number cut. An edit of its body is drawn
+            # and not cut.
+            from ..projects.parts.assignments import literal_values
+
+            draft = variants.read_variant_draft(part, variant)
+            if draft is not None:
+                named = set(part.params_model.model_fields)
+                params = {k: v for k, v in literal_values(draft).items() if k in named}
     if not part.has_cuts:
         raise CamError(f"the part {name} does not say how it is cut: it has no cuts to write")
     try:

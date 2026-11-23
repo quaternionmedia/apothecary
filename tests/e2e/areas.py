@@ -240,6 +240,7 @@ AREAS = {
             "apothecary/routes/motion.py",
             "apothecary/static/part_motion.js",
             "apothecary/static/widgets/motion.js",
+            "apothecary/static/widgets/badge.js",
             "parts/*",
             "walkthrough/04-*",
             "walkthrough/screenshots/04-*",
@@ -256,6 +257,7 @@ AREAS = {
             "test_part_motion.py",
             "test_assignments_in_the_page.py",
             "test_airgap.py",
+            "test_badge.py",
         ),
     },
     "lighting": {

@@ -279,6 +279,31 @@ def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():
     assert run.steps[4].puts == (("fit", "printer_1"), ("working", "printer_1"))
 
 
+def test_compose_a_badge_stands_in_the_universe_on_the_badge_window_and_ends_at_make():
+    """A face or the word picked in the Badge window, shaped there and in Parameters, then
+    made: the badge's editor opened in the universe, where every part stands, and the last
+    stage the window's ⚒ Print and ⚒ Cut, where Print a part and Cut a part go on. It comes
+    just before Join a hose, the last."""
+    compose = by_id("compose")
+    assert (compose.name, compose.title, compose.group, compose.site) == (
+        "Compose a badge",
+        "Compose",
+        "Part",
+        UNIVERSE,
+    )
+    assert [j.id for j in JOURNEYS][-2:] == ["compose", "join"]
+    assert compose.staged_on == (("edit", "badge"),)
+    assert [(s.id, s.label) for s in compose.steps] == [
+        ("pick", "Pick"),
+        ("shape", "Shape"),
+        ("make", "Make"),
+    ]
+    assert all(s.forward[0] == "badge" for s in compose.steps)
+    assert compose.steps[0].owns[0] == "badge"
+    assert "⚒ Print" in compose.steps[-1].hint and "⚒ Cut" in compose.steps[-1].hint
+    assert "Print a part or Cut a part" in compose.steps[-1].hint
+
+
 def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():
     """Two ends, then the adapter between them, then whether it is ready: the port part
     and the adapter are the universe's leaves, which is where the tour opens it."""

@@ -15,8 +15,9 @@ the router; the router trued by a piece it cut, measured by hand; the board a ma
 runs on; a deck's knobs on the machines; the site
 brought up, and watched; photographs, a drawing read into shapes that stand up as
 parts to design; a printer's bed levelled, the shims computed from its readings a
-part to print; and last two ends joined by the adapter the server derives between
-them, a part to print. Each journey hands the next what it made.
+part to print; a badge composed, a face or a word, to print or cut; and last two ends
+joined by the adapter the server derives between them, a part to print. Each journey
+hands the next what it made.
 
 The box has no words of its own. A stage's line is its step's in
 `apothecary/journeys.py`.
@@ -64,8 +65,9 @@ names, in a tab. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
 - the site the journey stands in opened, where another is, as the banner's ▾ opens
-  it (`Journey.site`): the garage, whose pieces and machines every journey but one
-  names, or the universe, where *Join a hose*'s port part and adapter stand; so a
+  it (`Journey.site`): the garage, whose pieces and machines every journey but two
+  names, or the universe, where *Compose a badge*'s badge and *Join a hose*'s port
+  part and adapter stand; so a
   stage is the same whichever site the tour was opened in. What a machine makes may be
   a part no piece of the garage stands for: *Calibrate a router*'s 😮, named under
   makes, its file made and its cabinet opened by its name;

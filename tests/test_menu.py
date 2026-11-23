@@ -1456,8 +1456,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in part.children] == [
         ("Selected", "panel:toggle:selected", 8),
         ("Motion", "panel:toggle:motion", 6),
+        ("Badge", "panel:toggle:badge", 2),
     ]
     assert address_of(root, "panel:selected") == "468"
+    assert address_of(root, "panel:badge") == "462"
     tools = next(c for c in panels.children if c.label == "Tools")
     assert [(c.label, c.action, c.cell) for c in tools.children] == [
         ("Bench", None, 8),

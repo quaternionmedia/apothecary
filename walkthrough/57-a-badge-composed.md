@@ -15,8 +15,9 @@ the Badge window and handed to a machine by ⚒ Print or ⚒ Cut, the tour's
 
 ## A face or the word: its presets
 
-What the Badge window's buttons choose, and the ring's Part › Presets: six faces
-and the word, each staged over the part's defaults.
+What the Badge window's buttons choose: six faces and the word. They are the part's
+presets too, each its numbers over the part's defaults, which `apothecary parts info
+badge` lists.
 
     >>> from apothecary.projects.parts.badge import DEFAULT, FONTS, PRESETS
     >>> for name, preset in PRESETS.items():

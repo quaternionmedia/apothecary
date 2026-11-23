@@ -94,7 +94,11 @@ cut file -- checked as any streamed file is, listed in the Cut card's files --
 and records what made it beside the file (`GET /cam/cuts`, by `file_id`): the
 part, the variant drawn when it was one, its parameters, the router, the stock,
 the tool, the feeds, each operation with its passes, the lines, the length, the
-time, the messages, and the problems the check found.
+time, the messages, and the problems the check found. A variant's parameters are
+its record's; a variant drawn from a draft of the part's text, which carries its
+numbers in that text and none on the side, is cut at the text's top-level values
+the part's model names, so a number changed in the text is the number cut (an edit
+of the text's body is drawn and not cut).
 
 In the page, a router's Cut card has **Toolpath** where a printer's has Slice,
 there once a part is chosen under *makes*: that part gets its toolpath written
