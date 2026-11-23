@@ -122,6 +122,7 @@ GROUPS = {
             "test_loop_tuning.py",
             "test_machine_frame.py",
             "test_machine_plans.py",
+            "test_missing.py",
             "test_machine_words.py",
             "test_projector.py",
             "test_rust_installer.py",

@@ -44,7 +44,7 @@ import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional
+from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 try:  # the state file's cross-process lock
     import fcntl
@@ -344,6 +344,24 @@ class FirmwareState:
         what a simulated devkit, which is its port, runs."""
         records = [rec for rec in self.flashes() if rec.port == port]
         return max(records, key=lambda rec: rec.flashed_at, default=None)
+
+    def last_found(self, identity: str) -> Tuple[Optional[str], Optional[DeviceInfo], Optional[dict]]:
+        """Where the board ``identity`` names was last found: the port, its record
+        there and what the port list said of that port; Nones for a board never
+        found. Read whether or not it is plugged in now (``cached_device`` is not)."""
+        data = self._load()
+        wanted = identity.strip().lower()
+        for port, raw in data["devices"].items():
+            try:
+                device = DeviceInfo(**raw)
+            except (TypeError, ValueError):
+                continue
+            if wanted in device.names or port == identity:
+                return port, device, data["seen"].get(port)
+        for port, seen in data["seen"].items():
+            if wanted == (seen.get("serial_number") or "").strip().lower():
+                return port, None, seen
+        return None, None, None
 
     def remember_device(self, device: DeviceInfo) -> None:
         """Keep ``device`` as the record of the board on its port, beside what the

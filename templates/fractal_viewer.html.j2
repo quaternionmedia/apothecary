@@ -10034,6 +10034,13 @@
                             variantFor: (path) => { const node = this.nodeByPath(path); const ref = node ? node.part_ref : path; return ref ? this.variantByPart[ref] ?? null : null; },
                             afterPrint: (job) => this.afterPrint(job),
                             afterHello: (sketch) => this.afterHello(sketch),
+                            // A plan whose pinned board has come up: the board's own
+                            // Machine in its place, once the page's scan names it.
+                            onFound: async (path) => {
+                                const end = Date.now() + 10000;
+                                while (this.machine === machine && !this.bindingFor(path).row?.device?.port && Date.now() < end) await new Promise((r) => setTimeout(r, 200));
+                                if (this.machine === machine) this.openMachine(path);
+                            },
                         });
                         if (this.machine === machine) { window.apothecaryMachine = machine.handle; if (planned) this.planOpened(planned); else this.machineOpened(port); }
                     },

@@ -187,6 +187,20 @@
 /* A machine planned with no board connected: the head's link verbs, the control
    latch and E-STOP are its board's, and stand for nothing here. */
 .machine.planning .machine-head .cluster { display: none; }
+/* Its board pinned and not found: each check in its order, the first off said as what
+   to do, and every serial port plugged in now. Shown only while that is so. */
+#c-missing-card[hidden] { display: none; }
+#c-missing-card { border-color: var(--warn); min-height: 0; font-size: 0.8rem; }
+#c-missing-card .checks { list-style: none; margin: 0.35rem 0; padding: 0; }
+#c-missing-card .check { padding: 0.1rem 0; color: var(--ink-2); }
+#c-missing-card .check .mark { display: inline-block; width: 1.1rem; font-weight: 700; }
+#c-missing-card .check.ok .mark { color: var(--ok); }
+#c-missing-card .check.off { color: var(--ink); }
+#c-missing-card .check.off .mark { color: var(--bad); }
+#c-missing-card .check.after, #c-missing-card .check.unread { color: var(--ink-3); }
+#c-missing-card .todo { margin: 0.3rem 0; padding: 0.35rem 0.5rem; border-left: 3px solid var(--warn); background: rgba(255, 200, 80, 0.06); }
+#c-missing-card .plugged { color: var(--ink-2); margin-top: 0.3rem; }
+#c-missing-card .missing-do { margin-top: 0.4rem; display: flex; align-items: center; gap: 0.5rem; color: var(--ink-3); }
 
 
 /* What the machine's state asks of a person: what it needs before it moves again, and the

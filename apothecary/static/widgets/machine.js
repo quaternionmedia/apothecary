@@ -130,6 +130,8 @@ const CARDS = `
     <div class="card printer-only gcode"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div><div class="s old" id="c-age" hidden></div></div>
     <div class="card wide needs" id="c-needs-card" hidden><div class="k">Needs you</div><div class="needs-list" id="c-needs"></div></div>
     <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+    <div class="card wide missing" id="c-missing-card" hidden><div class="k">Its board, not found</div><div id="c-missing"></div>
+        <div class="missing-do" id="missing-said"></div></div>
 </div>
 <div data-section="status">
 <div class="cards">
@@ -418,7 +420,7 @@ const OLD_MS = 5000;
 // the markup, which carries none of its own.
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null, onFound = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -917,7 +919,57 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     window.addEventListener("apothecary:board", onBoard);
     onWindow.push(["apothecary:board", onBoard]);
 
+    // Planned, with a board pinned at the machine that no port holds: why it is not
+    // found, read with no port opened (GET /sites/{site}/machines/{path}/missing), each
+    // check a board gets through on its way in its order, and the first that is off
+    // said as what to do. Asked again every few seconds while it shows; a board come up
+    // on its port and not yet in the scan is scanned for once, and a board found opens
+    // its own Machine (onFound).
+    const MISSING_MS = 4000;
+    const miss = { timer: null, asked: 0, scannedFor: null };
+    const MARK = { ok: "✓", off: "✗", unread: "?", after: "·" };
+    async function loadMissing({ again = false } = {}) {
+        clearTimeout(miss.timer); miss.timer = null;
+        if (!planning()) { $("c-missing-card").hidden = true; return; }
+        const at = machineAt, asked = ++miss.asked;
+        if (again) { $("missing-said").textContent = "scanning the ports…"; try { await model.rescan(); } catch (e) { /* the route says what is there */ } }
+        let d = null;
+        try { d = await api(`/sites/${encodeURIComponent(at.site)}/machines/${encodeURIComponent(at.path)}/missing`); } catch (e) { d = null; }
+        if (asked !== miss.asked || !planning()) return;
+        if (d && d.connected.length && !d.expected.length) {
+            $("c-missing-card").hidden = true;
+            const found = d.connected[0];
+            if (say) say(`${at.path}'s board is found on ${found.port}: its Machine opens with it`, "success");
+            // The page's own scan names it too before its Machine is opened on it.
+            if (!again) { try { await model.rescan(); } catch (e) { /* onFound waits for it */ } }
+            if (asked === miss.asked && planning() && onFound) onFound(at.path, found.port);
+            return;
+        }
+        renderMissing(d, again);
+        // On its port, open to this user, and not in the scan: scanned for once.
+        const ready = d && d.expected.find((e) => e.checks.every((c) => c.id === "scan" || c.state === "ok"));
+        if (ready && !again && miss.scannedFor !== ready.identity) { miss.scannedFor = ready.identity; return loadMissing({ again: true }); }
+        miss.timer = setTimeout(loadMissing, document.hidden ? 4 * MISSING_MS : MISSING_MS);
+    }
+    function renderMissing(d, looked) {
+        const card = $("c-missing-card");
+        if (!d || !d.expected.length) { card.hidden = true; return; }
+        card.hidden = false;
+        const boards = d.expected.map((e) => {
+            const checks = e.checks.map((c) => `<li class="check ${esc(c.state)}"><span class="mark">${MARK[c.state] || "·"}</span> ${esc(c.label)}${c.says ? ` — ${esc(c.says)}` : ""}</li>`).join("");
+            return `<div class="expected"><b>${esc(e.bridge)} ${esc(e.serial || e.identity)}</b>, pinned at ${esc(e.pinned_at)}.${e.last_said ? ` ${esc(e.last_said)}` : ""}</div>`
+                + `<ul class="checks">${checks}</ul>`
+                + (e.todo ? `<div class="todo">${esc(e.todo)}</div>` : "");
+        }).join("");
+        const plugged = (d.plugged || []).map((p) => `<b>${esc(p.port)}</b> ${esc(p.bridge)}${p.serial ? " " + esc(p.serial) : ""}${p.for ? ` — ${esc(p.for)}'s` : " — pinned nowhere"}`);
+        $("c-missing").innerHTML = boards
+            + `<div class="plugged">Plugged in now: ${plugged.length ? plugged.join(" · ") : "no serial port"}${d.usb_read ? "" : " (USB is not read here)"}</div>`;
+        $("missing-said").textContent = `${looked ? "scanned afresh" : "checked"} at ${clock(new Date())}; checked again every few seconds`;
+    }
+
     async function selectPort(port) {
+        clearTimeout(miss.timer); miss.timer = null; miss.asked++;
+        $("c-missing-card").hidden = true;
         if (state.port && state.port !== port) model.unwatch(state.port, who);
         if (flash && flash.port !== port) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
         state.port = port; state.kind = null; state.history = []; state.listening = false;
@@ -926,7 +978,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!port) {
             applyKind(); renderAll(); loadLevel(); loadPrintJobs();
             if (!planning()) { loadChoices(); loadPrintFiles(); }
-            if (planning()) $("ident").textContent = `${machineAt.path}: no board connected -- planned here; ${words().start} is its board's`;
+            if (planning()) { $("ident").textContent = `${machineAt.path}: no board connected -- planned here; ${words().start} is its board's`; loadMissing(); }
             return;
         }
         // Watched at once as what it is known to be, so a verb carried the moment
@@ -2346,6 +2398,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer); clearInterval(knob.timer); clearInterval(ageTimer);
+            clearTimeout(miss.timer); miss.asked++;
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
