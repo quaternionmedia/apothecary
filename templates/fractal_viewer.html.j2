@@ -1934,6 +1934,7 @@
                             this.feedback = mountFeedback(sections.feedback, {
                                 base: BASE_URL,
                                 say: (t, kind) => this.setStatus(t, kind === 'error' ? 'error' : 'success'),
+                                retry: (drawer, how) => this.sliceAgain(drawer, how),
                             });
                             window.apothecaryFeedback = this.feedback;
                             return {
@@ -8604,7 +8605,15 @@
                 const machine = this.bearerPathFor(pinned);
                 this.selectAtItsLevel(machine);
                 if (!this.openMachine(machine)) return false;
-                this.setStatus(`Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, 'success');
+                // The piece it made, beside the Machine: its drawer in Part › Feedback.
+                const piece = job.part?.path;
+                if (!piece || !this.nodeByPath(piece)?.part_ref) {
+                    this.setStatus(`Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}${piece ? '' : '; it made no part, so it has no drawer'}`, 'success');
+                    return true;
+                }
+                this.openFeedback(piece, { job: job.id }).then((opened) => this.setStatus(opened.refused
+                    ? `Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}; ${opened.refused}`
+                    : `Opened ${machine} and ${opened.said}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, opened.refused ? 'error' : 'success'));
                 return true;
             }
 
@@ -8804,7 +8813,9 @@
                 if (!job.part) return null;
                 const node = this.nodeByPath(job.part);
                 const part = node?.part_ref || String(job.part).split('.').pop();
-                // A part's piece has a drawer; a piece made from a picture is no part's.
+                // A part's piece has a drawer; a piece made from a picture is no part's. A print
+                // that stopped says there where, and what to try; its board is no next step.
+                if (job.stage !== 'done') return node && !node.part_ref ? null : `its drawer is open in Part › Feedback: the layer it stopped on, a fault to file there, and what to try`;
                 const said = node && !node.part_ref ? [] : [`its drawer is in Part › Feedback`];
                 const row = Object.values(this.bindings || {}).find((r) => r.sketch === part);
                 if (row) said.push(row.device
@@ -9380,6 +9391,24 @@
                 if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Print again` };
                 if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
                 return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
+            }
+            // A print that stopped, tried again from Part › Feedback: the piece sliced again
+            // for the printer that made it, in its Print window, with `how` chosen there --
+            // "probe" its levelling probe first, "brim" or "raft" its adhesion -- and the
+            // variant it was made of. Nothing is sent: ▶ Print is the person's.
+            async sliceAgain(drawer, how) {
+                const printer = drawer.machine?.path;
+                if (!printer || !this.nodeByPath(printer)) return { refused: `${drawer.part}'s piece was printed on ${drawer.machine?.name || 'a printer'}, which ${this.siteName} does not hold: open that site, then try again` };
+                const piece = drawer.slice?.made?.path || drawer.part;
+                if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Slice again') };
+                const machine = this.machine;
+                const end = Date.now() + 15000;
+                while (machine.handle?.kind() !== 'printer' && Date.now() < end) await new Promise((r) => setTimeout(r, 150));
+                if (machine.handle?.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it, then try again` };
+                this.makingWith(machine);
+                const chosen = how === 'probe' ? { levelling: 'probe-each-print' } : { adhesion: how };
+                const started = await machine.handle.print.slice(piece, drawer.variant ?? null, chosen);
+                return started.refused ? started : { said: `${printer}'s Print window: ${started.said}` };
             }
             // Slice, from a made piece's ring or a part's: the printer's Machine opened
             // with it chosen under makes, as Print does, and a slice of it started

@@ -58,6 +58,9 @@ class PrintSettings(BaseModel):
     # A brim this wide round each piece's first layer, 0 for none: what a part whose
     # pieces are small or thin declares, so its first layer is held down.
     brim_width: float = Field(0.0, ge=0, le=20)
+    # Layers of raft under each piece, 0 for none: what lifts a first layer that will
+    # not hold off the bed, at the cost of a rougher underside.
+    raft_layers: int = Field(0, ge=0, le=10)
 
     def clearance_hole(self, nominal: float) -> float:
         """Calculate clearance hole size for given nominal diameter."""

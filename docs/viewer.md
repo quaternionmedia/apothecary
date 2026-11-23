@@ -879,7 +879,8 @@ stage.
   **Problems** (its tab counts them, red while there are any; each row selects
   its piece, at its level), what is **Pinned** in every site (each with its
   Remove or Unpin), the site's **Jobs** (its tab counts them and the running
-  ones; a row opens its machine) and its **SCAD**, generated from the tree.
+  ones; a row opens its machine, and the drawer of the piece it made in Part ›
+  Feedback beside it) and its **SCAD**, generated from the tree.
 - **Selected**: the selected piece -- its name, place (each field to two places
   at the most; the place itself is kept whole, and a field changes it only when
   typed in) and footprint, a

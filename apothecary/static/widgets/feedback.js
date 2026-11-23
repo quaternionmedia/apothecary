@@ -11,6 +11,11 @@
  * chosen there is that part's cabinet shown, which is how a part standing in no site is
  * reached.
  *
+ * A print that stopped -- cancelled, or failed -- says the layer it stopped on, of the file's
+ * layers, and offers what to try: Probe first, Brim and Raft each slice the piece again, as
+ * its printer's Print window would with that chosen (`retry`, the page's). A fault seen on
+ * it is filed on that layer.
+ *
  * Under the piece chosen: a print's features to read, a row each as its slice's plan names
  * them (or its box), with Keep -- its printer's next turn of its tuning -- and Take turn
  * and Undo turn for that printer, the filament and process the piece used; each fault seen,
@@ -19,14 +24,17 @@
  * in the order it was filed, an undone filing struck through. Nothing here sends anything
  * to a machine.
  *
- * mountFeedback(root, { base, say }) -> handle
+ * mountFeedback(root, { base, say, retry }) -> handle
  *   show(part, { drawer, job })   this part's cabinet, the drawer named (or that job's) chosen
  *   verb(action)                   feedback:measure, feedback:note, feedback:tune-apply,
- *                                  feedback:tune-undo: { said } or { refused }
+ *                                  feedback:tune-undo, feedback:try-probe, feedback:try-brim,
+ *                                  feedback:try-raft: { said } or { refused }
  *   part()                         the part shown, or null
  *   redraw()                       its rows again, as the window comes to the front
  *   pairs()                        each control by the ring verb it is, for the addresses
- * `say(text, kind)` is the page's status line, "error" for a refusal.
+ * `say(text, kind)` is the page's status line, "error" for a refusal. `retry(drawer, how)`
+ * slices the drawer's piece again for the printer that made it, `how` "probe" (probe first),
+ * "brim" or "raft": { said } or { refused }.
  */
 
 import { esc } from "/static/board_text.js";
@@ -34,9 +42,27 @@ import { mm as mmText, stamp } from "/static/format.js";
 import { setReason } from "/static/can.js";
 import * as tuning from "/static/tuning.js";
 
-export const VERBS = ["feedback:measure", "feedback:note", "feedback:tune-apply", "feedback:tune-undo"];
+export const VERBS = [
+    "feedback:measure", "feedback:note", "feedback:tune-apply", "feedback:tune-undo",
+    "feedback:try-probe", "feedback:try-brim", "feedback:try-raft",
+];
+// What a print that stopped offers to try, each slicing the piece again with it chosen.
+const TRIES = {
+    probe: "probe first, G29 once the bed is hot, the mesh on for its print",
+    brim: "a 5 mm brim round each piece",
+    raft: "a raft of 3 layers under each piece",
+};
+// How a print that did not finish ended (cabinet.STOPPED).
+const STOPPED = ["cancelled", "failed"];
 
-export function mountFeedback(root, { base = "", say = null } = {}) {
+// Where a print stopped, in words (cabinet.Stopped.said).
+export function stoppedSaid(s) {
+    if (!s) return "where is not known: its file is no longer kept";
+    if (s.layer === 0) return `in its start, before the first of ${s.layers} layers`;
+    return `on layer ${s.layer} of ${s.layers}${s.z != null ? `, ${s.z} mm` : ""}`;
+}
+
+export function mountFeedback(root, { base = "", say = null, retry = null } = {}) {
     // part: shown; pieces: every part's drawers then its loose kept files, the part shown's
     // first ({ key, part, label, drawer?, record?, made });
     // chosen: the key of the piece chosen; whole: the drawer chosen, whole, as the server said it.
@@ -48,6 +74,12 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
         <div class="row" id="feedback-piece-row" hidden><label for="feedback-piece">piece</label>
             <select id="feedback-piece" title="Each piece made of the part, the newest first, then each kept slice or toolpath of it made elsewhere: the drawer its feedback is filed in"></select>
             <span class="s" id="feedback-piece-said"></span>
+        </div>
+        <div class="row" id="feedback-stopped-row" hidden><label>stopped</label>
+            <span class="s" id="feedback-stopped-said"></span>
+            <button type="button" id="feedback-try-probe" title="Slice this piece again for its printer to probe first: G29 once the bed is hot, the mesh on for its print. Nothing is sent">Probe first</button>
+            <button type="button" id="feedback-try-brim" title="Slice this piece again for its printer with a 5 mm brim round each piece. Nothing is sent">Brim</button>
+            <button type="button" id="feedback-try-raft" title="Slice this piece again for its printer on a raft of 3 layers. Nothing is sent">Raft</button>
         </div>
         <div class="row" id="feedback-measure-row" hidden><label for="feedback-measure">measured</label>
             <input id="feedback-measure" size="16" spellcheck="false" title="What the piece this toolpath cut measures, in millimetres, each feature it names in order, any left out as -">
@@ -178,6 +210,7 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
         const shown = !!(p && r);
         $("feedback-measure-row").hidden = !shown;
         $("feedback-note-row").hidden = !shown;
+        renderStopped(shown && printed() ? st.whole : null);
         renderMeasure(shown ? r : null);
         renderSeen(shown && printed() ? r : null);
         renderFiled();
@@ -187,9 +220,24 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
         if (d.variant) bits.push(`variant ${d.variant.slice(0, 8)}`);
         const params = Object.entries(d.params || {});
         if (params.length) bits.push(params.slice(0, 4).map(([k, v]) => `${k} ${v}`).join(", ") + (params.length > 4 ? "…" : ""));
-        if (d.job) bits.push(`job ${d.job.outcome}${d.job.reason ? ` (${d.job.reason})` : ""}`);
+        if (d.job) bits.push(`job ${d.job.outcome}${STOPPED.includes(d.job.outcome) ? ` ${stoppedSaid(d.job.stopped)}` : ""}${d.job.reason ? ` (${d.job.reason})` : ""}`);
         if (d.stl_sha256) bits.push(`STL ${d.stl_sha256.slice(0, 10)}`);
         return bits.join(" · ");
+    }
+    // A print that stopped: where, and what to try, each slicing the piece again.
+    function stoppedOf(d) { return d && d.job && STOPPED.includes(d.job.outcome) ? d.job : null; }
+    function renderStopped(d) {
+        const job = stoppedOf(d);
+        $("feedback-stopped-row").hidden = !job;
+        if (!job) return;
+        $("feedback-stopped-said").textContent = `${job.outcome} ${stoppedSaid(job.stopped)}; a fault seen is filed there. Try, sliced again:`;
+    }
+    async function tryAgain(how) {
+        const job = stoppedOf(st.whole);
+        if (!job) return refuse(`try ${how}: ${st.whole ? "this piece's print did not stop part way" : "choose a print that stopped"}`);
+        if (!retry) return refuse(`try ${how}: nothing here slices a piece again`);
+        const answer = await retry(st.whole, how);
+        return answer.refused ? refuse(`try ${how}: ${answer.refused}`) : tell(`${st.part} sliced again with ${TRIES[how]}: ${answer.said}`);
     }
     // A print's rows: a feature each, as its plan names it; a cut's one field of its sizes.
     function renderMeasure(r) {
@@ -245,9 +293,11 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
         }
         const applies = tuning.appliesOf(r);
         const looks = (st.whole && st.whole.filed.filter((f) => f.kind === "look" && !f.undone)) || [];
-        $("feedback-seen-said").textContent = looks.length
+        const job = stoppedOf(st.whole);
+        $("feedback-seen-said").textContent = (looks.length
             ? `${looks.length} look${looks.length > 1 ? "s" : ""} filed of this piece`
-            : `what the piece shows${applies ? `, for ${applies.filament}` : ""}`;
+            : `what the piece shows${applies ? `, for ${applies.filament}` : ""}`)
+            + (job && job.stopped ? `; filed ${stoppedSaid(job.stopped)}` : "");
     }
     function renderFiled() {
         const list = $("feedback-filed"), filed = (st.whole && st.whole.filed) || [];
@@ -364,6 +414,9 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
     $("feedback-seen-keep").onclick = () => keepSeen();
     $("feedback-note-keep").onclick = () => keepNote();
     $("feedback-note").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); keepNote(); } });
+    $("feedback-try-probe").onclick = () => tryAgain("probe");
+    $("feedback-try-brim").onclick = () => tryAgain("brim");
+    $("feedback-try-raft").onclick = () => tryAgain("raft");
     $("feedback-tune-apply").onclick = () => tune("apply");
     $("feedback-tune-undo").onclick = () => tune("undo");
     // A slice or a toolpath kept, a job begun or ended (widgets/machine.js): the pieces listed
@@ -385,6 +438,9 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
             if (action === "feedback:note") return keepNote();
             if (action === "feedback:tune-apply") return tune("apply");
             if (action === "feedback:tune-undo") return tune("undo");
+            if (action === "feedback:try-probe") return tryAgain("probe");
+            if (action === "feedback:try-brim") return tryAgain("brim");
+            if (action === "feedback:try-raft") return tryAgain("raft");
             return null;
         },
         part: () => st.part,
@@ -393,7 +449,9 @@ export function mountFeedback(root, { base = "", say = null } = {}) {
         pairs() {
             const out = [[$("feedback-measure-keep"), "feedback:measure"], [$("feedback-measure"), "feedback:measure"],
                 [$("feedback-seen-keep"), "feedback:measure"], [$("feedback-note"), "feedback:note"], [$("feedback-note-keep"), "feedback:note"],
-                [$("feedback-tune-apply"), "feedback:tune-apply"], [$("feedback-tune-undo"), "feedback:tune-undo"]];
+                [$("feedback-tune-apply"), "feedback:tune-apply"], [$("feedback-tune-undo"), "feedback:tune-undo"],
+                [$("feedback-try-probe"), "feedback:try-probe"], [$("feedback-try-brim"), "feedback:try-brim"],
+                [$("feedback-try-raft"), "feedback:try-raft"]];
             for (const el of root.querySelectorAll("input.measure-read, select.seen-read")) out.push([el, "feedback:measure"]);
             return out;
         },

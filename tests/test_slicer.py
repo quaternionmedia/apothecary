@@ -253,6 +253,23 @@ def test_a_declared_brim_goes_round_each_pieces_outside_and_none_at_zero(fake_or
     )
 
 
+def test_a_slices_adhesion_goes_over_what_the_part_declares(fake_orcaslicer):
+    from apothecary.projects.parts import bed_shims
+
+    settings = get_module("orcaslicer").settings
+    shims = Declared.of(bed_shims.DEFAULT.print_settings, "part bed_shims")
+    assert shims.adhered(None) is shims
+    raft = settings(load_profile("ender3"), shims.adhered("raft"))
+    process, shown = raft.configs["process"], _by_name(raft)
+    assert (process["raft_layers"], process["brim_type"]) == ("3", "no_brim")
+    assert shown["raft_layers"].source == "part bed_shims, this slice's adhesion 'raft'"
+    assert process["layer_height"] == "0.1"  # what the part declares otherwise stands
+    brim = settings(load_profile("ender3"), shims.adhered("brim")).configs["process"]
+    assert (brim["brim_type"], brim["brim_width"], brim["raft_layers"]) == ("outer_only", "5", "0")
+    with pytest.raises(SlicerError, match="adhesion is one of brim, raft, none"):
+        shims.adhered("glue")
+
+
 def test_the_parts_that_declare_print_settings_declare_only_what_they_set():
     from apothecary.projects.parts import calibration_cube, datum_core
 

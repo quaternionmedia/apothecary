@@ -672,6 +672,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
     ),
+    "print-adhesion": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of how the next slice's first layer holds: the part's own, a brim, a"
+        " raft, or neither",
+    ),
     "print-level": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -752,6 +758,22 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "a button that drops the last turn of that printer's tuning, and what it applied",
+    ),
+    "feedback-try-probe": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on a print that stopped that slices the piece again, its printer's"
+        " levelling probe first",
+    ),
+    "feedback-try-brim": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on a print that stopped that slices the piece again with a brim",
+    ),
+    "feedback-try-raft": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on a print that stopped that slices the piece again on a raft",
     ),
     # ---- Procedure, apothecary/static/widgets/procedure.js -------------------
     # A site's procedures. GO and Start over are Site › Procedure too (RING_BACKED).
@@ -1103,6 +1125,8 @@ RING_BACKED: Dict[str, str] = {
     "print-plan": "print:plan",
     # The levelling of the next slice: the Print cell's Levelling steps it.
     "print-level": "print:level",
+    # Its first layer's hold: the Print cell's Adhesion steps it.
+    "print-adhesion": "print:adhesion",
     # A part's piece's Feedback › Measure files what is typed under measured, as Keep does,
     # and takes a person to the field when nothing is typed; a fault chosen under seen and
     # nothing read, it files the look, as Keep look does. Note files the note, or takes a
@@ -1116,6 +1140,10 @@ RING_BACKED: Dict[str, str] = {
     "feedback-note-keep": "feedback:note",
     "feedback-tune-apply": "feedback:tune-apply",
     "feedback-tune-undo": "feedback:tune-undo",
+    # A print that stopped, tried again: Feedback › Try again's cells.
+    "feedback-try-probe": "feedback:try-probe",
+    "feedback-try-brim": "feedback:try-brim",
+    "feedback-try-raft": "feedback:try-raft",
     "feedback-note:keydown:keepNote": "feedback:note",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.

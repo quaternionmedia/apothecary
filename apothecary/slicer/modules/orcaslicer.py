@@ -30,6 +30,8 @@ top, then the part's declared print settings:
   for a fit, and a slicer compensating as well would take it twice.
 - ``brim_width`` is the process's brim, round each piece's outside
   (``brim_type`` ``outer_only``) that wide, or none at 0.
+- ``raft_layers`` is the process's ``raft_layers``: a raft that many layers
+  under each piece, or none at 0.
 
 The machine's start G-code is composed from the pieces the printer's profile
 names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
@@ -503,6 +505,16 @@ class OrcaSlicerModule(SlicerModule):
                     source=declared.by,
                     note=f"brim_width {width:g} mm: {said}",
                 )
+        if "raft_layers" in values:
+            layers = int(values["raft_layers"])
+            process["raft_layers"] = str(layers)
+            origins[("process", "raft_layers")] = Setting(
+                name="raft_layers",
+                value=str(layers),
+                origin="declared",
+                source=declared.by,
+                note=f"a raft of {layers} layers under each piece" if layers else "no raft",
+            )
         if "tolerance" in values:
             origins[("part", "tolerance")] = Setting(
                 name="tolerance",

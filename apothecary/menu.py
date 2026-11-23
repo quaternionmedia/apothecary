@@ -1599,7 +1599,8 @@ def _feedback() -> Option:
     """Part › View › Feedback: the part's cabinet in Part › Feedback, a drawer for each
     piece made of it (apothecary/cabinet.py), then what is done to the piece chosen there
     (widgets/feedback.js): Measure files what is read or seen, Note a note, and Take turn
-    and Undo turn the turn it makes in its printer's next slices."""
+    and Undo turn the turn it makes in its printer's next slices. Try again, on a print
+    that stopped, slices the piece again: Probe first, Brim or Raft chosen."""
     return Option(
         id="feedback",
         label="Feedback",
@@ -1609,6 +1610,17 @@ def _feedback() -> Option:
             Option(id="feedback:note", label="Note", action="feedback:note"),
             Option(id="feedback:tune-apply", label="Take turn", action="feedback:tune-apply"),
             Option(id="feedback:tune-undo", label="Undo turn", action="feedback:tune-undo"),
+            Option(
+                id="feedback:try",
+                label="Try again",
+                children=[
+                    Option(
+                        id="feedback:try-probe", label="Probe first", action="feedback:try-probe"
+                    ),
+                    Option(id="feedback:try-brim", label="Brim", action="feedback:try-brim"),
+                    Option(id="feedback:try-raft", label="Raft", action="feedback:try-raft"),
+                ],
+            ),
         ],
     )
 
@@ -2562,6 +2574,7 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:preview": None,
     "print:plan": None,
     "print:level": None,
+    "print:adhesion": None,
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
@@ -2716,8 +2729,9 @@ def control_options(device: Device) -> List[Option]:
         # The print, whichever is running: the card's (M24/M25/M524) or one
         # the host streams. The page knows which and carries the verb to it;
         # Send file starts a host print of the file the page has chosen.
-        # Levelling, seated last so no address moves, steps the Print window's
-        # levelling for the next slice: its profile's, probe first, home only.
+        # Levelling and Adhesion, seated last so no address moves, step the Print
+        # window's rows for the next slice: its levelling (its profile's, probe first,
+        # home only) and its first layer's hold (the part's, brim, raft, neither).
         Option(
             id="control:sd",
             label="Print",
@@ -2729,6 +2743,7 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
                 Option(id="print:level", label="Levelling", action="print:level"),
+                Option(id="print:adhesion", label="Adhesion", action="print:adhesion"),
             ],
         ),
         Option(

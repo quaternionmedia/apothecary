@@ -76,8 +76,8 @@
  * as in the log; a print started is said there, naming where it is followed, and
  * a print that ends, how it ended (failed, and why, as an error). `variantFor(path)`
  * names the applied variant the page draws a part from, or null, so Slice slices
- * the part as drawn. `afterPrint(job)` names what comes next once a print is done,
- * said after how it ended, or null; `afterHello(sketch)` the same once a devkit is
+ * the part as drawn. `afterPrint(job)` names what comes next once a print ends, done,
+ * cancelled or failed, said after how it ended, or null; `afterHello(sketch)` the same once a devkit is
  * heard saying the hello of the sketch it runs. destroy() stops watching and frees what the module put on the
  * window.
  */
@@ -197,6 +197,14 @@ const CARDS = `
                 <option value="home">home only: no levelling</option>
             </select>
             <span class="s" id="print-level-said"></span>
+        </div>
+        <div class="row" id="print-adhesion-row" hidden><label for="print-adhesion">adhesion</label>
+            <select id="print-adhesion" title="How the next slice's first layer holds: as the part declares, a 5 mm brim round each piece, a raft of 3 layers under each, or neither">
+                <option value="">the part's own</option>
+                <option value="brim">brim: 5 mm round each piece</option>
+                <option value="raft">raft: 3 layers under each piece</option>
+                <option value="none">neither brim nor raft</option>
+            </select>
         </div>
         <div class="row"><label for="print-pick">file</label>
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
@@ -1727,6 +1735,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-slice").disabled = slc.running;
         // A printer's slice levels as chosen here, for that slice (compose.levelled).
         $("print-level-row").hidden = !words().slice || !part;
+        $("print-adhesion-row").hidden = !words().slice || !part;
         $("print-slice").title = slicerOk
             ? words().prepareTitle
             : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`;
@@ -1944,14 +1953,16 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         let task;
         const at = state.port ? { port: state.port } : { site: machineAt.site, printer: machineAt.path };
         const levelling = $("print-level").value || null;
-        const body = { ...at, part, ...(variant ? { variant } : {}), ...(levelling ? { levelling } : {}) };
+        const adhesion = $("print-adhesion").value || null;
+        const body = { ...at, part, ...(variant ? { variant } : {}), ...(levelling ? { levelling } : {}), ...(adhesion ? { adhesion } : {}) };
         try { task = await post("/slicer/slice", body); }
         catch (e) { slc.running = false; renderPrint(); refuse(`slice: ${e.message}`); return false; }
         $("print-slice-box").hidden = false;
         $("print-slice-task").hidden = false;
         $("print-slice-said").innerHTML = "";
         const ending = sliceTasks().start(async () => task, "/slicer/tasks");
-        const levelled = levelling ? `, ${$("print-level").selectedOptions[0].textContent.split(":")[0]}` : "";
+        const levelled = [levelling ? $("print-level") : null, adhesion ? $("print-adhesion") : null]
+            .filter(Boolean).map((el) => `, ${el.selectedOptions[0].textContent.split(":")[0]}`).join("");
         tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in Print from here, and its G-code is chosen there when it ends`);
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
@@ -2037,18 +2048,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // The ring's Slice on a piece or a part, and the page's Make: chosen under makes,
     // then sliced -- as `variant` where one is given (startSlice).
-    // The Print cell's Levelling: the next of the levelling row's choices, told.
-    function stepLevelling() {
-        const el = $("print-level");
+    // The Print cell's Levelling and Adhesion: the next of that row's choices, told.
+    function stepRow(id, what) {
+        const el = $(id);
         el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
         renderPrint();
-        tell(`levelling of the next slices: ${el.selectedOptions[0].textContent}`);
+        tell(`${what} of the next slices: ${el.selectedOptions[0].textContent}`);
     }
-    // `levelling`, when given, is chosen in the Print window's levelling for this slice
-    // and the ones after it ("" its profile's start).
-    async function slicePart(path, variant = undefined, { levelling = undefined } = {}) {
+    // `levelling` and `adhesion`, when given, are chosen in the Print window's rows for this
+    // slice and the ones after it ("" its profile's start, the part's own).
+    async function slicePart(path, variant = undefined, { levelling = undefined, adhesion = undefined } = {}) {
         if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
         if (levelling !== undefined) $("print-level").value = levelling || "";
+        if (adhesion !== undefined) $("print-adhesion").value = adhesion || "";
         const before = refusals;
         const started = await startSlice(variant);
         if (!started) return { refused: refusals > before ? lastRefusal : `${path} could not be sliced` };
@@ -2059,8 +2071,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // as said, failed as an error with its reason.
     function toldEnded(job) {
         const what = `${job.name} on ${state.port}${job.part ? `, making ${job.part}` : ""}`;
-        if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}`, "error"); return; }
-        const next = job.stage === "done" && afterPrint ? afterPrint(job) : null;
+        // Done or not, the page is told: a piece's drawer opens in Part › Feedback, and a
+        // print that stopped says there where, and what to try.
+        const next = afterPrint ? afterPrint(job) : null;
+        if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}${next ? `; ${next}` : ""}`, "error"); return; }
         tell(`${what}, ended: ${job.stage}, ${job.sent}/${job.total} lines${next ? `; ${next}` : ""}`);
     }
     // A print followed until it ends; its end is told (the printer's jobs, the site's,
@@ -2224,7 +2238,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:start") { await startPrint(); return true; }
         if (action === "print:preview") { togglePreview(); return true; }
         if (action === "print:plan") return keepPlan();
-        if (action === "print:level") { stepLevelling(); return true; }
+        if (action === "print:level") { stepRow("print-level", "levelling"); return true; }
+        if (action === "print:adhesion") { stepRow("print-adhesion", "adhesion"); return true; }
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -2274,6 +2289,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-plan"), "print:plan"]);
         out.push([$("print-level"), "print:level"]);
+        out.push([$("print-adhesion"), "print:adhesion"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);

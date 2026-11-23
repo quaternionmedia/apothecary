@@ -795,6 +795,7 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "print:preview",
         "print:plan",
         "print:level",
+        "print:adhesion",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",
@@ -846,6 +847,12 @@ def test_the_control_ring_says_what_the_machine_s_windows_say():
     )
     assert piece["feedback:tune-apply"] == button("feedback-tune-apply", feedback) == "Take turn"
     assert piece["feedback:tune-undo"] == button("feedback-tune-undo", feedback) == "Undo turn"
+    for action, name, label in (
+        ("feedback:try-probe", "feedback-try-probe", "Probe first"),
+        ("feedback:try-brim", "feedback-try-brim", "Brim"),
+        ("feedback:try-raft", "feedback-try-raft", "Raft"),
+    ):
+        assert piece[action] == button(name, feedback) == label
     assert printer["control:sd-abort"] == router["control:job-abort"] == button("print-cancel")
     assert button("print-cancel") == "Abort"
     assert printer["control:sd-pause"] == pause["Print"] == "Pause"
@@ -2246,8 +2253,16 @@ def test_a_part_that_is_made_has_its_cabinet_under_view_after_motion():
         ("Note", "feedback:note"),
         ("Take turn", "feedback:tune-apply"),
         ("Undo turn", "feedback:tune-undo"),
+        ("Try again", None),
     ]
-    assert all(carried_by(c.action).name == "VIEWER" for c in feedback.children)
+    tries = feedback.children[-1].children
+    assert [(c.label, c.action) for c in tries] == [
+        ("Probe first", "feedback:try-probe"),
+        ("Brim", "feedback:try-brim"),
+        ("Raft", "feedback:try-raft"),
+    ]
+    acts = [c for c in [*feedback.children[:-1], *tries]]
+    assert all(carried_by(c.action).name == "VIEWER" for c in acts)
     still = on("footpedal", part=PartSeen(editable=True, motion=True))
     assert address_of(still, "part:fit") == address_of(ring, "part:fit")
     assert address_of(still, "feedback:open")[:-2] == address_of(ring, "feedback:open")[:-2]

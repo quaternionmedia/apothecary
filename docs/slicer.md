@@ -105,6 +105,10 @@ the slice as `levelling` (`POST /slicer/slice`), and the start is composed with
 that piece in place of the profile's levelling (`compose.levelled`), each piece's
 precondition checked as it is when the profile names it, before a task starts.
 The profile is not changed: the slice's `start` setting says the slice asked.
+Beside it, the **adhesion** row (the part's own, a 5 mm brim, a raft of 3 layers,
+or neither) is sent as `adhesion` and set over what the part declares
+(`profiles.ADHESIONS`, `Declared.adhered`), each value's source saying the slice
+asked. The ring's Print › Levelling and Adhesion step the two rows.
 Fixes' Make these chooses probe first, since the shims are printed on a bed not
 yet level.
 
@@ -124,6 +128,7 @@ piece's answer says so.
 | `wall_thickness` | The process's `wall_loops`: as many lines as wide as the nozzle as reach it |
 | `tolerance` | Reported, not passed: the part's geometry already allows for it |
 | `brim_width` | The process's brim round each piece's outside (`brim_type` `outer_only`) that wide, or none (`no_brim`) at 0 |
+| `raft_layers` | The process's `raft_layers`: a raft that many layers under each piece, or none at 0 |
 
 Every slice's answer lists each value with its `origin` (`declared` or
 `printer`) and its `source`.

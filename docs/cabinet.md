@@ -14,6 +14,20 @@ when something is first filed of it. Filed by its file, a piece goes into the ne
 drawer of that file; the same file printed again is another piece, in a drawer of its
 own. A piece made from a picture is no part's, and has none.
 
+## A print that stopped
+
+A print cancelled or failed says where it stopped: the layer its last line sent was
+in, of its file's layers, and that layer's height (`cabinet.stopped_at`, counting lines
+as a print sends them and layers by OrcaSlicer's `;LAYER_CHANGE`). It is worked out
+from the kept file when the job ends, and for a drawer kept before, when it is read
+while its job and file are kept. Its end opens the drawer in Part › Feedback, as a
+finished print's does, and the drawer says where it stopped. A fault seen on it and
+placed nowhere is filed on that layer. **Probe first**, **Brim** and **Raft** (Part ›
+View › Feedback › Try again) each slice the piece again for the printer that made it,
+in its Print window, with the levelling or the adhesion chosen there
+([docs/slicer.md](slicer.md)); ▶ Print stays a person's. Site's Jobs opens a job's
+Machine and, where the job made a part's piece, its drawer beside it.
+
 | Field | What it holds |
 |---|---|
 | `id` | The moment it was opened, to the millisecond (`apothecary/stamped.py`) |
@@ -25,7 +39,7 @@ own. A piece made from a picture is no part's, and has none.
 | `machine` | The printer or router: its name, site, node, port, and a printer's part |
 | `filament`, `process` | The profiles a print used |
 | `slice`, `cut` | The slice's record or the cut's, whole: the piece is measured from its drawer after its file is forgotten |
-| `job` | The job that made it: its id, how it ended and why, when |
+| `job` | The job that made it: its id, how it ended and why, when; a print cancelled or failed, where it stopped (`stopped`) |
 | `filed` | What was said of the piece, in order |
 
 A **filing** is what calipers read (`measured`), what is seen by eye (`look`), or a note.

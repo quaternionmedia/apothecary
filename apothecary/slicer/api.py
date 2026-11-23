@@ -136,6 +136,9 @@ class SliceRequest(BaseModel):
     # The start's levelling for this slice over the printer's profile (compose.levelled):
     # "home" none, or a levelling piece; none said is the profile's own.
     levelling: Optional[Literal["home", "stored-mesh", "probe-each-print"]] = None
+    # How its first layer holds over what the part declares (profiles.ADHESIONS); none
+    # said is the part's own.
+    adhesion: Optional[Literal["brim", "raft", "none"]] = None
 
 
 class MeasuredRequest(BaseModel):
@@ -243,7 +246,12 @@ def slicer_slice(body: SliceRequest):
     def work(running: Running) -> None:
         try:
             record = service.slice_into(
-                target, printer, running, slicer=module.id, levelling=body.levelling
+                target,
+                printer,
+                running,
+                slicer=module.id,
+                levelling=body.levelling,
+                adhesion=body.adhesion,
             )
         except service.SliceFailed as exc:
             service.remember(

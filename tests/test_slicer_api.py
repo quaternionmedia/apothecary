@@ -282,8 +282,10 @@ def test_what_is_not_a_part_or_a_printer_is_refused_before_a_task_starts(
 def test_a_slice_levels_as_the_print_window_asks_and_one_that_cannot_is_refused_first(
     fake_orcaslicer, parts_built
 ):
-    done = _slice({"part": "calibration_cube", "levelling": "probe-each-print"})
+    done = _slice({"part": "calibration_cube", "levelling": "probe-each-print", "adhesion": "raft"})
     assert done["status"] == "succeeded", done["lines"]
+    raft = next(s for s in done["slice"]["record"]["settings"] if s["name"] == "raft_layers")
+    assert raft["value"] == "3" and "this slice's adhesion 'raft'" in raft["source"]
     start = next(s for s in done["slice"]["record"]["settings"] if s["name"] == "start")
     assert start["value"] == ["home", "probe-each-print"]
     assert "this slice asked 'probe-each-print'" in start["source"]
@@ -295,6 +297,8 @@ def test_a_slice_levels_as_the_print_window_asks_and_one_that_cannot_is_refused_
     assert r.status_code == 422, r.text
     assert "'stored-mesh' reads the newest bed reading" in r.json()["detail"], r.text
     r = client.post("/slicer/slice", json={"part": "calibration_cube", "levelling": "G29 P1"})
+    assert r.status_code == 422
+    r = client.post("/slicer/slice", json={"part": "calibration_cube", "adhesion": "glue"})
     assert r.status_code == 422
     assert len(client.get("/slicer/tasks").json()) == tasks
 

@@ -288,10 +288,13 @@ def slice_into(
     runner: Runner,
     slicer: Optional[str] = None,
     levelling: Optional[str] = None,
+    adhesion: Optional[str] = None,
 ) -> SliceRecord:
     """Slice ``target`` for ``printer`` with the module chosen, keep the G-code
     where the Print card keeps a file, and record the slice beside it. ``levelling``
-    is the start's levelling this slice asks over the profile's (compose.levelled)."""
+    is the start's levelling this slice asks over the profile's (compose.levelled),
+    ``adhesion`` how its first layer holds over what the part declares
+    (Declared.adhered)."""
     module = get_module(chosen_id(slicer, printer.profile))
     status = module.status()
     if not status.ok:
@@ -308,7 +311,8 @@ def slice_into(
     profile = filaments.chosen(printer.profile, printer.at.site, printer.at.path, module.id)
     profile = tuning.applied(profile, printer.at.site, printer.at.path, module.id)
     profile = compose.levelled(profile, levelling)
-    resolved = module.settings(profile, target.declared, port=printer.at.port)
+    declared = target.declared.adhered(adhesion)
+    resolved = module.settings(profile, declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(
             0,

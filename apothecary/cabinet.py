@@ -80,6 +80,69 @@ class MadeFrom(BaseModel):
     sha256: Optional[str] = None  # as the job that ran it recorded it
 
 
+# How a print ended without finishing: what Part › Feedback offers to try again for.
+STOPPED = ("cancelled", "failed")
+# An OrcaSlicer file's mark of each layer it begins, and the height it names after.
+_LAYER = ";LAYER_CHANGE"
+_LAYER_Z = re.compile(r"^;Z:\s*([-+]?\d+(?:\.\d+)?)")
+
+
+class Stopped(BaseModel):
+    """Where a print that did not finish stopped: the layer of the last line sent, of the
+    file's layers, and that layer's height. Layer 0 is the file's start, before its first."""
+
+    layer: int = Field(..., ge=0)
+    layers: int = Field(..., ge=1)
+    z: Optional[float] = None
+    sent: int = Field(..., ge=0)
+    total: int = Field(..., ge=0)
+
+    def said(self) -> str:
+        if self.layer == 0:
+            return f"in its start, before the first of {self.layers} layers"
+        height = f", {self.z:g} mm" if self.z is not None else ""
+        return f"on layer {self.layer} of {self.layers}{height}"
+
+
+def stopped_at(text: str, sent: int, total: int) -> Optional[Stopped]:
+    """Where a file stopped once ``sent`` of its lines were sent, counted as a print sends
+    them (``gcode.strip_gcode``: each line with a command once its comment is taken off).
+    None for a file that marks no layers."""
+    from .firmware.gcode import strip_gcode
+
+    layers = sum(1 for line in text.splitlines() if line.startswith(_LAYER))
+    if not layers:
+        return None
+    layer, z, n = 0, None, 0
+    for line in text.splitlines():
+        if n >= sent:
+            break
+        if line.startswith(_LAYER):
+            layer, z = layer + 1, None
+            continue
+        m = _LAYER_Z.match(line)
+        if m:
+            z = float(m.group(1))
+        elif strip_gcode(line):
+            n += 1
+    return Stopped(layer=layer, layers=layers, z=z if layer else None, sent=sent, total=total)
+
+
+def _stopped(job: jobs.Job) -> Optional[Stopped]:
+    """Where ``job``'s print stopped, from its kept file, while that file is kept."""
+    if job.kind != "print" or job.outcome not in STOPPED or not job.input.file_id:
+        return None
+    from .firmware import devices
+
+    path = devices.prints_dir() / f"{job.input.file_id}.gcode"
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    sent = int(job.detail.get("sent") or 0)
+    return stopped_at(text, sent, int(job.detail.get("total") or 0))
+
+
 class Ran(BaseModel):
     """The job that made the piece: as it began, and as it ended."""
 
@@ -88,6 +151,8 @@ class Ran(BaseModel):
     reason: Optional[str] = None
     started_at: datetime
     finished_at: Optional[datetime] = None
+    # A print that did not finish: where it stopped (STOPPED).
+    stopped: Optional[Stopped] = None
 
 
 class SeenFiled(BaseModel):
@@ -194,11 +259,21 @@ def drawers(part: str) -> List[Drawer]:
 
 
 def get(part: str, drawer_id: str) -> Optional[Drawer]:
+    """The drawer, and a print's that stopped told where, when it was kept before the
+    cabinet said so and its job and file are still kept."""
     if not re.match(DRAWER_ID, drawer_id or ""):
         return None
     path = _folder(part) / f"{drawer_id}.json"
     with _LOCK:
-        return _read(path) if path.is_file() else None
+        drawer = _read(path) if path.is_file() else None
+        ran = drawer.job if drawer is not None else None
+        if ran is not None and ran.outcome in STOPPED and ran.stopped is None:
+            job = jobs.get(ran.id)
+            told = _stopped(job) if job is not None else None
+            if told is not None:
+                drawer.job = ran.model_copy(update={"stopped": told})
+                drawer = _write(drawer)
+        return drawer
 
 
 # ---- opening a drawer ---------------------------------------------------------------------
@@ -216,6 +291,7 @@ def _ran(job: jobs.Job) -> Ran:
         reason=job.reason,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        stopped=_stopped(job),
     )
 
 
@@ -528,9 +604,16 @@ def measured_cut(
 def looked(
     drawer: Drawer, seen: Mapping[str, int], where: Mapping[str, str], note: str = ""
 ) -> Tuple[Drawer, tuning.TuningDocument, tuning.Look]:
-    """A printed piece read by eye: the printer's next look, filed."""
+    """A printed piece read by eye: the printer's next look, filed. On a print that
+    stopped, a fault seen and placed nowhere is placed where the print stopped."""
     if drawer.slice is None:
         raise Refused(f"{drawer.id} is a cut: faults are read on a printed piece")
+    stopped = drawer.job.stopped if drawer.job is not None else None
+    if stopped is not None:
+        where = {
+            **{f: stopped.said() for f, s in seen.items() if s > 0},
+            **{k: v for k, v in where.items() if v},
+        }
     with _LOCK:
         doc, look = tuning.add_look(drawer.slice, dict(seen), dict(where), note)
         drawer = _file(

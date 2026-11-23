@@ -221,6 +221,7 @@ AREAS = {
             "test_steps_one_machine.py",
             "test_loops_window.py",
             "test_level_a_bed.py",
+            "test_a_print_that_stopped.py",
         ),
     },
     "parts": {

@@ -68,6 +68,7 @@ at page 00.
 | [51 — A part's cabinet](../walkthrough/51-a-part-s-cabinet.md) | A cube's print opening its drawer and its end told there, the parameters and STL it was made from kept, a look and a note filed in the drawer, the same file printed again a drawer of its own, an undone look saying so, and `apothecary cabinet` |
 | [52 — Shims that level a bed](../walkthrough/52-shims-that-level-a-bed.md) | printer_1's recorded probe at its four screws, the low corners lifted to the highest and a corner under a layer left out, the bow no shim fixes set against the bound for a stored mesh, a made-up heated pair's floor, the part and its slice, a made-up after pair, and `apothecary bed` |
 | [53 — A bed levelled in the page](../walkthrough/53-a-bed-levelled-in-the-page.md) | The tour's Level a bed on a simulated printer_1: two heated runs in Runs, one drawn over the bed, the floor and the bow in Differences, the bed screw and a mount's diameter set in Parameters and kept, the shims at their screws as wide as the mount after a reload, sliced in the Print window, and the pair after them against the pair before; written by the browser suite |
+| [54 — A print that stopped](../walkthrough/54-a-print-that-stopped.md) | A simulated printer_1's print of bed_shims cancelled on its first layer: its drawer opened by itself in Part › Feedback saying the layer it stopped on, a fault filed there, the piece sliced again on a raft, and Site's Jobs opening the Machine and the drawer together; written by the browser suite |
 
 ## The checklists
 

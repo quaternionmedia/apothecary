@@ -225,6 +225,59 @@ def test_a_job_opens_its_piece_s_drawer_and_its_end_says_how_it_ended(fake_orcas
     assert len(cabinet.drawers(CUBE)) == 2
 
 
+def test_a_print_that_stopped_says_its_layer_and_a_fault_seen_is_placed_there(
+    fake_orcaslicer, built
+):
+    """A print cancelled part way says, in its drawer, the layer its last line sent was
+    in, of the file's layers; a fault seen on the piece is filed on that layer unless
+    placed elsewhere. A drawer kept before the cabinet said it is told when read."""
+    from apothecary.firmware.gcode import strip_gcode
+
+    record = _slice()
+    text = (devices.prints_dir() / f"{record['file_id']}.gcode").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    first = next(i for i, line in enumerate(lines) if line.startswith(";LAYER_CHANGE"))
+    start = sum(1 for line in lines[:first] if strip_gcode(line))
+    total = sum(1 for line in lines if strip_gcode(line))
+    layers = text.count(";LAYER_CHANGE")
+    assert cabinet.stopped_at(text, start, total).said() == (
+        f"in its start, before the first of {layers} layers"
+    )
+    assert cabinet.stopped_at(text, start + 1, total).layer == 1
+    assert cabinet.stopped_at(text, total, total).layer == layers
+    assert cabinet.stopped_at("G28\nG1 X1\n", 1, 2) is None  # a file that marks no layers
+
+    began = _job(record["file_id"], record["name"])
+    cabinet.job_told(began)
+    ended = began.model_copy(
+        update={
+            "outcome": "cancelled",
+            "finished_at": began.started_at,
+            "detail": {"sent": start + 2, "total": total},
+        }
+    )
+    jobs.end(ended)
+    (drawer,) = cabinet.drawers(CUBE)
+    assert drawer.job.stopped.said() == f"on layer 1 of {layers}"
+    r = client.post(
+        f"/cabinet/{CUBE}/drawers/{drawer.id}/seen",
+        json={"seen": {"first_layer": 3, "stringing": 1}, "where": {"stringing": "the top"}},
+    )
+    assert r.status_code == 200, r.text
+    seen = {s["fault"]: s["where"] for s in r.json()["filed"][-1]["seen"]}
+    assert seen == {"first_layer": f"on layer 1 of {layers}", "stringing": "the top"}
+
+    # Kept before the cabinet said where it stopped: told when read, and kept so.
+    old = drawer.model_copy(update={"job": drawer.job.model_copy(update={"stopped": None})})
+    cabinet._write(old)
+    assert cabinet.get(CUBE, drawer.id).job.stopped.layer == 1
+    # A print that finished says no layer.
+    done = _job(record["file_id"], record["name"]).model_copy(update={"id": began.id + "-2"})
+    cabinet.job_told(done)
+    jobs.end(done.model_copy(update={"outcome": "done", "finished_at": done.started_at}))
+    assert cabinet.drawers(CUBE)[0].job.stopped is None
+
+
 def test_a_cut_s_drawer_is_measured_by_its_sizes_and_keeps_the_router_s_allowance():
     record = cam_service.cut_into("router_emoji", ROUTER)
     r = client.post("/cabinet/router_emoji/drawers", json={"file_id": record.file_id})
