@@ -99,6 +99,15 @@ the host cannot see is whether a probed mesh was stored: Marlin keeps a probe
 in RAM until it is stored from the printer's screen, so storing it is the
 bench's box, and the piece trusts the newest probe.
 
+One slice may level otherwise than its profile names: the Print window's
+**levelling** row (its profile's start, probe first, or home only) is sent with
+the slice as `levelling` (`POST /slicer/slice`), and the start is composed with
+that piece in place of the profile's levelling (`compose.levelled`), each piece's
+precondition checked as it is when the profile names it, before a task starts.
+The profile is not changed: the slice's `start` setting says the slice asked.
+Fixes' Make these chooses probe first, since the shims are printed on a bed not
+yet level.
+
 ## Print settings from the part
 
 A part's print settings are what its wrapper declares as `print_settings` --
@@ -114,6 +123,7 @@ piece's answer says so.
 | `layer_height` | The process's `layer_height`, inside the machine's range |
 | `wall_thickness` | The process's `wall_loops`: as many lines as wide as the nozzle as reach it |
 | `tolerance` | Reported, not passed: the part's geometry already allows for it |
+| `brim_width` | The process's brim round each piece's outside (`brim_type` `outer_only`) that wide, or none (`no_brim`) at 0 |
 
 Every slice's answer lists each value with its `origin` (`declared` or
 `printer`) and its `source`.

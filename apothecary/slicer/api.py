@@ -65,7 +65,7 @@ opens a serial port or sends anything to a printer.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.routing import APIRoute
@@ -133,6 +133,9 @@ class SliceRequest(BaseModel):
     # A cached variant of the part (its key, as generate answered it): the
     # variant a page draws is what is sliced, and the record names it.
     variant: Optional[str] = Field(None, pattern=VARIANT_KEY)
+    # The start's levelling for this slice over the printer's profile (compose.levelled):
+    # "home" none, or a levelling piece; none said is the profile's own.
+    levelling: Optional[Literal["home", "stored-mesh", "probe-each-print"]] = None
 
 
 class MeasuredRequest(BaseModel):
@@ -230,12 +233,18 @@ def slicer_slice(body: SliceRequest):
     status = module.status()
     if not status.ok:
         raise NotInstalled(f"{module.label}: " + "; ".join(status.problems))
+    if body.levelling is not None:
+        # A levelling whose precondition fails is refused now, not once the task runs.
+        levelled = compose.levelled(printer.profile, body.levelling)
+        compose.chosen(compose.START, levelled.start.modules, levelled, printer.at.port)
     named = f"{target.made.name} ({target.made.variant})" if target.made.variant else None
     title = f"Slice {named or target.made.name} for {printer.at.name}"
 
     def work(running: Running) -> None:
         try:
-            record = service.slice_into(target, printer, running, slicer=module.id)
+            record = service.slice_into(
+                target, printer, running, slicer=module.id, levelling=body.levelling
+            )
         except service.SliceFailed as exc:
             service.remember(
                 running.task.id,

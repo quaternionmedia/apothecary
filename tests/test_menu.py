@@ -794,6 +794,7 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "print:start",
         "print:preview",
         "print:plan",
+        "print:level",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",

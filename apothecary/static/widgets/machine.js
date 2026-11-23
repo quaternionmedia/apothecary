@@ -190,6 +190,14 @@ const CARDS = `
             <select id="print-filament" title="The filament loaded on this printer: its next slices are made with it, and take its own tuning"></select>
             <span class="s" id="print-filament-said"></span>
         </div>
+        <div class="row" id="print-level-row" hidden><label for="print-level">levelling</label>
+            <select id="print-level" title="How the next slice levels the bed at the start of its print: as this printer's profile says, a probe once the bed is hot (G29, the mesh on for that print), or homing alone">
+                <option value="">its profile's start</option>
+                <option value="probe-each-print">probe first: G29 once the bed is hot</option>
+                <option value="home">home only: no levelling</option>
+            </select>
+            <span class="s" id="print-level-said"></span>
+        </div>
         <div class="row"><label for="print-pick">file</label>
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
@@ -1717,6 +1725,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const slicerOk = !words().slice || !!(slc.status && slc.status.ok);
         $("print-slice").hidden = !part;
         $("print-slice").disabled = slc.running;
+        // A printer's slice levels as chosen here, for that slice (compose.levelled).
+        $("print-level-row").hidden = !words().slice || !part;
         $("print-slice").title = slicerOk
             ? words().prepareTitle
             : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`;
@@ -1933,13 +1943,16 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (variant === undefined) variant = variantFor ? variantFor(part) : null;
         let task;
         const at = state.port ? { port: state.port } : { site: machineAt.site, printer: machineAt.path };
-        try { task = await post("/slicer/slice", variant ? { ...at, part, variant } : { ...at, part }); }
+        const levelling = $("print-level").value || null;
+        const body = { ...at, part, ...(variant ? { variant } : {}), ...(levelling ? { levelling } : {}) };
+        try { task = await post("/slicer/slice", body); }
         catch (e) { slc.running = false; renderPrint(); refuse(`slice: ${e.message}`); return false; }
         $("print-slice-box").hidden = false;
         $("print-slice-task").hidden = false;
         $("print-slice-said").innerHTML = "";
         const ending = sliceTasks().start(async () => task, "/slicer/tasks");
-        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}: its log is in Print from here, and its G-code is chosen there when it ends`);
+        const levelled = levelling ? `, ${$("print-level").selectedOptions[0].textContent.split(":")[0]}` : "";
+        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in Print from here, and its G-code is chosen there when it ends`);
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
@@ -2024,8 +2037,18 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // The ring's Slice on a piece or a part, and the page's Make: chosen under makes,
     // then sliced -- as `variant` where one is given (startSlice).
-    async function slicePart(path, variant = undefined) {
+    // The Print cell's Levelling: the next of the levelling row's choices, told.
+    function stepLevelling() {
+        const el = $("print-level");
+        el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
+        renderPrint();
+        tell(`levelling of the next slices: ${el.selectedOptions[0].textContent}`);
+    }
+    // `levelling`, when given, is chosen in the Print window's levelling for this slice
+    // and the ones after it ("" its profile's start).
+    async function slicePart(path, variant = undefined, { levelling = undefined } = {}) {
         if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
+        if (levelling !== undefined) $("print-level").value = levelling || "";
         const before = refusals;
         const started = await startSlice(variant);
         if (!started) return { refused: refusals > before ? lastRefusal : `${path} could not be sliced` };
@@ -2201,6 +2224,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:start") { await startPrint(); return true; }
         if (action === "print:preview") { togglePreview(); return true; }
         if (action === "print:plan") return keepPlan();
+        if (action === "print:level") { stepLevelling(); return true; }
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -2249,6 +2273,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-start"), "print:start"]);
         out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-plan"), "print:plan"]);
+        out.push([$("print-level"), "print:level"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);

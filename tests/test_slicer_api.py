@@ -279,6 +279,26 @@ def test_what_is_not_a_part_or_a_printer_is_refused_before_a_task_starts(
     assert client.get("/slicer/tasks").json() == []
 
 
+def test_a_slice_levels_as_the_print_window_asks_and_one_that_cannot_is_refused_first(
+    fake_orcaslicer, parts_built
+):
+    done = _slice({"part": "calibration_cube", "levelling": "probe-each-print"})
+    assert done["status"] == "succeeded", done["lines"]
+    start = next(s for s in done["slice"]["record"]["settings"] if s["name"] == "start")
+    assert start["value"] == ["home", "probe-each-print"]
+    assert "this slice asked 'probe-each-print'" in start["source"]
+    tasks = len(client.get("/slicer/tasks").json())
+    # The stored mesh is turned on only under the bound, which a slice for no printer's
+    # board cannot read: refused before a task starts (tests/test_slicer.py holds the
+    # rest of its preconditions, over the bound among them).
+    r = client.post("/slicer/slice", json={"part": "calibration_cube", "levelling": "stored-mesh"})
+    assert r.status_code == 422, r.text
+    assert "'stored-mesh' reads the newest bed reading" in r.json()["detail"], r.text
+    r = client.post("/slicer/slice", json={"part": "calibration_cube", "levelling": "G29 P1"})
+    assert r.status_code == 422
+    assert len(client.get("/slicer/tasks").json()) == tasks
+
+
 def test_a_name_that_could_be_a_path_elsewhere_is_refused_by_its_shape(fake_orcaslicer):
     for bad in ("../etc/passwd", "a/b", "", ".hidden"):
         assert client.post("/slicer/slice", json={"part": bad}).status_code == 422

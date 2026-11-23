@@ -60,6 +60,9 @@ _BED_WAIT = re.compile(r"^[ \t]*M190(?=\s|;|$)", re.I | re.M)
 STORED_MESH_LINE = "M420 S1 ; use the bed mesh the printer stored"
 PROBE_LINE = "G29 ; probe the bed"
 LEVELLING = ("stored-mesh", "probe-each-print")
+# What one slice may ask its start to level by, over its printer's profile: none
+# ("home"), or one of the levelling pieces (levelled).
+LEVELLINGS = ("home", *LEVELLING)
 
 
 @dataclass(frozen=True)
@@ -280,6 +283,28 @@ def chosen(
         if p.needs is not None:
             p.needs(profile, port)
     return found
+
+
+def levelled(profile: "PrinterProfile", levelling: Optional[str]) -> "PrinterProfile":
+    """``profile`` with its start levelling as one slice asks (the Print window's
+    choice): ``None`` as the profile names it; ``"home"`` none; a levelling piece in
+    place of any the profile names. The profile is not changed, and the start's source
+    says the slice asked; the piece's precondition is checked where any is (chosen)."""
+    if levelling is None:
+        return profile
+    if levelling not in LEVELLINGS:
+        raise SlicerError(f"a slice levels by one of {', '.join(LEVELLINGS)}, not {levelling!r}")
+    modules = [m for m in profile.start.modules if m not in LEVELLING]
+    if levelling != "home":
+        modules.append(levelling)
+    asked = "no levelling" if levelling == "home" else repr(levelling)
+    start = profile.start.model_copy(
+        update={
+            "modules": modules,
+            "source": f"this slice asked {asked}, in place of the profile's levelling",
+        }
+    )
+    return profile.model_copy(update={"start": start})
 
 
 def compose_start(base: str, start: List[Piece]) -> str:

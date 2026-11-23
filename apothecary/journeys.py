@@ -860,8 +860,8 @@ LEVEL = Journey(
             "print",
             "Print",
             "Make these in Fixes: the shims rendered at their thicknesses and the mount kept, "
-            "and sliced for the printer in its Print window, where Print a part goes on; "
-            "▶ Print is a person's",
+            "with a brim, and sliced for the printer in its Print window to probe first, the "
+            "bed not yet level; ▶ Print is a person's",
             forward=("machine-print", "bed-fixes"),
             owns=("machine-print",),
             shown_by=("53-a-bed-levelled-in-the-page.md#5",),

@@ -9211,17 +9211,19 @@
             }
             // Fixes' Make these: the shims stood on bed_shims (standShims) and that variant,
             // the one drawn, chosen and sliced in the open Machine's Print window, as ⚒ Make
-            // does a part. Nothing is armed, started or sent: ▶ Print is the person's.
+            // does a part, with its levelling probe first: the shims are printed on a bed not
+            // yet level, so the mesh is on for their print. Nothing is armed, started or
+            // sent: ▶ Print is the person's.
             async makeShims(params) {
                 const machine = this.machine;
                 if (!machine || !machine.handle) throw new Error("open a printer's Machine: the shims are sliced for it");
                 await this.standShims(params);
                 const variant = this.variantByPart['bed_shims'] ?? null;
                 this.makingWith(machine);
-                const started = await machine.handle.print.slice('bed_shims', variant);
+                const started = await machine.handle.print.slice('bed_shims', variant, { levelling: 'probe-each-print' });
                 if (started && started.refused) throw new Error(started.refused);
                 const thick = params.thicknesses.map((t) => Number(t).toFixed(1)).join(', ');
-                return `bed_shims as drawn, ${thick} mm (${params.labels}), chosen in ${machine.path}'s Print window and sliced${started && started.said ? `: ${started.said}` : ''}; then ▶ Print with control armed`;
+                return `bed_shims as drawn, ${thick} mm (${params.labels}), chosen in ${machine.path}'s Print window and sliced to probe first, the bed not yet level${started && started.said ? `: ${started.said}` : ''}; then ▶ Print with control armed`;
             }
             // A board's Machine (widgets/machine.js): a printer's cards and controls or
             // a devkit's sketch and serial output, with the board's one log, a tab

@@ -18,7 +18,8 @@ shims as it is given thicknesses, one label each, and a corner that gets none is
 out.
 
 Its wrapper, `apothecary/projects/parts/bed_shims.py`, declares a layer height of
-0.1 mm. Each thickness the computation gives is a whole number of those layers over a
+0.1 mm and a 3 mm brim, which holds the small rings down on the first layer and leaves
+each underside flat on the bed. Each thickness the computation gives is a whole number of those layers over a
 first layer of 0.2 mm, so each shim's top lands on a layer. Print them in a filament
 that holds its shape at the bed's temperature: a shim sits under the heated plate.
 

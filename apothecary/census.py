@@ -672,6 +672,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
     ),
+    "print-level": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of how the next slice levels the bed at its start: the printer's"
+        " profile's, probe first, or home only",
+    ),
     "print-filament": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1095,6 +1101,8 @@ RING_BACKED: Dict[str, str] = {
     "print-preview": "print:preview",
     # Keep as plan keeps the machine's plan, its board connected or not.
     "print-plan": "print:plan",
+    # The levelling of the next slice: the Print cell's Levelling steps it.
+    "print-level": "print:level",
     # A part's piece's Feedback › Measure files what is typed under measured, as Keep does,
     # and takes a person to the field when nothing is typed; a fault chosen under seen and
     # nothing read, it files the look, as Keep look does. Note files the note, or takes a

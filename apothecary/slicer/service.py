@@ -47,7 +47,7 @@ from ..firmware import devices
 from ..meshes import MeshError, read_stl
 from ..models.measures import MeasurePlan
 from ..state_folder import private_folder, state_dir, write_whole
-from . import filaments, tuning
+from . import compose, filaments, tuning
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -283,10 +283,15 @@ def model_size(stl: bytes) -> Optional[List[float]]:
 
 
 def slice_into(
-    target: Target, printer: Printer, runner: Runner, slicer: Optional[str] = None
+    target: Target,
+    printer: Printer,
+    runner: Runner,
+    slicer: Optional[str] = None,
+    levelling: Optional[str] = None,
 ) -> SliceRecord:
     """Slice ``target`` for ``printer`` with the module chosen, keep the G-code
-    where the Print card keeps a file, and record the slice beside it."""
+    where the Print card keeps a file, and record the slice beside it. ``levelling``
+    is the start's levelling this slice asks over the profile's (compose.levelled)."""
     module = get_module(chosen_id(slicer, printer.profile))
     status = module.status()
     if not status.ok:
@@ -302,6 +307,7 @@ def slice_into(
     # settings its tuning holds for that filament, fed back from pieces it made.
     profile = filaments.chosen(printer.profile, printer.at.site, printer.at.path, module.id)
     profile = tuning.applied(profile, printer.at.site, printer.at.path, module.id)
+    profile = compose.levelled(profile, levelling)
     resolved = module.settings(profile, target.declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(

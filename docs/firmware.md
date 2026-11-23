@@ -891,7 +891,9 @@ Slice makes one, never a file made of another part. A file chosen by a person st
 chosen, and ▶ Print says it was made of another part than makes names. Each kept file's
 row says when it was kept, so two of one name and length are told apart. The card shows each control once what it
 needs holds, in the loop's order: makes and Choose File are the two ways in;
-Slice is there once a part is chosen under makes, the files kept once there is
+Slice is there once a part is chosen under makes, with a printer's levelling
+row beside it (the next slice's: its profile's start, probe first, or home only;
+the ring's Print › Levelling steps it), the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
 preview and ▶ Print once a file is chosen, Pause and Abort while a print runs,
 and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per

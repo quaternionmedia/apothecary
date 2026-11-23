@@ -2561,6 +2561,7 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:start": "print.start",
     "print:preview": None,
     "print:plan": None,
+    "print:level": None,
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
@@ -2715,6 +2716,8 @@ def control_options(device: Device) -> List[Option]:
         # The print, whichever is running: the card's (M24/M25/M524) or one
         # the host streams. The page knows which and carries the verb to it;
         # Send file starts a host print of the file the page has chosen.
+        # Levelling, seated last so no address moves, steps the Print window's
+        # levelling for the next slice: its profile's, probe first, home only.
         Option(
             id="control:sd",
             label="Print",
@@ -2725,6 +2728,7 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
+                Option(id="print:level", label="Levelling", action="print:level"),
             ],
         ),
         Option(

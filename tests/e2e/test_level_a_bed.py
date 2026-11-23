@@ -310,6 +310,12 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
         made = [s for s in http.get("/slicer/slices").json() if s["made"]["name"] == "bed_shims"]
     newest = max(made, key=lambda s: s["at"])
     assert drawn_variant and newest["made"]["variant"] == drawn_variant, newest["made"]
+    # Sliced to probe first, the bed not yet level, and with the part's brim.
+    said = {s["name"]: s for s in newest["settings"]}
+    assert said["start"]["value"] == ["home", "probe-each-print"], said["start"]
+    assert said["brim_type"]["value"] == "outer_only" and said["brim_width"]["value"] == "3"
+    level = windows.panel(page, "machine-print").locator("#print-level")
+    expect(level).to_have_value("probe-each-print")
     settled(page)
     story.shows(
         "The shims sliced for the printer",

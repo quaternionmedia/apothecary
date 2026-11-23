@@ -235,6 +235,24 @@ def test_a_part_asking_for_another_nozzle_or_layers_it_cannot_print_is_refused(f
         settings(load_profile("ender3"), Declared.of(PrintSettings(layer_height=0.5), "part p"))
 
 
+def test_a_declared_brim_goes_round_each_pieces_outside_and_none_at_zero(fake_orcaslicer):
+    settings = get_module("orcaslicer").settings
+    resolved = settings(
+        load_profile("ender3"), Declared.of(PrintSettings(brim_width=3.0), "part r")
+    )
+    process, shown = resolved.configs["process"], _by_name(resolved)
+    assert (process["brim_type"], process["brim_width"]) == ("outer_only", "3")
+    assert shown["brim_type"].origin == "declared" and "3 mm brim" in shown["brim_type"].note
+    none = settings(load_profile("ender3"), Declared.of(PrintSettings(brim_width=0.0), "part r"))
+    assert none.configs["process"]["brim_type"] == "no_brim"
+    # Not declared, the printer's process says (the model's default is not a declaration).
+    plain = settings(load_profile("ender3"), Declared.of(PrintSettings(layer_height=0.2), "part r"))
+    assert (
+        _by_name(plain).get("brim_type") is None
+        or _by_name(plain)["brim_type"].origin != "declared"
+    )
+
+
 def test_the_parts_that_declare_print_settings_declare_only_what_they_set():
     from apothecary.projects.parts import calibration_cube, datum_core
 
@@ -242,6 +260,10 @@ def test_the_parts_that_declare_print_settings_declare_only_what_they_set():
     assert cube.values == {"nozzle_diameter": 0.4, "layer_height": 0.2, "tolerance": 0.1}
     tray = Declared.of(datum_core.DEFAULT.print_settings, "part datum_core")
     assert tray.values["wall_thickness"] == 3.0
+    from apothecary.projects.parts import bed_shims
+
+    shims = Declared.of(bed_shims.DEFAULT.print_settings, "part bed_shims")
+    assert shims.values == {"nozzle_diameter": 0.4, "layer_height": 0.1, "brim_width": 3.0}
     assert Declared.of(None, "piece box").values == {}
 
 
@@ -675,6 +697,34 @@ def test_the_bound_a_probes_range_must_be_under_is_the_profiles_with_its_source(
     bound = load_profile("ender3").measured["mesh_range_bound"]
     assert bound.value == 0.3 and bound.unit == "mm"
     assert "2026-11-07-machine-setup" in bound.source and "stored-mesh" in bound.used
+
+
+def test_a_slice_levels_as_it_asks_over_the_profile_and_the_profile_is_untouched(
+    fake_orcaslicer,
+):
+    """The Print window's levelling for one slice: a probe first, none, or the
+    profile's own; the profile itself keeps what it names."""
+    from apothecary.slicer import compose
+
+    profile = load_profile("ender3")
+    assert profile.start.modules == ["home"]
+    probed = compose.levelled(profile, "probe-each-print")
+    assert probed.start.modules == ["home", "probe-each-print"]
+    assert "this slice asked 'probe-each-print'" in probed.start.source
+    assert profile.start.modules == ["home"]  # the profile's own is not changed
+    lines = (
+        get_module("orcaslicer")
+        .settings(probed, Declared(by="part x"))
+        .configs["machine"]["machine_start_gcode"]
+        .splitlines()
+    )
+    assert lines.index(next(ln for ln in lines if ln.startswith("M190"))) + 1 == lines.index(
+        next(ln for ln in lines if ln.startswith("G29"))
+    )
+    assert compose.levelled(_start("home", "probe-each-print"), "home").start.modules == ["home"]
+    assert compose.levelled(profile, None) is profile
+    with pytest.raises(SlicerError, match="a slice levels by one of home, stored-mesh"):
+        compose.levelled(profile, "G29 P1")
 
 
 def test_a_probe_each_print_goes_after_homing_and_the_wait_for_the_bed(fake_orcaslicer):

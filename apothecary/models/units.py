@@ -55,6 +55,9 @@ class PrintSettings(BaseModel):
     layer_height: float = Field(0.2, gt=0)
     wall_thickness: float = Field(1.2, gt=0)  # Usually 3x nozzle
     tolerance: float = Field(0.2, ge=0)
+    # A brim this wide round each piece's first layer, 0 for none: what a part whose
+    # pieces are small or thin declares, so its first layer is held down.
+    brim_width: float = Field(0.0, ge=0, le=20)
 
     def clearance_hole(self, nominal: float) -> float:
         """Calculate clearance hole size for given nominal diameter."""
