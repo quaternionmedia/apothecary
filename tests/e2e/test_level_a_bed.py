@@ -149,8 +149,8 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
             "The tour's *Level a bed* on printer_1: its bed readings in Runs, the second of a "
             "heated pair less the first in Differences, what a shim fits measured and kept, "
             "the shims in Fixes and drawn at their screws in the world, sliced for the "
-            "printer, and the pair taken after them set against the pair before in "
-            "Differences and History. [docs/bed-shims.md](../docs/bed-shims.md#in-the-page) "
+            "printer, a shim's thickness read against its design, and the pair taken after "
+            "them set against the pair before in Differences and History. [docs/bed-shims.md](../docs/bed-shims.md#in-the-page) "
             "is the reference."
         ),
         runtime=(
@@ -331,8 +331,69 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
         blank=CHANGING,
     )
 
-    # Fit, and the pair after: the shims' lift, as a rigid plate takes it.
+    # Fit: a shim's thickness clicked on bed_shims with Measure shown, read into its
+    # Feedback and checked against its design; then the pair after, the shims' lift as a
+    # rigid plate takes it.
     _stage(page, "Fit", "fit")
+    record = next(
+        r
+        for r in httpx.get(f"{url}/slicer/slices", timeout=15.0).json()
+        if r["made"]["name"] == "bed_shims"
+    )
+    first = record["plan"]["features"][0]
+    name, designed = first["name"], first["nominal"]
+    reading = f"{designed + 0.04:.2f}"
+    page.wait_for_function(f"() => {VIEWER}.selectedName === 'bed_shims'", timeout=15000)
+    windows.from_the_windows_menu(page, "layers")
+    page.locator(
+        ".panel[data-panel='layers'] input[data-layer='measure'][data-kind='shown']"
+    ).check()
+    # Where the label shows: the tour's box may stand over part of it in a narrow world, and
+    # a person clicks what is seen of it.
+    label = f"""(n) => {{
+        const v = {VIEWER}, r = v.canvas.getBoundingClientRect();
+        const p = v.measure.picks.find((x) => x.name === n);
+        if (!p) return null;
+        const y = r.top + (p.box.t + p.box.b) / 2;
+        for (let k = 1; k < 10; k += 1) {{
+            const x = r.left + p.box.l + ((p.box.r - p.box.l) * k) / 10;
+            if (document.elementFromPoint(x, y) === v.canvas) return {{ x, y }};
+        }}
+        return null;
+    }}"""
+    page.wait_for_function(f"(n) => ({label})(n) !== null", arg=name, timeout=20000)
+    at = page.evaluate(label, name)
+    page.mouse.click(at["x"], at["y"])
+    feedback = windows.panel(page, "part-feedback")
+    expect(feedback.locator(".measure-row.picked")).to_have_attribute("data-feature", name)
+    page.wait_for_function(f"() => document.activeElement?.dataset?.feature === '{name}'")
+    page.keyboard.type(reading)
+    page.keyboard.press("Enter")
+    expect(page.locator("#status")).to_contain_text(
+        "turn-1 filed in bed_shims's drawer, for printer_1", timeout=15000
+    )
+    check = feedback.locator(f'.measure-row[data-feature="{name}"] .measure-check')
+    expect(check).to_have_text(f"{reading} {float(reading) - designed:+.2f} ✓")
+    page.wait_for_function(
+        f"""(n) => {VIEWER}.measure.labels.some((l) => l.userData.pick?.name === n
+            && l.userData.text.includes('read'))""",
+        arg=name,
+        timeout=15000,
+    )
+    settled(page)
+    story.shows(
+        "A shim's thickness read against its design",
+        "Fit, Measure shown in Layers: bed_shims, drawn as the shims sliced, wears each "
+        "shim's thickness across its ring. One clicked brings its row in Part › Feedback, "
+        "on the slice Make these kept; what calipers read is typed and kept with Enter, "
+        "checked against the thickness designed within the default ± 0.20 mm, since "
+        "bed_shims' print settings state none, and the shim's line and label in the world "
+        "wear the page's colour for within.",
+        blank=CHANGING,
+    )
+    page.locator(
+        ".panel[data-panel='layers'] input[data-layer='measure'][data-kind='shown']"
+    ).uncheck()
     told = httpx.get(f"{url}/bed/garage/printer_1", timeout=15.0).json()["shims"]["shims"]
     lift = bs.fit_plane([(s["x"], s["y"], s["printed"] or 0.0) for s in told])
     _keep(

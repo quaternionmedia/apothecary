@@ -534,3 +534,26 @@ def test_a_part_s_plan_gives_its_dimensions_in_its_own_frame(fake_orcaslicer, bu
         planned["axis"],
     )
     assert first["designed"] == planned["nominal"]
+
+
+def test_a_printed_shim_s_thickness_is_a_dimension_of_its_piece(fake_orcaslicer, built):
+    """bed_shims names each shim's thickness: a slice of it at its defaults gives three
+    heights in the part's frame, and a shim read files the printer's turn, checked within
+    the default tolerance, since the part's print settings state none."""
+    record = _slice("bed_shims")
+    drawer = client.post("/cabinet/bed_shims/drawers", json={"file_id": record["file_id"]}).json()
+    dims = drawer["dimensions"]
+    assert [(d["name"], d["kind"], d["frame"], d["designed"]) for d in dims["dimensions"]] == [
+        ("shim_fl", "height", "part", 0.5),
+        ("shim_br", "height", "part", 0.5),
+        ("shim_bl", "height", "part", 0.5),
+    ]
+    assert dims["tolerance"]["source"] == "default"
+    r = client.post(
+        f"/cabinet/bed_shims/drawers/{drawer['id']}/measured", json={"readings": {"shim_br": 0.56}}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["turn"] == "turn-1"
+    (check,) = r.json()["filed"][0]["checked"]
+    assert (check["name"], check["within"]) == ("shim_br", True)
+    assert check["deviation"] == pytest.approx(0.06)

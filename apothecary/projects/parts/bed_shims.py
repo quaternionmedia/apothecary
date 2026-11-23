@@ -11,6 +11,14 @@ Every thickness the computation gives is a whole number of 0.1 mm layers over a 
 layer of 0.2 mm, and the part declares that layer height, so a slice puts each shim's top
 on a layer. Each shim's tab is thicker than the thinnest shim, so its label is cut into
 the tab whatever the shim's thickness.
+
+**What a person reads of the shims printed** is each one's thickness (``plan``, the part's
+``measures``): a height named for its corner, read with the outside jaws across the ring
+between its hole and its rim, a little round from straight toward the next shim, so the
+line misses the hole and the slot (toward +X) and stays in the ring where the tab (toward
+-X) joins it at the ring's own thickness. A shim's outer diameter is not in the plan: any
+line across its middle meets the slot on one side and runs on into the tab on the other,
+so no two faces of the shim stand a diameter apart along it.
 """
 
 from __future__ import annotations
@@ -24,6 +32,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from apothecary.core import OpenSCADObject
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
+from apothecary.models.measures import MeasuredFeature, MeasurePlan
 
 from .base import BasePart
 from .skeleton import ROOT
@@ -186,6 +195,51 @@ class SetScad(OpenSCADObject):
         return text.rstrip("\n")
 
 
+# How far round from straight toward +Y a shim's thickness is read, degrees: past the
+# ring's middle toward the tab, so the line is clear of the slot whatever the hole.
+READ_AT = 100.0
+
+
+def centre(p: Params, i: int) -> tuple:
+    """Where the ``i``th shim's ring is centred, in the part's frame (the SCAD's)."""
+    r = p.outer_d / 2
+    return (p.tab_length + r, r + i * (p.outer_d + p.gap))
+
+
+def plan(p: Params) -> MeasurePlan:
+    """Each shim's thickness, in the order of the labels: a height across the ring
+    between its hole and its rim. A feature is named for its corner (``shim_fl``), or for
+    its place in the column where two labels would name the same one."""
+    words = p.labels.split()
+    names = [f"shim_{w.lower()}" for w in words]
+    if len(set(names)) != len(names) or not all(
+        re.fullmatch(r"shim_[a-z0-9]{1,34}", n) for n in names
+    ):
+        names = [f"shim_{i + 1}" for i in range(len(words))]
+    r, h = p.outer_d / 2, p.hole / 2
+    between = (r + h) / 2  # the ring's middle, between the hole and the rim
+    a = math.radians(READ_AT)
+    features = []
+    for i, (name, word, t) in enumerate(zip(names, words, p.thicknesses, strict=True)):
+        cx, cy = centre(p, i)
+        features.append(
+            MeasuredFeature(
+                name=name,
+                kind="height",
+                axis="z",
+                jaw="outside",
+                words=f"the {word} shim's thickness, across its ring between the hole and the rim",
+                at=(
+                    round(cx + between * math.cos(a), 6),
+                    round(cy + between * math.sin(a), 6),
+                    0.0,
+                ),
+                faces=(0.0, t),
+            )
+        )
+    return MeasurePlan(features=features)
+
+
 class BedShimsPart(BasePart):
     """Shims in a column along Y, as many as their thicknesses.
 
@@ -212,6 +266,10 @@ class BedShimsPart(BasePart):
                 z=max(max(p.thicknesses), p.tab_t),
             ),
         )
+
+    def measures(self, params: Optional[Mapping[str, Any]] = None) -> MeasurePlan:
+        """Each shim's thickness, read on the shims printed at ``params``."""
+        return plan(Params(**dict(params or {})))
 
     def scad_overrides(self, params: Mapping[str, Any]) -> Dict[str, Any]:
         """The labels go to the SCAD as a list of words."""

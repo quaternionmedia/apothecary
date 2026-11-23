@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-The tour's *Level a bed* on printer_1: its bed readings in Runs, the second of a heated pair less the first in Differences, what a shim fits measured and kept, the shims in Fixes and drawn at their screws in the world, sliced for the printer, and the pair taken after them set against the pair before in Differences and History. [docs/bed-shims.md](../docs/bed-shims.md#in-the-page) is the reference.
+The tour's *Level a bed* on printer_1: its bed readings in Runs, the second of a heated pair less the first in Differences, what a shim fits measured and kept, the shims in Fixes and drawn at their screws in the world, sliced for the printer, a shim's thickness read against its design, and the pair taken after them set against the pair before in Differences and History. [docs/bed-shims.md](../docs/bed-shims.md#in-the-page) is the reference.
 
 **Runtime-bound.** It drives a real browser against `apothecary serve --simulated`, started as a person starts it, with a script that answers as OrcaSlicer's command line does. The readings are written into its state folder as a bench keeps them: a heated pair made up from printer_1's recorded probe of 2026-09-26 with a probe's noise of about a hundredth, seeded, and a pair after the shims, the shims' lift added as a rigid plate would take it. The numbers are this page's and no bed's.
 
@@ -47,11 +47,17 @@ Make these slices bed_shims as it is drawn, at the shims' thicknesses and the mo
 
 ![The shims sliced for the printer](screenshots/53-05-the-shims-sliced-for-the-printer.png)
 
-## 6. After less before, and the range over the readings
+## 6. A shim's thickness read against its design
+
+Fit, Measure shown in Layers: bed_shims, drawn as the shims sliced, wears each shim's thickness across its ring. One clicked brings its row in Part › Feedback, on the slice Make these kept; what calipers read is typed and kept with Enter, checked against the thickness designed within the default ± 0.20 mm, since bed_shims' print settings state none, and the shim's line and label in the world wear the page's colour for within.
+
+![A shim's thickness read against its design](screenshots/53-06-a-shim-s-thickness-read-against-its-design.png)
+
+## 7. After less before, and the range over the readings
 
 The pair after the shims less the pair before, in Differences, and each reading's range in History against the bound for a stored mesh: the tilt taken out, the bow left.
 
-![After less before, and the range over the readings](screenshots/53-06-after-less-before-and-the-range-over-the-readings.png)
+![After less before, and the range over the readings](screenshots/53-07-after-less-before-and-the-range-over-the-readings.png)
 
 ## What this page does not show
 

@@ -126,7 +126,9 @@ forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the 
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
 Make are a person's. So are Level a bed's heating, probing, measuring and fitting: Heat
 brings the Machine forward, Probe its Runs, Measure bed_shims' Parameters, where the bed
-screw and the mount's outer diameter are typed and kept, and Fit names what to do.
+screw and the mount's outer diameter are typed and kept, and Fit opens bed_shims'
+cabinet in Part › Feedback, where each shim's thickness clicked on the part with Measure
+shown is read, and names what to do.
 
 A window chosen in the page that another stage of the journey owns -- its tab, ⊞
 Windows or a stack's + -- moves the box to that stage, and takes the page nowhere. One chosen while the page is

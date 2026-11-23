@@ -332,6 +332,7 @@ DID = {
         "printer_1's Machine opened",
         "printer_1 framed in the world, as f does",
         "bed_shims chosen",
+        "bed_shims's cabinet in Part › Feedback",
     ],
     "join": [
         "apothecary opened, where Join a hose stands (garage was open)",

@@ -35,9 +35,13 @@ Heating and probing are a person's acts, done at the printer from its Machine.
    PETG or ASA. A shim sits directly under the heated plate, and PLA softens
    near the temperatures a bed prints PLA at. The filament is the one loaded
    in the printer's Print window ([the slicer](slicer.md)).
-5. **Fit.** Over each corner its label names: loosen the knob, lift the corner
-   enough to slide the shim onto the mount, slot first, with its tab out past
-   the mount, then tighten the knob again.
+5. **Fit.** First read each shim's thickness with calipers, across its ring between
+   the hole and the rim: the part names each as a feature to measure (`bed_shims`'s
+   plan, `shim_fl` and so on by its label), so the reading is kept in its piece's
+   drawer and checked against the thickness designed ([the cabinet](cabinet.md#dimensions)).
+   Then over each corner its label names: loosen the knob, lift the corner enough to
+   slide the shim onto the mount, slot first, with its tab out past the mount, then
+   tighten the knob again.
 
 Before the first print, the bed screw and a mount's outer diameter are measured and
 kept, so the shims fit them ([below](#what-a-shim-fits)).
@@ -72,7 +76,10 @@ the router coupon stands on the router's table. Its Parameters are where the bed
 (`screw`, M3 or M4, a hole typed over it where it needs another) and the mount's outer
 diameter are set before Keep, and the tour's Level a bed chooses it at Measure. Its
 thicknesses and labels are the ones Fixes stood on it; a ⚒ Make or a Slice of it makes
-those.
+those. With Measure shown in Layers it
+wears each shim's thickness, and one clicked brings its row in Part › Feedback, where
+what calipers read is kept and checked ([viewer.md](viewer.md#measure)). Its tolerance is
+the default, said so, until `bed_shims`' print settings state one.
 
 The tour's **Level a bed** takes the page through it a stage at a time: Heat, Probe,
 Compare, Measure, Shims, Print, Fit and After. Heating, probing, measuring and fitting

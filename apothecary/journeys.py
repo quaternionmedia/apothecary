@@ -787,7 +787,8 @@ JOIN = Journey(
 # Level a bed: printer_1's bed heated and probed twice, the two runs set against each
 # other for the floor a shim must clear, what the shims fit measured at the bench and
 # kept for the printer, the shims that lift its low corners to the highest computed and
-# drawn at its screws, handed to Print a part, fitted, and the bed probed again and set
+# drawn at its screws, handed to Print a part, each shim's thickness read against its
+# design (Part › Feedback, the Measure layer), fitted, and the bed probed again and set
 # against what it was. Heating, probing, measuring and fitting are a person's: a stage
 # that needs one says so, and the tour does none of them. What it hands on is the shims,
 # a part to print, as Join a hose hands on its adapter.
@@ -871,11 +872,13 @@ LEVEL = Journey(
         Step(
             "fit",
             "Fit",
-            "each shim's thickness checked against its design, where the part's Feedback "
-            "measures a printed piece; each on the mount its label names, slot first, its tab "
-            "out past the mount; then the bed heated, soaked and probed twice again",
+            "each shim's thickness clicked on bed_shims, Measure shown in Layers, what "
+            "calipers read typed in its row in Part › Feedback and checked against its design; "
+            "each on the mount its label names, slot first, its tab out past the mount; then "
+            "the bed heated, soaked and probed twice again",
             forward=("bed-runs",),
-            shown_by=("52-shims-that-level-a-bed.md",),
+            puts=(("feedback", "bed_shims"),),
+            shown_by=("53-a-bed-levelled-in-the-page.md#6", "52-shims-that-level-a-bed.md"),
         ),
         Step(
             "after",
@@ -884,7 +887,7 @@ LEVEL = Journey(
             "the bound for a stored mesh",
             forward=("bed-history", "bed-differences"),
             owns=("bed-history",),
-            shown_by=("53-a-bed-levelled-in-the-page.md#6",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#7",),
         ),
     ),
 )

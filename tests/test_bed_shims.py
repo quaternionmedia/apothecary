@@ -519,3 +519,63 @@ def test_the_routes_answer_the_story_and_keep_a_mount(tmp_path, monkeypatch):
     assert refused.status_code == 422 and "not a mount a shim fits" in refused.json()["detail"]
     assert client.get("/bed/garage/nowhere").status_code == 404
     assert client.put("/bed/garage/printer_1/mount", json={"screw": "M5"}).status_code == 422
+
+
+# ---- what a person reads of the shims printed -------------------------------------------
+
+MADE = {"thicknesses": [0.3, 0.8], "labels": "FL BR", "screw": "M3", "outer_d": 11.8}
+
+
+def test_each_shim_s_thickness_is_read_across_its_ring_and_named_for_its_corner():
+    """A height for each shim, in the order of the labels, its nominal the shim's
+    thickness, its line through the ring between the hole and the rim, clear of the slot;
+    two labels that would give one name are named by their place instead."""
+    import math
+
+    from apothecary.projects.parts.bed_shims import centre
+
+    p = Params(**MADE)
+    drawn = PART.measures(MADE)
+    assert [(f.name, f.kind, f.axis, f.jaw, f.nominal) for f in drawn.features] == [
+        ("shim_fl", "height", "z", "outside", 0.3),
+        ("shim_br", "height", "z", "outside", 0.8),
+    ]
+    for i, f in enumerate(drawn.features):
+        cx, cy = centre(p, i)
+        out = math.hypot(f.at[0] - cx, f.at[1] - cy)
+        assert p.hole / 2 < out < p.outer_d / 2, f.name
+        # The slot runs from the hole toward +X, as wide as the hole.
+        assert f.at[0] < cx or abs(f.at[1] - cy) > p.hole / 2, f.name
+    assert drawn.check() == {"scale_z": True, "first": True}
+    assert [f.name for f in PART.measures({"labels": "FL fl BL"}).features] == [
+        "shim_1",
+        "shim_2",
+        "shim_3",
+    ]
+    assert [f.name for f in PART.measures({"labels": "Ä FL BL"}).features] == [
+        "shim_1",
+        "shim_2",
+        "shim_3",
+    ]
+
+
+def test_the_render_has_each_shim_s_faces_where_the_plan_draws_them(tmp_path):
+    from apothecary.meshes import read_mesh
+    from apothecary.models.measures import MEASURE_TOLERANCE
+    from apothecary.projects.parts.stl_renderer import get_renderer, render_part
+
+    if not get_renderer().is_available:
+        pytest.skip("OpenSCAD not installed")
+    result = render_part(PART, tmp_path / "bed_shims.stl", params=MADE, timeout=180)
+    assert result.success, result.stderr
+    triangles = read_mesh(result.stl_path)
+    for feature in PART.measures(MADE).features:
+        found = feature.read_on(triangles)
+        assert found is not None, feature.name
+        assert found == pytest.approx(feature.faces, abs=MEASURE_TOLERANCE), feature.name
+    # Drawn for other thicknesses than the render's, both are found off.
+    other = PART.measures({**MADE, "thicknesses": [0.5, 0.6]})
+    assert all(
+        f.read_on(triangles) != pytest.approx(f.faces, abs=MEASURE_TOLERANCE)
+        for f in other.features
+    )
