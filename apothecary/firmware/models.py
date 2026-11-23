@@ -674,6 +674,11 @@ class LevelingRequest(ProbeRequest):
     probe: bool = True  # False: read the stored mesh without probing (a printer's)
     note: Optional[str] = Field(None, max_length=200)
     grid: Optional[TableGrid] = None  # a router's grid; left out, three by three
+    # Probe hot, a printer's: the bed heated to this first (M190) and held this long, then
+    # probed `times` over, and turned off after; none, probed as it stands.
+    heat_c: Optional[float] = Field(None, gt=0, le=130)
+    soak_s: float = Field(0.0, ge=0, le=3600)
+    times: int = Field(1, ge=1, le=2)
 
 
 class PrintFile(BaseModel):

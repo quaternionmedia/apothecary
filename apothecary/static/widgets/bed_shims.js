@@ -23,7 +23,12 @@
  * them as the printer's (PUT /bed/{site}/{printer}/mount): the state folder holds them
  * across a reload and a restart, and every slice of the shims after takes them.
  *
- * mountBedShims({ runs, differences, fixes, history }, { base, printer, say, draw, shims, make, measured })
+ * Above the runs, Probe hot: the bed heated to the filament's bed temperature (the Print
+ * window's filament; a temperature typed over it) and held the seconds typed (90 by
+ * default), then probed twice, a reading each, and turned off after -- the heated pair the
+ * shims are computed from, in the Machine's own probe.
+ *
+ * mountBedShims({ runs, differences, fixes, history }, { base, printer, say, draw, shims, make, measured, probeHot, bedTemperature })
  *   printer(): { site, path } of the open Machine's printer, or null
  *   say(text, kind): the page's status line
  *   draw(record, newest): a reading drawn over the printer's bed in the world, and kept
@@ -36,9 +41,11 @@
  *   whenever the readings call for other shims than it last stood
  *   measured(): { screw, hole_d, outer_d } as Parameters holds them for bed_shims (hole_d
  *   null where none is typed over the screw's), or null
+ *   probeHot(heat, soak): the open Machine's bed probed hot; { said } or { refused }
+ *   bedTemperature(): the bed temperature of the filament its Print window holds, or null
  *   -> { load(), choose(id), act(verb), story() }
- *   act("make" | "keep"): Make these, Keep, as the ring's Panels › Machine › Bed cells do
- *   them; what it did, or an Error saying why not.
+ *   act("make" | "keep" | "probe-hot"): Make these, Keep, Probe hot, as the ring's Panels ›
+ *   Machine › Bed cells do them; what it did, or an Error saying why not.
  */
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -70,20 +77,36 @@ function heatmap(grid, colour, name) {
 
 function flatOf(grid) { return (grid || []).flat(); }
 
-export function mountBedShims(sections, { base, printer, say, draw, shims, make, stand, measured }) {
+export function mountBedShims(sections, { base, printer, say, draw, shims, make, stand, measured, probeHot = null, bedTemperature = null }) {
     const el = sections;
     let story = null, chosen = null, error = null, loading = null, stood = null;
+    // Probe hot above the runs, drawn once: what is typed there stays as the runs redraw.
+    let runsList = null, hotC = null, soakS = null;
+    if (el.runs) {
+        el.runs.innerHTML = `<div class="bed-hot"><label for="bed-hot-c">probe hot</label>
+            <input id="bed-hot-c" type="number" min="1" max="130" step="1" size="4" title="The bed's temperature to probe it at, °C: the Print window's filament's, typed over where another is wanted"> °C, held
+            <input id="bed-soak" type="number" min="0" max="3600" step="10" size="5" value="90" title="How long the bed is held at temperature before it is probed, s, so the plate settles through"> s
+            <button type="button" id="bed-probe-hot" class="warm" title="Heat the bed, hold it, then home and probe it twice, a reading each, and turn it off after: the heated pair the shims are computed from. Control must be armed">▤ Probe hot</button></div>
+            <div class="bed-runs-list"></div>`;
+        runsList = el.runs.querySelector(".bed-runs-list");
+        hotC = el.runs.querySelector("#bed-hot-c");
+        soakS = el.runs.querySelector("#bed-soak");
+        hotC.addEventListener("input", () => { hotC.dataset.typed = hotC.value ? "1" : ""; });
+    }
 
     const empty = (text) => `<p class="bed-empty">${esc(text)}</p>`;
 
     function renderRuns() {
         if (!el.runs) return;
-        if (error) { el.runs.innerHTML = empty(error); return; }
-        if (!story) { el.runs.innerHTML = empty("Open a printer's Machine: these windows are of its bed."); return; }
+        // The filament's bed temperature, until a person types another.
+        const t = bedTemperature ? bedTemperature() : null;
+        if (hotC && !hotC.dataset.typed && t !== null && document.activeElement !== hotC) hotC.value = String(t);
+        if (error) { runsList.innerHTML = empty(error); return; }
+        if (!story) { runsList.innerHTML = empty("Open a printer's Machine: these windows are of its bed."); return; }
         const runs = story.runs || [];
         const head = `<p class="bed-head" data-board="${esc(story.board)}">${esc(story.printer)}'s board ${esc(story.board)}: ${runs.length} reading${runs.length === 1 ? "" : "s"}, newest first. A run chosen is drawn over the bed in the world.</p>`;
-        if (!runs.length) { el.runs.innerHTML = head + empty("No reading yet: heat the bed, let it soak, then ▤ Probe bed in the Machine's Bed level, twice."); return; }
-        el.runs.innerHTML = head + runs.map((r) => {
+        if (!runs.length) { runsList.innerHTML = head + empty("No reading yet: ▤ Probe hot above heats the bed, holds it and probes it twice; or heat it, let it soak, then ▤ Probe bed in the Machine's Bed level, twice."); return; }
+        runsList.innerHTML = head + runs.map((r) => {
             const lo = Math.min(...flatOf(r.mesh)), hi = Math.max(...flatOf(r.mesh));
             const warm = r.heated === true ? "heated" : r.heated === false ? "cold" : "unknown";
             const temp = r.bed_c == null ? "bed temperature not read" : `bed ${r.bed_c} °C`;
@@ -236,15 +259,31 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
         return `${at.path}'s shims fit a ${answer.said}`;
     }
 
+    // Probe hot: the temperature and the hold typed, the open Machine's bed probed hot.
+    async function hot() {
+        const heat = Number(hotC && hotC.value), soak = Number(soakS && soakS.value);
+        if (!(heat > 0 && heat <= 130)) throw new Error("type the bed's temperature in °C, at most 130: the Print window's filament's is filled in when it is known");
+        if (!(soak >= 0 && soak <= 3600)) throw new Error("type how long the bed is held, 0 to 3600 s");
+        if (!probeHot) throw new Error("open a printer's Machine: its bed is probed there");
+        const done = await probeHot(heat, soak);
+        if (done.refused) throw new Error(done.refused);
+        return done.said;
+    }
+
     async function act(verb) {
         if (verb === "keep") return keep();
+        if (verb === "probe-hot") return hot();
         if (verb !== "make") throw new Error(`no such act: ${verb}`);
         const s = story && story.shims;
         if (!s || s.error || !s.params) throw new Error(s && s.error ? s.error : "no shim to make: Fixes has none");
         return make(s.params);
     }
 
-    function onRunsClick(ev) {
+    async function onRunsClick(ev) {
+        if (ev.target.closest("#bed-probe-hot")) {
+            try { say(`Probe hot: ${await hot()}`, "success"); } catch (e) { say(`Probe hot: ${e.message}`, "error"); }
+            return;
+        }
         const run = ev.target.closest(".bed-run");
         if (run) choose(run.dataset.id);
     }
@@ -263,6 +302,9 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
     el.runs.addEventListener("click", onRunsClick);
     el.runs.addEventListener("keydown", onRunsKey);
     el.fixes.addEventListener("click", onFixesClick);
+    // A reading kept by the Machine (Probe bed, Probe hot): the runs asked for again.
+    const onLeveled = () => { if (printer()) load(); };
+    window.addEventListener("apothecary:leveled", onLeveled);
 
     async function load() {
         const at = printer();

@@ -2054,6 +2054,12 @@
                     make: (params) => this.makeShims(params),
                     stand: (params) => this.standShims(params),
                     measured: () => this.shimsMeasured(),
+                    // Probe hot, in the open Machine's own probe; the filament its Print
+                    // window holds says the bed's temperature.
+                    probeHot: async (heat, soak) => (this.machine?.handle?.level?.hot
+                        ? this.machine.handle.level.hot(heat, soak)
+                        : { refused: "open a printer's Machine: its bed is probed there" }),
+                    bedTemperature: () => this.machine?.handle?.print?.bedTemperature?.() ?? null,
                 });
                 window.apothecaryBedShims = this.bedShims;
                 const bedLoad = () => this.bedShims.load();
@@ -11910,10 +11916,10 @@
                     return;
                 }
                 // A Bed verb: Fixes shown, and its act done on the open Machine's printer --
-                // the mount kept from Parameters, the shims sliced in its Print window; what
-                // came of it, or why not, is said here.
+                // the mount kept from Parameters, the shims sliced in its Print window -- or
+                // Runs shown, and its bed probed hot; what came of it, or why not, is said here.
                 if (action.startsWith('bed:')) {
-                    viewer.panels.open('bed-fixes');
+                    viewer.panels.open(action === 'bed:probe-hot' ? 'bed-runs' : 'bed-fixes');
                     try {
                         await viewer.bedShims.load();
                         viewer.setStatus(`${intent.label}${tail}: ${await viewer.bedShims.act(action.slice('bed:'.length))}`, 'success');

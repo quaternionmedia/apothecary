@@ -24,6 +24,7 @@ import windows
 from doc_capture import MOMENT
 from garage import open_garage
 from playwright.sync_api import Page, expect
+from rings import on_row
 from simulated_process import guarded_env, start_simulated, still_folder, stop
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
@@ -188,11 +189,15 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
         arg="20261122T120000.000-dev_ttyFAKE1",
     )
     settled(page)
+    # Probe hot above the runs, the filament's bed temperature filled in.
+    expect(runs.locator("#bed-hot-c")).to_have_value("60", timeout=15000)
+    runs.locator(".bed-hot").scroll_into_view_if_needed()
     story.shows(
         "Two heated runs, one drawn over the bed",
         "Runs lists printer_1's readings, newest first, each a small heatmap of its grid with "
         "its bed temperature marked heated, its range and its note. The older is chosen, and "
-        "drawn over the bed in the world on the Bed mesh layer.",
+        "drawn over the bed in the world on the Bed mesh layer. Above them, Probe hot holds "
+        "the filament's bed temperature and a hold of 90 s.",
         blank=CHANGING,
     )
 
@@ -366,3 +371,45 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
         assert http.get("/firmware/printers/armed").json() == {"armed": {}}
     touched = simulated["touched"]
     assert not touched.exists() or not touched.read_text().strip()
+
+
+@pytest.mark.e2e
+def test_probe_hot_heats_holds_probes_twice_and_turns_the_bed_off(page: Page, simulated):
+    """Runs' Probe hot on a simulated printer_1: the filament's bed temperature and a hold of
+    90 s filled in, the hold typed down to none, then the bed heated, probed twice -- a
+    reading each, noted how and which -- and turned off after, in the Machine's own probe."""
+    url = simulated["url"]
+    open_garage(page, url)
+    on_row(page, "printer_1", "Device", "Open")
+    _shown(page, "machine")
+    windows.open_window(page, "bed-runs")
+    runs = windows.panel(page, "bed-runs")
+    expect(runs.locator("#bed-hot-c")).to_have_value("60", timeout=20000)  # Generic PLA's bed
+    expect(runs.locator("#bed-soak")).to_have_value("90")
+    runs.locator("#bed-soak").fill("0")
+    on_row(page, "printer_1", "Device", "Control", "Arm")
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    windows.show(page, "bed-runs")  # in front again, the control pad opened beside it
+    asked = []
+    page.once("dialog", lambda d: (asked.append(d.message), d.accept()))
+    runs.locator("#bed-probe-hot").click()
+    second = runs.locator(".bed-run", has_text="heated 60 C, soaked 0 s, 2 of 2")
+    expect(second).to_have_count(1, timeout=30000)
+    expect(runs.locator(".bed-run", has_text="heated 60 C, soaked 0 s, 1 of 2")).to_have_count(1)
+    assert asked and "60 °C" in asked[0] and "probe it twice" in asked[0], asked
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        job = http.get("/firmware/printers/level", params={"port": PRINTER}).json()
+        assert job["stage"] == "saved" and len(job["record_ids"]) == 2, job
+        newest = http.get("/firmware/printers/leveling", params={"port": PRINTER}).json()[:2]
+        assert [r["id"] for r in newest] == job["record_ids"][::-1]
+        assert all(r["bed_c"] is not None for r in newest)
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        log = http.get("/firmware/printers/log", params={"port": PRINTER}).json()["entries"]
+    sent = [e["text"] for e in log if e["kind"] == "tx"]
+    assert "M190 S60" in sent and sent.index("M190 S60") < sent.index("G29 V3"), sent[-12:]
+    assert any(e["text"] == "the bed heated for the reading turned off" for e in log)
+    assert "M140 S0" in sent[sent.index("M190 S60") :]
+    on_row(page, "printer_1", "Device", "Control", "Disarm")
+    expect(page.locator("#control")).to_be_hidden(timeout=5000)
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        assert http.get("/firmware/printers/armed").json() == {"armed": {}}

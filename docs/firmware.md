@@ -804,7 +804,9 @@ drawn the same way whichever took it.
 A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
 probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
-(`G28`, `G29 V3`) and then reads; it is offered once the latch is armed, and runs as a job that
+(`G28`, `G29 V3`) and then reads; probed hot (`heat_c`, `soak_s`, `times`: Runs' Probe
+hot), the bed is heated first (`M190`), held, probed up to twice, a reading each, and
+turned off after (`M140 S0`), however the job ends. It is offered once the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the

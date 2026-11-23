@@ -169,6 +169,11 @@ one machine on the number another held; nothing in them moves a machine.
       the port*). When it reads `saved`, the heatmap redraws and the history
       has a *probe* row: compare its range with the last one. Its line says
       *probed X a–b, Y c–d mm*: where the board said its points lie (`G29 V3`).
+- [ ] **▤ Probe hot** in Runs (Panels › Machine › Bed), the filament's bed
+      temperature filled in, the hold 90 s: the state card reads `heating`,
+      then `soaking`, then a probe twice; Runs gains two readings noted
+      *heated 60 C, soaked 90 s, 1 of 2* and *2 of 2*, and the bed's target
+      reads 0 after.
       No such words, and the board's `G29` said no `Bed X:` lines: the
       reading's ⤓ log shows what it said.
 - [ ] **Mesh on**, then **Read mesh** (⌗746): the record says *leveling on*.

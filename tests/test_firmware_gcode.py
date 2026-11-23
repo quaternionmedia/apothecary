@@ -1621,6 +1621,47 @@ def test_two_bed_readings_in_one_millisecond_are_both_kept(
     assert second.snapshot()["record_id"] == second.record.id
 
 
+def test_a_bed_probed_hot_is_heated_soaked_probed_twice_and_turned_off(
+    fake_arduino_cli, scripted_links
+):
+    """Probe hot: the bed heated and waited for (M190), held, homed and probed twice --
+    a reading each, noted how and which -- and turned off after; a probe that fails turns
+    it off all the same, and what cannot be asked is refused before the port is touched."""
+    port = "/dev/ttyFAKE1"
+    scripted_links.control.arm(port)
+    devices.printer_status(port, links=scripted_links)
+    hot = {**LEVELING, "M190 S60": ["ok"], "M140 S0": ["ok"]}
+    ScriptedTransport.instances[0].replies = hot
+    job = devices.start_leveling(
+        port, probe=True, heat_c=60, soak_s=0, times=2, note="shims in", links=scripted_links
+    )
+    job.thread.join(5)
+    assert job.stage == "saved" and job.error is None, job.error
+    sent = ScriptedTransport.instances[0].sent
+    probes = [i for i, line in enumerate(sent) if line == gcode.PROBE_BED]
+    assert len(probes) == 2
+    assert sent.index("M190 S60") < sent.index("G28") < probes[0] < probes[1]
+    assert sent[-1] == "M140 S0"
+    first, second = job.records
+    assert first.note == "heated 60 C, soaked 0 s, 1 of 2, shims in"
+    assert second.note == "heated 60 C, soaked 0 s, 2 of 2, shims in"
+    assert job.snapshot()["record_ids"] == [first.id, second.id]
+    assert [r.id for r in devices.leveling_records(port)][:2] == [second.id, first.id]
+    # A probe that fails: the bed is turned off all the same.
+    ScriptedTransport.instances[0].replies = {**hot, gcode.PROBE_BED: ["Error:Probing failed"]}
+    ScriptedTransport.instances[0].sent.clear()
+    job = devices.start_leveling(port, probe=True, heat_c=60, links=scripted_links)
+    job.thread.join(5)
+    assert job.stage == "failed" and ScriptedTransport.instances[0].sent[-1] == "M140 S0"
+    for asked, said in (
+        ({"probe": False, "heat_c": 60}, "probed: a stored mesh is read cold"),
+        ({"heat_c": 140}, "at most 130"),
+        ({"times": 3}, "once or twice"),
+    ):
+        with pytest.raises(ValueError, match=said):
+            devices.start_leveling(port, links=scripted_links, **asked)
+
+
 def test_leveling_job_reports_a_board_that_will_not_probe(fake_arduino_cli, scripted_links):
     port = "/dev/ttyFAKE1"
     scripted_links.control.arm(port)

@@ -818,8 +818,8 @@ LEVEL = Journey(
         Step(
             "probe",
             "Probe",
-            "▤ Probe bed in the Machine's Bed level, twice, one after the other: each run in "
-            "Runs, heated or cold, and the one chosen drawn over the bed",
+            "▤ Probe hot in Runs: the bed heated, held and probed twice; each run in Runs, "
+            "heated or cold, the one chosen drawn over the bed",
             forward=("bed-runs", "machine"),
             owns=("bed-runs",),
             puts=(("fit", "printer_1"),),

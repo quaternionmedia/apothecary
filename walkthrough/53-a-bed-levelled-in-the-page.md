@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Two heated runs, one drawn over the bed
 
-Runs lists printer_1's readings, newest first, each a small heatmap of its grid with its bed temperature marked heated, its range and its note. The older is chosen, and drawn over the bed in the world on the Bed mesh layer.
+Runs lists printer_1's readings, newest first, each a small heatmap of its grid with its bed temperature marked heated, its range and its note. The older is chosen, and drawn over the bed in the world on the Bed mesh layer. Above them, Probe hot holds the filament's bed temperature and a hold of 90 s.
 
 ![Two heated runs, one drawn over the bed](screenshots/53-01-two-heated-runs-one-drawn-over-the-bed.png)
 

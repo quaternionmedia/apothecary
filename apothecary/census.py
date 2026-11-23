@@ -502,6 +502,17 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a button that renders the shims at their thicknesses and slices them for the "
         "printer in its Print window",
     ),
+    "bed-hot-c": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for the bed's temperature to probe it at, the filament's filled in",
+    ),
+    "bed-soak": (WIDGET, WHAT_YOU_SEE, "a field for how long the bed is held before it is probed"),
+    "bed-probe-hot": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that heats the bed, holds it, probes it twice and turns it off after",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -1253,6 +1264,10 @@ RING_BACKED: Dict[str, str] = {
     # Fixes' Keep and Make these are the cells of Panels › Machine › Bed.
     "bed-keep": "bed:keep",
     "bed-make": "bed:make",
+    # Runs' Probe hot: the cell Panels › Machine › Bed › Probe hot, its fields the ones it reads.
+    "bed-probe-hot": "bed:probe-hot",
+    "bed-hot-c": "bed:probe-hot",
+    "bed-soak": "bed:probe-hot",
     "fixes:click:onFixesClick": "bed:make",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
@@ -1887,7 +1902,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "runs:click:onRunsClick": (
         LIST,
         WHAT_YOU_SEE,
-        "a run chosen in Runs, drawn over the printer's bed in the world",
+        "a run chosen in Runs, drawn over the printer's bed in the world; or Probe hot above",
+    ),
+    "hotC:input:(nothing)": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a bed temperature typed in Runs, kept over the filament's as the runs redraw",
     ),
     "runs:keydown:onRunsKey": (
         LIST,

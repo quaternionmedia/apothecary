@@ -1430,20 +1430,42 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("level-job").textContent = job.running ? levelStage(job) : (job.error ? `failed: ${job.error}` : "");
             if (job.running) { level.timer = setTimeout(watchLevelJob, 1000); return; }
             level.timer = null;
-            if (job.record_id) { await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel(); }
+            if (job.record_id) {
+                await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel();
+                // A reading kept: the windows of the bed (Runs, Differences) take it.
+                window.dispatchEvent(new CustomEvent("apothecary:leveled", { detail: { port: state.port, records: job.record_ids || [job.record_id] } }));
+            }
             await pollNow();
         } catch (e) { $("level-job").textContent = e.message; }
     }
-    async function startLevel(probe) {
-        if (!state.port) return;
-        if (probe && !ctl.armed) { refuse("probing moves the machine: arm control first"); return; }
-        if (probe && !confirm(words().level.ask.replace("{port}", state.port))) return;
+    // `hot`: probe hot -- the bed heated to hot.heat °C and held hot.soak s first, probed
+    // twice, a reading each, and turned off after. { said } or { refused }.
+    async function startLevel(probe, hot = null) {
+        const no = (text) => { refuse(text); return { refused: text }; };
+        if (!state.port) return { refused: "no port" };
+        if (probe && !ctl.armed) return no("probing moves the machine: arm control first");
+        const ask = hot
+            ? `Heat ${state.port}'s bed to ${hot.heat} °C, hold it ${hot.soak} s, then home and probe it twice? It is turned off after.`
+            : words().level.ask.replace("{port}", state.port);
+        if (probe && !confirm(ask)) return { refused: "not asked to" };
+        const body = hot ? { port: state.port, probe, heat_c: hot.heat, soak_s: hot.soak, times: 2 } : { port: state.port, probe };
         try {
-            const job = await post("/firmware/printers/level", { port: state.port, probe });
+            const job = await post("/firmware/printers/level", body);
             $("level-job").textContent = levelStage(job);
             level.timer = setTimeout(watchLevelJob, 800);
             forgetRefusal();
-        } catch (e) { refuse(`${words().level.card}: ` + e.message); $("level-job").textContent = e.message; }
+            return { said: hot ? `${state.port}'s bed heating to ${hot.heat} °C, held ${hot.soak} s, then probed twice: the Machine's Bed level follows it, and the bed is turned off after` : `${state.port}: ${levelStage(job)}` };
+        } catch (e) { $("level-job").textContent = e.message; return no(`${words().level.card}: ` + e.message); }
+    }
+    // The bed temperature of the filament the Print window holds (the loaded one, else the
+    // profile's), or null where none is known.
+    function bedTemperature() {
+        const a = fil.answer;
+        if (!a || !a.choices) return null;
+        const name = $("print-filament").value || (a.loaded ? a.loaded.loaded.filament : a.profile);
+        const found = a.choices.find((c) => c.name === name);
+        const t = found ? Number(found.bed_temperature) : NaN;
+        return Number.isFinite(t) && t > 0 ? t : null;
     }
     $("level-probe").onclick = () => startLevel(true);
     $("level-read").onclick = () => startLevel(false);
@@ -2311,8 +2333,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         flashing: () => flash,
         kind: () => state.kind,
         device, carry, pairs, pad: togglePad, padBack,
-        level: { start: startLevel, corner: (which) => { const lines = cornerLines(which); return lines ? enqueue(lines) : refuse(NO_CORNERS); }, lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, fileOf: chooseFileOf, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
+        level: { start: startLevel, hot: (heat, soak) => startLevel(true, { heat, soak }), corner: (which) => { const lines = cornerLines(which); return lines ? enqueue(lines) : refuse(NO_CORNERS); }, lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, bedTemperature, fileOf: chooseFileOf, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
         plan: { keep: keepPlan, load: loadPlan, shown: () => pl.plan, planning },
         destroy() {
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });

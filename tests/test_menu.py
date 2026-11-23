@@ -1550,19 +1550,24 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Rule", None, 7),
     ]
     assert address_of(root, "panel:loops") == "4428"
-    # Bed: the four windows of the printer's bed, then Fixes' Keep and Make these.
+    # Bed: the four windows of the printer's bed, then Fixes' Keep and Make these, then
+    # Runs' Probe hot, seated after them so none of theirs moves.
     bed = next(c for c in machine.children if c.label == "Bed")
-    assert [(c.label, c.action, c.cell) for c in bed.children] == [
-        ("Runs", "panel:toggle:bed-runs", 8),
-        ("Differences", "panel:toggle:bed-differences", 6),
-        ("Fixes", "panel:toggle:bed-fixes", 2),
-        ("History", "panel:toggle:bed-history", 4),
-        ("Keep mount", "bed:keep", 9),
-        ("Make these", "bed:make", 3),
+    assert [(c.label, c.action) for c in bed.children] == [
+        ("Runs", "panel:toggle:bed-runs"),
+        ("Differences", "panel:toggle:bed-differences"),
+        ("Fixes", "panel:toggle:bed-fixes"),
+        ("History", "panel:toggle:bed-history"),
+        ("Keep mount", "bed:keep"),
+        ("Make these", "bed:make"),
+        ("Probe hot", "bed:probe-hot"),
     ]
+    assert [c.cell for c in bed.children[:6]] == [8, 6, 2, 4, 9, 3]
     assert address_of(root, "panel:bed-runs") == "4448"
     assert address_of(root, "bed:make") == "4443"
     assert carried_by("bed:keep").name == carried_by("bed:make").name == "VIEWER"
+    assert carried_by("bed:probe-hot").name == "VIEWER"
+    assert address_of(root, "bed:probe-hot") == "4441"
     assert address_of(root, "loops:start") == "4422"
     assert address_of(root, "loops:loop:bed") == "44236"
     assert address_of(root, "loops:kind:perturbation") == "44212"

@@ -461,11 +461,19 @@ def firmware_printer_plate_set(body: PlateRequest):
 @router.post("/printers/level", status_code=202)
 def firmware_printer_level(body: LevelingRequest):
     """Start a bed reading in the port's dialect: a printer's -- home, probe (``G29``,
-    latch required) and read, or just read the stored mesh; a router's table map --
-    home, then probe down at each point of ``grid`` (latch required)."""
+    latch required) and read, or just read the stored mesh; with ``heat_c``, the bed
+    heated and soaked ``soak_s`` first, probed ``times`` over, and turned off after; a
+    router's table map -- home, then probe down at each point of ``grid`` (latch
+    required)."""
     _busy_guard(body.port)
     return devices.start_leveling(
-        body.port, probe=body.probe, note=body.note, grid=body.grid
+        body.port,
+        probe=body.probe,
+        note=body.note,
+        grid=body.grid,
+        heat_c=body.heat_c,
+        soak_s=body.soak_s,
+        times=body.times,
     ).snapshot()
 
 
