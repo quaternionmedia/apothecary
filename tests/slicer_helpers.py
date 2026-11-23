@@ -107,6 +107,11 @@ FAKE_ORCASLICER = textwrap.dedent(r"""
             if key in config:
                 value = config[key]
                 lines.append(f"; {key} = {value[0] if isinstance(value, list) else value}")
+    # How the first layer holds, as a real slice's configuration says it: a raft or a brim
+    # asked for is another file, as it is from OrcaSlicer.
+    for key in ("brim_type", "raft_layers"):
+        if key in process:
+            lines.append(f"; {key} = {process[key]}")
     lines.append("; CONFIG_BLOCK_END")
     (out / "plate_1.gcode").write_text("\n".join(lines) + "\n")
     (out / "result.json").write_text(json.dumps({"return_code": 0, "error_string": "Success.",

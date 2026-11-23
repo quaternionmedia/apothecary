@@ -232,9 +232,9 @@ def create(root: Path) -> BasePart:
         tags=["printer", "bed", "levelling", "shim"],
         readme_path=root / "parts" / "bed_shims" / "README.md",
         preview_color=Color.from_hex("#c9a227"),
-        # A brim holds the small rings down: each shim's underside stays flat on the
-        # bed, so its thickness is the slice's.
-        print_settings=PrintSettings(nozzle_diameter=0.4, layer_height=0.1, brim_width=3.0),
+        # No brim, said as none: each shim's slot opens its hole to its rim, so a brim
+        # round its outside would print into both. Make these slices it to probe first.
+        print_settings=PrintSettings(nozzle_diameter=0.4, layer_height=0.1, brim_width=0.0),
     )
 
 

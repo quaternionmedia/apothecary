@@ -280,7 +280,7 @@ def test_the_parts_that_declare_print_settings_declare_only_what_they_set():
     from apothecary.projects.parts import bed_shims
 
     shims = Declared.of(bed_shims.DEFAULT.print_settings, "part bed_shims")
-    assert shims.values == {"nozzle_diameter": 0.4, "layer_height": 0.1, "brim_width": 3.0}
+    assert shims.values == {"nozzle_diameter": 0.4, "layer_height": 0.1, "brim_width": 0.0}
     assert Declared.of(None, "piece box").values == {}
 
 
