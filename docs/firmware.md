@@ -1066,7 +1066,9 @@ lists only kernel names, so the symlink is for the CLI and other programs.
 ## HTTP API
 
 Every route is described at `/openapi.json`: the paths under `/firmware`, and
-the site routes `/sites/{name}/devices` and `/sites/{name}/nodes/{path}/device`.
+the site routes `/sites/{name}/devices`, `/sites/{name}/nodes/{path}/device`
+and `/sites/{name}/machines` with the routes under it (a machine's choices, its
+plan, and why its board is not found).
 Long-running actions (install, compile, upload, flash) return `202` with a
 task; poll `GET /firmware/tasks/{id}?since=N` for new log lines. One task
 runs at a time; a second request gets `409`.

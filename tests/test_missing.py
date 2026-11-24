@@ -195,7 +195,8 @@ def test_the_route_says_why_a_pinned_printer_s_board_is_not_found(monkeypatch):
         "garage", "printer_1.frame_system.mainboard", "A106ZTEU", "printer"
     )
     found: list = []
-    monkeypatch.setattr(devices, "detected_devices", lambda **kw: found)
+    asked: list = []
+    monkeypatch.setattr(devices, "detected_devices", lambda **kw: asked.append(kw) or found)
     monkeypatch.setattr(devices, "ports_now", lambda: {})
     monkeypatch.setattr(missing, "usb_devices", lambda: [])
     d = client.get("/sites/garage/machines/printer_1/missing").json()
@@ -211,5 +212,7 @@ def test_the_route_says_why_a_pinned_printer_s_board_is_not_found(monkeypatch):
     d = client.get("/sites/garage/machines/printer_1/missing").json()
     assert d["expected"] == []
     assert d["connected"] == [{"path": "printer_1.frame_system.mainboard", "port": "/dev/ttyUSB1"}]
+    # Asked every few seconds, it reads the newest scan and starts none.
+    assert asked == [{"any_age": True}] * 2
     # A node that is no machine is refused as the plan's routes refuse it.
     assert client.get("/sites/garage/machines/workbench/missing").status_code == 400

@@ -138,11 +138,12 @@ def let_plan_go(name: str, path: str):
 
 
 @router.get("/{name}/machines/{path}/missing")
-def machine_missing(name: str, path: str, fresh: bool = False):
+def machine_missing(name: str, path: str):
     """Why the machine's board is not found: each board pinned at the machine or
     beneath it that the port scan names on no port, with the checks a board gets
     through on its way to being found (``firmware/missing.py``), and every serial
-    port plugged in now with the node a pin names it for. ``fresh`` scans afresh. No port is opened."""
+    port plugged in now with the node a pin names it for. No port is opened, and no
+    scan started: a fresh one is the page's to ask for (``GET /sites/{name}/devices?fresh=1``)."""
     from ..firmware import devices, missing
     from ..firmware.bindings import bindings_for_site
     from ..firmware.toolchains import ToolchainError
@@ -150,13 +151,10 @@ def machine_missing(name: str, path: str, fresh: bool = False):
     site, _, kind = _machine(name, path)
     # The newest scan however old, so asking every few seconds starts none; the
     # USB list and the serial engine's port list are read now (a board on its
-    # port and not in the scan is scanned for afresh by the page, once).
+    # port and not in the scan is scanned for afresh by the page, once, through
+    # its model's rescan, so the page's own rows name it too).
     try:
-        found = (
-            devices.detected_devices(fresh=True)
-            if fresh
-            else devices.detected_devices(any_age=True)
-        )
+        found = devices.detected_devices(any_age=True)
     except ToolchainError:
         found = []
     rows = bindings_for_site(name, site, devices=found)
