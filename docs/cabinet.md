@@ -27,8 +27,10 @@ View › Feedback › Try again) each slice the piece again for the printer that
 in its Print window, with the levelling or the adhesion chosen there
 ([docs/slicer.md](slicer.md)); ▶ Print stays a person's. A try the part declares
 against is greyed, saying so: Brim on a part that declares no brim (`bed_shims`, whose
-slots a brim fills). Site's Jobs opens a job's Machine and, where the job made a part's
-piece, its drawer beside it.
+slots a brim fills). So is a try the piece was made with already, which would slice it
+again as it was: Probe first on a piece that probed first (`bed_shims` declares it), Brim
+on one with a 5 mm brim, Raft on one on a raft of 3 layers. Site's Jobs opens a job's
+Machine and, where the job made a part's piece, its drawer beside it.
 
 A drawer's **made** row (Part › Feedback) says how the piece was made: its values -- a
 variant's, those drawn, or the part's own -- and, for a print, how its start levelled

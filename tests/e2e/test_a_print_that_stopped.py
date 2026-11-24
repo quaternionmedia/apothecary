@@ -162,6 +162,16 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     brim = feedback.locator("#feedback-try-brim")
     expect(brim).to_be_disabled()
     expect(brim).to_have_attribute("title", re.compile("bed_shims declares no brim"))
+    # Probe first too: the piece was probed first already, as bed_shims declares.
+    probe = feedback.locator("#feedback-try-probe")
+    expect(probe).to_be_disabled()
+    expect(probe).to_have_attribute(
+        "title",
+        re.compile(
+            "this piece was made with probe first: G29 once the bed is hot, as bed_shims declares"
+        ),
+    )
+    expect(feedback.locator("#feedback-try-raft")).to_be_enabled()
     # How it was made, and what the board said of its levelling as the print began.
     made = feedback.locator("#feedback-made-said")
     for words in (
@@ -180,9 +190,10 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "file's layers and how the piece was made, in the Print window's words: the part's "
         "own values, probe first, no skirt and no brim, as bed_shims declares, and what the "
         "board said of its levelling as the print began -- on, its probe's offset, the "
-        "mesh's range and where the probe found the grid. It offers what to try: Probe "
-        "first and Raft, each slicing the piece again, and Brim greyed, bed_shims declaring "
-        "none. Feedback is maximised here from its stack, so the drawer is seen whole.",
+        "mesh's range and where the probe found the grid. It offers what to try: Raft, "
+        "slicing the piece again; Probe first is greyed, the piece made with it already as "
+        "bed_shims declares, and Brim greyed, bed_shims declaring none. Feedback is "
+        "maximised here from its stack, so the drawer is seen whole.",
         blank=CHANGING,
     )
     _restored(page, stack)

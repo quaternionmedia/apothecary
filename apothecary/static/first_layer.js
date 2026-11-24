@@ -99,8 +99,18 @@ export function made(settings) {
     return { levelling: levelled ? words(levelled) : null, skirt, adhesion };
 }
 
+// A try is not offered where the part declares against it -- a brim on a part that declares
+// none -- or where the piece was sliced with what the try chooses already: it would slice
+// the piece again as it was made.
 export function tryRefused(how, settings, declared = {}, part = "the part") {
-    if (!TRIES[how]) return null;
+    const tried = TRIES[how];
+    if (!tried) return null;
     if (how === "brim" && declared && declared.brim_width === 0) return `${part} declares no brim`;
-    return null;
+    const values = named(settings), c = tried.choice;
+    const already = how === "probe" ? levelledBy(values) === c
+        : how === "brim" ? brimOf(values) === c.sets.brim_width
+        : "raft_layers" in values && Number(values.raft_layers) === c.sets.raft_layers;
+    if (!already) return null;
+    const declares = how === "probe" && declared && declared.levelling === c.value;
+    return `this piece was made with ${words(c)}${declares ? `, as ${part} declares` : ""}`;
 }

@@ -14,8 +14,9 @@
  * A print that stopped -- cancelled, or failed -- says the layer it stopped on, of the file's
  * layers, and offers what to try: Probe first, Brim and Raft each slice the piece again, as
  * its printer's Print window would with that chosen (`retry`, the page's), and say it in
- * that window's words (first_layer.js), as the made row says how the piece was made. A
- * fault seen on it is filed on that layer.
+ * that window's words (first_layer.js), as the made row says how the piece was made. A try
+ * its part declares against, or that the piece was made with already, is greyed with why.
+ * A fault seen on it is filed on that layer.
  *
  * Under the piece chosen: a print's features to read, a row each as the piece's dimensions
  * name them (GET /cabinet/{part}/dimensions, its slice's plan or its box), each with its

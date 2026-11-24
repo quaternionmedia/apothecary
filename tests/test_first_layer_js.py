@@ -1,8 +1,9 @@
 """The first layer's words (apothecary/static/first_layer.js): each choice of the Print
 window's levelling and adhesion rows is one the server takes and sets what the server's
 sets; how a kept slice was made is said from the settings the slicer recorded; and a try
-on a print that stopped is refused where the part declares against it. The module is
-pure, so node runs it here, on settings the slicer itself resolved."""
+on a print that stopped is refused where the part declares against it or the piece was
+made with it already. The module is pure, so node runs it here, on settings the slicer
+itself resolved."""
 
 from __future__ import annotations
 
@@ -36,7 +37,9 @@ out.options = f.options(f.LEVELLING);
 out.made = Object.fromEntries(Object.entries(slices).map(([k, s]) => [k, f.made(s)]));
 out.refused = ["probe", "brim", "raft", "nothing"].map((how) => f.tryRefused(how,
     slices.shims, { brim_width: 0, levelling: "probe-each-print" }, "bed_shims"));
-out.free = f.tryRefused("brim", slices.plain, {}, "calibration_cube");
+out.free = ["probe", "brim", "raft"].map((how) => f.tryRefused(how, slices.plain, {}, "cube"));
+out.again = ["probe", "brim", "raft"].map((how) => f.tryRefused(how, slices[how], {}, "cube"));
+out.other = f.tryRefused("raft", slices.brim, {}, "cube");
 console.log(JSON.stringify(out));
 """
 
@@ -64,6 +67,7 @@ def out(fake_orcaslicer, tmp_path):
         "shims": _settings(shims, shims.values["levelling"]),
         "plain": _settings(plain),
         **{how: _settings(plain.adhered(how)) for how in ADHESIONS},
+        "probe": _settings(plain, "probe-each-print"),
         "stored": [{"name": "start", "value": ["home", "stored-mesh"]}],
     }
     return _run(tmp_path, slices)
@@ -108,9 +112,24 @@ def test_how_a_slice_was_made_is_said_in_the_rows_words(out):
     assert made["stored"]["levelling"] == "the stored mesh: M420 S1 after G28"
 
 
-def test_a_try_the_part_declares_against_is_refused_saying_so(out):
-    assert out["refused"] == [None, "bed_shims declares no brim", None, None]
-    assert out["free"] is None
+def test_a_try_the_part_declares_against_or_the_piece_had_is_refused_saying_so(out):
+    """bed_shims declares no brim and a probe first: its piece's Brim is refused for the
+    first, its Probe first for the second, and its Raft is offered. A piece made with a
+    probe first, a brim or a raft already is not offered it again."""
+    probe = "this piece was made with probe first: G29 once the bed is hot"
+    assert out["refused"] == [
+        f"{probe}, as bed_shims declares",
+        "bed_shims declares no brim",
+        None,
+        None,
+    ]
+    assert out["free"] == [None, None, None]
+    assert out["again"] == [
+        probe,
+        "this piece was made with brim: 5 mm round each piece",
+        "this piece was made with raft: 3 layers under each piece",
+    ]
+    assert out["other"] is None
 
 
 def test_the_print_window_and_feedback_take_their_words_from_the_module():
