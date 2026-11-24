@@ -73,6 +73,10 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       board once what it is (M115): the status line says *asked it once what
       it is: Marlin …*, and `printer_1` wears its ⚡ badge.
 - [ ] Open `printer_1`'s Machine: its plan's part and file are chosen.
+- [ ] Unplug the printer's USB with its Machine open: the Machine opens as its plan,
+      and its **Its board, not found** card says *On USB* ✗, where the board was
+      last found (its port and USB socket) and what to try. Plug it back in: the
+      card scans once, and the board's Machine opens in the plan's place.
 - [ ] **Pin the ESP32.** Select `esp32_blink`, choose the ESP32's port,
       **Query**, **Pin**: `esp32_blink` wears its ⚡ badge.
 
@@ -192,6 +196,22 @@ one machine on the number another held; nothing in them moves a machine.
       under the bound.
 - [ ] The world: the relief over `printer_1`'s bed is the newest reading, and
       nothing of the printer's lies over the router's table.
+- [ ] Where the nozzle's 0, 0 is on the plate: **Home all**, jog to X0 Y0 Z5,
+      and measure from the plate's front-left corner to the nozzle's tip, along
+      X and along Y. The frame model puts it 7.5 mm in from each edge of the
+      235 mm plate (`parts/ender3/slicer.json` `measured.bed_screws`, *not
+      measured on printer_1*); a print drawn at the bed's centre in the world
+      stands off its centre on the real bed by what this differs.
+- [ ] Where each levelling screw is in the nozzle's coordinates: jog the nozzle
+      over each screw's head and read X and Y from the Machine's position;
+      `measured.bed_screws` holds the frame model's 7.5 and 212.5.
+- [ ] A first layer with the mesh on: a slice that probes first (the Print
+      window's levelling *probe first*, or `bed_shims`, which declares it),
+      printed and cancelled once its first layer is down. Its drawer's *made*
+      row (Part › Feedback) says what the board said as it began: *levelling
+      on*, its probe's offset, the mesh's range, where it probed. A nozzle too
+      close to extrude, or too far to hold, is the probe's Z offset: the
+      one-layer square below with the mesh on, and the new `M851` kept.
 
 Shims, once the bed's tilt is to be taken out at its mounts
 ([docs/bed-shims.md](bed-shims.md)):
