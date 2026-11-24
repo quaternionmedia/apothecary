@@ -13,12 +13,10 @@ uv run playwright install chromium   # once per machine, for the browser tests
 uv run apothecary openscad install   # an OpenSCAD with Manifold, for the renders
 ```
 
-Rendering STLs needs OpenSCAD: `uv run apothecary openscad install` puts a development
-snapshot with Manifold in the tools dir ([docs/openscad.md](docs/openscad.md) says what it
-installs on each platform and which OpenSCAD a render uses). With the snapshot installed,
-the `--slow` suite also renders the parts that need an OpenSCAD newer than 2021.01.
-[Walkthrough page 00](walkthrough/00-getting-started.md) is the same path for a person
-trying it, and names the optional installs: the slicer and each firmware toolchain.
+[Walkthrough page 00](walkthrough/00-getting-started.md) says each step, and the installs
+only some loops want: the slicer and each firmware toolchain. With the OpenSCAD snapshot
+installed, the `--slow` suite also renders the parts that need an OpenSCAD newer than
+2021.01.
 
 ## The loop
 

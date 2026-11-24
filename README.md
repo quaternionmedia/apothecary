@@ -27,17 +27,23 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
 
 ## Start here
 
-[Walkthrough page 00, *Getting started*](walkthrough/00-getting-started.md): install, then
+Python 3.11 or newer and [uv](https://docs.astral.sh/uv/), then
 
 ```bash
+git clone --recurse-submodules https://github.com/quaternionmedia/apothecary.git
+cd apothecary
+uv sync
 uv run apothecary check              # what is installed here, and what is missing
 uv run apothecary openscad install   # an OpenSCAD with Manifold, before the first serve
 uv run apothecary serve --simulated  # the viewer, with a simulated printer and board
 ```
 
-and the five loops -- designing a part, editing its SCAD, a picture to a print, firmware,
-a whiteboard to a model -- with what each needs. `uv run apothecary --help` ends with the same three
-steps.
+[Walkthrough page 00, *Getting started*](walkthrough/00-getting-started.md) says each step
+-- a clone made without its submodules, the OpenSCAD renders use, what `serve` prints --
+then the five loops -- designing a part, editing its SCAD, a picture to a print, firmware,
+a whiteboard to a model -- with what each needs, and the installs only some of them want:
+the slicer, each firmware toolchain and the browser the tests drive.
+`uv run apothecary --help` gives the same three steps after its commands.
 
 ## What it does, and how to see it
 
@@ -106,32 +112,10 @@ browser test is in no row, or when a page a run writes is in no row that names t
 | It stays on this machine: the server answers this machine only, and the process connects nowhere else | `curl -H 'Host: evil.example' http://127.0.0.1:6283/sites/garage/attached` answers 403; without the header, the garage's cameras and views | `test_stays_local.py` | [02](walkthrough/02-the-bench-as-it-is.md) |
 | The checks before a push, and what a project pinning this one may rely on | `uv run --group preflight apothecary preflight` | `test_cli_testing.py`, `test_e2e_shards.py`, `test_browser_suite_is_not_gated.py` | [15](walkthrough/15-preflight.md), [16](walkthrough/16-being-depended-on.md) |
 
-## Install
-
-Python 3.11+ and [uv](https://docs.astral.sh/uv/); page 00's first step is the clone and
-`uv sync`. A clone made without `--recurse-submodules` has an empty `governance/qm` and no
-gridfinity library: run `git submodule update --init --recursive`.
-
-Rendering STLs needs OpenSCAD; nothing else does. Run `uv run apothecary openscad install`
-before the first `serve`: it puts a development snapshot with Manifold into the tools
-folder, and renders use it. [docs/openscad.md](docs/openscad.md) says what it installs on
-each platform, which OpenSCAD a render uses, and what 2021.01, the version most package
-managers carry, cannot do.
-
-The rest is optional, each into the same tools folder: the slicer, each firmware
-toolchain and the browser the tests drive. Page 00's
-[last install section](walkthrough/00-getting-started.md#6-the-installs-only-some-loops-want)
-names each.
-
 ## First commands
 
-```bash
-uv run apothecary serve                             # the viewer: http://127.0.0.1:6283/viewer
-```
-
-`serve` keeps its terminal until Ctrl+C; run the rest in another one. It listens on
-6283 unless `--port` or `APOTHECARY_PORT` names another, so a second checkout's server
-runs beside it; [docs/dev-loop.md](docs/dev-loop.md) is the loop from a change to `main`.
+None of these needs the server. `serve` keeps its terminal until Ctrl+C, so beside it they
+run in another one.
 
 ```bash
 uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad   # a scene to OpenSCAD
