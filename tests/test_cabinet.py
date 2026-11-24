@@ -526,6 +526,8 @@ def test_a_piece_s_dimensions_are_the_drawer_named_the_file_named_or_the_newest(
     other = client.get("/cabinet/print_coupon/dimensions", params={"file": record["file_id"]})
     assert other.status_code == 422
     assert other.json()["detail"] == f"{record['file_id']} made {CUBE}, not print_coupon"
+    gone = client.get(f"/cabinet/{CUBE}/dimensions", params={"file": "nothing"})
+    assert gone.status_code == 404 and gone.json()["detail"] == "no slice or cut keeps 'nothing'"
     missing = client.get(f"/cabinet/{CUBE}/dimensions", params={"drawer": "20261120T120000.000"})
     assert missing.status_code == 404
 

@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field
 from .. import cabinet
 from ..cam import measured as cut_measured
 from ..slicer import tuning
+from ..slicer.models import SliceRecord
 
 router = APIRouter(prefix="/cabinet", tags=["cabinet"])
 
@@ -205,14 +206,15 @@ def cabinet_drawer(part: str, drawer_id: str):
 
 def _kept_file(part: str, file_id: str):
     """The slice or cut record keeping ``file_id``, a piece of ``part``'s: 404 for a file
-    none keeps, 422 for another part's."""
+    none keeps, 422 for another part's. Opening a drawer and reading a piece's dimensions
+    both find a kept file here."""
     from ..cam import service as cam_service
     from ..slicer import service as slicer_service
 
     record = slicer_service.get_record(file_id) or cam_service.get_record(file_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"no slice or cut keeps {file_id!r}")
-    made = cabinet.part_of_slice(record) if hasattr(record, "printer") else record.part
+    made = cabinet.part_of_slice(record) if isinstance(record, SliceRecord) else record.part
     if made != part:
         what = made or "a piece made from a picture"
         raise HTTPException(status_code=422, detail=f"{file_id} made {what}, not {part}")
@@ -257,19 +259,12 @@ def cabinet_dimensions(
 @router.post("/{part}/drawers")
 def cabinet_open(part: str, body: OpenRequest):
     """A drawer for the kept file ``file_id``, a slice or a cut of ``part``."""
-    from ..cam import service as cam_service
-    from ..slicer import service as slicer_service
-
-    record = slicer_service.get_record(body.file_id)
-    cut = cam_service.get_record(body.file_id) if record is None else None
-    if record is None and cut is None:
-        raise HTTPException(status_code=404, detail=f"no slice or cut keeps {body.file_id!r}")
-    made = cabinet.part_of_slice(record) if record is not None else cut.part
-    if made != part:
-        what = made or "a piece made from a picture"
-        raise HTTPException(status_code=422, detail=f"{body.file_id} made {what}, not {part}")
+    record = _kept_file(part, body.file_id)
     try:
-        drawer = cabinet.for_slice(record) if record is not None else cabinet.for_cut(cut)
+        if isinstance(record, SliceRecord):
+            drawer = cabinet.for_slice(record)
+        else:
+            drawer = cabinet.for_cut(record)
     except cabinet.Refused as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _whole(drawer)
