@@ -140,6 +140,15 @@ def _what_it_is(identity: str, last: Optional[DeviceInfo], seen: Optional[dict])
     return {"make": make, "serial": serial}
 
 
+def named(want: dict, identity: str) -> str:
+    """The expected board as a person reads it: its bridge and its serial number
+    (``FTDI FT232R (0403:6001) A106ZTEU``), the bridge alone for a pin by make, the
+    serial number alone where its make was never read, else the pin as typed."""
+    if want["make"]:
+        return bridge(want["make"]) + (f" {want['serial']}" if want["serial"] else "")
+    return want["serial"] or identity
+
+
 def _is_it(dev: UsbDevice, want: dict) -> bool:
     if want["serial"]:
         return (dev.serial or "").strip().lower() == want["serial"].lower()
@@ -161,7 +170,7 @@ def explain(
     can_open = can_open or (lambda port: os.access(port, os.R_OK | os.W_OK))
     want = _what_it_is(identity, last, seen)
     machine = kind or "machine"
-    name = want["serial"] or identity
+    board = named(want, identity)
     made = bridge(want["make"])
     where_last = ""
     if last_port or (seen or {}).get("location"):
@@ -193,9 +202,9 @@ def explain(
         )
     elif on_usb:
         d = on_usb[0]
-        checks.append(Check("usb", "On USB", "ok", f"{made} {name} is in {socket(d.place)}"))
+        checks.append(Check("usb", "On USB", "ok", f"{board} is in {socket(d.place)}"))
     else:
-        checks.append(Check("usb", "On USB", "off", f"nothing on USB is {made} {name}"))
+        checks.append(Check("usb", "On USB", "off", f"nothing on USB is {board}"))
         todo = (
             f"Switch the {machine} on and seat its USB cable at both ends: a cable made only "
             "to charge carries no data. Plugged in through a hub, try a socket on the "
@@ -266,6 +275,7 @@ def explain(
 
     return {
         "identity": identity,
+        "board": board,
         "make": want["make"],
         "bridge": made,
         "serial": want["serial"],

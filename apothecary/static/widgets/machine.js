@@ -957,7 +957,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         card.hidden = false;
         const boards = d.expected.map((e) => {
             const checks = e.checks.map((c) => `<li class="check ${esc(c.state)}"><span class="mark">${MARK[c.state] || "·"}</span> ${esc(c.label)}${c.says ? ` — ${esc(c.says)}` : ""}</li>`).join("");
-            return `<div class="expected"><b>${esc(e.bridge)} ${esc(e.serial || e.identity)}</b>, pinned at ${esc(e.pinned_at)}.${e.last_said ? ` ${esc(e.last_said)}` : ""}</div>`
+            return `<div class="expected"><b>${esc(e.board)}</b>, pinned at ${esc(e.pinned_at)}.${e.last_said ? ` ${esc(e.last_said)}` : ""}</div>`
                 + `<ul class="checks">${checks}</ul>`
                 + (e.todo ? `<div class="todo">${esc(e.todo)}</div>` : "");
         }).join("");

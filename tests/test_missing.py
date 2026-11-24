@@ -82,6 +82,22 @@ def test_a_board_not_on_usb_is_switched_on_and_cabled_where_it_was_last_found():
     assert "last found on /dev/ttyUSB1, in USB socket 1-1.2 (a hub's socket 2)" in out["todo"]
 
 
+def test_a_board_is_named_once_by_what_is_known_of_it():
+    # Its bridge and serial number; a pin by make, the bridge alone, never its make twice;
+    # a serial number never seen on USB, that alone; a port typed by hand, as typed.
+    assert missing.explain("A106ZTEU", "printer", usb=[], listed={}, seen=FTDI)["board"] == (
+        "FTDI FT232R (0403:6001) A106ZTEU"
+    )
+    out = missing.explain("usb:1a86:7523", "router", usb=[], listed={})
+    assert out["board"] == "CH340 (1a86:7523)"
+    assert out["checks"][0]["says"] == "nothing on USB is CH340 (1a86:7523)"
+    out = missing.explain("A106ZTEU", "printer", usb=[], listed={})
+    assert out["checks"][0]["says"] == "nothing on USB is A106ZTEU"
+    assert (
+        missing.explain("/dev/ttyUSB3", "printer", usb=None, listed={})["board"] == "/dev/ttyUSB3"
+    )
+
+
 def test_another_board_of_its_make_is_named_to_pin_in_its_place():
     other = missing.UsbDevice("1-3", "usb:0403:6001", serial="B2XYZ", ports=["/dev/ttyUSB2"])
     out = missing.explain("A106ZTEU", "printer", usb=[other], listed={}, seen=FTDI)
@@ -96,6 +112,7 @@ def test_a_board_on_usb_with_no_serial_port_has_no_driver():
     ch340 = missing.UsbDevice("1-1.3", "usb:1a86:7523")
     out = missing.explain("usb:1a86:7523", "router", usb=[ch340], listed={})
     assert _states(out) == [("usb", "ok"), ("port", "off"), ("open", "after"), ("scan", "after")]
+    assert out["checks"][0]["says"] == "CH340 (1a86:7523) is in USB socket 1-1.3 (a hub's socket 3)"
     assert out["todo"].startswith("Unplug it and plug it in again.") and "brltty" in out["todo"]
     ftdi = missing.UsbDevice("1-1.2", "usb:0403:6001", serial="A106ZTEU")
     assert "brltty" not in missing.explain("A106ZTEU", "printer", usb=[ftdi], listed={})["todo"]

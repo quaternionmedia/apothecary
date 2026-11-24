@@ -50,10 +50,12 @@ def test_a_printer_whose_board_is_not_found_says_what_to_try_and_opens_when_it_c
     card = windows.in_machine(page, "#c-missing-card")
     expect(card).to_be_visible(timeout=10000)
     expect(card).to_contain_text(f"pinned at {BOARD}")
+    # Named by what is known of it: a serial number never seen on USB, that alone.
+    expect(card.locator(".expected b")).to_have_text(NOT_HERE)
     checks = card.locator(".check")
     expect(checks).to_have_count(4)
     expect(checks.nth(0)).to_have_class("check off")
-    expect(checks.nth(0)).to_contain_text(f"On USB — nothing on USB is a USB bridge {NOT_HERE}")
+    expect(checks.nth(0)).to_contain_text(f"On USB — nothing on USB is {NOT_HERE}")
     expect(checks.nth(1)).to_have_class("check after")
     expect(card.locator(".todo")).to_contain_text(
         "Switch the printer on and seat its USB cable at both ends"
