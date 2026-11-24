@@ -91,7 +91,7 @@ browser test is in no row, or when a page a run writes is in no row that names t
 | The view banner: the header's one trail of where you are, the universe first, then the site (its own level, and under ▾ the other sites), then each piece stepped into | The header: `🧪 Apothecary › garage ▾ › cnc_router`; the first crumb, the site's crumb and its ▾ ([docs/viewer.md](docs/viewer.md#the-header)) | `e2e/test_view_banner.py`, `test_viewer_assets.py` | |
 | Simulated machines, and the paths a newcomer takes | The banner over simulated machines; the bare `/viewer` address; the header's Docs | `e2e/test_simulated_machines.py`, `e2e/test_onboarding.py`, `e2e/test_paths_people_take.py`, `test_simulated.py` | [00](walkthrough/00-getting-started.md) |
 | The HTTP API, and the docs it serves | `/openapi.json`, `/docs`, `/walkthrough` | `test_api.py`, `test_docs_site.py` | [10](walkthrough/10-serving-it.md) |
-| Scenes to OpenSCAD, and the parts library | `uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad`; `uv run apothecary parts list` | `test_models.py`, `test_scene_render.py`, `test_registry.py` | [07](walkthrough/07-a-part.md), [09](walkthrough/09-an-assembly.md) |
+| Scenes to OpenSCAD, and the parts library | `uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad`; `uv run apothecary parts list` | `test_models.py`, `test_scene_render.py`, `test_registry.py` | [00](walkthrough/00-getting-started.md), [07](walkthrough/07-a-part.md), [09](walkthrough/09-an-assembly.md) |
 | Parts that meet: a part's interfaces, whether two fit and how far one goes into the other, held to the render, parts placed where their interfaces meet, and the adapter generated between two ends | `uv run apothecary parts interfaces hose_adapter`; `uv run apothecary parts fit hose_adapter dust_port@port_32`; `uv run apothecary parts adapter dust_port@hose_40 dust_port@port_32` | `test_interfaces.py`, `test_fittings.py`, `test_part_interfaces.py`, `test_dust_parts.py`, `test_connections.py`, `test_parts_fit.py`, `test_adapters.py` | [43](walkthrough/43-parts-that-meet.md) |
 | Two ends joined in the page: a part's presets in Parameters, ⇄ Adapter keeping one end and making the adapter between it and another, its fits said and checked again after each Apply | `/viewer/sites/apothecary`, `dust_port`'s ring, Part › Edit; a preset, ⇄ Adapter, another, ⇄ Adapter | `e2e/test_join_two_ends.py`, `test_ends_js.py` | [43](walkthrough/43-parts-that-meet.md) |
 | A bed levelled on its solid mounts: the newest heated pair of probes made into the least shims that lift the low corners to the highest, the bow no shim fixes said against the bound for a stored mesh, the shims sliced as a part and probed again after | `uv run apothecary bed shims --site garage --printer printer_1`; `bed runs`, `bed mount`, `bed compare`; the tour's Level a bed, and Panels › Machine › Bed ([docs/bed-shims.md](docs/bed-shims.md)) | `test_bed_shims.py`, `e2e/test_level_a_bed.py` | [52](walkthrough/52-shims-that-level-a-bed.md), [53](walkthrough/53-a-bed-levelled-in-the-page.md) |
@@ -131,15 +131,9 @@ shapes in it, and Picture › Make stands one up as a piece to slice and print
 ([docs/pictures.md](docs/pictures.md); [walkthrough 03](walkthrough/03-a-picture-to-a-print.md)
 goes round twice).
 
-From Python:
-
-```python
-from apothecary import Cube, Scene, Sphere, Translate, Union, Vector3D
-
-base = Cube(size=Vector3D(x=20, y=20, z=5))
-dome = Translate(v=Vector3D(x=10, y=10, z=5), children=[Sphere(r=8)])
-print(Scene(name="example", objects=[Union(children=[base, dome])]).render())
-```
+From Python, a scene is a few Pydantic models and its `render()` OpenSCAD's text:
+[page 00's *A scene from Python*](walkthrough/00-getting-started.md#a-scene-from-python)
+runs one and shows what it writes.
 
 STLs are build products and are not committed. `apothecary serve` builds the missing ones
 in the background when OpenSCAD is present (`APOTHECARY_SKIP_STL_GENERATION=1` skips that);
