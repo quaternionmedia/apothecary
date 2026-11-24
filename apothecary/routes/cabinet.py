@@ -100,7 +100,22 @@ def _whole(drawer: cabinet.Drawer) -> dict:
         | {"line": drawer.said()}
         | _kept(drawer)
         | {"dimensions": cabinet.dimensions(drawer.part, drawer).model_dump(mode="json")}
+        | {"declared": _declared(drawer.part)}
     )
+
+
+def _declared(part: str) -> dict:
+    """The print settings ``part`` declares, only those it set (slicer Declared); none for
+    a part that is not registered."""
+    from ..projects.parts.skeleton import ROOT
+    from ..projects.registry import PartLoadError, part_named
+    from ..slicer.profiles import Declared
+
+    try:
+        found = part_named(part, ROOT)
+    except (KeyError, PartLoadError):
+        return {}
+    return Declared.of(getattr(found, "print_settings", None), f"part {part}").values
 
 
 def _applies(drawer: cabinet.Drawer) -> tuning.AppliesTo:

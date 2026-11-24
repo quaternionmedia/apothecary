@@ -75,8 +75,8 @@ what it will do, before anything is built. The printer's profile names its piece
 | Kind | Piece | What it does | |
 |---|---|---|---|
 | start | `home` | The printer's own start, as its OrcaSlicer profile has it: heat, home every axis (G28), prime the nozzle; no levelling | printer_1's |
-| start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1); refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
-| start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29); refused without the probe whose offset the profile holds | built; a person names it |
+| start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1), and have the board say it and the probe's offset (M420 V, M851), which the print keeps; refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
+| start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29 V3, saying each point), turn levelling on (M420 S1) and have the board say the mesh and the probe's offset (M420 V, M851), which the print keeps; refused without the probe whose offset the profile holds | built; a person names it |
 | start | `first-layer-offset` | A first-layer Z offset measured at the bench, added to every Z | stub |
 | filament | `printer` | The printer's one filament, named in its profile | built |
 | filament | `choose` | The filament loaded on the printer, chosen among OrcaSlicer's profiles of its vendor that fit its machine (`GET /slicer/filaments`, the Print window's filament row); the profile's own until one is loaded | printer_1's |

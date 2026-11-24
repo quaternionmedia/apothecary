@@ -809,7 +809,10 @@ def test_a_probe_each_print_goes_after_homing_and_the_wait_for_the_bed(fake_orca
         for code in ("G28", "M190", "G29", "M109")
     }
     assert at["G28"] < at["M190"] < at["G29"] < at["M109"] and at["G29"] == at["M190"] + 1
-    assert not [line for line in lines if line.startswith("M420")]
+    # No stored mesh is turned on before the probe: the one M420 follows G29, turning on
+    # the mesh it found and having the board say it, then the probe's offset.
+    m420 = [i for i, line in enumerate(lines) if line.startswith("M420")]
+    assert m420 == [at["G29"] + 1] and lines[at["G29"] + 2].startswith("M851")
     assert "probe-each-print: after G28, probe the bed" in _by_name(resolved)["start"].note
     probe = [compose.piece("start", "home"), compose.piece("start", "probe-each-print")]
     assert (

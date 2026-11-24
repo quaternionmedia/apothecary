@@ -25,8 +25,20 @@ finished print's does, and the drawer says where it stopped. A fault seen on it 
 placed nowhere is filed on that layer. **Probe first**, **Brim** and **Raft** (Part ›
 View › Feedback › Try again) each slice the piece again for the printer that made it,
 in its Print window, with the levelling or the adhesion chosen there
-([docs/slicer.md](slicer.md)); ▶ Print stays a person's. Site's Jobs opens a job's
-Machine and, where the job made a part's piece, its drawer beside it.
+([docs/slicer.md](slicer.md)); ▶ Print stays a person's. A try the part declares
+against is greyed, saying so: Brim on a part that declares no brim (`bed_shims`, whose
+slots a brim fills). Site's Jobs opens a job's Machine and, where the job made a part's
+piece, its drawer beside it.
+
+A drawer's **made** row (Part › Feedback) says how the piece was made: its values -- a
+variant's, those drawn, or the part's own -- and, for a print, how its start levelled
+(probed first, the stored mesh on, or homed alone), its skirt, brim and raft, and what
+the board said of its levelling as the print began: levelling on or off, the probe's
+offset, the mesh's range and where the probe said the grid lies (`job.levelled`). A
+start that probes or turns the stored mesh on has the board say them (`M420 S1 V`,
+`M851`); the print keeps its answers from before its first layer
+(`devices.levelled_by`). The drawer's answer also carries what the part declares of its
+print (`declared`, only what it set).
 
 | Field | What it holds |
 |---|---|
@@ -39,7 +51,7 @@ Machine and, where the job made a part's piece, its drawer beside it.
 | `machine` | The printer or router: its name, site, node, port, and a printer's part |
 | `filament`, `process` | The profiles a print used |
 | `slice`, `cut` | The slice's record or the cut's, whole: the piece is measured from its drawer after its file is forgotten |
-| `job` | The job that made it: its id, how it ended and why, when; a print cancelled or failed, where it stopped (`stopped`) |
+| `job` | The job that made it: its id, how it ended and why, when; a print cancelled or failed, where it stopped (`stopped`); what its start had the board say of its levelling (`levelled`) |
 | `filed` | What was said of the piece, in order |
 
 A **filing** is what calipers read (`measured`), what is seen by eye (`look`), or a note.

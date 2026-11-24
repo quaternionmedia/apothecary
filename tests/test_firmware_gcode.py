@@ -1942,6 +1942,54 @@ def test_print_job_cancel_sends_the_safe_off_and_a_stop_does_not(fake_arduino_cl
     assert transport.sent.index("M112") >= len(transport.sent) - 2  # at most one line after
 
 
+def test_a_print_keeps_what_its_start_said_of_its_levelling(fake_arduino_cli, scripted_links):
+    """A start that probes first (compose.PROBE_LINE) has the board say its levelling,
+    the mesh and the probe's offset; the print keeps what was said before its first
+    layer, and a start that says none of it keeps nothing."""
+    from apothecary.slicer import compose
+
+    port = "/dev/ttyFAKE1"
+
+    class Levelling(ScriptedTransport):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.replies = {**REPLIES, **LEVELING, "M420 S1 V": MESH_REPORT}
+
+    scripted_links.factory = Levelling
+    scripted_links.control.arm(port)
+    probed = "\n".join(
+        ["G28", "M190 S60", compose.PROBE_LINE, "G1 Z0.28", ";LAYER_CHANGE", "G1 Z0.2", "M851"]
+    )
+    kept = devices.save_print_file("probed.gcode", probed.encode(), machine="printer")
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    job.thread.join(5)
+    assert job.record.outcome == "done"
+    sent = ScriptedTransport.instances[0].sent
+    assert sent[sent.index("G29 V3") :][:3] == ["G29 V3", "M420 S1 V", "M851"]
+    assert job.record.detail["start"] == {
+        "leveling_on": True,
+        "probe_offset": {"x": -44.0, "y": -10.0, "z": -3.15},
+        "mesh_range": 0.4,
+        "area": {"min": {"x": 10.0, "y": 10.0}, "max": {"x": 176.0, "y": 210.0}},
+        "points": 9,
+    }
+    plain = devices.save_print_file("small.gcode", SMALL_PRINT.encode(), machine="printer")
+    job = devices.start_print(port, plain.id, links=scripted_links)
+    job.thread.join(5)
+    assert job.record.outcome == "done" and "start" not in job.record.detail
+    # Said after the first layer began, it is the print's and not its start's.
+    late = devices.save_print_file(
+        "late.gcode", ";LAYER_CHANGE\nG1 Z0.2\nM851\n".encode(), machine="printer"
+    )
+    job = devices.start_print(port, late.id, links=scripted_links)
+    job.thread.join(5)
+    assert "start" not in job.record.detail
+    assert devices.levelled_by(["echo:Bed Leveling OFF", "ok"]) == {
+        "leveling_on": False,
+        "probe_offset": None,
+    }
+
+
 def test_print_job_fails_on_a_board_error_and_still_turns_the_heat_off(
     fake_arduino_cli, scripted_links
 ):

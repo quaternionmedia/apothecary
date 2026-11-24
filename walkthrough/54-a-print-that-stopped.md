@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Cancelled on its first layer, its drawer open where it stopped
 
-The print is cancelled once a line of its first layer is sent. Its end opens the piece's drawer in Part › Feedback, which says it was cancelled on layer 1 of the file's layers, and offers what to try: Probe first, Brim and Raft, each slicing the piece again. Feedback is maximised here from its stack, so the drawer is seen whole.
+The print is cancelled once a line of its first layer is sent. Its end opens the piece's drawer in Part › Feedback, which says it was cancelled on layer 1 of the file's layers and how the piece was made: the part's own values, probed first, no skirt and no brim, as bed_shims declares, and what the board said of its levelling as the print began -- on, its probe's offset, the mesh's range and where the probe found the grid. It offers what to try: Probe first and Raft, each slicing the piece again, and Brim greyed, bed_shims declaring none. Feedback is maximised here from its stack, so the drawer is seen whole.
 
 ![Cancelled on its first layer, its drawer open where it stopped](screenshots/54-01-cancelled-on-its-first-layer-its-drawer-open-where.png)
 

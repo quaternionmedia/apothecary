@@ -196,6 +196,38 @@ def test_a_piece_is_measured_from_its_drawer_after_its_file_is_forgotten(fake_or
     assert r.json()["filed"][0]["made"] == "turn-1"
 
 
+def test_a_drawer_keeps_what_its_print_s_start_said_of_its_levelling(fake_orcaslicer, built):
+    """The board's word on its levelling as the print began (devices.levelled_by) is kept
+    with the job in its piece's drawer; a print whose start said none keeps none."""
+    record = _slice()
+    began = _job(record["file_id"], record["name"])
+    cabinet.job_told(began)
+    said = {"leveling_on": True, "probe_offset": {"x": -44.0, "y": -10.0, "z": -3.15}}
+    ended = began.model_copy(
+        update={
+            "outcome": "cancelled",
+            "finished_at": began.started_at,
+            "detail": {"sent": 3, "total": 9, "start": said},
+        }
+    )
+    cabinet.job_told(ended)
+    (drawer,) = cabinet.drawers(CUBE)
+    assert drawer.job.levelled == said
+    whole = client.get(f"/cabinet/{CUBE}/drawers/{drawer.id}").json()
+    assert whole["job"]["levelled"] == said
+    assert cabinet._ran(began).levelled is None
+
+
+def test_a_drawer_says_what_its_part_declares():
+    """What a part declares of its print, only what it set: a try it declares against is
+    not offered on its drawer (a brim on bed_shims, whose slots a brim would fill)."""
+    from apothecary.routes.cabinet import _declared
+
+    shims = _declared("bed_shims")
+    assert shims["brim_width"] == 0.0 and shims["levelling"] == "probe-each-print"
+    assert _declared("no_such_part") == {}
+
+
 def test_a_job_opens_its_piece_s_drawer_and_its_end_says_how_it_ended(fake_orcaslicer, built):
     record = _slice()
     began = _job(record["file_id"], record["name"])

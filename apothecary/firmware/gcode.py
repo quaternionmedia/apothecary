@@ -545,6 +545,9 @@ class SimulatedPrinter:
         self.pos = {"X": 0.0, "Y": 0.0, "Z": 0.0}
         self.relative = False
         self.halted = False
+        # Levelling, as Marlin keeps it: on once a probe finishes (G29) or M420 S1 asks,
+        # off with M420 S0 and after G28.
+        self.leveling = False
         # Multiplies every G4 dwell: 1 is real time, 0 skips them.
         self.dwell_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
         held = os.environ.get("APOTHECARY_SIMULATED_PROGRESS", "").strip()
@@ -676,6 +679,7 @@ class SimulatedPrinter:
         elif code == "G28":
             for axis in "XYZ" if len(parts) == 1 else [a for a in "XYZ" if a in args]:
                 self.pos[axis] = 0.0
+            self.leveling = False  # G28 turns levelling off, as Marlin does
         elif code == "G91":
             self.relative = True
         elif code == "G90":
@@ -722,6 +726,7 @@ class SimulatedPrinter:
             # A probe takes a while; the busy lines are what Marlin prints while it does.
             # At verbosity 3 or more each point probed is said, where the probe stood.
             said = self._probed_lines() if float(args.get("V") or 0) >= 3 else []
+            self.leveling = True
             return [
                 "echo:busy: processing",
                 *said,
@@ -783,12 +788,17 @@ class SimulatedPrinter:
         controlled = self._apply_control(cmd)
         if controlled is not None:
             return controlled
+        asked = re.search(r"\bS([01])\b", cmd.upper()) if code == "M420" else None
+        if asked:
+            self.leveling = asked.group(1) == "1"
         if code == "M420" and cmd.upper().split()[-1] == "V":
             return [
                 *self._grid_lines(),
-                f"echo:Bed Leveling {'ON' if self.printing else 'OFF'}",
+                f"echo:Bed Leveling {'ON' if self.printing or self.leveling else 'OFF'}",
                 "ok",
             ]
+        if code == "M420":
+            return ["ok"]
         if code == "M851":
             return ["echo:  M851 X-44.00 Y-10.00 Z-3.15 ; (mm)", "ok"]
         if code == "M115":

@@ -85,6 +85,9 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             <select id="feedback-piece" title="Each piece made of the part, the newest first, then each kept slice or toolpath of it made elsewhere: the drawer its feedback is filed in"></select>
             <span class="s" id="feedback-piece-said"></span>
         </div>
+        <div class="row" id="feedback-made-row" hidden><label>made</label>
+            <span class="s" id="feedback-made-said"></span>
+        </div>
         <div class="row" id="feedback-stopped-row" hidden><label>stopped</label>
             <span class="s" id="feedback-stopped-said"></span>
             <button type="button" id="feedback-try-probe" title="Slice this piece again for its printer to probe first: G29 once the bed is hot, the mesh on for its print. Nothing is sent">Probe first</button>
@@ -231,6 +234,7 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         const shown = !!(p && r);
         $("feedback-measure-row").hidden = !shown;
         $("feedback-note-row").hidden = !shown;
+        renderMade(st.whole);
         renderStopped(shown && printed() ? st.whole : null);
         renderMeasure(shown ? r : null);
         renderSeen(shown && printed() ? r : null);
@@ -245,6 +249,45 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         if (d.stl_sha256) bits.push(`STL ${d.stl_sha256.slice(0, 10)}`);
         return bits.join(" · ");
     }
+    // How the piece was made, from its slice's record and its job: its values -- a
+    // variant's, the drawer's own, or the part's own -- how its start levelled, its skirt
+    // and brim, and what the board said of its levelling as the print began
+    // (devices.levelled_by). A cut says its values alone.
+    function madeSaid(d) {
+        const bits = [];
+        const params = Object.keys(d.params || {}).length;
+        bits.push(d.variant ? `variant ${d.variant.slice(0, 8)}` : params ? "the values drawn" : "the part's own values");
+        if (!d.slice) return bits.join(" · ");
+        const settings = d.slice.settings || [];
+        const named = (name) => settings.find((s) => s.name === name);
+        const start = named("start");
+        if (start) {
+            const pieces = [].concat(start.value || []);
+            bits.push(pieces.includes("probe-each-print") ? "probed first (G29)" : pieces.includes("stored-mesh") ? "the stored mesh on (M420 S1)" : "homed, no levelling");
+        }
+        const skirt = named("skirt_loops");
+        bits.push(skirt ? (Number(skirt.value) ? `${skirt.value} loops of skirt` : "no skirt") : "the printer's own skirt");
+        const brim = named("brim_type");
+        if (brim) bits.push(brim.value === "no_brim" ? "no brim" : `a ${named("brim_width")?.value ?? "?"} mm brim`);
+        const raft = named("raft_layers");
+        if (raft && Number(raft.value)) bits.push(`a raft of ${raft.value} layers`);
+        const said = d.job && d.job.levelled;
+        if (said) {
+            const heard = [];
+            if (said.leveling_on != null) heard.push(`levelling ${said.leveling_on ? "on" : "OFF"}`);
+            if (said.probe_offset) heard.push(`probe offset Z ${said.probe_offset.z}`);
+            if (said.mesh_range != null) heard.push(`mesh range ${mmText(said.mesh_range)}`);
+            if (said.area) heard.push(`probed x ${said.area.min.x}..${said.area.max.x}, y ${said.area.min.y}..${said.area.max.y}`);
+            bits.push(`the board said: ${heard.join(", ")}`);
+        } else if (d.job && start) bits.push("the board said nothing of its levelling");
+        return bits.join(" · ");
+    }
+    function renderMade(d) {
+        $("feedback-made-row").hidden = !d;
+        $("feedback-made-said").textContent = d ? madeSaid(d) : "";
+    }
+    // A try the part declares against is not offered: a brim on a part that declares none.
+    const declaresNo = (d, how) => how === "brim" && d && d.declared && d.declared.brim_width === 0;
     // A print that stopped: where, and what to try, each slicing the piece again.
     function stoppedOf(d) { return d && d.job && STOPPED.includes(d.job.outcome) ? d.job : null; }
     function renderStopped(d) {
@@ -252,10 +295,13 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         $("feedback-stopped-row").hidden = !job;
         if (!job) return;
         $("feedback-stopped-said").textContent = `${job.outcome} ${stoppedSaid(job.stopped)}; a fault seen is filed there. Try, sliced again:`;
+        const brimTip = "Slice this piece again for its printer with a 5 mm brim round each piece. Nothing is sent";
+        setReason($("feedback-try-brim"), declaresNo(d, "brim") ? `${d.part} declares no brim` : null, brimTip);
     }
     async function tryAgain(how) {
         const job = stoppedOf(st.whole);
         if (!job) return refuse(`try ${how}: ${st.whole ? "this piece's print did not stop part way" : "choose a print that stopped"}`);
+        if (declaresNo(st.whole, how)) return refuse(`try ${how}: ${st.part} declares no ${how}`);
         if (!retry) return refuse(`try ${how}: nothing here slices a piece again`);
         const answer = await retry(st.whole, how);
         return answer.refused ? refuse(`try ${how}: ${answer.refused}`) : tell(`${st.part} sliced again with ${TRIES[how]}: ${answer.said}`);

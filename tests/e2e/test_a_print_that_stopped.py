@@ -12,6 +12,7 @@ will not hold. No real port is touched. Walkthrough page 54 is what it writes.
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
@@ -157,13 +158,31 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     stack = _maximised(page, "part-feedback", "#feedback-stopped-row")
     for try_ in ("#feedback-try-probe", "#feedback-try-brim", "#feedback-try-raft"):
         expect(feedback.locator(try_)).to_be_visible()
+    # Brim is greyed: bed_shims declares none, its slots being what a brim would fill.
+    brim = feedback.locator("#feedback-try-brim")
+    expect(brim).to_be_disabled()
+    expect(brim).to_have_attribute("title", re.compile("bed_shims declares no brim"))
+    # How it was made, and what the board said of its levelling as the print began.
+    made = feedback.locator("#feedback-made-said")
+    for words in (
+        "the part's own values",
+        "probed first (G29)",
+        "no skirt",
+        "no brim",
+        "the board said: levelling on, probe offset Z -3.15",
+    ):
+        expect(made).to_contain_text(words, timeout=10000)
     settled(page)
     story.shows(
         "Cancelled on its first layer, its drawer open where it stopped",
         "The print is cancelled once a line of its first layer is sent. Its end opens the "
         "piece's drawer in Part › Feedback, which says it was cancelled on layer 1 of the "
-        "file's layers, and offers what to try: Probe first, Brim and Raft, each slicing the "
-        "piece again. Feedback is maximised here from its stack, so the drawer is seen whole.",
+        "file's layers and how the piece was made: the part's own values, probed first, "
+        "no skirt and no brim, as bed_shims declares, and what the board said of its "
+        "levelling as the print began -- on, its probe's offset, the mesh's range and "
+        "where the probe found the grid. It offers what to try: Probe first and Raft, each "
+        "slicing the piece again, and Brim greyed, bed_shims declaring none. Feedback is "
+        "maximised here from its stack, so the drawer is seen whole.",
         blank=CHANGING,
     )
     _restored(page, stack)

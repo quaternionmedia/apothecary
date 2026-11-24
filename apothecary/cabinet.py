@@ -161,6 +161,10 @@ class Ran(BaseModel):
     finished_at: Optional[datetime] = None
     # A print that did not finish: where it stopped (STOPPED).
     stopped: Optional[Stopped] = None
+    # What the print's start had the board say of its levelling (devices.levelled_by):
+    # whether it was on, the probe's offset, the mesh's range, where the probe said the
+    # grid lies. None for a start that said none of it.
+    levelled: Optional[dict] = None
 
 
 class SeenFiled(BaseModel):
@@ -331,6 +335,7 @@ def _ran(job: jobs.Job) -> Ran:
         started_at=job.started_at,
         finished_at=job.finished_at,
         stopped=_stopped(job),
+        levelled=(job.detail or {}).get("start"),
     )
 
 

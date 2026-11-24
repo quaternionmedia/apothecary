@@ -2106,8 +2106,9 @@ class PrintJob:
             # Told to the jobs' readers when the stage or the whole percent has changed.
             jobs.moved(self.job.id, self.now)
 
-    def _end(self, outcome: str, tail: List[str]) -> jobs.Job:
-        """The job as it ended, kept; a store that cannot be written does not stop the end."""
+    def _end(self, outcome: str, tail: List[str], start: Optional[dict] = None) -> jobs.Job:
+        """The job as it ended, kept; a store that cannot be written does not stop the end.
+        ``start`` is what the board said of its levelling before the first layer."""
         if outcome == "failed":
             reason = self.error
         elif outcome == "cancelled":
@@ -2125,7 +2126,7 @@ class PrintJob:
                 "outcome": outcome,
                 "reason": reason,
                 "progress": self.progress(),
-                "detail": self._detail(),
+                "detail": self._detail() | ({"start": start} if start else {}),
                 "log": tail,
             }
         )
@@ -2146,6 +2147,9 @@ class PrintJob:
             self.finished = self.record.finished_at
             return
         tail: List[str] = []
+        # What the board answered before the first layer: the start's levelling said.
+        start: List[str] = []
+        starting = True
         outcome = "done"
         kind = self.op.kind
         try:
@@ -2155,6 +2159,8 @@ class PrintJob:
             self._announce()
             boots = link.restarts
             for raw in text.splitlines():
+                if raw.startswith(";LAYER_CHANGE"):
+                    starting = False
                 for said in split_comments(raw)[1]:
                     if OPERATION_COMMENT.match(said):
                         self.operation = said
@@ -2170,6 +2176,8 @@ class PrintJob:
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
+                if starting and len(start) < START_SAID_MOST:
+                    start += lines
                 self.sent += 1
                 self._same_boot(link, boots)
                 if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
@@ -2214,7 +2222,7 @@ class PrintJob:
                 self.stage = "failed"
         if outcome != "done" and not self._quiet:
             tail = (tail + safe_off(link, self.op.machine, kind))[-200:]
-        ended = self._end(outcome, tail).finished_at
+        ended = self._end(outcome, tail, None if self.grbl else levelled_by(start)).finished_at
         link.log.add(
             "sys",
             f"{kind} {outcome}: {self.file.name}, {self.sent}/{self.total} lines"
@@ -2223,6 +2231,31 @@ class PrintJob:
         )
         link.job = None
         self.finished = ended  # last: a snapshot that says "not running" names the record
+
+
+# The board's answers kept from a print's start, before its first layer: a probe of a
+# 5 x 5 grid at verbosity 3 says a few lines a point, its mesh and offset a few more.
+START_SAID_MOST = 400
+
+
+def levelled_by(lines: List[str]) -> Optional[dict]:
+    """What a print's start had the board say of its levelling (compose.SAID_LINES):
+    whether levelling was on, the probe's offset, the mesh's range and where its probe
+    said the grid lies. None when it said none of them."""
+    on = gcode.parse_leveling_state(lines)
+    offset = gcode.parse_probe_offset(lines)
+    meshes = gcode.parse_meshes(lines)
+    points = gcode.parse_probed_points(lines)
+    if on is None and offset is None and not meshes and not points:
+        return None
+    mesh = meshes[0] if meshes else []
+    said: dict = {"leveling_on": on, "probe_offset": offset}
+    if mesh:
+        said["mesh_range"] = gcode.mesh_stats(mesh).get("range")
+    if points:
+        said["area"] = gcode.probed_area(points, mesh)
+        said["points"] = len(points)
+    return said
 
 
 def safe_off(link: gcode.GcodeLink, machine: str, origin: str) -> List[str]:
