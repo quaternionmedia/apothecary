@@ -86,7 +86,11 @@ class Params(BaseModel):
     )
     slot: bool = Field(True, description="An open slot from the hole to the rim")
     gap: float = Field(
-        4.0, ge=2, le=20, description="Between two shims on the bed", json_schema_extra=MM
+        10.0,
+        ge=2,
+        le=20,
+        description="Between two shims on the bed: wide enough that one lifting takes none beside it",
+        json_schema_extra=MM,
     )
     tab_length: float = Field(
         14.0, ge=8, le=40, description="How far the tab reaches past the ring", json_schema_extra=MM
@@ -291,8 +295,16 @@ def create(root: Path) -> BasePart:
         readme_path=root / "parts" / "bed_shims" / "README.md",
         preview_color=Color.from_hex("#c9a227"),
         # No brim, said as none: each shim's slot opens its hole to its rim, so a brim
-        # round its outside would print into both. Make these slices it to probe first.
-        print_settings=PrintSettings(nozzle_diameter=0.4, layer_height=0.1, brim_width=0.0),
+        # round its outside would print into both. No skirt: the start's prime lines
+        # prime the nozzle, and a skirt that lifts is dragged into a shim. Probed first:
+        # a shim is its first layer, and the bed it levels is not level yet.
+        print_settings=PrintSettings(
+            nozzle_diameter=0.4,
+            layer_height=0.1,
+            brim_width=0.0,
+            skirt_loops=0,
+            levelling="probe-each-print",
+        ),
     )
 
 

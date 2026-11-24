@@ -21,7 +21,7 @@ outer_d = 12;       // [6:0.5:40] the ring across: at least the mount's face it 
 screw = "M4";       // [M3, M4] the bed screw a shim goes round, which sets its hole
 hole_d = 0;         // [0:0.1:10] the hole, typed over the screw's; 0 is the screw's own
 slot = true;        // an open slot from the hole to the rim
-gap = 4;            // [2:0.5:20] between two shims on the bed
+gap = 10;           // [2:0.5:20] between two shims on the bed
 
 /* [Tab] */
 tab_length = 14;    // [8:1:40] how far the tab reaches past the ring

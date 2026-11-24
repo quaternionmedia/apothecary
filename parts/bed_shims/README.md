@@ -18,9 +18,12 @@ shims as it is given thicknesses, one label each, and a corner that gets none is
 out.
 
 Its wrapper, `apothecary/projects/parts/bed_shims.py`, declares a layer height of
-0.1 mm and no brim: each shim's slot opens its hole to its rim, so a brim round its
-outside would print into both, and Fixes' Make these slices the shims to probe first,
-the bed not yet level. Each thickness the computation gives is a whole number of those layers over a
+0.1 mm, no brim, no skirt and a probe first. Each shim's slot opens its hole to its
+rim, so a brim round its outside would print into both; the start's prime lines prime
+the nozzle, and a skirt that lifts is dragged into a shim; and a shim is all first
+layer, printed on a bed not yet level, so every slice of it probes the bed first
+unless the Print window's levelling row asks another. The shims stand 10 mm apart
+(`gap`), so one that lifts takes none beside it. Each thickness the computation gives is a whole number of those layers over a
 first layer of 0.2 mm, so each shim's top lands on a layer. Print them in a filament
 that holds its shape at the bed's temperature: a shim sits under the heated plate.
 

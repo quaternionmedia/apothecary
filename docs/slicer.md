@@ -129,6 +129,8 @@ piece's answer says so.
 | `tolerance` | Reported, not passed: the part's geometry already allows for it |
 | `brim_width` | The process's brim round each piece's outside (`brim_type` `outer_only`) that wide, or none (`no_brim`) at 0 |
 | `raft_layers` | The process's `raft_layers`: a raft that many layers under each piece, or none at 0 |
+| `skirt_loops` | The process's `skirt_loops`: that many loops round the pieces, or none at 0; not declared, the printer's own |
+| `levelling` | Not a process setting: the start's levelling piece (`home`, `stored-mesh`, `probe-each-print`), chosen as the Print window's levelling row chooses one, where the slice asks none; the start's `source` says the part asked |
 
 Every slice's answer lists each value with its `origin` (`declared` or
 `printer`) and its `source`.

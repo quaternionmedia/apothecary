@@ -285,11 +285,14 @@ def chosen(
     return found
 
 
-def levelled(profile: "PrinterProfile", levelling: Optional[str]) -> "PrinterProfile":
+def levelled(
+    profile: "PrinterProfile", levelling: Optional[str], by: str = "this slice"
+) -> "PrinterProfile":
     """``profile`` with its start levelling as one slice asks (the Print window's
-    choice): ``None`` as the profile names it; ``"home"`` none; a levelling piece in
-    place of any the profile names. The profile is not changed, and the start's source
-    says the slice asked; the piece's precondition is checked where any is (chosen)."""
+    choice) or its part declares (``by``): ``None`` as the profile names it; ``"home"``
+    none; a levelling piece in place of any the profile names. The profile is not
+    changed, and the start's source says who asked; the piece's precondition is
+    checked where any is (chosen)."""
     if levelling is None:
         return profile
     if levelling not in LEVELLINGS:
@@ -301,7 +304,7 @@ def levelled(profile: "PrinterProfile", levelling: Optional[str]) -> "PrinterPro
     start = profile.start.model_copy(
         update={
             "modules": modules,
-            "source": f"this slice asked {asked}, in place of the profile's levelling",
+            "source": f"{by} asked {asked}, in place of the profile's levelling",
         }
     )
     return profile.model_copy(update={"start": start})

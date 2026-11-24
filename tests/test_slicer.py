@@ -253,6 +253,51 @@ def test_a_declared_brim_goes_round_each_pieces_outside_and_none_at_zero(fake_or
     )
 
 
+def test_a_declared_skirt_is_that_many_loops_and_none_at_zero(fake_orcaslicer):
+    settings = get_module("orcaslicer").settings
+    none = settings(load_profile("ender3"), Declared.of(PrintSettings(skirt_loops=0), "part r"))
+    assert none.configs["process"]["skirt_loops"] == "0"
+    shown = _by_name(none)["skirt_loops"]
+    assert (shown.origin, shown.source, shown.note) == ("declared", "part r", "no skirt")
+    one = settings(load_profile("ender3"), Declared.of(PrintSettings(skirt_loops=1), "part r"))
+    assert one.configs["process"]["skirt_loops"] == "1"
+    # Not declared, the printer's process says.
+    plain = settings(load_profile("ender3"), Declared.of(PrintSettings(layer_height=0.2), "part r"))
+    assert "skirt_loops" not in _by_name(plain)
+
+
+def test_a_part_s_levelling_is_its_slices_where_the_slice_asks_none():
+    """bed_shims declares a probe first: its slice probes unless the Print window's row
+    asks another levelling, and a part that declares none leaves the printer's own."""
+    from types import SimpleNamespace
+
+    from apothecary.projects.parts import bed_shims
+    from apothecary.slicer import compose, service
+
+    shims = SimpleNamespace(
+        declared=Declared.of(bed_shims.DEFAULT.print_settings, "part bed_shims")
+    )
+    asked, by = service.asked_levelling(shims, None)
+    assert (asked, by) == ("probe-each-print", "part bed_shims, which declares it,")
+    assert service.asked_levelling(shims, "home") == ("home", "this slice")
+    plain = SimpleNamespace(declared=Declared.of(PrintSettings(layer_height=0.2), "part r"))
+    assert service.asked_levelling(plain, None) == (None, "this slice")
+    probed = compose.levelled(load_profile("ender3"), asked, by)
+    assert probed.start.modules == ["home", "probe-each-print"]
+    assert probed.start.source.startswith(
+        "part bed_shims, which declares it, asked 'probe-each-print'"
+    )
+
+
+def test_a_slice_of_a_part_that_declares_a_probe_first_probes(fake_orcaslicer):
+    record, _ = _slice(_target({"levelling": "probe-each-print"}, name="bed_shims"))
+    start = _by_name(record)["start"]
+    assert start.value == ["home", "probe-each-print"]
+    assert "part bed_shims, which declares it, asked" in start.source
+    record, _ = _slice(_target({"levelling": "probe-each-print"}), levelling="home")
+    assert _by_name(record)["start"].value == ["home"]
+
+
 def test_a_slices_adhesion_goes_over_what_the_part_declares(fake_orcaslicer):
     from apothecary.projects.parts import bed_shims
 
@@ -280,7 +325,13 @@ def test_the_parts_that_declare_print_settings_declare_only_what_they_set():
     from apothecary.projects.parts import bed_shims
 
     shims = Declared.of(bed_shims.DEFAULT.print_settings, "part bed_shims")
-    assert shims.values == {"nozzle_diameter": 0.4, "layer_height": 0.1, "brim_width": 0.0}
+    assert shims.values == {
+        "nozzle_diameter": 0.4,
+        "layer_height": 0.1,
+        "brim_width": 0.0,
+        "skirt_loops": 0,
+        "levelling": "probe-each-print",
+    }
     assert Declared.of(None, "piece box").values == {}
 
 

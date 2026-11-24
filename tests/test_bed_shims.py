@@ -228,7 +228,7 @@ def test_shims_the_part_cannot_draw_are_refused(given, match):
 
 def test_the_bounds_are_the_column_of_shims():
     box = PART.get_bounds({"thicknesses": [0.3, 2.5, 0.8], "labels": "A B C", "slot": False})
-    assert (box.max_point.x, box.max_point.y, box.max_point.z) == (14 + 12, 3 * 12 + 2 * 4, 2.5)
+    assert (box.max_point.x, box.max_point.y, box.max_point.z) == (14 + 12, 3 * 12 + 2 * 10, 2.5)
     assert PART.get_bounds({"thicknesses": [0.3], "labels": "A"}).max_point.z == 1.2
 
 

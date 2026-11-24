@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A part declares its skirt and its start's levelling as it declares its brim: `skirt_loops` is the slicer's loops of skirt, 0 for none, and `levelling` the start's levelling piece, taken where the slice asks none; `bed_shims` declares no skirt and a probe first, and stands its shims 10 mm apart. ([doc](docs/slicer.md))
 - A machine whose pinned board is not found says why in its Machine's *Its board, not found* card, read with no port opened: on USB, given a serial port, open to this user, found by the scan, the first that fails said as what to try, where the board was last found, and every serial port plugged in now; it asks again every few seconds, scans afresh once a board is on its port, and the board found opens its own Machine. ([doc](docs/firmware.md#its-board-pinned-and-not-found))
 - The Badge window composes `parts/badge` in the page: a face picked of six, or the word typed in a font, drawn in the world, and ⚒ Print or ⚒ Cut taking the badge drawn to the garage's printer or router; the tour's *Compose a badge* goes round it. ([doc](docs/viewer.md#the-windows))
 - A badge, `parts/badge`: a face drawn after its emoji (😮 🙂 😐 😉 🙁 😀) or a word in one of OpenSCAD's own fonts, engraved in a plate; a face is printed or cut on the router, a word printed. The router's toolpath has a groove, the tool's centre along a stroke, and a part that refuses its numbers is answered in its words. ([doc](parts/badge/README.md))

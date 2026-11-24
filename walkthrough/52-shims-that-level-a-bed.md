@@ -97,7 +97,7 @@ slicer takes them as the part's parameters:
     >>> from apothecary.projects.parts.bed_shims import DEFAULT as part
     >>> box = part.get_bounds(pair.params())
     >>> round(box.max_point.x, 2), box.max_point.y, box.max_point.z
-    (25.54, 28.0, 1.2)
+    (25.54, 34.0, 1.2)
     >>> pair.slice_command()
     "apothecary slicer slice bed_shims -p thicknesses=0.7,0.8 -p 'labels=FL BL'"
     >>> part.print_settings.layer_height

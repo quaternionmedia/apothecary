@@ -236,9 +236,10 @@ def slicer_slice(body: SliceRequest):
     status = module.status()
     if not status.ok:
         raise NotInstalled(f"{module.label}: " + "; ".join(status.problems))
-    if body.levelling is not None:
+    asked, by = service.asked_levelling(target, body.levelling)
+    if asked is not None:
         # A levelling whose precondition fails is refused now, not once the task runs.
-        levelled = compose.levelled(printer.profile, body.levelling)
+        levelled = compose.levelled(printer.profile, asked, by)
         compose.chosen(compose.START, levelled.start.modules, levelled, printer.at.port)
     named = f"{target.made.name} ({target.made.variant})" if target.made.variant else None
     title = f"Slice {named or target.made.name} for {printer.at.name}"
