@@ -70,9 +70,11 @@ def map_problems(readme: str, root=ROOT) -> list[str]:
         ):
             if text != page[len("walkthrough/") :][:2]:
                 problems.append(f"{what[:60]!r} links {page} as [{text}]")
-    whats = [row[0] for row in rows if len(row) == 4]
-    for what in sorted({what for what in whats if whats.count(what) > 1}):
-        problems.append(f"{what[:60]!r} is a row twice")
+    # A row's subject is its first cell up to the colon: a row copied and then grown
+    # keeps it, and differs from its copy only after it.
+    subjects = [row[0].split(":")[0].strip() for row in rows if len(row) == 4]
+    for subject in sorted({subject for subject in subjects if subjects.count(subject) > 1}):
+        problems.append(f"{subject[:60]!r} is a row twice")
     linked = {page for row in rows if len(row) == 4 for page in _pages(row[3])}
     for page in sorted((root / "walkthrough").glob("[0-9][0-9]-*.md")):
         if f"walkthrough/{page.name}" not in linked:
@@ -133,11 +135,15 @@ def test_the_map_says_what_is_wrong_with_it(breaks, says):
 
 
 def test_a_row_written_twice_is_named():
-    """A row copied to make another and left as it was is the drift a map falls into."""
+    """A row copied to make another and left as it was is the drift a map falls into,
+    and so is a row copied and grown, its subject the same and more said after it."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     row = next(line for line in readme.splitlines() if "(walkthrough/24-" in line)
-    problems = map_problems(readme.replace(row, f"{row}\n{row}", 1))
-    assert any("is a row twice" in problem for problem in problems), problems
+    grown = row.replace(": ", ": the same, and more: ", 1)
+    assert grown != row
+    for twice in (f"{row}\n{row}", f"{row}\n{grown}"):
+        problems = map_problems(readme.replace(row, twice, 1))
+        assert any("is a row twice" in problem for problem in problems), problems
 
 
 def test_the_maps_address_asked_as_another_host_serves_something_here():
