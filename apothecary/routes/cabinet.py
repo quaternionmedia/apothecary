@@ -9,8 +9,9 @@
   of (``cabinet.by_variant``), and those of none (``unsaved``): Part › Variants lists them.
 - ``GET /cabinet/{part}/drawers/{id}``: one drawer whole, with what its machine keeps of
   it now: a printer's tuning for the filament and process the piece used (``tuning``),
-  a router's tool allowance (``allowance``); null where none is kept; and its
-  ``dimensions`` (``cabinet.dimensions``).
+  a router's tool allowance (``allowance``); null where none is kept; its
+  ``dimensions`` (``cabinet.dimensions``); and what its part declares of its print, only
+  what it set (``declared``), which Part › Feedback's tries read.
 - ``GET /cabinet/{part}/dimensions``: a piece's dimensions, each as designed with its newest
   reading kept, and the tolerance a reading is checked with: ``?drawer=`` that drawer's,
   ``?file=`` the newest drawer of that kept file (or the file's, as designed, where no

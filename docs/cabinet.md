@@ -106,7 +106,7 @@ printer_1's profile holds none.
 | `GET /cabinet` | The parts with a drawer; `?job=` the drawer that job's piece is in |
 | `GET /cabinet/{part}` | Its drawers, the newest first, each with its `line` and without its record |
 | `GET /cabinet/{part}/variants` | Its drawers by the saved variant each piece was made of (`variants`, by name) and those of none (`unsaved`); each piece says `how` |
-| `GET /cabinet/{part}/drawers/{id}` | One drawer whole, with its machine's `tuning` (a printer's, for the filament and process the piece used) or `allowance` (a router's), and its `dimensions` |
+| `GET /cabinet/{part}/drawers/{id}` | One drawer whole, with its machine's `tuning` (a printer's, for the filament and process the piece used) or `allowance` (a router's), its `dimensions`, and what its part declares of its print (`declared`) |
 | `GET /cabinet/{part}/dimensions` | A piece's dimensions and its tolerance: `?drawer=` that drawer's; `?file=` the newest drawer of that kept file, or the file's as designed where none holds it; else the part's newest drawer, else its newest kept file |
 | `POST /cabinet/{part}/drawers` | `{file_id}`: the drawer of a kept slice or cut of the part, opened if need be |
 | `POST /cabinet/{part}/drawers/{id}/measured` | `{readings}`: a print's features in mm (repeats as a list), a cut's sizes (null where not measured); each checked against its design; `turn` is null for a check alone |
@@ -125,7 +125,8 @@ filed is a 422 saying why, and nothing is kept. The slicer's
 Readiness (`widgets/feedback.js`). It opens:
 
 - from a part's piece's ring, **Part › View › Feedback**, on that part, whose other cells
-  are the window's acts -- Measure, Note, Take turn, Undo turn;
+  are the window's acts -- Measure, Note, Take turn, Undo turn, and Try again's Probe
+  first, Brim and Raft;
 - on its own when a print or a cut ends, on the drawer of the piece it made;
 - from ⊞ Windows › Feedback, on the selected piece's part.
 
@@ -133,7 +134,9 @@ Its **piece** drop-down holds the part's pieces first -- its drawers, the newest
 then each kept slice or toolpath of it no drawer holds yet, which says it was not
 printed or cut from here, for a piece made from it elsewhere -- then every other part's,
 a group each; a piece of another part chosen there shows that part's cabinet, which is how a
-part standing in no site is reached. Under the piece chosen: **measured**, a row for each
+part standing in no site is reached. Under the piece chosen: **made**, how it was made;
+for a print that stopped, **stopped**, where, and the tries
+([above](#a-print-that-stopped)); **measured**, a row for each
 of a print's dimensions, its designed size, a field, and its newest reading with how far
 it is from the design, within its tolerance or outside it (the tolerance and whose it is
 said after the rows), or one field of a cut's sizes, with **Keep** (Enter in a row keeps
