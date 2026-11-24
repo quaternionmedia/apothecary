@@ -188,16 +188,27 @@ def explain(
     ]
     checks: List[Check] = []
     todo = ""
+    switch_on = (
+        f"Switch the {machine} on and seat its USB cable at both ends: a cable made only "
+        "to charge carries no data. Plugged in through a hub, try a socket on the "
+        f"computer itself. {where_last}"
+    ).strip()
 
-    # 1. On USB.
+    # 1. On USB: with no list, or nothing known of the board to look for in one, read
+    # from the serial ports alone.
     if usb is None or not (want["serial"] or want["make"]):
         found = bool(by_port)
+        unread = (
+            "USB is not read here"
+            if usb is None
+            else "no serial number or make of it is known to look for on USB"
+        )
         checks.append(
             Check(
                 "usb",
                 "On USB",
                 "ok" if found else "unread",
-                f"its port {by_port[0]} is listed" if found else "USB is not read here",
+                f"its port {by_port[0]} is listed" if found else unread,
             )
         )
     elif on_usb:
@@ -205,11 +216,7 @@ def explain(
         checks.append(Check("usb", "On USB", "ok", f"{board} is in {socket(d.place)}"))
     else:
         checks.append(Check("usb", "On USB", "off", f"nothing on USB is {board}"))
-        todo = (
-            f"Switch the {machine} on and seat its USB cable at both ends: a cable made only "
-            "to charge carries no data. Plugged in through a hub, try a socket on the "
-            f"computer itself. {where_last}"
-        ).strip()
+        todo = switch_on
         # Another of its make, with another serial number: a board swapped for this one.
         if want["serial"] and want["make"]:
             for d in usb or []:
@@ -225,6 +232,10 @@ def explain(
         checks.append(Check("port", "A serial port", "after"))
     elif ports:
         checks.append(Check("port", "A serial port", "ok", f"the kernel made {', '.join(ports)}"))
+    elif checks[0].state == "unread":
+        # Not seen on USB, so not said to be there with no driver: nothing lists it.
+        checks.append(Check("port", "A serial port", "off", "no serial port is listed for it"))
+        todo = switch_on
     else:
         checks.append(
             Check("port", "A serial port", "off", "on USB, with no serial port: no driver took it")

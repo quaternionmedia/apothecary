@@ -154,7 +154,24 @@ def test_where_usb_is_not_read_the_serial_ports_say_it():
     )
     assert _states(out) == [("usb", "ok"), ("port", "ok"), ("open", "ok"), ("scan", "off")]
     out = missing.explain("A106ZTEU", "printer", usb=None, listed={})
-    assert _states(out)[0] == ("usb", "unread")
+    assert _states(out)[:2] == [("usb", "unread"), ("port", "off")]
+    assert out["checks"][0]["says"] == "USB is not read here"
+    assert out["checks"][1]["says"] == "no serial port is listed for it"
+
+
+def test_a_board_known_by_its_port_alone_and_not_listed_is_not_said_to_be_on_usb():
+    # A port typed by hand (a udev name) that no board was found on: nothing to look
+    # for on USB, so neither On USB nor its driver is blamed, and it is switched on.
+    out = missing.explain("/dev/ender", "printer", usb=[], listed={})
+    assert _states(out) == [
+        ("usb", "unread"),
+        ("port", "off"),
+        ("open", "after"),
+        ("scan", "after"),
+    ]
+    assert out["checks"][0]["says"] == "no serial number or make of it is known to look for on USB"
+    assert out["checks"][1]["says"] == "no serial port is listed for it"
+    assert out["todo"].startswith("Switch the printer on and seat its USB cable at both ends")
 
 
 def test_every_serial_port_plugged_in_says_whose_it_is():

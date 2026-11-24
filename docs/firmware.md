@@ -637,15 +637,18 @@ said as what to try and those after it not reached:
 | Check | Read from | What fails it, and what to try |
 |---|---|---|
 | On USB | the kernel's USB list (`/sys/bus/usb/devices`) | no device with the pin's serial number, or of the pin's make: switch the machine on, seat the cable at both ends (a cable made only to charge carries no data), try a socket on the computer rather than a hub. Where the board was last found -- its port and its USB socket (`1-1.2`: a hub's socket 2) -- is said, and another board of its make with another serial number is named to pin in its place |
-| A serial port | the ports the device's driver made | on USB with none: unplug it and plug it in again; brltty, a braille display service, takes CH340 bridges on some Linux systems |
+| A serial port | the ports the device's driver made | on USB with none: unplug it and plug it in again; brltty, a braille display service, takes CH340 bridges on some Linux systems. Where On USB was not read, it is never said to be on USB: none is listed, and what to try is On USB's |
 | Open to this user | the port's permissions | the port's group (dialout) |
 | Found by the scan | the newest port scan | the board came up after it: the card scans again by itself, once; a board that last answered as another kind of machine is said to be that machine's |
 
 Beside them, every serial port plugged in now, with the node a pin names it
 for. The card asks again every few seconds while it shows, and once the board
 is found the machine's own Machine opens in its plan's place. Where the kernel
-keeps no USB list, and under the simulated serial engine, which reads none,
-the USB checks are read from the serial ports alone.
+keeps no USB list, or neither a serial number nor a make is known of the pinned
+board (a port typed by hand), On USB is read from the serial ports alone. The
+simulated serial engine reads no USB: on a simulated server nothing is on USB,
+so a board pinned there that it does not simulate stops at On USB, and the
+computer's own boards are never read.
 
 ### Control, behind a latch
 
