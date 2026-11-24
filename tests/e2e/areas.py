@@ -157,6 +157,10 @@ AREAS = {
             "apothecary/static/machine_marks.js",
             "apothecary/static/tuning.js",
             "apothecary/static/first_layer.js",
+            # A part's cabinet and Part › Feedback, which a print's or a cut's end opens.
+            "apothecary/cabinet.py",
+            "apothecary/routes/cabinet.py",
+            "apothecary/static/widgets/feedback.*",
             "apothecary/static/frames.js",
             "apothecary/static/projector.js",
             "templates/projector.html.j2",
