@@ -162,7 +162,8 @@ HELP = """Run the test suite, exiting as pytest does.
   apothecary test group [NAME...]
                         the unit suite's groups; with names, their unit files and
                         the walkthrough
-  uv run pytest         the quick inner loop, browser tests skipped
+  uv run pytest         the quick inner loop: the unit tests, the walkthrough and
+                        the window manager's page; other browser tests skip
 
 `test run`, `test changed` and `test group` run the unit part on a core fewer
 than the machine has (pytest-xdist, a file's tests together); --workers 1
