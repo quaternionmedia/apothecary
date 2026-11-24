@@ -96,6 +96,13 @@ def test_a_print_greys_the_jog_the_reboot_and_the_quickstop_and_never_the_stop(
     expect(corner).to_be_disabled(timeout=WITHIN_A_POLL)
     expect(corner).to_have_attribute("title", re.compile(r"^Disabled: .*a print holds the port"))
     expect(page.locator("#print-cancel")).to_have_text("⏏ Abort")
+    # The file the print sends is not forgotten under it: what only the page knows is
+    # said in the same shape as the server's reasons.
+    forget = page.locator("#print-delete")
+    expect(forget).to_be_disabled()
+    expect(forget).to_have_attribute(
+        "title", "Disabled: the print from here is sending it. Forget the chosen file"
+    )
     # A reason names the machine its board is pinned to, as its window does, not the
     # port's path: pinned, the next poll's answer says printer_1.
     with httpx.Client(base_url=url, timeout=15.0) as http:
@@ -125,6 +132,8 @@ def test_a_print_greys_the_jog_the_reboot_and_the_quickstop_and_never_the_stop(
     expect(jog).not_to_have_attribute("title", re.compile(r"^Disabled"))
     expect(quickstop).to_be_enabled()
     expect(needs).not_to_contain_text("Motors off did not go", timeout=WITHIN_A_POLL)
+    expect(forget).to_be_enabled()
+    expect(forget).to_have_attribute("title", "Forget the chosen file")
 
 
 @pytest.mark.e2e

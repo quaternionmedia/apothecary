@@ -1795,7 +1795,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const chosen = prt.files.find((f) => f.id === picked);
         $("print-pick").hidden = !prt.files.length;
         $("print-delete").hidden = !picked;
-        $("print-delete").disabled = running && job.file_id === picked;
+        setReason($("print-delete"), running && job.file_id === picked ? `the ${job.kind || "job"} from here is sending it` : null, "Forget the chosen file");
         $("print-preview-row").hidden = !picked;
         $("print-start").hidden = !picked;
         setTip($("print-start"), words().startTitle);
@@ -1806,13 +1806,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-verbs").hidden = !picked && !running;
         const slicerOk = !words().slice || !!(slc.status && slc.status.ok);
         $("print-slice").hidden = !part;
-        $("print-slice").disabled = slc.running;
         // A printer's slice levels as chosen here, for that slice (compose.levelled).
         $("print-level-row").hidden = !words().slice || !part;
         $("print-adhesion-row").hidden = !words().slice || !part;
-        $("print-slice").title = slicerOk
+        setReason($("print-slice"), slc.running ? "a slice is running; its log is in this window, with its Cancel" : null, slicerOk
             ? words().prepareTitle
-            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`;
+            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`);
         const went = !!(job && (running || job.stage));
         $("print-progress-row").hidden = !went;
         $("print-bar").hidden = !went;

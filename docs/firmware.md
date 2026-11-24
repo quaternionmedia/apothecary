@@ -803,8 +803,9 @@ Send reads `GET /firmware/printers/can-start` for the chosen file, so the page h
 rule of its own for which file goes to which machine. The Bench's Compile & upload and
 raw Flash read `can.flash` of the chosen port (the info of that port, asked once when it
 is chosen and again after a task ends, never on a timer), and grey with its reason for
-a machine's controller; the Bench's own reasons (no sketch, a task running) go through
-the same helper (`setReason`), so there is one way a button says why.
+a machine's controller; the Bench's own reasons (no sketch, a task running) and the
+Print window's (a slice running, for Slice; the file a job from here is sending, for its
+✕) go through the same helper (`setReason`), so there is one way a button says why.
 
 `M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
 for a board busy with the line before it. The reply such a line is owed, and the reply
