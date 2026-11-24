@@ -1174,9 +1174,12 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#print-start")).to_be_hidden()
-    page.locator("#print-file").set_input_files(
-        {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
-    )
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/firmware/printers/prints" in r.url
+    ) as slow:
+        page.locator("#print-file").set_input_files(
+            {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
+        )
     expect(page.locator("#print-pick")).to_contain_text(
         "slow cube.gcode · 6000 lines", timeout=8000
     )
@@ -1187,9 +1190,8 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
         {"name": "eeprom.gcode", "mimeType": "text/plain", "buffer": b"G28\nM500\n"}
     )
     expect(page.locator("#print-pick")).to_contain_text("refused: line 2: M500", timeout=8000)
-    page.locator("#print-pick").select_option(
-        label=page.locator("#print-pick option", has_text="slow cube").text_content()
-    )
+    # By its id, which keeping it again keeps; its label's kept time moves.
+    page.locator("#print-pick").select_option(slow.value.json()["id"])
 
     # Disarmed: the button is greyed and says why, so nothing leaves the page.
     expect(page.locator("#print-start")).to_be_disabled(timeout=8000)
