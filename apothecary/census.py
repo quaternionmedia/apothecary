@@ -692,8 +692,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-level": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a drop-down of how the next slice levels the bed at its start: the printer's"
-        " profile's, probe first, or home only",
+        "a drop-down of how the next slice levels the bed at its start: the part's own,"
+        " probe first, or home only",
     ),
     "print-filament": (
         WIDGET,

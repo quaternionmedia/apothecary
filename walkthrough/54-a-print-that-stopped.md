@@ -19,13 +19,13 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Cancelled on its first layer, its drawer open where it stopped
 
-The print is cancelled once a line of its first layer is sent. Its end opens the piece's drawer in Part › Feedback, which says it was cancelled on layer 1 of the file's layers and how the piece was made: the part's own values, probed first, no skirt and no brim, as bed_shims declares, and what the board said of its levelling as the print began -- on, its probe's offset, the mesh's range and where the probe found the grid. It offers what to try: Probe first and Raft, each slicing the piece again, and Brim greyed, bed_shims declaring none. Feedback is maximised here from its stack, so the drawer is seen whole.
+The print is cancelled once a line of its first layer is sent. Its end opens the piece's drawer in Part › Feedback, which says it was cancelled on layer 1 of the file's layers and how the piece was made, in the Print window's words: the part's own values, probe first, no skirt and no brim, as bed_shims declares, and what the board said of its levelling as the print began -- on, its probe's offset, the mesh's range and where the probe found the grid. It offers what to try: Probe first and Raft, each slicing the piece again, and Brim greyed, bed_shims declaring none. Feedback is maximised here from its stack, so the drawer is seen whole.
 
 ![Cancelled on its first layer, its drawer open where it stopped](screenshots/54-01-cancelled-on-its-first-layer-its-drawer-open-where.png)
 
 ## 2. Tried again on a raft
 
-First layer, bad, is kept as a look and filed on the layer the print stopped on. Raft slices the piece again for printer_1 in its Print window, its adhesion row on a raft; ▶ Send is a person's. Print is maximised here from its stack.
+First layer, bad, is kept as a look and filed on the layer the print stopped on. Raft slices the piece again for printer_1 in its Print window, its adhesion row on a raft and its levelling the part's own, which bed_shims declares probe first; ▶ Send is a person's. Print is maximised here from its stack.
 
 ![Tried again on a raft](screenshots/54-02-tried-again-on-a-raft.png)
 

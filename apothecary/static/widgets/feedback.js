@@ -13,8 +13,9 @@
  *
  * A print that stopped -- cancelled, or failed -- says the layer it stopped on, of the file's
  * layers, and offers what to try: Probe first, Brim and Raft each slice the piece again, as
- * its printer's Print window would with that chosen (`retry`, the page's). A fault seen on
- * it is filed on that layer.
+ * its printer's Print window would with that chosen (`retry`, the page's), and say it in
+ * that window's words (first_layer.js), as the made row says how the piece was made. A
+ * fault seen on it is filed on that layer.
  *
  * Under the piece chosen: a print's features to read, a row each as the piece's dimensions
  * name them (GET /cabinet/{part}/dimensions, its slice's plan or its box), each with its
@@ -50,17 +51,14 @@ import { esc } from "/static/board_text.js";
 import { mm as mmText, stamp } from "/static/format.js";
 import { setReason } from "/static/can.js";
 import * as tuning from "/static/tuning.js";
+import { TRIES, made as madeOf, tryRefused, words } from "/static/first_layer.js";
 
 export const VERBS = [
     "feedback:measure", "feedback:note", "feedback:tune-apply", "feedback:tune-undo",
     "feedback:try-probe", "feedback:try-brim", "feedback:try-raft",
 ];
 // What a print that stopped offers to try, each slicing the piece again with it chosen.
-const TRIES = {
-    probe: "probe first, G29 once the bed is hot, the mesh on for its print",
-    brim: "a 5 mm brim round each piece",
-    raft: "a raft of 3 layers under each piece",
-};
+const tryTip = (how) => `Slice this piece again for its printer with ${words(TRIES[how].choice)}. Nothing is sent`;
 // How a print that did not finish ended (cabinet.STOPPED).
 const STOPPED = ["cancelled", "failed"];
 
@@ -90,9 +88,9 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         </div>
         <div class="row" id="feedback-stopped-row" hidden><label>stopped</label>
             <span class="s" id="feedback-stopped-said"></span>
-            <button type="button" id="feedback-try-probe" title="Slice this piece again for its printer to probe first: G29 once the bed is hot, the mesh on for its print. Nothing is sent">Probe first</button>
-            <button type="button" id="feedback-try-brim" title="Slice this piece again for its printer with a 5 mm brim round each piece. Nothing is sent">Brim</button>
-            <button type="button" id="feedback-try-raft" title="Slice this piece again for its printer on a raft of 3 layers. Nothing is sent">Raft</button>
+            <button type="button" id="feedback-try-probe" title="${tryTip("probe")}">Probe first</button>
+            <button type="button" id="feedback-try-brim" title="${tryTip("brim")}">Brim</button>
+            <button type="button" id="feedback-try-raft" title="${tryTip("raft")}">Raft</button>
         </div>
         <div class="row" id="feedback-measure-row" hidden><label for="feedback-measure">measured</label>
             <input id="feedback-measure" size="16" spellcheck="false" title="What the piece this toolpath cut measures, in millimetres, each feature it names in order, any left out as -">
@@ -250,27 +248,17 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         return bits.join(" · ");
     }
     // How the piece was made, from its slice's record and its job: its values -- a
-    // variant's, the drawer's own, or the part's own -- how its start levelled, its skirt
-    // and brim, and what the board said of its levelling as the print began
-    // (devices.levelled_by). A cut says its values alone.
+    // variant's, the drawer's own, or the part's own -- how its start levelled, its skirt,
+    // brim and raft, in the Print window's words (first_layer.made), and what the board
+    // said of its levelling as the print began (devices.levelled_by). A cut says its
+    // values alone.
     function madeSaid(d) {
         const bits = [];
         const params = Object.keys(d.params || {}).length;
         bits.push(d.variant ? `variant ${d.variant.slice(0, 8)}` : params ? "the values drawn" : "the part's own values");
         if (!d.slice) return bits.join(" · ");
-        const settings = d.slice.settings || [];
-        const named = (name) => settings.find((s) => s.name === name);
-        const start = named("start");
-        if (start) {
-            const pieces = [].concat(start.value || []);
-            bits.push(pieces.includes("probe-each-print") ? "probed first (G29)" : pieces.includes("stored-mesh") ? "the stored mesh on (M420 S1)" : "homed, no levelling");
-        }
-        const skirt = named("skirt_loops");
-        bits.push(skirt ? (Number(skirt.value) ? `${skirt.value} loops of skirt` : "no skirt") : "the printer's own skirt");
-        const brim = named("brim_type");
-        if (brim) bits.push(brim.value === "no_brim" ? "no brim" : `a ${named("brim_width")?.value ?? "?"} mm brim`);
-        const raft = named("raft_layers");
-        if (raft && Number(raft.value)) bits.push(`a raft of ${raft.value} layers`);
+        const how = madeOf(d.slice.settings);
+        bits.push(...[how.levelling, how.skirt, how.adhesion].filter(Boolean));
         const said = d.job && d.job.levelled;
         if (said) {
             const heard = [];
@@ -279,15 +267,15 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             if (said.mesh_range != null) heard.push(`mesh range ${mmText(said.mesh_range)}`);
             if (said.area) heard.push(`probed x ${said.area.min.x}..${said.area.max.x}, y ${said.area.min.y}..${said.area.max.y}`);
             bits.push(`the board said: ${heard.join(", ")}`);
-        } else if (d.job && start) bits.push("the board said nothing of its levelling");
+        } else if (d.job && how.levelling) bits.push("the board said nothing of its levelling");
         return bits.join(" · ");
     }
     function renderMade(d) {
         $("feedback-made-row").hidden = !d;
         $("feedback-made-said").textContent = d ? madeSaid(d) : "";
     }
-    // A try the part declares against is not offered: a brim on a part that declares none.
-    const declaresNo = (d, how) => how === "brim" && d && d.declared && d.declared.brim_width === 0;
+    // Why a try is not offered on the drawer `d`'s piece (first_layer.tryRefused), or null.
+    const refusedTry = (d, how) => tryRefused(how, d.slice && d.slice.settings, d.declared, d.part);
     // A print that stopped: where, and what to try, each slicing the piece again.
     function stoppedOf(d) { return d && d.job && STOPPED.includes(d.job.outcome) ? d.job : null; }
     function renderStopped(d) {
@@ -295,16 +283,16 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         $("feedback-stopped-row").hidden = !job;
         if (!job) return;
         $("feedback-stopped-said").textContent = `${job.outcome} ${stoppedSaid(job.stopped)}; a fault seen is filed there. Try, sliced again:`;
-        const brimTip = "Slice this piece again for its printer with a 5 mm brim round each piece. Nothing is sent";
-        setReason($("feedback-try-brim"), declaresNo(d, "brim") ? `${d.part} declares no brim` : null, brimTip);
+        for (const how of Object.keys(TRIES)) setReason($(`feedback-try-${how}`), refusedTry(d, how), tryTip(how));
     }
     async function tryAgain(how) {
         const job = stoppedOf(st.whole);
         if (!job) return refuse(`try ${how}: ${st.whole ? "this piece's print did not stop part way" : "choose a print that stopped"}`);
-        if (declaresNo(st.whole, how)) return refuse(`try ${how}: ${st.part} declares no ${how}`);
+        const why = refusedTry(st.whole, how);
+        if (why) return refuse(`try ${how}: ${why}`);
         if (!retry) return refuse(`try ${how}: nothing here slices a piece again`);
         const answer = await retry(st.whole, how);
-        return answer.refused ? refuse(`try ${how}: ${answer.refused}`) : tell(`${st.part} sliced again with ${TRIES[how]}: ${answer.said}`);
+        return answer.refused ? refuse(`try ${how}: ${answer.refused}`) : tell(`${st.part} sliced again with ${words(TRIES[how].choice)}: ${answer.said}`);
     }
     // A print's rows: a feature each, as its plan names it; a cut's one field of its sizes.
     function renderMeasure(r) {

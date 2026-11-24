@@ -148,6 +148,7 @@ GROUPS = {
             "parts/bed_shims/*",
             "apothecary/print_faults.py",
             "apothecary/static/tuning.js",
+            "apothecary/static/first_layer.js",
             "apothecary/cabinet.py",
             "apothecary/routes/cabinet.py",
             "apothecary/cli/cabinet.py",
@@ -180,6 +181,7 @@ GROUPS = {
             "test_cabinet.py",
             "test_tuning_cli.py",
             "test_tuning_js.py",
+            "test_first_layer_js.py",
         ),
     },
     "parts": {

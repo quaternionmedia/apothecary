@@ -166,7 +166,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     made = feedback.locator("#feedback-made-said")
     for words in (
         "the part's own values",
-        "probed first (G29)",
+        "probe first: G29 once the bed is hot",
         "no skirt",
         "no brim",
         "the board said: levelling on, probe offset Z -3.15",
@@ -177,12 +177,12 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "Cancelled on its first layer, its drawer open where it stopped",
         "The print is cancelled once a line of its first layer is sent. Its end opens the "
         "piece's drawer in Part › Feedback, which says it was cancelled on layer 1 of the "
-        "file's layers and how the piece was made: the part's own values, probed first, "
-        "no skirt and no brim, as bed_shims declares, and what the board said of its "
-        "levelling as the print began -- on, its probe's offset, the mesh's range and "
-        "where the probe found the grid. It offers what to try: Probe first and Raft, each "
-        "slicing the piece again, and Brim greyed, bed_shims declaring none. Feedback is "
-        "maximised here from its stack, so the drawer is seen whole.",
+        "file's layers and how the piece was made, in the Print window's words: the part's "
+        "own values, probe first, no skirt and no brim, as bed_shims declares, and what the "
+        "board said of its levelling as the print began -- on, its probe's offset, the "
+        "mesh's range and where the probe found the grid. It offers what to try: Probe "
+        "first and Raft, each slicing the piece again, and Brim greyed, bed_shims declaring "
+        "none. Feedback is maximised here from its stack, so the drawer is seen whole.",
         blank=CHANGING,
     )
     _restored(page, stack)
@@ -209,13 +209,17 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     assert settings["raft_layers"]["value"] == "3", settings["raft_layers"]
     assert "this slice's adhesion 'raft'" in settings["raft_layers"]["source"]
     expect(machine.locator("#print-adhesion")).to_have_value("raft")
+    # Its levelling is the part's own, which bed_shims declares: the slice probed first.
+    expect(machine.locator("#print-level option:checked")).to_have_text("the part's own")
+    assert settings["start"]["value"] == ["home", "probe-each-print"], settings["start"]
     stack = _maximised(page, "machine-print", "#print-adhesion-row")
     settled(page)
     story.shows(
         "Tried again on a raft",
         "First layer, bad, is kept as a look and filed on the layer the print stopped on. "
         "Raft slices the piece again for printer_1 in its Print window, its adhesion row "
-        "on a raft; ▶ Send is a person's. Print is maximised here from its stack.",
+        "on a raft and its levelling the part's own, which bed_shims declares probe first; "
+        "▶ Send is a person's. Print is maximised here from its stack.",
         blank=CHANGING,
     )
     _restored(page, stack)

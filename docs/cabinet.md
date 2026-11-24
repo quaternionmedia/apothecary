@@ -32,13 +32,16 @@ piece, its drawer beside it.
 
 A drawer's **made** row (Part › Feedback) says how the piece was made: its values -- a
 variant's, those drawn, or the part's own -- and, for a print, how its start levelled
-(probed first, the stored mesh on, or homed alone), its skirt, brim and raft, and what
+(probe first, the stored mesh, or home only), its skirt, brim and raft, and what
 the board said of its levelling as the print began: levelling on or off, the probe's
 offset, the mesh's range and where the probe said the grid lies (`job.levelled`). A
 start that probes or turns the stored mesh on has the board say them (`M420 S1 V`,
 `M851`); the print keeps its answers from before its first layer
 (`devices.levelled_by`). The drawer's answer also carries what the part declares of its
-print (`declared`, only what it set).
+print (`declared`, only what it set). The tries, their tips and the made row say a
+levelling and an adhesion in the Print window's words, from one module
+(`apothecary/static/first_layer.js`): the row's *probe first: G29 once the bed is hot*
+is the made row's too.
 
 | Field | What it holds |
 |---|---|

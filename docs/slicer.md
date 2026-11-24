@@ -100,7 +100,8 @@ in RAM until it is stored from the printer's screen, so storing it is the
 bench's box, and the piece trusts the newest probe.
 
 One slice may level otherwise than its profile names: the Print window's
-**levelling** row (its profile's start, probe first, or home only) is sent with
+**levelling** row (the part's own -- what it declares, else its profile's start --
+probe first, or home only) is sent with
 the slice as `levelling` (`POST /slicer/slice`), and the start is composed with
 that piece in place of the profile's levelling (`compose.levelled`), each piece's
 precondition checked as it is when the profile names it, before a task starts.
@@ -110,7 +111,9 @@ or neither) is sent as `adhesion` and set over what the part declares
 (`profiles.ADHESIONS`, `Declared.adhered`), each value's source saying the slice
 asked. The ring's Print › Levelling and Adhesion step the two rows.
 Fixes' Make these chooses probe first, since the shims are printed on a bed not
-yet level.
+yet level. The rows' choices are said in one set of words
+(`apothecary/static/first_layer.js`), which Part › Feedback's tries on a print that stopped
+and its drawer's made row say too ([cabinet.md](cabinet.md#a-print-that-stopped)).
 
 ## Print settings from the part
 

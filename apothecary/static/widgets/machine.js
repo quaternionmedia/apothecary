@@ -87,6 +87,7 @@ import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/
 import { clock, degrees, heater, mm as mmText, sentence, span, stamp, viaRing } from "/static/format.js";
 import { toolPosition as toolPositionOf, fileOrigin, MOVE_COLORS } from "/static/machine_marks.js";
 import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
+import { ADHESION, LEVELLING, options } from "/static/first_layer.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
@@ -193,19 +194,14 @@ const CARDS = `
             <span class="s" id="print-filament-said"></span>
         </div>
         <div class="row" id="print-level-row" hidden><label for="print-level">levelling</label>
-            <select id="print-level" title="How the next slice levels the bed at the start of its print: as this printer's profile says, a probe once the bed is hot (G29, the mesh on for that print), or homing alone">
-                <option value="">its profile's start</option>
-                <option value="probe-each-print">probe first: G29 once the bed is hot</option>
-                <option value="home">home only: no levelling</option>
+            <select id="print-level" title="How the next slice levels the bed at the start of its print: as the part declares, else as this printer's profile says; a probe once the bed is hot (G29, the mesh on for that print); or homing alone">
+                ${options(LEVELLING)}
             </select>
             <span class="s" id="print-level-said"></span>
         </div>
         <div class="row" id="print-adhesion-row" hidden><label for="print-adhesion">adhesion</label>
-            <select id="print-adhesion" title="How the next slice's first layer holds: as the part declares, a 5 mm brim round each piece, a raft of 3 layers under each, or neither">
-                <option value="">the part's own</option>
-                <option value="brim">brim: 5 mm round each piece</option>
-                <option value="raft">raft: 3 layers under each piece</option>
-                <option value="none">neither brim nor raft</option>
+            <select id="print-adhesion" title="How the next slice's first layer holds: as the part declares, else as this printer's profile says; a brim round each piece; a raft under each; or neither">
+                ${options(ADHESION)}
             </select>
         </div>
         <div class="row"><label for="print-pick">file</label>
@@ -2135,7 +2131,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         tell(`${what} of the next slices: ${el.selectedOptions[0].textContent}`);
     }
     // `levelling` and `adhesion`, when given, are chosen in the Print window's rows for this
-    // slice and the ones after it ("" its profile's start, the part's own).
+    // slice and the ones after it ("" the part's own: what it declares, else the profile's).
     async function slicePart(path, variant = undefined, { levelling = undefined, adhesion = undefined } = {}) {
         if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
         if (levelling !== undefined) $("print-level").value = levelling || "";

@@ -2778,7 +2778,7 @@ def control_options(device: Device) -> List[Option]:
         # the host streams. The page knows which and carries the verb to it;
         # Send file starts a host print of the file the page has chosen.
         # Levelling and Adhesion, seated last so no address moves, step the Print
-        # window's rows for the next slice: its levelling (its profile's, probe first,
+        # window's rows for the next slice: its levelling (the part's, probe first,
         # home only) and its first layer's hold (the part's, brim, raft, neither).
         Option(
             id="control:sd",
