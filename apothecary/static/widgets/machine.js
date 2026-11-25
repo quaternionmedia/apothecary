@@ -252,7 +252,6 @@ const LOG = `
         <button type="submit">send</button>
     </form>
     <label class="printer-only gcode"><input type="checkbox" id="show-polls"> poll traffic</label>
-    <label><input type="checkbox" id="follow" checked> follow</label>
     <button type="button" id="clear">clear</button>
     <button type="button" id="download" title="Download the log as text" aria-label="Download the log">⤓</button>
 </div>
@@ -822,7 +821,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // M115s are not, so hiding poll traffic keeps them. Each entry drawn is one
     // element of the log, so new entries are appended and the ones the model
     // dropped off the front go with their elements; the whole log is redrawn only
-    // when the poll-traffic box changes, it is cleared, or the board changes.
+    // when the poll-traffic box changes, it is cleared, or the board changes. It follows
+    // its end while it is scrolled to it; scrolled up, it stays where the reader is.
     const LOG_EMPTY = '<span class="empty">nothing logged yet — poll or send a query</span>';
     function logRow(e) {
         e.drawn = $("show-polls").checked || !((e.kind === "tx" || e.kind === "rx") && e.origin === "poll");
@@ -840,7 +840,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
         draw(log);
         if (!log.firstElementChild) log.innerHTML = LOG_EMPTY;
-        if (atBottom && $("follow").checked) log.scrollTop = log.scrollHeight;
+        if (atBottom) log.scrollTop = log.scrollHeight;
     }
     function renderLog() {
         drawLog((log) => { log.innerHTML = state.entries.map(logRow).join(""); });

@@ -307,7 +307,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "q": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
     "qform:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
     "show-polls": (WIDGET, WHAT_YOU_SEE, "a tick-box that shows the poll traffic"),
-    "follow": (WIDGET, WHAT_YOU_SEE, "a tick-box that keeps the log scrolled to the end"),
     "clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
     "download": (WIDGET, NOTHING, "a button that downloads the log"),
     # The control pad, behind the latch. The buttons carry the G-code line

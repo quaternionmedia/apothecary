@@ -512,7 +512,8 @@ run against what it was heard saying (its `apothecary <name>: hello`
 banner), and what changed since it was flashed -- and **Flashing**. Both
 kinds have the board's **one log**, **Log**: a printer's comms log, with the
 one box that asks it for a report code (poll traffic hidden unless asked
-for), or a devkit's serial output. A section opens from ⊞ Windows or a
+for), or a devkit's serial output. It follows its end while it is scrolled to
+it; scrolled up, it stays where the reader is. A section opens from ⊞ Windows or a
 stack's +, by a verb that acts on it -- Poll opens Status, Query and Listen
 a devkit's Sketch and the Log, Flash its Flashing, a print's or a slice's
 verbs Print, the bed's Bed level -- by a link to the board (below), or with
