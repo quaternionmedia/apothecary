@@ -109,7 +109,11 @@ The profile is not changed: the slice's `start` setting says the slice asked.
 Beside it, the **adhesion** row (the part's own, a 5 mm brim, a raft of 3 layers,
 or neither) is sent as `adhesion` and set over what the part declares
 (`profiles.ADHESIONS`, `Declared.adhered`), each value's source saying the slice
-asked. The ring's Print › Levelling and Adhesion step the two rows.
+asked. The ring's Print › Levelling and Adhesion step the two rows. Each row's
+first choice says what it comes to for the part under *makes* on this printer
+(`GET /slicer/first-layer`): *the part's own: probe first* where the part declares
+it, *the printer's: home only* where the profile's start names no levelling, and
+*the printer's own* adhesion where the part declares neither brim nor raft.
 Fixes' Make these chooses probe first, since the shims are printed on a bed not
 yet level. The rows' choices are said in one set of words
 (`apothecary/static/first_layer.js`), which Part › Feedback's tries on a print that stopped
@@ -168,6 +172,7 @@ used. The routes:
 | `GET /slicer/status` | Each slicer module, the one a slice uses, and the printers that keep a profile |
 | `POST /slicer/install` | Install the pinned release (a task) |
 | `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer; `variant`, a part's cached variant, is sliced in place of its own STL |
+| `GET /slicer/first-layer?part=...` | With the printer named as `POST /slicer/slice` names it: how a slice levels and holds where it asks neither, and whose each is -- `levelling` the part's declared, else the printer profile's start (homing alone where it names no levelling piece); `adhesion` the part's declared `brim_width` and `raft_layers`, else the slicer profile's own. The Print window's rows say it as their first choice |
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |

@@ -275,6 +275,20 @@ def slicer_slice(body: SliceRequest):
     return _snapshot(get_runner().run_staged("slice", title, work))
 
 
+@router.get("/first-layer")
+def slicer_first_layer(
+    part: str = Query(..., pattern=NODE_PATH),
+    port: Optional[Port] = None,
+    site: Optional[str] = Query(None, pattern=SITE_NAME),
+    printer: Optional[str] = Query(None, pattern=NODE_PATH),
+    variant: Optional[str] = Query(None, pattern=VARIANT_KEY),
+):
+    """How a slice of ``part`` for the printer named as a slice names it levels and
+    holds with neither asked: the part's own, else the printer's (service.first_layer)."""
+    target, at = service.resolve(part, port=port, site=site, printer=printer, variant=variant)
+    return service.first_layer(target, at.profile)
+
+
 @router.get("/tasks")
 def slicer_tasks():
     return [_snapshot(t, since=len(t.lines)) for t in get_runner().list()]

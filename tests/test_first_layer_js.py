@@ -19,6 +19,7 @@ from apothecary.projects.parts import bed_shims
 from apothecary.slicer import compose
 from apothecary.slicer.modules import get_module
 from apothecary.slicer.profiles import ADHESIONS, Declared, load_profile
+from apothecary.slicer.service import Target, first_layer
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "apothecary" / "static" / "first_layer.js"
@@ -40,6 +41,7 @@ out.refused = ["probe", "brim", "raft", "nothing"].map((how) => f.tryRefused(how
 out.free = ["probe", "brim", "raft"].map((how) => f.tryRefused(how, slices.plain, {}, "cube"));
 out.again = ["probe", "brim", "raft"].map((how) => f.tryRefused(how, slices[how], {}, "cube"));
 out.other = f.tryRefused("raft", slices.brim, {}, "cube");
+out.own = %(resolved)s.map((r) => [f.own("levelling", r), f.own("adhesion", r)]);
 console.log(JSON.stringify(out));
 """
 
@@ -51,9 +53,16 @@ def _settings(declared: Declared, levelling=None) -> list:
     return [s.model_dump(mode="json") for s in resolved.settings]
 
 
-def _run(tmp_path: Path, slices: dict) -> dict:
+def _run(tmp_path: Path, slices: dict, resolved: list) -> dict:
     script = tmp_path / "run.mjs"
-    script.write_text(SCRIPT % {"module": MODULE.as_uri(), "slices": json.dumps(slices)})
+    script.write_text(
+        SCRIPT
+        % {
+            "module": MODULE.as_uri(),
+            "slices": json.dumps(slices),
+            "resolved": json.dumps(resolved),
+        }
+    )
     done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
@@ -70,7 +79,35 @@ def out(fake_orcaslicer, tmp_path):
         "probe": _settings(plain, "probe-each-print"),
         "stored": [{"name": "start", "value": ["home", "stored-mesh"]}],
     }
-    return _run(tmp_path, slices)
+    # What GET /slicer/first-layer answers for bed_shims and for a part that declares
+    # neither on printer_1, as the server works it out; then answers it may give.
+    profile = load_profile("ender3")
+    resolved = [
+        first_layer(_target(shims), profile),
+        first_layer(_target(plain), profile),
+        {
+            "levelling": {"value": "stored-mesh", "by": "printer"},
+            "adhesion": {"by": "part", "raft_layers": 3},
+        },
+        {
+            "levelling": {"value": "home", "by": "part"},
+            "adhesion": {"by": "part", "brim_width": 4, "raft_layers": 0},
+        },
+        {
+            "levelling": {"value": "home", "by": "part"},
+            "adhesion": {"by": "part", "brim_width": 0, "raft_layers": 0},
+        },
+        {
+            "levelling": {"value": "probe-each-print", "by": "part"},
+            "adhesion": {"by": "part", "raft_layers": 0},
+        },
+        None,
+    ]
+    return _run(tmp_path, slices, resolved)
+
+
+def _target(declared: Declared) -> Target:
+    return Target(made=None, declared=declared, stl=lambda log: b"")
 
 
 def test_each_choice_is_one_the_server_takes_and_sets_what_it_sets(out):
@@ -143,3 +180,18 @@ def test_the_print_window_and_feedback_take_their_words_from_the_module():
     for widget in (machine, feedback):
         assert "/static/first_layer.js" in widget
         assert "mm round each piece" not in widget and "layers under each" not in widget
+
+
+def test_the_rows_first_choice_says_what_it_comes_to(out):
+    """The part's own, said as the server works it out: bed_shims' probe first and no
+    brim, declared; a part that declares neither homes as printer_1's profile starts and
+    holds as its slicer profile's own; where nothing is known yet, the plain words."""
+    assert out["own"] == [
+        ["the part's own: probe first", "the part's own: no brim"],
+        ["the printer's: home only", "the printer's own"],
+        ["the printer's: the stored mesh", "the part's own: raft of 3 layers"],
+        ["the part's own: home only", "the part's own: brim 4 mm"],
+        ["the part's own: home only", "the part's own: neither brim nor raft"],
+        ["the part's own: probe first", "the part's own: no raft"],
+        [None, None],
+    ]

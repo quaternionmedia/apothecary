@@ -226,6 +226,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The Print window's levelling and adhesion rows say what their first choice comes to for the part under makes on this printer: *the part's own: probe first*, *the printer's: home only* (`GET /slicer/first-layer`, [docs/slicer.md](docs/slicer.md)).
 - A printer's **Probe bed** probes with `G29 V3`, at which Marlin says where each point lies, and keeps those points and the area they span with the reading: the relief is drawn and the shims' plane fitted where the bed was probed, and the Machine's Bed level says it. A read of the stored mesh still says no place, and is placed by estimate. ([doc](docs/firmware.md))
 - `GET /firmware/status` and `apothecary firmware validate --json-out` are `tools_dir` and `toolchains`, each toolchain's own status, with what is Arduino's alone -- its cores, its config file, the cores it suggests -- in Arduino's. The top-level `arduino_cli_*`, `esptool_*`, `cores`, `config_file`, `problems` and `ok` are gone; what the Bench and the command line say reads the same. ([doc](docs/firmware.md))
 - The sites kept and the picture root have public homes below the server, `apothecary.sites` and `apothecary.picture_root`; a node is found by `hierarchy.find_node_by_path`; and no module of the package takes an underscore name from another, which a test holds. A site that is not there and a picture refused answer as they did. ([doc](docs/boundaries.md))

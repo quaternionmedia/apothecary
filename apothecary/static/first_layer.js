@@ -17,6 +17,9 @@
  *   tryRefused(how, settings, declared, part)
  *                         why a try is not offered on a piece sliced with `settings` of
  *                         `part`, which declares `declared`; null where it is
+ *   own(row, resolved)    a row's first choice said as what it comes to, from
+ *                         GET /slicer/first-layer: "the part's own: probe first", "the
+ *                         printer's: home only"; null where that is not known
  */
 
 export const LEVELLING = [
@@ -97,6 +100,25 @@ export function made(settings) {
         if (said.length) adhesion = said.join(", ");
     }
     return { levelling: levelled ? words(levelled) : null, skirt, adhesion };
+}
+
+// What a part declares of how its first layer holds, in a few words: the raft before the
+// brim, as the slicer lays them.
+function held(r) {
+    const layers = Number(r.raft_layers || 0), width = r.brim_width;
+    if (layers > 0) return `raft of ${layers} layers`;
+    if (width != null && Number(width) > 0) return `brim ${Number(width)} mm`;
+    if (width != null && r.raft_layers != null) return words(choice(ADHESION, "none"));
+    return width != null ? "no brim" : "no raft";
+}
+
+export function own(row, resolved) {
+    const r = resolved && resolved[row];
+    if (!r) return null;
+    const whose = r.by === "part" ? "the part's own" : "the printer's";
+    if (row === "adhesion") return r.by === "part" ? `${whose}: ${held(r)}` : "the printer's own";
+    const c = choice(LEVELLING, r.value) || (r.value === STORED_MESH.value ? STORED_MESH : null);
+    return c ? `${whose}: ${c.name}` : whose;
 }
 
 // A try is not offered where the part declares against it -- a brim on a part that declares

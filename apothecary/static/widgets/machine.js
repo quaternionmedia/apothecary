@@ -87,7 +87,7 @@ import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/
 import { clock, degrees, heater, mm as mmText, sentence, span, stamp, viaRing } from "/static/format.js";
 import { toolPosition as toolPositionOf, fileOrigin, MOVE_COLORS } from "/static/machine_marks.js";
 import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
-import { ADHESION, LEVELLING, options } from "/static/first_layer.js";
+import { ADHESION, LEVELLING, options, own, words as firstLayerWords } from "/static/first_layer.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
@@ -1540,7 +1540,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
     // `wanted` is a part asked for from outside (print.choose), chosen once listed.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null };
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null, ownFor: null };
     // Slicing: the slicer's status (whether one is installed), and the task that
     // slices what makes names, followed by tasks.js at the slicer's own routes.
     // `shown` is the kept file whose slice the card says, the one chosen in its files.
@@ -1805,6 +1805,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         // A printer's slice levels as chosen here, for that slice (compose.levelled).
         $("print-level-row").hidden = !words().slice || !part;
         $("print-adhesion-row").hidden = !words().slice || !part;
+        if (words().slice) sayTheOwn(part);
         setReason($("print-slice"), slc.running ? "a slice is running; its log is in this window, with its Cancel" : null, slicerOk
             ? words().prepareTitle
             : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`);
@@ -2036,6 +2037,23 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
+    }
+    // The rows' first choice said as what it comes to for the part under makes on this
+    // printer: the part's own where it declares one, else the printer's (GET
+    // /slicer/first-layer), asked once each time the part or the printer changes.
+    async function sayTheOwn(part) {
+        const at = state.port ? { port: state.port } : machineAt ? { site: machineAt.site, printer: machineAt.path } : null;
+        const key = part && at ? JSON.stringify([part, at]) : null;
+        if (key === prt.ownFor) return;
+        prt.ownFor = key;
+        let resolved = null;
+        if (key) {
+            try { resolved = await api(`/slicer/first-layer?${new URLSearchParams({ part, ...at })}`); } catch (e) { resolved = null; }
+        }
+        if (prt.ownFor !== key) return;  // another part or printer since
+        for (const [id, row, choices] of [["print-level", "levelling", LEVELLING], ["print-adhesion", "adhesion", ADHESION]]) {
+            $(id).options[0].textContent = own(row, resolved) || firstLayerWords(choices[0]);
+        }
     }
     // Toolpath: what makes names, its cuts written for this router (POST /cam/cut),
     // the file kept and chosen, what it holds said under makes. True when it was kept.

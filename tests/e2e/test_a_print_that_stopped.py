@@ -220,8 +220,11 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     assert settings["raft_layers"]["value"] == "3", settings["raft_layers"]
     assert "this slice's adhesion 'raft'" in settings["raft_layers"]["source"]
     expect(machine.locator("#print-adhesion")).to_have_value("raft")
-    # Its levelling is the part's own, which bed_shims declares: the slice probed first.
-    expect(machine.locator("#print-level option:checked")).to_have_text("the part's own")
+    # Its levelling is the part's own, which bed_shims declares and the row says: the
+    # slice probed first.
+    expect(machine.locator("#print-level option:checked")).to_have_text(
+        "the part's own: probe first"
+    )
     assert settings["start"]["value"] == ["home", "probe-each-print"], settings["start"]
     stack = _maximised(page, "machine-print", "#print-adhesion-row")
     settled(page)

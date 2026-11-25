@@ -303,6 +303,30 @@ def test_a_slice_levels_as_the_print_window_asks_and_one_that_cannot_is_refused_
     assert len(client.get("/slicer/tasks").json()) == tasks
 
 
+def test_the_part_s_own_first_layer_is_what_it_declares_else_the_printer_s(
+    fake_orcaslicer, parts_built
+):
+    """What the Print window's rows' first choice comes to: bed_shims declares a probe
+    first and no brim; calibration_cube declares neither, so it homes as printer_1's
+    profile starts and holds as its slicer profile's own. Named as a slice names its
+    printer, and refused as a slice is where that names none."""
+    at = {"site": "garage", "printer": "printer_1"}
+    r = client.get("/slicer/first-layer", params={"part": "bed_shims", **at})
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "levelling": {"value": "probe-each-print", "by": "part"},
+        "adhesion": {"by": "part", "brim_width": 0.0},
+    }
+    r = client.get("/slicer/first-layer", params={"part": "calibration_cube", **at})
+    assert r.json() == {
+        "levelling": {"value": "home", "by": "printer"},
+        "adhesion": {"by": "printer"},
+    }
+    r = client.get("/slicer/first-layer", params={"part": "calibration_cube", "site": "nowhere"})
+    assert r.status_code == 422
+    assert client.get("/slicer/first-layer", params={"part": "../etc"}).status_code == 422
+
+
 def test_a_name_that_could_be_a_path_elsewhere_is_refused_by_its_shape(fake_orcaslicer):
     for bad in ("../etc/passwd", "a/b", "", ".hidden"):
         assert client.post("/slicer/slice", json={"part": bad}).status_code == 422
@@ -387,6 +411,7 @@ def test_the_openapi_shows_the_slicer_routes():
         "/slicer/tasks/{task_id}/cancel",
         "/slicer/slices",
         "/slicer/slices/{file_id}",
+        "/slicer/first-layer",
     ):
         assert path in paths, path
 

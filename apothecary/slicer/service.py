@@ -293,6 +293,22 @@ def asked_levelling(target: Target, levelling: Optional[str]) -> tuple:
     return None, "this slice"
 
 
+def first_layer(target: Target, profile: PrinterProfile) -> dict:
+    """What a slice of ``target`` levels and holds with where it asks neither (the
+    Print window's rows left at their first choice): what the part declares, else
+    the printer profile's -- its start's levelling piece, or homing alone; its
+    adhesion is the slicer profile's own, which this does not read. ``by`` says
+    whose each is: ``part`` or ``printer``."""
+    declared = target.declared.values
+    if declared.get("levelling") is not None:
+        levelling = {"value": declared["levelling"], "by": "part"}
+    else:
+        named = [m for m in profile.start.modules if m in compose.LEVELLING]
+        levelling = {"value": named[-1] if named else "home", "by": "printer"}
+    held = {k: declared[k] for k in ("brim_width", "raft_layers") if declared.get(k) is not None}
+    return {"levelling": levelling, "adhesion": {"by": "part" if held else "printer", **held}}
+
+
 def slice_into(
     target: Target,
     printer: Printer,
