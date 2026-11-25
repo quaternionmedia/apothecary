@@ -229,6 +229,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- Part › Feedback's status line names the step after a filing: Take turn once a turn or a look is filed, and a Slice in the printer's Print window once a turn is taken. ([docs/cabinet.md](docs/cabinet.md))
 - The control pad's SD print buttons say ▶ Resume, ⏸ Pause and ⏏ Abort, as the Print window's and the ring's Print cells do, where the first said Start / resume. ([docs/firmware.md](docs/firmware.md))
 - The Machine's ▤ Probe bed (a router's ▦ Probe table) and the bed's corner moves are greyed, saying why, while control is down, where they were hidden until it was armed, as the Print window's ▶ and every other button that needs the latch is. ([docs/firmware.md](docs/firmware.md))
 - Part › Feedback has one Keep for a piece's drawer, where Keep, Keep look and Keep note stood: what is read, the faults seen and the note, whichever is typed or chosen, each filed as before, and Enter in any of their fields keeps too; Feedback › Measure on the ring is that Keep, and Note files the note alone. ([docs/cabinet.md](docs/cabinet.md))

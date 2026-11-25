@@ -462,6 +462,7 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
                 : `type what the piece measures, ${names.join(" × ")} in mm, or a note; then Keep`);
         }
         const said = [];
+        let turned = null;  // the printer a turn or a look was filed for
         if (measured) {
             const answer = await filed("measured", measured, "Keep");
             if (answer.refused) return answer;
@@ -471,12 +472,14 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             said.push(print
                 ? `${answer.turn ?? "a check"} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`
                 : `${answer.said}: filed in ${st.part}'s drawer, and kept for ${answer.allowance.router}, whose next toolpaths take it`);
+            if (print && answer.turn) turned = answer.machine.path;
         }
         if (seen) {
             const answer = await filed("seen", seen, "Keep");
             if (answer.refused) return answer;
             for (const el of $("feedback-seen-faults").querySelectorAll("select.seen-read")) el.value = "0";
             said.push(`${answer.look} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`);
+            turned = answer.machine.path;
         }
         if (note) {
             const answer = await filed("note", note, "Keep");
@@ -484,6 +487,8 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             $("feedback-note").value = "";
             said.push(`noted in ${st.part}'s drawer ${answer.id}`);
         }
+        // Take turn named where it would go: a turn that proposes no change is not taken.
+        if (turned && st.whole && tuning.canApply(st.whole.tuning).ok) said.push(`Take turn takes it into ${turned}'s next slices`);
         return tell(said.join("; "));
     }
     async function tune(verb) {
@@ -500,7 +505,7 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         await load();
         const where = answer.machine.path;
         return tell(verb === "apply"
-            ? `Taken for ${where}'s next slices: ${answer.applied.map((c) => `${c.setting} ${tuning.settingText(c.after, c.unit)}`).join(", ")}`
+            ? `Taken for ${where}'s next slices: ${answer.applied.map((c) => `${c.setting} ${tuning.settingText(c.after, c.unit)}`).join(", ")}; Slice in ${where}'s Print window makes the next print with it`
             : `${answer.undone} undone: ${where}'s next slices take what the turns before it applied`);
     }
 

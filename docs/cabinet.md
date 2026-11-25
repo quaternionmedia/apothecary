@@ -143,7 +143,9 @@ said after the rows), or one field of a cut's sizes; a dimension clicked on the 
 the world, with Measure shown, marks its row and gives it the caret; **seen**, each fault
 none to bad; **note**; then one **Keep** (Enter in any of their fields keeps too), which
 files whichever of them is typed or chosen, each a filing of its own -- a turn, a look, a
-note -- with Take turn and Undo turn beside it; the tuning's history; and what the drawer holds, an undone filing
+note -- with Take turn and Undo turn beside it, the status line naming the step after
+each: Take turn once a turn or a look is filed, a Slice in the printer's Print window
+once a turn is taken; the tuning's history; and what the drawer holds, an undone filing
 struck through, a measured filing's checks under it. Machine › Print and Cut print and
 cut: they measure nothing.
 
