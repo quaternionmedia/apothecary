@@ -100,7 +100,7 @@ def test_nothing_covers_a_control_of_the_part_editor(
     page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)
     _ring(page, "Part", "Edit")
-    windows.part_view(page)  # the Part laid out: Selected, Parameters, the SCAD window
+    windows.part_view(page)  # the Part laid out: Selected, Parameters, the SCAD editor
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
     # Something staged, so the bar says so and Apply is live.
     page.locator("#part-params .param[data-field='size'] .param-number").fill("20")
@@ -131,11 +131,11 @@ def test_nothing_covers_a_control_of_the_part_editor(
     maximise.click()
     expect(page.locator(".lm_maximised")).to_have_count(0)
 
-    # The SCAD window (Part › View › SCAD), then the editor over the whole page.
-    _ring(page, "Part", "View", "SCAD")
+    # The SCAD editor (Part › View › SCAD editor), then the editor over the whole page.
+    _ring(page, "Part", "View", "SCAD editor")
     scad = ".panel[data-panel='part-scad']"
     expect(page.locator(scad)).to_be_visible()
-    assert _nothing_covered(page, scad, f"the SCAD window at {width}") > 3
+    assert _nothing_covered(page, scad, f"the SCAD editor at {width}") > 3
     page.locator("#scad-fullscreen").click()
     expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
     assert _nothing_covered(page, ".scad-editor.fullscreen", f"fullscreen at {width}") > 3

@@ -21,7 +21,7 @@ WORLD_HEADER = ".lm_stack:has(.world-window) > .lm_header"
 # of focused systems (apothecary/systems.py).
 AIRGAP_SECTIONS = tuple(section.id for section in AIRGAP.sections)
 # The Part's sections, each a window ``part-<section>``, registered at start and
-# closed until asked for: Part › Edit opens Parameters, Part › View › SCAD the SCAD.
+# closed until asked for: Part › Edit opens Parameters, Part › View › SCAD editor the SCAD editor.
 PART_SECTIONS = tuple(section.id for section in PART.sections)
 
 

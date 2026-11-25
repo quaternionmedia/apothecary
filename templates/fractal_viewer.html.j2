@@ -641,7 +641,7 @@
                                  border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
         .scad-code { height: 260px; border: 1px solid #2a2f38; border-radius: 4px; overflow: hidden; }
         .scad-code .cm-editor { height: 100%; }
-        /* The Part's SCAD window: the editor fills it, the code taking what the bar
+        /* The Part's SCAD editor window: the editor fills it, the code taking what the bar
            leaves. */
         .panel[data-panel="part-scad"] .panel-body-slot { display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .panel-body-slot > div, .panel[data-panel="part-scad"] [data-section="scad"],
@@ -7795,7 +7795,7 @@
 
             // ---- the SCAD editor ----------------------------------------
             //
-            // In the Part's SCAD window: the target's SCAD in CodeMirror
+            // In the Part's SCAD editor window: the target's SCAD in CodeMirror
             // (widgets/scad_editor.js), its file's name as the API gives it
             // (source_file), which OpenSCAD's messages name it by. A part's own SCAD
             // is edited; a part built by Python, and a made piece, are read. Typing is checked once it stops
@@ -8212,7 +8212,7 @@
                 editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed. ${merging}`, 'valid');
                 const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
                 const printer = this.pinnedPrinter();
-                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD window says how to make it the part\'s source.';
+                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD editor says how to make it the part\'s source.';
                 const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed.${next}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
@@ -8297,13 +8297,13 @@
                 return this.saveScad(target);
             }
 
-            // Part › View › SCAD: the part's SCAD window, beside the world, the editor in it.
+            // Part › View › SCAD editor: the part's SCAD editor, a window beside the world.
             async scadWindowOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD to show` };
                 this.systems.part.showSection('scad');
                 this.scadEditor?.measure();
-                return { ok: true, said: `${target.label}'s SCAD, in its window beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
+                return { ok: true, said: `${target.label}'s SCAD, in its SCAD editor beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
             }
 
             async fullscreenScadOn(path) {

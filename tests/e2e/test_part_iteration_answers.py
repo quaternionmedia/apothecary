@@ -290,7 +290,7 @@ def test_the_variants_window_alone_lists_the_saved_variants(
     page: Page, url, cube_as_it_was, variants_cleared
 ):
     """A part's saved variants are listed in its Variants window and nowhere else: the
-    SCAD window holds the editor, its name box, Save and Fullscreen. Closed, the Variants
+    SCAD editor holds the editor, its name box, Save and Fullscreen. Closed, the Variants
     window opens for a ring's cell and for a Save; a variant is renamed there from its
     ring, deleted from its ⋯ and restored from the Deleted fold."""
     errors = []

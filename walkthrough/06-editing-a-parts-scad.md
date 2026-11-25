@@ -46,7 +46,7 @@ calibration_cube's ring, Part › Save: the edited SCAD, its values in it, commi
 ![Part › Save keeps it as a variant in git](screenshots/06-04-part-save-keeps-it-as-a-variant-in-git.png)
 
 ```
-calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Its SCAD window says how to make it the part's source. (⌗39)
+calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Its SCAD editor says how to make it the part's source. (⌗39)
 ```
 
 ## 5. Fullscreen covers the page
@@ -57,12 +57,12 @@ Its Fullscreen button: the editor over the whole page, the code as tall as it ca
 
 ## 6. Round two: a name, a change and Save
 
-In the SCAD window: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed in Variants, still in front of Parameters, newest first, the list following each Save. Drawing the first again is the next step.
+In the SCAD editor: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed in Variants, still in front of Parameters, newest first, the list following each Save. Drawing the first again is the next step.
 
 ![Round two: a name, a change and Save](screenshots/06-06-round-two-a-name-a-change-and-save.png)
 
 ```
-calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. Its SCAD window says how to make it the part's source.
+calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. Its SCAD editor says how to make it the part's source.
 ```
 
 ## 7. Part › Variants draws the first again

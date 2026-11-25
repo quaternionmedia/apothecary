@@ -186,7 +186,7 @@ PART = System(
         # Beside the world, as tall as it.
         Section(
             "scad",
-            "SCAD",
+            "SCAD editor",
             "the part's SCAD in the editor: checked as typing stops, rendered, and saved "
             "under the name beside Save, as a variant Variants lists",
             home="beside",

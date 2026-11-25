@@ -680,7 +680,7 @@ pieces it holds: a digit selects one), then what the piece is:
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
-Defaults, Apply, Revert, Save, View › SCAD, Fullscreen, Ghost and Fit,
+Defaults, Apply, Revert, Save, View › SCAD editor, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
 Duplicate, History, Compare and Delete, and Variants › Deleted; after them,
 where the ring has room, Presets › each preset and Adapter), and, when a printer is pinned in the site, **Print** (a made piece) and
@@ -799,7 +799,7 @@ which the page, the ring and the tests all read.
 | View | |
 |---|---|
 | Default | The page's own layout, as Reset layout puts it |
-| Part | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
+| Part | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD editor over Site, Problems and SCAD |
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 | Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
@@ -955,8 +955,9 @@ stage.
   the ring's Panels › Machine › Control pad or disarming put it back in the
   Machine, and
   the world takes its room back.
-- **The Part's SCAD** (Part › View › SCAD) is a window of its own beside the
-  world, the code filling it.
+- **The Part's SCAD editor** (Part › View › SCAD editor) is a window of its
+  own beside the world, the code filling it: titled apart from Site's SCAD, the
+  site's generated OpenSCAD, which the Part view lays out beside it.
 
 A window the page makes for the moment -- a Machine and its sections, the pad --
 is left out of the layout this browser remembers. Every other window is kept in
@@ -1126,7 +1127,7 @@ adapter stays drawn as its variant.
 
 ## The SCAD editor
 
-The part's SCAD is in an editor, in its SCAD window: the same draft as the
+The part's SCAD is in its **SCAD editor**, a window of its own: the same draft as the
 controls in Parameters, its values theirs. Typing in it is
 checked 300 ms after typing stops, the values in it: a line OpenSCAD
 refuses is marked where it is, with its message, and nothing is rendered until
@@ -1202,7 +1203,7 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   overlaid (blue and orange, seen through) or side by side, framed, with each
   one's measured size, every number that differs and what the SCAD changes.
   Close draws the part as it was.
-- **Part › View › SCAD** opens the SCAD window, beside the world; **Part ›
+- **Part › View › SCAD editor** opens the SCAD editor, beside the world; **Part ›
   View › Fullscreen** gives the editor the page (Escape gives it back).
 
 A part built by Python geometry shows the SCAD its geometry generates, read

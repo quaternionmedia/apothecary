@@ -1,11 +1,11 @@
 """Loop 2, editing a part's SCAD, gone round in the page: the part's editor opened from
 its ring (Part › Edit) and the part laid out by the Part view -- Selected, its
-Parameters, its SCAD window beside the world -- its SCAD edited there, an assertion that
+Parameters, its SCAD editor beside the world -- its SCAD edited there, an assertion that
 fails checked once typing stops and marked on its line with nothing rendered, then a
 real change rendered soon after its check passes and drawn as an applied variant, taller
 than its envelope and said so; saved from the ring (Part › Save) as a variant in git and
 listed in the part's Variants window, with what it changes; the editor made fullscreen
-(its own button, then Esc). Round two in the SCAD window: a name typed, another change,
+(its own button, then Esc). Round two in the SCAD editor: a name typed, another change,
 saved with Ctrl+S; then the first variant drawn from the ring (Part › Variants › its
 name › Draw). Round three: the name box letting go of the variant once the
 text moves on and taking it back on Ctrl+Z, Save asking before it replaces a variant, F5
@@ -259,7 +259,7 @@ def _saved(page: Page, name: str) -> None:
     expect(mark).to_have_text(f"{PART}: {name}, saved in git")
     expect(page.locator("#part-drawn")).to_have_text(f"{name}, saved in git")
     # Listed in Variants (a tab of the Part view, in front or not), not merged; the
-    # SCAD window lists nothing.
+    # SCAD editor lists nothing.
     expect(
         page.locator(f"#part-saved .saved-row[data-variant='{name}'] .not-in-head")
     ).to_be_attached()
@@ -468,7 +468,7 @@ def test_editing_a_parts_scad_twice_round(
     expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)
     expect(windows.panel(page, "part-scad")).to_be_visible()
 
-    # Round two, in the SCAD window: a name typed, a bigger top, Ctrl+S in the editor.
+    # Round two, in the SCAD editor: a name typed, a bigger top, Ctrl+S in the editor.
     page.locator("#scad-name").fill("taller")
     _replace_last_line(page, BIG_TOP)
     _rendered(page, 20)
@@ -480,7 +480,7 @@ def test_editing_a_parts_scad_twice_round(
     assert rows.evaluate_all("(rs) => rs.map((r) => r.dataset.variant)") == ["taller", "variant-1"]
     story.shows(
         "Round two: a name, a change and Save",
-        "In the SCAD window: a name typed, taller, and the top made as big as the cube, "
+        "In the SCAD editor: a name typed, taller, and the top made as big as the cube, "
         "rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, "
         "which saves as its Save does. Both variants are listed in Variants, still in "
         "front of Parameters, newest first, the list following each Save. Drawing the "

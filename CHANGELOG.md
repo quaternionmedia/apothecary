@@ -227,6 +227,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The part's SCAD window is the **SCAD editor**, in its tab and on the ring (Part › View › SCAD editor), so the Part view never shows two tabs named SCAD: Site's SCAD is the site's generated OpenSCAD. ([doc](docs/viewer.md#the-scad-editor))
 - The Print window's levelling and adhesion rows say what their first choice comes to for the part under makes on this printer: *the part's own: probe first*, *the printer's: home only* (`GET /slicer/first-layer`, [docs/slicer.md](docs/slicer.md)).
 - A machine whose board is not there is *not connected* wherever the page says so: its Machine's head and status, its ▶'s reason and its card, *Its board, not connected* ([docs/firmware.md](docs/firmware.md#its-board-pinned-and-not-connected)).
 - Every doc and `apothecary --help` give the submodule command as `git submodule update --init --recursive` ([docs/dev-loop.md](docs/dev-loop.md)).

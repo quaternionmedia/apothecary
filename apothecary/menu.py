@@ -2343,13 +2343,13 @@ def _node_ring(
         if seen is not None and seen.editable:
             verbs.append(Option(id="part:save", label="Save", action="part:save"))
         # Two groups, so the ring holds eight at the most: View -- how the part
-        # and its editor are seen: its SCAD window, beside the world, or the editor
-        # over the whole page, the ghost of what was drawn before beside what is
+        # and its editor are seen: its SCAD editor, a window beside the world, or the
+        # editor over the whole page, the ghost of what was drawn before beside what is
         # drawn now, and the part framed with Selected kept open (f) -- and History,
         # the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
         view = []
         if seen is not None:
-            view.append(Option(id="part:scad", label="SCAD", action="part:scad"))
+            view.append(Option(id="part:scad", label="SCAD editor", action="part:scad"))
             view.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))
