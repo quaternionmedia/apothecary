@@ -307,7 +307,7 @@ const CONTROL = `
         </div>
         <div class="grp printer-only">
             <div class="k">SD print</div>
-            <div class="row"><button type="button" data-cmd="M24" title="Start the print on the SD card, or carry on a paused one (M24)">▶ Start / resume</button><button type="button" data-cmd="M25" title="Pause the print on the SD card where it is (M25)">⏸ Pause</button><button type="button" data-cmd="M524" data-twice="abort" title="Abandon the print on the card: pressed twice">⏏ Abort</button></div>
+            <div class="row"><button type="button" data-cmd="M24" title="Carry on the print on the SD card where it was paused, or start the one chosen on the printer (M24)">▶ Resume</button><button type="button" data-cmd="M25" title="Pause the print on the SD card where it is (M25)">⏸ Pause</button><button type="button" data-cmd="M524" data-twice="abort" title="Abandon the print on the card: pressed twice">⏏ Abort</button></div>
         </div>
         <div class="grp printer-only">
             <div class="k">Leveling</div>

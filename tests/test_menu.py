@@ -857,6 +857,14 @@ def test_the_control_ring_says_what_the_machine_s_windows_say():
     assert button("print-cancel") == "Abort"
     assert printer["control:sd-pause"] == pause["Print"] == "Pause"
     assert router["control:job-hold"] == pause["Cut"] == "Hold"
+    # The pad's SD print buttons are the same three acts, worded as the ring's cells.
+    for line, action in (
+        ("M24", "control:sd-resume"),
+        ("M25", "control:sd-pause"),
+        ("M524", "control:sd-abort"),
+    ):
+        said = re.search(rf'data-cmd="{line}"[^>]*>([^<]+)</button>', machine)[1]
+        assert re.sub(r"^\W+", "", said) == printer[action], (line, said)
 
 
 def test_the_bed_windows_buttons_say_what_their_ring_cells_say():
