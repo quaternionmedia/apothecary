@@ -5,7 +5,7 @@ piece chosen, the stage entered; ✓ Works keeps a person's word, under the name
 them once, and takes the page to the next stage, with what there is to try there; the See stage slices the piece where no file is kept, and its path is drawn;
 ✗ Off keeps what is off, and only with it; a view laid out moves the windows and not the
 box; the ring's Panels › Windows › Tour cells do what its buttons do; a reload opens it
-where it was, and starts no job on the way; a machine with no board connected is taken as the site plans it; a stage
+where it was, and starts no job on the way; a machine whose board is not connected is taken as the site plans it; a stage
 that needs what only a person brings is entered, the box saying what it needs; and the
 server gives back every word kept. Walkthrough page 34 is what it writes.
 
@@ -46,7 +46,7 @@ EARLIER = {
     "commit": "0000000",
     "changed": False,
 }
-PLANNED = "cnc_router's Machine opened with no board connected: what it makes is planned there"
+PLANNED = "cnc_router's Machine opened, not connected: what it makes is planned there"
 NO_BOARD = (
     "esp32_blink's board is pinned to a board, but not connected: connect it, or ⟳ Rescan in "
     "its Device section"
@@ -363,9 +363,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     expect(pick.locator("option").first).to_have_text("— none kept for a router —")
     expect(pick).to_have_value("")
     story.says(
-        "A machine with no board connected is taken as the site plans it",
+        "A machine whose board is not connected is taken as the site plans it",
         "Cut a part, chosen: its stages are on the router's Machine, and this server's "
-        "router has no board connected. Its Machine opens all the same, as its badge "
+        "router is not connected. Its Machine opens all the same, as its badge "
         "opens it: what it makes is planned there, its toolpath written and drawn, "
         "and ▶ Cut is its board's once it is connected.",
         shown="\n".join(_words(t) for t in did.all_inner_texts()),

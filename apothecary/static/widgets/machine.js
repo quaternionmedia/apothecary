@@ -131,7 +131,7 @@ const CARDS = `
     <div class="card printer-only gcode"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div><div class="s old" id="c-age" hidden></div></div>
     <div class="card wide needs" id="c-needs-card" hidden><div class="k">Needs you</div><div class="needs-list" id="c-needs"></div></div>
     <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
-    <div class="card wide missing" id="c-missing-card" hidden><div class="k">Its board, not found</div><div id="c-missing"></div>
+    <div class="card wide missing" id="c-missing-card" hidden><div class="k">Its board, not connected</div><div id="c-missing"></div>
         <div class="missing-do" id="missing-said"></div></div>
 </div>
 <div data-section="status">
@@ -452,7 +452,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         get polling() { return state.port ? !!b().polling : false; },  // a poll asked and not yet answered
         get entries() { return state.port ? b().log : []; },
     };
-    // Planning: the Machine of a machine with no board connected (machineAt, its site
+    // Planning: the Machine of a machine not connected (machineAt, its site
     // and node, with no port). What makes it, its slice or toolpath, the files and the
     // path drawn ask the board nothing; ▶ and every control are its board's.
     const planning = () => !state.port && !!machineAt;
@@ -974,7 +974,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!port) {
             applyKind(); renderAll(); loadLevel(); loadPrintJobs();
             if (!planning()) { loadChoices(); loadPrintFiles(); }
-            if (planning()) { $("ident").textContent = `${machineAt.path}: no board connected -- planned here; ${words().start} is its board's`; loadMissing(); }
+            if (planning()) { $("ident").textContent = `${machineAt.path}: not connected -- planned here; ${words().start} is its board's`; loadMissing(); }
             return;
         }
         // Watched at once as what it is known to be, so a verb carried the moment
@@ -1210,7 +1210,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const job = prt.job, running = !!(job && job.running);
         const chosen = prt.files.find((f) => f.id === $("print-pick").value);
         if (!state.port) {
-            out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
+            out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} is not connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
         } else if (running) {
             out["print.start"] = { ok: false, kind: "held", why: `a ${job.kind || "job"} from here is under way` };
         } else if (chosen && ofAnother(chosen, $("print-part").value)) {

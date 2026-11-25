@@ -1,4 +1,4 @@
-"""Why a machine's board is not found (apothecary/firmware/missing.py), read with no
+"""Why a machine's pinned board is not connected (apothecary/firmware/missing.py), read with no
 port opened: the kernel's USB list read from a tree written here, the serial ports and
 the scan given, and each check a board gets through in its order. Each test keeps its
 pins in a state folder of its own.

@@ -609,9 +609,9 @@ Machine's button for that verb; the ring never opens a port.
 A machine is a node drawn from a part that says it is one (`BasePart.machine`:
 the Ender a printer, the AnoleX a router), whether or not a board is pinned to
 it (`GET /sites/{name}/machines`). Everything that prepares a job asks its board
-nothing, so a machine with no board connected -- none pinned, or one pinned and
+nothing, so a machine not connected -- none pinned, or one pinned and
 unplugged -- opens its Machine all the same, from its badge, its ring or ⚙
-View › Machine: its Print or Cut card alone, its head saying no board is
+View › Machine: its Print or Cut card alone, its head saying it is not
 connected. What it makes is chosen there, its slice or toolpath written for it
 by its node (`GET /sites/{name}/machines/{path}` answers its choices as
 `/jobs/choices` does for a port), the file kept for its kind, and the file's
@@ -625,10 +625,10 @@ connected or not, unless another was chosen meanwhile. A part that says how it
 is cut has Toolpath on its ring for a router with no board as for one with; a
 printer's plan is made in its own Machine.
 
-#### Its board pinned and not found
+#### Its board pinned and not connected
 
 A machine with a board pinned to it, at its node or beneath it, that no port
-holds says why in its Machine's **Its board, not found** card, read with no
+holds says why in its Machine's **Its board, not connected** card, read with no
 port opened (`GET /sites/{name}/machines/{path}/missing`,
 `apothecary/firmware/missing.py`). A board gets through four checks on its way
 to being found, and the card shows each in that order, the first that fails
@@ -1072,7 +1072,7 @@ lists only kernel names, so the symlink is for the CLI and other programs.
 Every route is described at `/openapi.json`: the paths under `/firmware`, and
 the site routes `/sites/{name}/devices`, `/sites/{name}/nodes/{path}/device`
 and `/sites/{name}/machines` with the routes under it (a machine's choices, its
-plan, and why its board is not found).
+plan, and why its board is not connected).
 Long-running actions (install, compile, upload, flash) return `202` with a
 task; poll `GET /firmware/tasks/{id}?since=N` for new log lines. One task
 runs at a time; a second request gets `409`.

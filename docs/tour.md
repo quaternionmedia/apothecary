@@ -78,7 +78,7 @@ thing only where it is not so already:
   | Put | What the page does | As |
   |---|---|---|
   | `pin` | a board on a port pinned to a piece, where that port is listed | Pin, in the piece's Device section |
-  | `machine` | a piece chosen, and its Machine opened, in place of another's, where it is not open already; with no board connected, as the site plans it | its badge, or Device › Open |
+  | `machine` | a piece chosen, and its Machine opened, in place of another's, where it is not open already; not connected, as the site plans it | its badge, or Device › Open |
   | `part` | a piece chosen | its row in Site |
   | `fit` | a piece chosen and framed in the world | `f` |
   | `makes` | the piece named under makes in the open Machine's Print window (a router's Cut), and the file kept made from it chosen, where one is kept: nothing is sliced | the card's makes, and its files |
@@ -117,7 +117,7 @@ box opens on what the stage needs, in the page's own words for it -- *esp32_blin
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
 section*. With that done, ↻ takes the page the rest of the way. A stage that stands
 without what its journey is staged on is not stopped by it: Flash a board's Bench
-builds a sketch with no board connected, so it opens on the sketch whatever the board.
+builds a sketch while not connected, so it opens on the sketch whatever the board.
 A picture that is not there is named inside the pictures folder, as a person names
 it, never by where the server keeps that folder.
 

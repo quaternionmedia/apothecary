@@ -2342,7 +2342,7 @@
                 this.following = {};   // port -> the world's own watch of a machine it draws (followMachines)
                 this.leavingSite = false;  // a site left while the next loads: nothing of it is followed
                 // The site's machines by the part each is drawn from (GET /sites/{name}/machines):
-                // what a machine with no board connected is planned as; `machinesLoaded`
+                // what a machine not connected is planned as; `machinesLoaded`
                 // settles once the site in view's have answered (loadMachinesHere).
                 this.machinesHere = [];
                 this.machinesLoaded = Promise.resolve();
@@ -9360,7 +9360,7 @@
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
                 if (!port) {
-                    // No board connected: a machine of the site is planned instead.
+                    // Not connected: a machine of the site is planned instead.
                     const planned = this.plannedMachineOf(path);
                     if (planned) return this.showPlan(planned);
                     this.setStatus(this.noMachine(path), 'error');
@@ -9473,14 +9473,14 @@
                 }
                 return null;
             }
-            // A machine's Machine with no board connected: what it makes, its slice or
+            // A machine's Machine, not connected: what it makes, its slice or
             // toolpath, the files and the path drawn over it, kept as its plan.
             showPlan(planned) {
                 if (this.machine && this.machine.plan && this.machine.path === planned.path) { this.panels.open('machine'); this.makingWith(this.machine); return true; }
                 this.mountMachinePanel('', planned.path, null, planned);
                 this.panels.open('machine');
                 const card = planned.kind === 'router' ? 'Cut' : 'Print';
-                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} plans what it makes, and ▶ ${card} is its board's once it is connected`, 'success');
+                this.setStatus(`Opened ${planned.path}'s Machine, not connected: its ${card} plans what it makes, and ▶ ${card} is its board's once it is connected`, 'success');
                 return true;
             }
             // Why a machine has no Machine to open: nothing pinned, or a pin whose board
@@ -9817,7 +9817,7 @@
                     if (!this.openMachine(subject) || !(await until(open, 15000))) {
                         return { refused: port ? `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` : this.noMachine(subject) };
                     }
-                    return { did: port ? `${subject}'s Machine opened` : `${subject}'s Machine opened with no board connected: what it makes is planned there` };
+                    return { did: port ? `${subject}'s Machine opened` : `${subject}'s Machine opened, not connected: what it makes is planned there` };
                 }
                 if (verb === 'makes') {
                     const machine = this.machine, print = machine?.handle?.print;
@@ -9999,7 +9999,7 @@
                     // Never laid out lower than its head -- the latch and ⏹ E-STOP -- and its
                     // state under it, at any width the page is laid out for (panels.js).
                     group: 'Machine', least: 250,
-                    title: planned ? `${anchor} · no board connected: its plan` : (anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`),
+                    title: planned ? `${anchor} · not connected: its plan` : (anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`),
                     // Its tab, beside Pictures and the Bench: the node's name (the
                     // port's last part, pinned nowhere); the whole title its tooltip.
                     tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),

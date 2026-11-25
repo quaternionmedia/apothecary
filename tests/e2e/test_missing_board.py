@@ -1,4 +1,4 @@
-"""A machine whose pinned board is not found: printer_1 pinned to a bridge by its serial
+"""A machine whose pinned board is not connected: printer_1 pinned to a bridge by its serial
 number, A106ZTEU, with no such board plugged in. Its Machine opens as its plan, and says
 how far the board got -- not on USB -- and what to try; once a board it is pinned to
 comes up, its own Machine opens in the plan's place.
@@ -46,7 +46,7 @@ def test_a_printer_whose_board_is_not_found_says_what_to_try_and_opens_when_it_c
         timeout=15000,
     )
     assert page.evaluate("() => window.fractalViewer.openMachine('printer_1')") is True
-    expect(windows.in_machine(page, "#ident")).to_contain_text("no board connected")
+    expect(windows.in_machine(page, "#ident")).to_contain_text("not connected")
     card = windows.in_machine(page, "#c-missing-card")
     expect(card).to_be_visible(timeout=10000)
     expect(card).to_contain_text(f"pinned at {BOARD}")
@@ -70,5 +70,5 @@ def test_a_printer_whose_board_is_not_found_says_what_to_try_and_opens_when_it_c
         arg=PRINTER,
         timeout=20000,
     )
-    expect(windows.in_machine(page, "#ident")).not_to_contain_text("no board connected")
+    expect(windows.in_machine(page, "#ident")).not_to_contain_text("not connected")
     assert not errors, errors

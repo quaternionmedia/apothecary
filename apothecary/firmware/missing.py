@@ -1,4 +1,4 @@
-"""Why a machine's board is not found, read without opening a port.
+"""Why a machine's pinned board is not connected, read without opening a port.
 
 A machine's board is expected when a board is pinned at the machine's node or beneath
 it (``FirmwareState.bindings``) and the port scan names none on any port. What can be

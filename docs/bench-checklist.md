@@ -44,7 +44,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       note what each names, and take back any that stands on a node it should
       not. A pin's node says *not connected* in its Device section.
 - [ ] **Plan the router.** Select `cnc_router`, ⚙ View › Machine: its
-      Machine opens with no board connected, its head saying so, its Cut card
+      Machine opens not connected, its head saying so, its Cut card
       alone. Under *makes* choose `router_coupon`, **Toolpath**: the file is
       kept and chosen, listed with what it was written from; the preview
       slider draws its passes over the router's table, standing on the table
@@ -74,7 +74,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       it is: Marlin …*, and `printer_1` wears its ⚡ badge.
 - [ ] Open `printer_1`'s Machine: its plan's part and file are chosen.
 - [ ] Unplug the printer's USB with its Machine open: the Machine opens as its plan,
-      and its **Its board, not found** card says *On USB* ✗, where the board was
+      and its **Its board, not connected** card says *On USB* ✗, where the board was
       last found (its port and USB socket) and what to try. Plug it back in: the
       card scans once, and the board's Machine opens in the plan's place.
 - [ ] **Pin the ESP32.** Select `esp32_blink`, choose the ESP32's port,

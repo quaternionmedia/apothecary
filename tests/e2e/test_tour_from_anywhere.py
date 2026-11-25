@@ -6,7 +6,7 @@ file made from its own piece -- another part's file chosen before is not its, an
 file of its piece kept before is chosen rather than sliced again.
 
 Runs against a server of its own with nothing pinned: printer_1 is taken as the garage
-plans it, with no board connected, so no port is touched. The slicer is the scripted
+plans it, not connected, so no port is touched. The slicer is the scripted
 OrcaSlicer of the unit tests (tests/slicer_helpers.py). No word is kept.
 """
 
@@ -156,7 +156,7 @@ def test_a_stage_opens_a_planned_machine_once_its_site_s_machines_answer(page: P
     held[0].continue_()
     _taken_to(page, "choose")
     assert page.locator(f"{BOX} .tour-pop-needs").text_content() == ""
-    planned = "printer_1's Machine opened with no board connected: what it makes is planned there"
+    planned = "printer_1's Machine opened, not connected: what it makes is planned there"
     assert planned in _did(page)
     assert page.evaluate("() => window.fractalViewer.selectedName") == "footpedal"
     assert errors == []

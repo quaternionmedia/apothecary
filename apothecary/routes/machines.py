@@ -10,7 +10,7 @@
   registered part -- in the shape
   ``GET /jobs/choices`` answers for a board's port, with no port; where it stands, as
   ``/firmware/printers/where`` says of a pinned board's printer; and its plan.
-- ``GET /sites/{name}/machines/{path}/missing``: why its board is not found -- each
+- ``GET /sites/{name}/machines/{path}/missing``: why its board is not connected -- each
   board pinned there that no port holds, how far it got (``firmware/missing.py``),
   and every serial port plugged in now.
 - ``PUT /sites/{name}/machines/{path}/plan``: keep the part it will make and the kept
@@ -139,7 +139,7 @@ def let_plan_go(name: str, path: str):
 
 @router.get("/{name}/machines/{path}/missing")
 def machine_missing(name: str, path: str):
-    """Why the machine's board is not found: each board pinned at the machine or
+    """Why the machine's board is not connected: each board pinned at the machine or
     beneath it that the port scan names on no port, with the checks a board gets
     through on its way to being found (``firmware/missing.py``), and every serial
     port plugged in now with the node a pin names it for. No port is opened, and no
