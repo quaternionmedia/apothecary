@@ -387,7 +387,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     slicing.click()
     _said(
         page,
-        f"slicing {disc} for printer_1: its log is in Print from here, and its G-code is "
+        f"slicing {disc} for printer_1: its log is in its Print window, and its G-code is "
         "chosen there when it ends",
     )
     said = machine.locator("#print-slice-said")
@@ -461,7 +461,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     # What was asserted is what the page shows: a short print can end, and say so in
     # the status line, before the line is read again.
     started = (
-        f"started {disc}.gcode on {PRINTER}, making {disc}: Print from here follows it to "
+        f"started {disc}.gcode on {PRINTER}, making {disc}: its Print window follows it to "
         "its end, and Site's Jobs lists it"
     )
     _said(page, started)
@@ -594,7 +594,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     _press(page, "Slice")
     _said(
         page,
-        f"Slice: slicing {plate} for printer_1: its log is in Print from here, and its "
+        f"Slice: slicing {plate} for printer_1: its log is in its Print window, and its "
         "G-code is chosen there when it ends",
     )
     expect(makes).to_have_value(plate)
@@ -639,7 +639,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         f"{plate}.gcode · printing", timeout=5000
     )
     assert asked and f"making {plate}" in asked[0], asked
-    _said(page, f"Send file: started {plate}.gcode on {PRINTER}, making {plate}: Print from here")
+    _said(page, f"Send file: started {plate}.gcode on {PRINTER}, making {plate}: its Print window")
     expect(machine.locator("#print-progress")).to_contain_text(
         f"{plate}.gcode · done", timeout=30000
     )

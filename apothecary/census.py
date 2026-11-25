@@ -1881,6 +1881,18 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
+    # A row of the Print window's jobs, pressed or Enter on it: the drawer of the piece the
+    # job made, in Part › Feedback.
+    "print-history:click:onJobRow": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in the Print window, opening its piece's drawer in Part › Feedback",
+    ),
+    "print-history:keydown:onJobRow": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in the Print window with Enter, opening its piece's drawer",
+    ),
     # ---- the Bench --------------------------------------------------------
     "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
     "modulesEl:click:closest": (WIDGET, WHAT_IS_THERE, "a toolchain module's Install button"),

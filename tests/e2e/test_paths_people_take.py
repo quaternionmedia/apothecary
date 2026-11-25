@@ -86,7 +86,8 @@ def test_a_made_piece_s_print_cell_opens_its_printer_s_machine_with_it_chosen(pa
     assert "Print" in _labels(page), _labels(page)
     _press(page, "Print")
     _said(
-        page, f"printer_1's Machine makes {piece}: choose its file in Print from here, then ▶ Print"
+        page,
+        f"printer_1's Machine makes {piece}: choose its file in its Print window, then ▶ Print",
     )
     machine = windows.machine(page)
     expect(page.locator(MACHINE)).to_be_visible(timeout=5000)

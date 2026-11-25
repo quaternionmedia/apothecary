@@ -57,6 +57,10 @@
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
  * made says what it was sliced from and for which printer. What the piece made of it
  * measures and shows is said in its part's Feedback, not here (widgets/feedback.js).
+ * The window's first line says the step a person is at and what is next: what to
+ * choose, Slice, ▶ Print and why it waits, the job streaming and where its end goes.
+ * Its jobs are listed under it, newest first; a row of one that made a piece opens
+ * that piece's drawer in Part › Feedback (`openDrawer(job)`, the host's).
  * `host` is "world": the world's page, a window of its layout, one board and
  * everything inline in one column; /firmware/monitor opens the world's page with
  * this Machine.
@@ -184,6 +188,7 @@ const CARDS = `
 <div class="cards">
     <div class="card wide printer-only gcode" id="print-card">
         <div class="k"><span id="print-title"></span></div>
+        <div class="s print-next" id="print-next"></div>
         <div class="row"><label for="print-part">makes</label>
             <select id="print-part"><option value="">— no part named —</option></select>
             <button type="button" id="print-slice">Slice</button>
@@ -218,7 +223,7 @@ const CARDS = `
             <span class="s" id="print-plan-said"></span>
         </div>
         <div class="row" id="print-verbs">
-            <button type="button" id="print-start" data-can="print.start" class="warm">▶ Send</button>
+            <button type="button" id="print-start" data-can="print.start" class="warm"></button>
             <button type="button" id="print-pause" data-can="print.pause">⏸ Pause</button>
             <button type="button" id="print-resume" data-can="print.resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel" data-can="print.cancel">⏏ Abort</button>
@@ -415,7 +420,7 @@ const OLD_MS = 5000;
 // the markup, which carries none of its own.
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null, onFound = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null, onFound = null, openDrawer = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -975,7 +980,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!port) {
             applyKind(); renderAll(); loadLevel(); loadPrintJobs();
             if (!planning()) { loadChoices(); loadPrintFiles(); }
-            if (planning()) { $("ident").textContent = `${machineAt.path}: not connected -- planned here; ${words().start} is its board's`; loadMissing(); }
+            if (planning()) { $("ident").textContent = `${machineAt.path}: not connected — its plan is made here, and ${words().start} is its board's once it is`; loadMissing(); }
             return;
         }
         // Watched at once as what it is known to be, so a verb carried the moment
@@ -1241,6 +1246,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         askStart();
         const c = localCan();
         for (const el of everywhere) applyCan(el, c);
+        // The Print window's first line reads the same answer: said again with it.
+        const next = $("print-next");
+        if (next) next.textContent = nextSaid();
     }
     function takeCan(c) {
         if (!c) return;
@@ -1826,16 +1834,45 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         renderPlan();
         renderFilament();
     }
+    // The step a person is at, in the window's first line: what is next, and where.
+    function nextSaid() {
+        const w = words(), job = prt.job, running = !!(job && job.running);
+        const part = $("print-part").value, file = prt.files.find((f) => f.id === $("print-pick").value);
+        if (!isGcode() || (!state.port && !planning())) return "";
+        if (running) return job.stage === "paused"
+            ? `The ${w.job} is paused: ▶ Resume feeds it again, ⏏ Abort ends it.`
+            : `The ${w.job} streams from here; its end opens its piece's drawer in Part › Feedback.`;
+        if (slc.running) return `Slicing ${part}: its G-code is chosen here when it ends, for ${w.start}.`;
+        if (file) {
+            const v = localCan()["print.start"];
+            if (v && !v.ok && v.kind === "armed") return `${w.start} waits for control: ⚙ Control in the Machine's head arms it.`;
+            if (v && !v.ok) return `${w.start} waits: ${v.why}.`;
+            return `${w.start} ${w.job}s ${file.name}${part ? `, making ${part}` : ""}, asking first.`;
+        }
+        if (part) return `${w.prepare} makes ${part}'s file for this ${state.kind}.`;
+        return `Choose what it makes under makes, then ${w.prepare}; or choose a file kept.`;
+    }
     // One job of the history: when it started and finished, its kind, the file it ran
-    // and the part it makes, how it ended (and why), and how far it got.
+    // and the part it makes, how it ended (and why), and how far it got. A job that made
+    // a piece opens its drawer, pressed.
     function jobRow(j) {
         const d = j.detail || {};
         const when = `${stamp(j.started_at)} – ${j.finished_at ? clock(j.finished_at) : "…"}`;
         const part = j.part ? ` → ${esc(j.part.path)}` : "";
         const lines = d.total != null ? ` · ${d.sent}/${d.total} lines` : "";
         const why = j.reason ? ` (${esc(j.reason)})` : "";
-        return `<div><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
+        const opens = j.part && openDrawer ? ` role="button" tabindex="0" title="Open the drawer of ${esc(j.part.path)}, the piece it made, in Part › Feedback"` : "";
+        return `<div class="job-row" data-job="${esc(j.id)}"${opens}><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
     }
+    // A job's row pressed, or Enter on it: its piece's drawer in Part › Feedback.
+    function onJobRow(ev) {
+        if ((ev.type === "keydown" && ev.key !== "Enter") || ev.target.closest("a")) return;
+        const row = ev.target.closest('.job-row[role="button"]');
+        const job = row && prt.jobs.find((j) => j.id === row.dataset.job);
+        if (job && openDrawer) openDrawer(job);
+    }
+    $("print-history").addEventListener("click", onJobRow);
+    $("print-history").addEventListener("keydown", onJobRow);
     // A kept file a slice made says what it was sliced from, and for which printer.
     // What a kept file came from: a slice's piece and printer, or a toolpath's part and router.
     const slicedFrom = (f) => {
@@ -2013,7 +2050,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const part = $("print-part").value;
         if (!state.port && !planning()) { refuse("slice: no printer chosen"); return false; }
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
-        if (slc.running) { refuse("slice: one is running; its log is in Print from here"); return false; }
+        if (slc.running) { refuse("slice: one is running; its log is in its Print window"); return false; }
         const status = await loadSlicer();
         if (!status.ok) { refuse(`slice: no slicer here (${status.why}); Panels › Tools › Bench › Install › OrcaSlicer installs it`); return false; }
         slc.running = true; renderPrint();
@@ -2033,7 +2070,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ending = sliceTasks().start(async () => task, "/slicer/tasks");
         const levelled = [levelling ? $("print-level") : null, adhesion ? $("print-adhesion") : null]
             .filter(Boolean).map((el) => `, ${el.selectedOptions[0].textContent.split(":")[0]}`).join("");
-        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in Print from here, and its G-code is chosen there when it ends`);
+        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in its Print window, and its G-code is chosen there when it ends`);
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
@@ -2151,7 +2188,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // `levelling` and `adhesion`, when given, are chosen in the Print window's rows for this
     // slice and the ones after it ("" the part's own: what it declares, else the profile's).
     async function slicePart(path, variant = undefined, { levelling = undefined, adhesion = undefined } = {}) {
-        if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
+        if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print window can make` };
         if (levelling !== undefined) $("print-level").value = levelling || "";
         if (adhesion !== undefined) $("print-adhesion").value = adhesion || "";
         const before = refusals;
@@ -2210,7 +2247,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!confirm(`${w.verb} ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the ${state.kind} will ${w.can}.`)) return;
         try {
             prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
-            tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: ${w.title} follows it to its end, and Site's Jobs lists it`);
+            tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: its ${w.verb} window follows it to its end, and Site's Jobs lists it`);
             renderPrint();
             prt.timer = setTimeout(watchPrint, 800);
             forgetRefusal();

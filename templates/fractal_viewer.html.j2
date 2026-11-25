@@ -9506,8 +9506,8 @@
                 if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Print') };
                 const handle = this.machine && this.machine.handle;
                 if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Print again` };
-                if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
-                return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
+                if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print window can make` };
+                return { said: `${printer}'s Machine makes ${piece}: choose its file in its Print window, then ▶ Print` };
             }
             // A print that stopped, tried again from Part › Feedback: the piece sliced again
             // for the printer that made it, in its Print window, with `how` chosen there --
@@ -10036,6 +10036,11 @@
                             variantFor: (path) => { const node = this.nodeByPath(path); const ref = node ? node.part_ref : path; return ref ? this.variantByPart[ref] ?? null : null; },
                             afterPrint: (job) => this.afterPrint(job),
                             afterHello: (sketch) => this.afterHello(sketch),
+                            // A row of its jobs pressed: the piece the job made, its drawer.
+                            openDrawer: async (job) => {
+                                const opened = await this.openFeedback(job.part.path, { job: job.id });
+                                this.setStatus(opened.refused ? `${job.input.name}: ${opened.refused}` : `${opened.said}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, opened.refused ? 'error' : 'success');
+                            },
                             // A plan whose pinned board has come up: the board's own
                             // Machine in its place, once the page's scan names it.
                             onFound: async (path) => {

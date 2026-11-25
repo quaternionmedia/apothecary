@@ -926,7 +926,11 @@ row beside it (the next slice's: the part's own, probe first, or home only;
 the ring's Print › Levelling steps it), the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
 preview and ▶ Print once a file is chosen, Pause and Abort while a print runs,
-and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
+and Resume while it is paused. The window's first line says the step a person is
+at and what is next: what to choose, Slice, ▶ Print -- and what it waits for, the
+latch in the Machine's head or the server's reason -- the print streaming and where
+its end goes. Under it, the printer's jobs, newest first; the row of one that made
+a piece opens that piece's drawer in Part › Feedback, as Site's Jobs does. **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and
