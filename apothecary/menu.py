@@ -36,8 +36,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .facets import KIND, KINDS, SYSTEM, SYSTEM_LAYER, facet_of, facets_of, kinds_and_systems
 from .facets import SYSTEMS as SITE_SYSTEMS
 from .hierarchy import Assembly, find_node_by_path
-from .journeys import JOURNEYS
-from .journeys import by_id as journey_by_id
 from .layer_colours import (
     BED_MESH,
     CATEGORY,
@@ -943,14 +941,12 @@ PANEL_GROUPS = {
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
-# The views: each focused system's windows laid out together (systems.py), then each
-# journey's that has a cell (journeys.py: the ring is full, so the first's alone), a cell
-# of Panels › Windows after the layout's own two and an entry of the header's ⚙ View. The page defines each from the same entry; a view's
-# windows the page has not got are left out of it.
-VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
-    (journey.id, journey.cell) for journey in JOURNEYS if journey.cell
-)
-JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
+# The views: each focused system's windows laid out together (systems.py), a cell of
+# Panels › Windows after the layout's own two and an entry of the header's ⚙ View. The
+# page defines each from the same entry; a view's windows the page has not got are left
+# out of it. A journey's view is laid out by the tour going to its stages, where a
+# journey is chosen, and is listed in neither.
+VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # Panels is one cell per group of windows, each a ring of its group's windows and their
 # verbs: Site 8, Part 6, Pictures 2, Machine 4, then the layout's own Windows 9, Tools 3,
 # Family 1 and Airgap 7. These four come before Windows.
@@ -1053,7 +1049,7 @@ def _panels(rig: bool = False) -> Option:
                 Option(
                     id=f"panel:view:{vid}",
                     label=label,
-                    group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
+                    group=by_id(vid).group,
                     action=f"panel:view:{vid}",
                 )
                 for vid, label in VIEWS

@@ -1682,13 +1682,13 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
-        ("Print view", "panel:view:make", 1),
-        # The Tour, after the views: its box over the page, then its buttons.
-        ("Tour", None, 7),
+        # The Tour, after the views: its box over the page, then its buttons. A
+        # journey's view has no cell: the tour lays it out.
+        ("Tour", None, 1),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
     assert address_of(root, "panel:view:family") == "493"
-    assert address_of(root, "panel:view:make") == "491"
+    assert "panel:view:make" not in [c.action for c in windows.children]
     tour = next(c for c in windows.children if c.label == "Tour")
     assert [(c.label, c.action, c.cell) for c in tour.children] == [
         ("Tour", "tour:toggle", 8),
@@ -1700,8 +1700,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Take me here", "tour:put", 1),
         ("Who", "tour:by", 7),
     ]
-    assert address_of(root, "tour:toggle") == "4978"
-    assert address_of(root, "tour:works") == "4972"
+    assert address_of(root, "tour:toggle") == "4918"
+    assert address_of(root, "tour:works") == "4912"
     assert carried_by("tour:off").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"

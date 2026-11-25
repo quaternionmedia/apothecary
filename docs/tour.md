@@ -191,7 +191,8 @@ said of each stage.
 Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back,
 Works, Off (with what the box's field says), Next, Its page (the walkthrough page the
 stage names first, at its step, in a tab), Take me here, and Who, the field for the name. It is
-seated after the views, so no cell before it moves.
+seated after the views, the systems' alone: a journey's view is laid out by the box, and
+has no cell.
 
 ## What it does not do
 

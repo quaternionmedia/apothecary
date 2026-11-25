@@ -30,8 +30,8 @@
  *   away), and openLinked() opens the sections a link to the subject asks for.
  * defineJourneyViews(panels, journeys) defines each journey's view (apothecary/journeys.py),
  *   the windows a path through the page passes, laid out together, greyed until the
- *   window it `requires` is there. One with a cell on the ring is listed among the
- *   views after the systems'; the others are laid out by the Tour box going to a stage of theirs.
+ *   window it `requires` is there. None is listed among the views: each is laid out by
+ *   the Tour box going to a stage of its journey, where a journey is chosen.
  */
 
 export function knownWindows(systems) {
@@ -53,7 +53,7 @@ export function transientWindows(systems) {
 
 export function defineJourneyViews(panels, journeys) {
     for (const journey of journeys) {
-        panels.defineView(journey.id, { title: journey.title, layout: journey.view, requires: journey.requires, hint: journey.opened_by, listed: Boolean(journey.cell) });
+        panels.defineView(journey.id, { title: journey.title, layout: journey.view, requires: journey.requires, hint: journey.opened_by, listed: false });
     }
 }
 

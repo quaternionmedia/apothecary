@@ -656,7 +656,8 @@ site, a target no longer in it or nothing at its level, Site with no site regist
   Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)) and
   Bed (Runs, Differences, Fixes and History, then Keep mount and Make these, on the
   printer whose Machine is open, [bed-shims.md](bed-shims.md#in-the-page)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view;
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Tour (the
+  [tour](tour.md#the-ring)'s box, then its buttons);
   Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
   slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
   Deck window, then the Stream Deck +'s knobs: On / off, Machine, Step, Here and Screen
@@ -803,15 +804,15 @@ which the page, the ring and the tests all read.
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 | Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
-| Print | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
 
-A view needs its main window. The Machine view, and the Print view, open the Machine
+A view needs its main window. The Machine view opens the Machine
 of the machine selected, or else stepped into, when none is open; with none to open
-each is offered greyed, its tooltip saying why as every greyed control's does
+it is offered greyed, its tooltip saying why as every greyed control's does
 ("Disabled: <why>. ..."), and asked for, from ⚙ View or the ring, it says why and
 leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
-the printer's Machine.
-Laid out, either lands on the file the machine would run: the path of the file its
+the printer's Machine. A journey's windows are laid out by the [tour](tour.md), where a
+journey is chosen, and ⚙ View lists none of them ([below](#journeys)).
+Laid out, the Machine view lands on the file the machine would run: the path of the file its
 Print or Cut has chosen drawn in the world, all of it, and framed, the slider
 that goes through it beside it ([toolpath-preview.md](toolpath-preview.md#in-the-page));
 with no file of that machine's kept, the status line says how one comes to be.
@@ -879,10 +880,10 @@ what it made:
 | 5 | **Print** | the Print window, then Jobs | the Machine, Jobs |
 | 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure, or a dimension clicked on the part with Measure shown | the Feedback window |
 
-A journey's view lays its windows out when it is entered. *Print a part*'s is also
-listed in ⚙ View › Views and has a cell on the ring's Panels › Windows, which is
-full; the others' are laid out by the tour alone, which takes the page to each
-stage.
+A journey's view lays its windows out when it is entered: the windows its stages
+name, the first stage's in front and the next's a tab away. It is laid out by the tour
+alone, which takes the page to each stage; ⚙ View and the ring's Panels › Windows list
+the systems' views, and no journey's.
 
 - **A step chosen in the box enters it** -- its number, ‹ or ›, and ↻ for the
   step already on: its windows come in front of their stacks, the one it is

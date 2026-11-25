@@ -706,8 +706,7 @@ def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_ur
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
     assert sorted(_wedges(page).values()) == [
-        "Airgap view", "Family view", "Machine view", "Part view", "Print view", "Reset layout",
-        "Tour",
+        "Airgap view", "Family view", "Machine view", "Part view", "Reset layout", "Tour",
         "World alone",
     ]  # fmt: skip
     page.keyboard.press(
@@ -806,13 +805,14 @@ def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows
     expect(page.locator("#view-menu > summary")).to_have_text("⚙ View")
     body = page.locator(windows.VIEW_MENU)
     expect(body.locator(".view-menu-views .spawn-group")).to_have_text(["Views"])
+    # The systems' views: a journey's is the tour's to lay out, and is not listed.
     expect(body.locator(".view-item")).to_have_text(
-        ["Default", "Part", "Machine", "Airgap", "Family", "Print"]
+        ["Default", "Part", "Machine", "Airgap", "Family"]
     )
     # The views first, then how the world is drawn; Settings is a window, not here.
     order = body.evaluate(
         """(el) => { const at = (s) => el.querySelector(s).getBoundingClientRect().top;
-            return [at('.view-item[data-view=default]'), at('.view-item[data-view=make]'),
+            return [at('.view-item[data-view=default]'), at('.view-item[data-view=family]'),
                 at('#snap-toggle'), at('#walls-toggle')]; }"""
     )
     assert order == sorted(order) and len(set(order)) == 4, order
@@ -829,7 +829,7 @@ def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows
     page.keyboard.press("ArrowDown")
     assert page.evaluate("() => document.activeElement.dataset.view") == "part"
     page.keyboard.press("End")
-    assert page.evaluate("() => document.activeElement.dataset.view") == "make"
+    assert page.evaluate("() => document.activeElement.dataset.view") == "family"
     page.keyboard.press("Home")
     page.keyboard.press("ArrowDown")
     page.keyboard.press("Enter")
