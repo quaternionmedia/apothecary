@@ -978,7 +978,8 @@ LEVEL = Journey(
             "what a shim fits, measured at the bench and typed in bed_shims' Parameters: the "
             "bed screw chosen, M3 or M4, the hole typed over where it needs another; a "
             "mount's outer diameter where it meets the bed, read with calipers, as the ring; "
-            "then Keep mount in Fixes keeps both as printer_1's",
+            "then Keep mount in Fixes keeps both as printer_1's. Where each screw is: Home all "
+            "in printer_1's Machine, jog the nozzle over the screw, and Here in Fixes keeps it",
             forward=("part-parameters", "bed-fixes"),
             owns=("part-parameters", "selected"),
             puts=(("part", "bed_shims"),),

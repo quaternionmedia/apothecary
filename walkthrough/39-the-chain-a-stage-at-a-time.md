@@ -181,7 +181,7 @@ A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat a
 3 Compare: nothing more to do
     Level a bed › 3 Compare (the tour): the second run less the first in Differences: the floor a shim must clear, and the bow, which no shim fixes
 4 Measure: bed_shims chosen
-    Level a bed › 4 Measure (the tour): what a shim fits, measured at the bench and typed in bed_shims' Parameters: the bed screw chosen, M3 or M4, the hole typed over where it needs another; a mount's outer diameter where it meets the bed, read with calipers, as the ring; then Keep mount in Fixes keeps both as printer_1's
+    Level a bed › 4 Measure (the tour): what a shim fits, measured at the bench and typed in bed_shims' Parameters: the bed screw chosen, M3 or M4, the hole typed over where it needs another; a mount's outer diameter where it meets the bed, read with calipers, as the ring; then Keep mount in Fixes keeps both as printer_1's. Where each screw is: Home all in printer_1's Machine, jog the nozzle over the screw, and Here in Fixes keeps it
 5 Shims: printer_1 framed in the world, as f does
     Level a bed › 5 Shims (the tour): each corner's shim in Fixes, drawn at its screw in the world as wide as the mount: the highest none, one under a layer or under the floor skipped
 6 Print: nothing more to do

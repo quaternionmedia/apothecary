@@ -46,3 +46,5 @@
 .bed-history .bed-point.read circle { stroke-dasharray: 2 2; }
 .bed-default { padding: 0 4px; border-radius: 3px; font-size: 11px; border: 1px dashed #e8b04a; color: #e8b04a; }
 .bed-mount { margin-top: 8px; }
+.bed-where { margin-top: 8px; }
+.bed-where-said { margin-bottom: 4px; }

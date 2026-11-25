@@ -40,7 +40,7 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Callable, Dict, List, Optional, Protocol, Tuple
+from typing import Callable, Dict, List, Optional, Protocol, Set, Tuple
 
 from .models import MACHINE_OF, MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
@@ -102,6 +102,32 @@ def parse_m105(line: str) -> dict:
                 actual=actual, target=target, power=powers.get(f"@{key[1:]}", powers.get("@"))
             )
     return {"hotends": [hotends[i] for i in sorted(hotends)], "bed": bed}
+
+
+HOME_RE = re.compile(r"^G28(?![0-9.])(.*)$", re.IGNORECASE)
+
+
+def homes(cmd: str) -> Set[str]:
+    """The axes ``cmd`` homes: Marlin's ``G28`` all three, ``G28 X Y`` those named;
+    nothing for any other line."""
+    m = HOME_RE.match(cmd.strip())
+    if not m:
+        return set()
+    named = {a.upper() for a in re.findall(r"[XYZ]", m.group(1), re.IGNORECASE)}
+    return named or {"X", "Y", "Z"}
+
+
+FREE_RE = re.compile(r"^M(?:84|18)(?![0-9.])(.*)$", re.IGNORECASE)
+
+
+def unhomes(cmd: str) -> Set[str]:
+    """The axes ``cmd`` lets go of: ``M84`` (or ``M18``) frees the motors, all of them or
+    those named, and what turns by hand is no longer where it was homed."""
+    m = FREE_RE.match(cmd.strip())
+    if not m:
+        return set()
+    named = {a.upper() for a in re.findall(r"[XYZ]", m.group(1), re.IGNORECASE)}
+    return named or {"X", "Y", "Z"}
 
 
 def is_temperature_line(line: str) -> bool:
@@ -1033,6 +1059,11 @@ class GcodeLink:
         # Those of them nothing here asked for: a banner that does not follow a reset
         # this link wrote is a board whose power was cycled, or its button pressed.
         self.unasked_restarts = 0
+        # The axes a `G28` sent here homed since the board last started: what a position
+        # it reports is measured from. A restart forgets them, as the board does, and so
+        # do motors freed (`M84`) and a link opened afresh, which cannot know what was
+        # homed before it.
+        self.homed: Set[str] = set()
         self._asked_reset = float("-inf")
         # Replies still to come for lines whose exchange is over: one written ahead
         # of an exchange in flight (``ahead``), one whose `ok` did not come in time.
@@ -1097,6 +1128,7 @@ class GcodeLink:
             self.alarm = text
         if BOOT_RE.match(text):
             self.restarts += 1
+            self.homed.clear()
             if time.monotonic() - self._asked_reset > RESET_ANSWER_S:
                 self.unasked_restarts += 1
             self._owed = 0  # a board that restarted owes nothing it was asked before
@@ -1345,6 +1377,7 @@ class GcodeLink:
             if BUSY_RE.match(line):
                 end = time.monotonic() + timeout * self.time_scale  # heating/homing
             elif OK_RE.match(line):
+                self.homed = (self.homed - unhomes(cmd)) | homes(cmd)
                 return lines
             elif objected:
                 # A refusal says the dialect's words for it, where it has them, so

@@ -513,6 +513,19 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that heats the bed, holds it, probes it twice and turns it off after",
     ),
+    # Fixes' Here: where the nozzle stands kept as a screw or a corner of the plate, the
+    # place chosen beside it; the cell Panels › Machine › Bed › Here (RING_BACKED).
+    "bed-where-what": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a choice of the place Here keeps: a levelling screw or a corner of the plate",
+    ),
+    "bed-where-here": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps where the printer's nozzle stands, as its board says, as that "
+        "screw or corner",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -1290,6 +1303,9 @@ RING_BACKED: Dict[str, str] = {
     "bed-probe-hot": "bed:probe-hot",
     "bed-hot-c": "bed:probe-hot",
     "bed-soak": "bed:probe-hot",
+    # Fixes' Here: the cell Panels › Machine › Bed › Here, the place it keeps the one chosen.
+    "bed-where-here": "bed:where",
+    "bed-where-what": "bed:where",
     "fixes:click:onFixesClick": "bed:make",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",

@@ -1416,8 +1416,9 @@ def _bed(toggles: List[Option]) -> Option:
     Runs, Differences, Fixes, History (widgets/bed_shims.js) -- then Fixes' acts, which the
     page hands to it: Keep mount, the screw hole and the ring Parameters holds for bed_shims kept
     as the printer's mount, and Make these, the shims sliced for it in its Print window;
-    then Runs' act, Probe hot: the bed heated, held and probed twice. Seated after Loops,
-    so no cell of the Machine's moves; Probe hot after Make these, so none of Bed's does."""
+    then Runs' act, Probe hot: the bed heated, held and probed twice; then Fixes' Here, where
+    the nozzle stands kept as the screw or plate corner chosen there. Seated after Loops, so
+    no cell of the Machine's moves; each act after the last, so none of Bed's does."""
     return Option(
         id="panels:bed",
         label="Bed",
@@ -1427,6 +1428,7 @@ def _bed(toggles: List[Option]) -> Option:
             Option(id="bed:keep", label="Keep mount", action="bed:keep"),
             Option(id="bed:make", label="Make these", action="bed:make"),
             Option(id="bed:probe-hot", label="Probe hot", action="bed:probe-hot"),
+            Option(id="bed:where", label="Here", action="bed:where"),
         ],
     )
 
@@ -2663,6 +2665,7 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "bed:keep": None,
     "bed:make": None,
     "bed:probe-hot": None,
+    "bed:where": None,
 }
 # What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
 NEVER_GREYED = frozenset({"estop"})

@@ -2535,6 +2535,51 @@ def printer_query(
     )
 
 
+def port_of_board(identity: str) -> Optional[str]:
+    """The port the board a pin names is on now: by its serial number, its make
+    (``usb:vvvv:pppp``) or a port typed as the pin, among the newest scan's devices (as a
+    pin's row finds its board, starting no scan) and then the serial engine's port list.
+    None where no port holds it."""
+    key = identity.strip()
+
+    def names(port: str, serial: Optional[str], vid, pid) -> bool:
+        if key.startswith("/"):
+            return os.path.realpath(key) == os.path.realpath(port)
+        if key.lower().startswith("usb:"):
+            return usb_make(vid, pid) == key.lower()
+        return (serial or "").strip().lower() == key.lower()
+
+    try:
+        scanned = detected_devices(any_age=True)
+    except ToolchainError:
+        scanned = []
+    listed = sorted(ports_now().items())
+    held = set(p for p, _ in listed)
+    for d in scanned:
+        if names(d.port, d.serial_number, d.vid, d.pid) and (not held or d.port in held):
+            return d.port
+    for port, board in listed:
+        if names(port, board.serial_number, board.vid, board.pid):
+            return port
+    return None
+
+
+def nozzle_at(
+    port: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> dict:
+    """Where the nozzle on ``port`` stands, as its board says it (``M114``), and the axes
+    homed since the board started (``GcodeLink.homed``): ``{x, y, z, homed}``."""
+    links = links or gcode.get_printer_links()
+    said = printer_query(port, "M114", state=state, links=links)
+    at = gcode.parse_m114(said.lines)
+    if at is None:
+        raise ToolchainError(f"{port}: M114 said no position ({' | '.join(said.lines)[:200]})")
+    link = links.get(port)
+    return {**at, "homed": sorted(link.homed) if link is not None else []}
+
+
 # --- observed: serial -------------------------------------------------------------
 
 

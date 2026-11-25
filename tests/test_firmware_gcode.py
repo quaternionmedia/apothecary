@@ -2955,3 +2955,27 @@ def test_the_card_refusal_still_holds_while_a_host_print_streams(scripted_links)
     scripted_links.control.arm(port)
     with pytest.raises(ToolchainError, match="the card is printing"):
         devices.start_print(port, kept.id, links=scripted_links)
+
+
+def test_the_link_knows_the_axes_homed_since_the_board_started(scripted_links):
+    """A `G28` answered `ok` homes what it names, all three where it names none; motors
+    freed (`M84`) are no longer homed, and a board that restarts forgets them all."""
+    port = "/dev/ttyFAKE1"
+    link = scripted_links.open(port, 115200, settle=False)
+    assert link.homed == set()
+    link.command("G28 X Y")
+    assert link.homed == {"X", "Y"}
+    link.command("G28")
+    assert link.homed == {"X", "Y", "Z"}
+    link.command("G29 V3")
+    assert link.homed == {"X", "Y", "Z"}
+    link.command("M84 Z")
+    assert link.homed == {"X", "Y"}
+    link.command("M84")
+    assert link.homed == set()
+    link.command("G28")
+    board = ScriptedTransport.instances[-1]
+    board.pending += b"start\n"
+    link._read_line(1.0)
+    assert link.restarts >= 1 and link.homed == set()
+    assert gcode.homes("G280") == set() and gcode.homes("g28 z") == {"Z"}
