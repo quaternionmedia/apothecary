@@ -1984,6 +1984,17 @@ def test_a_print_keeps_what_its_start_said_of_its_levelling(fake_arduino_cli, sc
     job = devices.start_print(port, late.id, links=scripted_links)
     job.thread.join(5)
     assert "start" not in job.record.detail
+
+    # A bed slow to heat reports its temperature for minutes before the probe, and a
+    # probe says it is busy: none of it is kept, so the offset said after the mesh still
+    # is. The board is the one the link holds open.
+    board = ScriptedTransport.instances[0]
+    heating = [f" T:150.00 /150.00 B:{20 + i / 10:.2f} /60.00 @:0 B@:127" for i in range(450)]
+    board.replies = {**board.replies, "M190 S60": [*heating, "ok"]}
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    job.thread.join(5)
+    assert job.record.outcome == "done"
+    assert job.record.detail["start"]["probe_offset"] == {"x": -44.0, "y": -10.0, "z": -3.15}
     assert devices.levelled_by(["echo:Bed Leveling OFF", "ok"]) == {
         "leveling_on": False,
         "probe_offset": None,

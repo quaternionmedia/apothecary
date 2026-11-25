@@ -2176,8 +2176,15 @@ class PrintJob:
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
-                if starting and len(start) < START_SAID_MOST:
-                    start += lines
+                if starting:
+                    # Heating's reports and the busy lines a probe says are none of it,
+                    # and a long wait for the bed would fill the start's room first.
+                    said = [
+                        s
+                        for s in lines
+                        if not (gcode.is_temperature_line(s) or gcode.BUSY_RE.match(s))
+                    ]
+                    start += said[: max(0, START_SAID_MOST - len(start))]
                 self.sent += 1
                 self._same_boot(link, boots)
                 if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
@@ -2233,8 +2240,9 @@ class PrintJob:
         self.finished = ended  # last: a snapshot that says "not running" names the record
 
 
-# The board's answers kept from a print's start, before its first layer: a probe of a
-# 5 x 5 grid at verbosity 3 says a few lines a point, its mesh and offset a few more.
+# The board's answers kept from a print's start, before its first layer, its heaters'
+# reports and busy lines left out: a probe of a 5 x 5 grid at verbosity 3 says a few lines
+# a point, its mesh and offset a few more.
 START_SAID_MOST = 400
 
 
