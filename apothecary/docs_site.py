@@ -20,13 +20,17 @@ regenerates nothing, and ``apothecary docs generate`` does it by hand. A link
 to a generated page that is not there yet says how to make it.
 
 ``/walkthrough`` is an index of the walkthrough's pages, in order. The root
-README is ``/README.md`` (``routes/readme.py``), and every page's bar links it.
+README is ``/README.md`` (``routes/readme.py``), and every page's bar links it. A
+link from a page to a file of the repository these do not serve -- a part's README,
+CONTRIBUTING.md, todo.md, a sketch -- goes to that file in the repository, as the
+README's do, where it is a page rather than a 404 here.
 """
 
 from __future__ import annotations
 
 import html
 import json
+import posixpath
 import re
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +46,8 @@ WALKTHROUGH_ROOT = ROOT / "walkthrough"
 GENERATED_ROOT = DOCS_ROOT / "generated"
 REFRESH_STATE = GENERATED_ROOT / ".refresh.json"  # written by `apothecary docs generate`
 SERVED = {"/docs": DOCS_ROOT, "/walkthrough": WALKTHROUGH_ROOT}
+# Where a file of the repository that is not served here is a page.
+REPOSITORY = "https://github.com/quaternionmedia/apothecary"
 
 router = APIRouter()
 
@@ -84,12 +90,20 @@ FENCE = re.compile(r"^(`{3,}|~{3,})\s*(\w[\w+-]*)?\s*$")
 COMMENT = re.compile(r"<!--.*?-->", re.S)
 
 
+# An underscore that is emphasis, around words, and not one inside a name.
+EMPHASIS_UNDERSCORE = re.compile(r"(?<![\w_])_(?!\s)(.+?)(?<!\s)_(?![\w_])")
+
+
 def slug(text: str) -> str:
-    """A heading's anchor, the way GitHub makes one."""
-    plain = re.sub(r"[`*_~]", "", text)
-    plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", plain)
+    """A heading's anchor, the way GitHub makes one: from the words it shows, lowered,
+    every mark but a letter, a digit, ``_`` and ``-`` taken out, each space a ``-``. So
+    ``APOTHECARY_* variables`` is ``apothecary_-variables`` and ``20 — Title`` is
+    ``20--title``, here and on GitHub alike."""
+    plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+    plain = EMPHASIS_UNDERSCORE.sub(r"\1", plain)
+    plain = re.sub(r"[`*~]", "", plain)
     plain = re.sub(r"[^\w\s-]", "", plain.lower())
-    return re.sub(r"\s+", "-", plain.strip())
+    return re.sub(r"\s", "-", plain.strip())
 
 
 # A link whose words hold code (``[`generated/x.md`](generated/x.md)``): its words
@@ -458,12 +472,50 @@ def mark_absent(body: str, here: Path) -> str:
     return HREF.sub(mark, body)
 
 
+def in_the_repository(clean: str) -> str:
+    """The repository's page for ``clean``, a path from the repository's root."""
+    return f"{REPOSITORY}/{'tree' if (ROOT / clean).is_dir() else 'blob'}/main/{clean}"
+
+
+def is_served(target: Path) -> bool:
+    """Whether this server answers ``target``'s own path: under docs/ or walkthrough/,
+    or the root README."""
+    target = target.resolve()
+    if target == (ROOT / "README.md").resolve():
+        return True
+    return any(
+        target == root.resolve() or root.resolve() in target.parents for root in SERVED.values()
+    )
+
+
+LINK_HREF = re.compile(r'<a href="([^"#?]*)([#?][^"]*)?">')
+
+
+def to_the_repository(body: str, here: Path) -> str:
+    """A relative link from a page in ``here`` to a file of the repository this server
+    does not serve goes to that file in the repository; every other link is left as it
+    is, since its URL is its path."""
+
+    def one(m: re.Match) -> str:
+        path = html.unescape(m.group(1))
+        if not path or not is_local(path) or path.startswith("/"):
+            return m.group(0)
+        if re.match(r"^[a-z][a-z0-9+.-]*:", path, re.I):
+            return m.group(0)
+        target = Path(posixpath.normpath((here / path).as_posix()))
+        if ROOT.resolve() not in target.resolve().parents or is_served(target):
+            return m.group(0)
+        clean = target.resolve().relative_to(ROOT.resolve()).as_posix()
+        return f'<a href="{html.escape(in_the_repository(clean), quote=True)}{m.group(2) or ""}">'
+
+    return LINK_HREF.sub(one, body)
+
+
 def render_page(root: Path, prefix: str, rel: str) -> HTMLResponse:
     target = _resolve(root, rel)
     body, title = render_markdown(target.read_text(encoding="utf-8"))
-    return as_page(
-        mark_absent(body, target.parent), title or target.stem, f"{prefix.strip('/')}/{rel}"
-    )
+    body = to_the_repository(mark_absent(body, target.parent), target.parent)
+    return as_page(body, title or target.stem, f"{prefix.strip('/')}/{rel}")
 
 
 def as_page(body: str, title: str, crumb: str, status_code: int = 200) -> HTMLResponse:
@@ -545,8 +597,33 @@ def walkthrough_index_page() -> HTMLResponse:
     return as_page(body, "The walkthrough", "walkthrough/")
 
 
+def folder_page(root: Path, prefix: str, rel: str) -> HTMLResponse:
+    """A folder with no README of its own: its pages, each a link to itself, by its
+    title, as a link to the folder on GitHub lists them."""
+    folder = _resolve_folder(root, rel)
+    rows = []
+    for page in sorted(folder.glob("*.md")):
+        _body, title = render_markdown(page.read_text(encoding="utf-8"))
+        rows.append(
+            f'<li><a href="{html.escape(page.name, quote=True)}">'
+            f"{html.escape(title or page.stem)}</a></li>"
+        )
+    crumb = f"{prefix.strip('/')}/{rel}"
+    body = f"<h1>{html.escape(crumb)}</h1>" + f'<ul class="pages">{"".join(rows)}</ul>'
+    return as_page(body, crumb, crumb)
+
+
+def _resolve_folder(root: Path, rel: str) -> Path:
+    folder = (root / rel).resolve()
+    if root.resolve() not in folder.parents or not folder.is_dir():
+        raise HTTPException(status_code=404, detail=f"no such page: {rel}")
+    return folder
+
+
 def _serve(root: Path, prefix: str, rel: str):
     if rel.endswith("/") or not rel:
+        if rel and not (root / rel / "README.md").is_file():
+            return folder_page(root, prefix, rel)
         rel = rel + "README.md"
     if rel.lower().endswith((".md", ".markdown")):
         return render_page(root, prefix, rel)
