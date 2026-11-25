@@ -137,6 +137,7 @@ from .projects.registry import (
 from .routes import lighting as lighting_routes
 from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
+from .routes.bed import router as bed_router
 from .routes.cabinet import router as cabinet_router
 from .routes.cameras import router as cameras_router
 from .routes.evidence import router as evidence_router
@@ -342,6 +343,8 @@ app.include_router(part_edits_router)
 app.include_router(interfaces_router)
 # A part's motion, sampled into the table the page plays (apothecary/motion.py).
 app.include_router(motion_router)
+# A printer's bed readings and the shims that level it, and what they fit (docs/bed-shims.md).
+app.include_router(bed_router)
 app.include_router(lighting_router)
 # The Airgap panel's metrics document: its schema, and a copied document read back.
 app.include_router(airgap_router)

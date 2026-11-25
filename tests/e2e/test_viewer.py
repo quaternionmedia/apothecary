@@ -89,7 +89,7 @@ def test_viewer_shows_contents_for_the_loaded_site(garage):
     """
     page, _ = garage
 
-    expect(page.locator("#contents-list .contents-item")).to_have_count(18)
+    expect(page.locator("#contents-list .contents-item")).to_have_count(19)
     contents = page.locator("#contents-list")
     for name in (
         "workbench",

@@ -609,9 +609,9 @@ Machine's button for that verb; the ring never opens a port.
 A machine is a node drawn from a part that says it is one (`BasePart.machine`:
 the Ender a printer, the AnoleX a router), whether or not a board is pinned to
 it (`GET /sites/{name}/machines`). Everything that prepares a job asks its board
-nothing, so a machine with no board connected -- none pinned, or one pinned and
+nothing, so a machine not connected -- none pinned, or one pinned and
 unplugged -- opens its Machine all the same, from its badge, its ring or ⚙
-View › Machine: its Print or Cut card alone, its head saying no board is
+View › Machine: its Print or Cut card alone, its head saying it is not
 connected. What it makes is chosen there, its slice or toolpath written for it
 by its node (`GET /sites/{name}/machines/{path}` answers its choices as
 `/jobs/choices` does for a port), the file kept for its kind, and the file's
@@ -624,6 +624,31 @@ machine; the machine's Machine chooses them whenever it opens, its board
 connected or not, unless another was chosen meanwhile. A part that says how it
 is cut has Toolpath on its ring for a router with no board as for one with; a
 printer's plan is made in its own Machine.
+
+#### Its board pinned and not connected
+
+A machine with a board pinned to it, at its node or beneath it, that no port
+holds says why in its Machine's **Its board, not connected** card, read with no
+port opened (`GET /sites/{name}/machines/{path}/missing`,
+`apothecary/firmware/missing.py`). A board gets through four checks on its way
+to being found, and the card shows each in that order, the first that fails
+said as what to try and those after it not reached:
+
+| Check | Read from | What fails it, and what to try |
+|---|---|---|
+| On USB | the kernel's USB list (`/sys/bus/usb/devices`) | no device with the pin's serial number, or of the pin's make: switch the machine on, seat the cable at both ends (a cable made only to charge carries no data), try a socket on the computer rather than a hub. Where the board was last found -- its port and its USB socket (`1-1.2`: a hub's socket 2) -- is said, and another board of its make with another serial number is named to pin in its place |
+| A serial port | the ports the device's driver made | on USB with none: unplug it and plug it in again; brltty, a braille display service, takes CH340 bridges on some Linux systems. Where On USB was not read, it is never said to be on USB: none is listed, and what to try is On USB's |
+| Open to this user | the port's permissions | the port's group (dialout) |
+| Found by the scan | the newest port scan | the board came up after it: the card scans again by itself, once; a board that last answered as another kind of machine is said to be that machine's |
+
+Beside them, every serial port plugged in now, with the node a pin names it
+for. The card asks again every few seconds while it shows, and once the board
+is found the machine's own Machine opens in its plan's place. Where the kernel
+keeps no USB list, or neither a serial number nor a make is known of the pinned
+board (a port typed by hand), On USB is read from the serial ports alone. The
+simulated serial engine reads no USB: on a simulated server nothing is on USB,
+so a board pinned there that it does not simulate stops at On USB, and the
+computer's own boards are never read.
 
 ### Control, behind a latch
 
@@ -778,8 +803,9 @@ Send reads `GET /firmware/printers/can-start` for the chosen file, so the page h
 rule of its own for which file goes to which machine. The Bench's Compile & upload and
 raw Flash read `can.flash` of the chosen port (the info of that port, asked once when it
 is chosen and again after a task ends, never on a timer), and grey with its reason for
-a machine's controller; the Bench's own reasons (no sketch, a task running) go through
-the same helper (`setReason`), so there is one way a button says why.
+a machine's controller; the Bench's own reasons (no sketch, a task running) and the
+Print window's (a slice running, for Slice; the file a job from here is sending, for its
+✕) go through the same helper (`setReason`), so there is one way a button says why.
 
 `M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
 for a board busy with the line before it. The reply such a line is owed, and the reply
@@ -804,7 +830,9 @@ drawn the same way whichever took it.
 A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
 probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
-(`G28`, `G29`) and then reads; it is offered once the latch is armed, and runs as a job that
+(`G28`, `G29 V3`) and then reads; probed hot (`heat_c`, `soak_s`, `times`: Runs' Probe
+hot), the bed is heated first (`M190`), held, probed up to twice, a reading each, and
+turned off after (`M140 S0`), however the job ends. It is offered once the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
@@ -813,7 +841,12 @@ relief over the printer's bed in the world. The corner buttons, offered with
 the probe once the latch is armed, move the nozzle to paper height at each
 corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
-the `G29 W` points an `M503` prints.
+the `G29 W` points an `M503` prints. At verbosity 3 Marlin's probe says where
+each point lies as it probes it (`Bed X: .. Y: .. Z: ..`), and a probe's
+reading keeps those points (`points`) and, when they are the grid's, the
+first and last of them as where the grid lies (`area`, `gcode.probed_area`):
+the relief is drawn there and a printer's shims are fitted there. A read of
+the stored mesh says no place, and its grid is placed by estimate.
 A print's start turns a stored mesh on only through the `stored-mesh` start
 piece (`M420 S1` after `G28`; whether `G28` leaves a mesh on is the
 firmware's, the bench checklist's D), named in the printer's slicer profile and refused unless the board's
@@ -886,7 +919,9 @@ Slice makes one, never a file made of another part. A file chosen by a person st
 chosen, and ▶ Print says it was made of another part than makes names. Each kept file's
 row says when it was kept, so two of one name and length are told apart. The card shows each control once what it
 needs holds, in the loop's order: makes and Choose File are the two ways in;
-Slice is there once a part is chosen under makes, the files kept once there is
+Slice is there once a part is chosen under makes, with a printer's levelling
+row beside it (the next slice's: the part's own, probe first, or home only;
+the ring's Print › Levelling steps it), the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
 preview and ▶ Print once a file is chosen, Pause and Abort while a print runs,
 and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
@@ -999,7 +1034,7 @@ port list and monitor -- is an engine slot:
 | Engine | What it is |
 |---|---|
 | `pyserial` | the default: any baud, every platform |
-| `simulated` | an in-process pretend Marlin for `serve --simulated` and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
+| `simulated` | an in-process pretend Marlin for `serve --simulated` and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29` (at `V3`, with each point's place), `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
 
 `apothecary serve --simulated` is the way to try all of this with no board: an
 idle simulated Ender pinned to printer_1's mainboard, a simulated ESP32
@@ -1035,7 +1070,9 @@ lists only kernel names, so the symlink is for the CLI and other programs.
 ## HTTP API
 
 Every route is described at `/openapi.json`: the paths under `/firmware`, and
-the site routes `/sites/{name}/devices` and `/sites/{name}/nodes/{path}/device`.
+the site routes `/sites/{name}/devices`, `/sites/{name}/nodes/{path}/device`
+and `/sites/{name}/machines` with the routes under it (a machine's choices, its
+plan, and why its board is not connected).
 Long-running actions (install, compile, upload, flash) return `202` with a
 task; poll `GET /firmware/tasks/{id}?since=N` for new log lines. One task
 runs at a time; a second request gets `409`.

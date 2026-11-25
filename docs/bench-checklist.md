@@ -44,7 +44,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       note what each names, and take back any that stands on a node it should
       not. A pin's node says *not connected* in its Device section.
 - [ ] **Plan the router.** Select `cnc_router`, ⚙ View › Machine: its
-      Machine opens with no board connected, its head saying so, its Cut card
+      Machine opens not connected, its head saying so, its Cut card
       alone. Under *makes* choose `router_coupon`, **Toolpath**: the file is
       kept and chosen, listed with what it was written from; the preview
       slider draws its passes over the router's table, standing on the table
@@ -73,6 +73,10 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       board once what it is (M115): the status line says *asked it once what
       it is: Marlin …*, and `printer_1` wears its ⚡ badge.
 - [ ] Open `printer_1`'s Machine: its plan's part and file are chosen.
+- [ ] Unplug the printer's USB with its Machine open: the Machine opens as its plan,
+      and its **Its board, not connected** card says *On USB* ✗, where the board was
+      last found (its port and USB socket) and what to try. Plug it back in: the
+      card scans once, and the board's Machine opens in the plan's place.
 - [ ] **Pin the ESP32.** Select `esp32_blink`, choose the ESP32's port,
       **Query**, **Pin**: `esp32_blink` wears its ⚡ badge.
 
@@ -167,7 +171,15 @@ one machine on the number another held; nothing in them moves a machine.
       state card reads `leveling: homing`, then `probing`; the temperatures
       keep updating; a jog pressed meanwhile is refused (*a bed reading holds
       the port*). When it reads `saved`, the heatmap redraws and the history
-      has a *probe* row: compare its range with the last one.
+      has a *probe* row: compare its range with the last one. Its line says
+      *probed X a–b, Y c–d mm*: where the board said its points lie (`G29 V3`).
+- [ ] **▤ Probe hot** in Runs (Panels › Machine › Bed), the filament's bed
+      temperature filled in, the hold 90 s: the state card reads `heating`,
+      then `soaking`, then a probe twice; Runs gains two readings noted
+      *heated 60 C, soaked 90 s, 1 of 2* and *2 of 2*, and the bed's target
+      reads 0 after.
+      No such words, and the board's `G29` said no `Bed X:` lines: the
+      reading's ⤓ log shows what it said.
 - [ ] **Mesh on**, then **Read mesh** (⌗746): the record says *leveling on*.
       Apothecary never writes the printer's EEPROM; to keep a mesh across a
       power cycle, store it from the printer's own screen.
@@ -184,6 +196,46 @@ one machine on the number another held; nothing in them moves a machine.
       under the bound.
 - [ ] The world: the relief over `printer_1`'s bed is the newest reading, and
       nothing of the printer's lies over the router's table.
+- [ ] Where the nozzle's 0, 0 is on the plate: **Home all**, jog to X0 Y0 Z5,
+      and measure from the plate's front-left corner to the nozzle's tip, along
+      X and along Y. The frame model puts it 7.5 mm in from each edge of the
+      235 mm plate (`parts/ender3/slicer.json` `measured.bed_screws`, *not
+      measured on printer_1*); a print drawn at the bed's centre in the world
+      stands off its centre on the real bed by what this differs.
+- [ ] Where each levelling screw is in the nozzle's coordinates: jog the nozzle
+      over each screw's head and read X and Y from the Machine's position;
+      `measured.bed_screws` holds the frame model's 7.5 and 212.5.
+- [ ] A first layer with the mesh on: a slice that probes first (the Print
+      window's levelling *probe first*, or `bed_shims`, which declares it),
+      printed and cancelled once its first layer is down. Its drawer's *made*
+      row (Part › Feedback) says what the board said as it began: *levelling
+      on*, its probe's offset, the mesh's range, where it probed. A nozzle too
+      close to extrude, or too far to hold, is the probe's Z offset: the
+      one-layer square below with the mesh on, and the new `M851` kept.
+
+Shims, once the bed's tilt is to be taken out at its mounts
+([docs/bed-shims.md](bed-shims.md)):
+
+- [ ] Bed on at the loaded filament's printing temperature, about ten minutes'
+      soak once it gets there, then **▤ Probe bed** twice, one after the other:
+      `uv run apothecary bed runs --site garage --printer printer_1` lists both
+      newest, each *heated*.
+- [ ] The bed screw and a mount's outer diameter, with calipers, kept:
+      `uv run apothecary bed mount --site garage --printer printer_1 --screw M3`
+      (or `M4`, or `--hole` for another) `--outer` the diameter; `bed mount` alone
+      then says both kept, neither a default.
+- [ ] `uv run apothecary bed shims --site garage --printer printer_1`: the two
+      readings named first, their floor, a shim or *none* for each corner, and
+      the bow said against `measured.mesh_range_bound`. Keep its output in the
+      dated record.
+- [ ] The shims sliced with the command it prints, printed in PETG or ASA, and
+      fitted, each on the mount its label names, slot first, its tab out past
+      the mount.
+- [ ] Heated, soaked and probed twice again, then `uv run apothecary bed compare
+      --site garage --printer printer_1` with `--before` each of the first pair
+      and `--after` each of the second: the tilt smaller, each corner needing
+      under a layer. `bed shims` with `--fitted` for each shim in place says
+      whether a set should replace them.
 
 ## E. Print from here
 
@@ -394,11 +446,12 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] With a tool and stock, the first real cut from a CAM post's file, the
       spindle at its dial's speed: watch the first pass.
 - [ ] **The 😮.** Under *makes* choose `router_emoji`, **Toolpath**, and cut it
-      from 6 mm stock with the 6 mm end mill. Measure an eye, the mouth and the
-      face across with calipers, type them under **measured** in that order,
-      **Keep**: the status line says each size's error, the scale and the tool's
-      allowance kept for `cnc_router`. **Toolpath** again: `tool_allowance` shows
-      that value, *measured*. Note the scale: past a few tenths of a percent the
+      from 6 mm stock with the 6 mm end mill; at the cut's end its drawer opens in
+      Part › Feedback. Measure an eye, the mouth and the face across with calipers,
+      type them under **measured** there in that order, **Keep**: the status line
+      says each size's error, the scale and the tool's allowance kept for
+      `cnc_router`. **Toolpath** again: `tool_allowance` shows that value,
+      *measured*. The tour's *Calibrate a router* is the same, a stage at a time. Note the scale: past a few tenths of a percent the
       steps per millimetre (`$100`, `$101`) want a look, which nothing here changes.
 
 ## J. The Stream Deck +

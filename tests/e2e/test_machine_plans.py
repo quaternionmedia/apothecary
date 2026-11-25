@@ -55,11 +55,11 @@ def test_the_router_is_planned_with_no_board_connected(page: Page, url: str):
     # Its Machine, with no board pinned: its plan, not a refusal.
     assert page.evaluate("() => window.fractalViewer.openMachine('cnc_router')") is True
     expect(page.locator("#status")).to_contain_text(
-        "Opened cnc_router's Machine with no board connected"
+        "Opened cnc_router's Machine, not connected"
     )
     windows.machine_ready(page, "router")
     expect(windows.in_machine(page, "#print-slice")).to_have_text("Toolpath", timeout=10000)
-    expect(windows.in_machine(page, "#ident")).to_contain_text("no board connected")
+    expect(windows.in_machine(page, "#ident")).to_contain_text("not connected")
     # The coupon's toolpath, written for the router by its node.
     windows.in_machine(page, "#print-part").select_option("router_coupon")
     windows.in_machine(page, "#print-slice").click()
@@ -68,7 +68,7 @@ def test_the_router_is_planned_with_no_board_connected(page: Page, url: str):
     # ▶ Cut is the board's.
     start = windows.in_machine(page, "#print-start")
     expect(start).to_be_disabled()
-    assert "has no board connected" in start.get_attribute("title")
+    assert "is not connected" in start.get_attribute("title")
     # Its path drawn over the router, standing on its table.
     page.evaluate("() => window.apothecaryMachine.print.show()")
     page.wait_for_function(DRAWN, timeout=10000)

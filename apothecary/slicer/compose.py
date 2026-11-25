@@ -57,9 +57,15 @@ _HOMES = re.compile(r"^[ \t]*G28(?=\s|;|$)", re.I | re.M)
 # A line that waits for the bed to reach its temperature: a probe follows it.
 _BED_WAIT = re.compile(r"^[ \t]*M190(?=\s|;|$)", re.I | re.M)
 
-STORED_MESH_LINE = "M420 S1 ; use the bed mesh the printer stored"
-PROBE_LINE = "G29 ; probe the bed"
+# What the board then says, kept by the print's job (firmware/devices.py PrintJob): the
+# mesh it follows and that levelling is on (M420 S1 V), and the probe's offset (M851).
+SAID_LINES = "M420 S1 V ; levelling on, and say the mesh it follows\nM851 ; say the probe's offset"
+STORED_MESH_LINE = "M420 S1 ; use the bed mesh the printer stored\n" + SAID_LINES
+PROBE_LINE = "G29 V3 ; probe the bed, saying each point\n" + SAID_LINES
 LEVELLING = ("stored-mesh", "probe-each-print")
+# What one slice may ask its start to level by, over its printer's profile: none
+# ("home"), or one of the levelling pieces (levelled).
+LEVELLINGS = ("home", *LEVELLING)
 
 
 @dataclass(frozen=True)
@@ -194,7 +200,8 @@ PIECES: Tuple[Piece, ...] = (
         START,
         "stored-mesh",
         "after G28, turn on the bed mesh the printer stored (M420 S1), so the firmware "
-        "follows the bed it last probed; chosen only while the newest bed reading of the "
+        "follows the bed it last probed, and have the board say the mesh and the probe's "
+        "offset (M420 V, M851), which the print keeps; chosen only while the newest bed reading of the "
         "printer's board is a probe whose range is under the profile's bound "
         "(measured.mesh_range_bound)",
         needs=_needs_a_probe_under_the_bound,
@@ -203,9 +210,11 @@ PIECES: Tuple[Piece, ...] = (
     Piece(
         START,
         "probe-each-print",
-        "after G28, probe the bed before each print (G29), once the start has waited for "
-        "the bed's temperature, and print on what it finds; needs the probe whose offset "
-        "the profile holds (measured.probe_offset)",
+        "after G28, probe the bed before each print (G29, saying each point), once the "
+        "start has waited for the bed's temperature, and print on what it finds, levelling "
+        "turned on (M420 S1) and the mesh and the probe's offset said (M420 V, M851), "
+        "which the print keeps; needs the probe whose offset the profile holds "
+        "(measured.probe_offset)",
         needs=_needs_the_probe,
         compose=lambda start: _after_the_beds_wait(start, PROBE_LINE),
     ),
@@ -280,6 +289,31 @@ def chosen(
         if p.needs is not None:
             p.needs(profile, port)
     return found
+
+
+def levelled(
+    profile: "PrinterProfile", levelling: Optional[str], by: str = "this slice"
+) -> "PrinterProfile":
+    """``profile`` with its start levelling as one slice asks (the Print window's
+    choice) or its part declares (``by``): ``None`` as the profile names it; ``"home"``
+    none; a levelling piece in place of any the profile names. The profile is not
+    changed, and the start's source says who asked; the piece's precondition is
+    checked where any is (chosen)."""
+    if levelling is None:
+        return profile
+    if levelling not in LEVELLINGS:
+        raise SlicerError(f"a slice levels by one of {', '.join(LEVELLINGS)}, not {levelling!r}")
+    modules = [m for m in profile.start.modules if m not in LEVELLING]
+    if levelling != "home":
+        modules.append(levelling)
+    asked = "no levelling" if levelling == "home" else repr(levelling)
+    start = profile.start.model_copy(
+        update={
+            "modules": modules,
+            "source": f"{by} asked {asked}, in place of the profile's levelling",
+        }
+    )
+    return profile.model_copy(update={"start": start})
 
 
 def compose_start(base: str, start: List[Piece]) -> str:

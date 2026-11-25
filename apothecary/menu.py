@@ -221,6 +221,9 @@ class PartSeen(BaseModel):
     # Whether it is a Stream Deck + (tagged ``streamdeck``): its ring's Deck opens the Deck
     # window, as Open Deck in its Selected does.
     deck: bool = False
+    # Whether it is composed in the Badge window (tagged ``badge``): Part › View › Badge
+    # is offered, its faces and the word the window's buttons.
+    badge: bool = False
 
 
 class PictureContext(BaseModel):
@@ -886,11 +889,23 @@ PANELS: Sequence[Tuple[str, str]] = (
     # window of the Machine's group registered at start and closed until asked for. Its
     # acts are a ring of their own under Panels › Machine (_loops).
     ("loops", "Loops"),
+    # Bed: a printer's bed readings and the shims that level it (widgets/bed_shims.js),
+    # four windows of the Machine's group registered at start and closed until asked for,
+    # of the printer whose Machine is open. Their cells and acts are a ring of their own
+    # under Panels › Machine (_bed).
+    ("bed-runs", "Runs"),
+    ("bed-differences", "Differences"),
+    ("bed-fixes", "Fixes"),
+    ("bed-history", "History"),
     # Motion: the selected part's pieces moved through its motion (widgets/motion.js), a
     # window in the column registered at start and closed until asked for: Panels ›
     # Part's, beside Selected, and the part's own Part › View › Motion, on a part whose
     # pieces move.
     ("motion", "Motion"),
+    # Badge: parts/badge composed, a face or the word, and made on a printer or the router
+    # (widgets/badge.js), a window in the column registered at start and closed until
+    # asked for: Panels › Part's, after Motion, so no cell before it moves.
+    ("badge", "Badge"),
     # Lighting: a rig's legend and its console's levels (static/lighting.js), registered
     # while the site has a rig: Panels › Site's, greyed on a site without one.
     ("lighting", "Lighting"),
@@ -919,7 +934,12 @@ PANEL_GROUPS = {
     "deck": "Tools",
     "airgap": "Airgap",
     "loops": "Machine",
+    "bed-runs": "Machine",
+    "bed-differences": "Machine",
+    "bed-fixes": "Machine",
+    "bed-history": "Machine",
     "motion": "Part",
+    "badge": "Part",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
@@ -986,13 +1006,17 @@ def _panels(rig: bool = False) -> Option:
             group="Site",
             children=[of_site(each) for each in _RINGS["site"]],
         ),
-        # Part: Selected, the Part system's main window, and Motion; the part's own
-        # sections are its ring's (Part › Edit, View, History, Variants).
+        # Part: Selected, the Part system's main window, Motion and the Badge; the part's
+        # own sections are its ring's (Part › Edit, View, History, Variants).
         "part": Option(
             id="panels:part",
             label="Part",
             group="Part",
-            children=[toggle("selected", labels["selected"]), toggle("motion", labels["motion"])],
+            children=[
+                toggle("selected", labels["selected"]),
+                toggle("motion", labels["motion"]),
+                toggle("badge", labels["badge"]),
+            ],
         ),
         "pictures": Option(
             id="panels:pictures",
@@ -1011,6 +1035,7 @@ def _panels(rig: bool = False) -> Option:
                 toggle("machine", labels["machine"]),
                 Option(id="panel:pad", label="Control pad", action="panel:pad"),
                 _loops(toggle("loops", labels["loops"])),
+                _bed([toggle(pid, labels[pid]) for pid in BED_WINDOWS]),
             ],
         ),
     }
@@ -1383,6 +1408,29 @@ RULE_LABELS = {
 }
 
 
+BED_WINDOWS = ("bed-runs", "bed-differences", "bed-fixes", "bed-history")
+
+
+def _bed(toggles: List[Option]) -> Option:
+    """Panels › Machine › Bed: the windows of the printer's bed whose Machine is open --
+    Runs, Differences, Fixes, History (widgets/bed_shims.js) -- then Fixes' acts, which the
+    page hands to it: Keep mount, the screw hole and the ring Parameters holds for bed_shims kept
+    as the printer's mount, and Make these, the shims sliced for it in its Print window;
+    then Runs' act, Probe hot: the bed heated, held and probed twice. Seated after Loops,
+    so no cell of the Machine's moves; Probe hot after Make these, so none of Bed's does."""
+    return Option(
+        id="panels:bed",
+        label="Bed",
+        group=PANEL_GROUPS["bed-runs"],
+        children=[
+            *toggles,
+            Option(id="bed:keep", label="Keep mount", action="bed:keep"),
+            Option(id="bed:make", label="Make these", action="bed:make"),
+            Option(id="bed:probe-hot", label="Probe hot", action="bed:probe-hot"),
+        ],
+    )
+
+
 def _loops(toggle: Option) -> Option:
     """Panels › Machine › Loops: the window, then the acts of the loop it shows, which the
     page hands to it (widgets/loops.js), on the printer whose Machine is open -- the board's
@@ -1561,11 +1609,41 @@ def _motion() -> Option:
     )
 
 
+# The badge's faces, each drawn after its emoji, in the Badge window's order
+# (parts/badge, widgets/badge.js).
+BADGE_FACES: Tuple[Tuple[str, str], ...] = (
+    ("open", "😮 Open"),
+    ("smile", "🙂 Smile"),
+    ("neutral", "😐 Neutral"),
+    ("wink", "😉 Wink"),
+    ("frown", "🙁 Frown"),
+    ("grin", "😀 Grin"),
+)
+
+
+def _badge() -> Option:
+    """Part › View › Badge: the Badge window opened on the badge, then its buttons, which
+    the page hands to it (widgets/badge.js): each face staged and drawn, and the word."""
+    return Option(
+        id="part:badge",
+        label="Badge",
+        children=[
+            Option(id="part:badge:open", label="Badge", action="part:badge:open"),
+            *(
+                Option(id=f"part:badge:face:{face}", label=label, action=f"part:badge:face:{face}")
+                for face, label in BADGE_FACES
+            ),
+            Option(id="part:badge:word", label="✎ Word", action="part:badge:word"),
+        ],
+    )
+
+
 def _feedback() -> Option:
     """Part › View › Feedback: the part's cabinet in Part › Feedback, a drawer for each
     piece made of it (apothecary/cabinet.py), then what is done to the piece chosen there
     (widgets/feedback.js): Measure files what is read or seen, Note a note, and Take turn
-    and Undo turn the turn it makes in its printer's next slices."""
+    and Undo turn the turn it makes in its printer's next slices. Try again, on a print
+    that stopped, slices the piece again: Probe first, Brim or Raft chosen."""
     return Option(
         id="feedback",
         label="Feedback",
@@ -1575,6 +1653,17 @@ def _feedback() -> Option:
             Option(id="feedback:note", label="Note", action="feedback:note"),
             Option(id="feedback:tune-apply", label="Take turn", action="feedback:tune-apply"),
             Option(id="feedback:tune-undo", label="Undo turn", action="feedback:tune-undo"),
+            Option(
+                id="feedback:try",
+                label="Try again",
+                children=[
+                    Option(
+                        id="feedback:try-probe", label="Probe first", action="feedback:try-probe"
+                    ),
+                    Option(id="feedback:try-brim", label="Brim", action="feedback:try-brim"),
+                    Option(id="feedback:try-raft", label="Raft", action="feedback:try-raft"),
+                ],
+            ),
         ],
     )
 
@@ -2272,6 +2361,10 @@ def _node_ring(
         # moves.
         if part and not in_a_printer:
             view.append(_feedback())
+        # The badge: its Badge window and the window's buttons (widgets/badge.js). After
+        # Feedback, so no cell of View moves.
+        if seen is not None and seen.badge:
+            view.append(_badge())
         verbs.append(Option(id="part:view", label="View", children=view))
         verbs.append(
             Option(
@@ -2527,6 +2620,8 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:start": "print.start",
     "print:preview": None,
     "print:plan": None,
+    "print:level": None,
+    "print:adhesion": None,
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
@@ -2559,6 +2654,15 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "loops:loop:": None,
     "loops:kind:": None,
     "loops:rule:": None,
+    # The bed's windows, and Fixes' Keep mount and Make these: a mount kept in the state
+    # folder and a slice, neither of which the board's latch or a job stands in the way of.
+    "panel:toggle:bed-runs": None,
+    "panel:toggle:bed-differences": None,
+    "panel:toggle:bed-fixes": None,
+    "panel:toggle:bed-history": None,
+    "bed:keep": None,
+    "bed:make": None,
+    "bed:probe-hot": None,
 }
 # What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
 NEVER_GREYED = frozenset({"estop"})
@@ -2673,6 +2777,9 @@ def control_options(device: Device) -> List[Option]:
         # The print, whichever is running: the card's (M24/M25/M524) or one
         # the host streams. The page knows which and carries the verb to it;
         # Send file starts a host print of the file the page has chosen.
+        # Levelling and Adhesion, seated last so no address moves, step the Print
+        # window's rows for the next slice: its levelling (the part's, probe first,
+        # home only) and its first layer's hold (the part's, brim, raft, neither).
         Option(
             id="control:sd",
             label="Print",
@@ -2683,6 +2790,8 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
+                Option(id="print:level", label="Levelling", action="print:level"),
+                Option(id="print:adhesion", label="Adhesion", action="print:adhesion"),
             ],
         ),
         Option(
@@ -2708,9 +2817,9 @@ def router_control_options(device: Device) -> List[Option]:
     (``firmware.grbl.CONTROL_CODES`` and the realtime characters), sent by the
     Machine's control chain as a printer's are. Home, Unlock and Jog first, as a
     person homes before anything else; the spindle; work zero and the probe
-    together, since a probe is how Z is zeroed; the cut's own verbs, the piece cut
-    measured among them; Stop is the soft reset, destructive as E-STOP is. Eight, as
-    a ring holds.
+    together, since a probe is how Z is zeroed; the cut's own verbs; Stop is the soft
+    reset, destructive as E-STOP is. Eight, as a ring holds. The piece cut is measured in
+    its part's cabinet, Part › Feedback, not here.
     """
     return [
         Option(
@@ -2859,6 +2968,10 @@ CARRIED_BY: Dict[str, Carries] = {
     # open (POST /firmware/printers/loops/read, start, cancel, set), never the intent
     # route, and greys what the server would refuse.
     "loops": Carries.VIEWER,
+    # Fixes' acts (widgets/bed_shims.js), which keep a printer's mount (PUT
+    # /bed/{site}/{printer}/mount) and slice its shims in its Print window, never the
+    # intent route.
+    "bed": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

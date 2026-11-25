@@ -11,10 +11,13 @@ it takes the page to.
 
 The tour is [the viewer's journeys](viewer.md#journeys), in their order, which is the
 order of the chain the page manages: a part designed; made on the printer, or cut on
-the router; the board a machine runs on; a deck's knobs on the machines; the site
+the router; the router trued by a piece it cut, measured by hand; the board a machine
+runs on; a deck's knobs on the machines; the site
 brought up, and watched; photographs, a drawing read into shapes that stand up as
-parts to design; and last two ends joined by the adapter the server derives
-between them, a part to print. Each journey hands the next what it made.
+parts to design; a printer's bed levelled, the shims computed from its readings a
+part to print; a badge composed, a face or a word, to print or cut; and last two ends
+joined by the adapter the server derives between them, a part to print. Each journey
+hands the next what it made.
 
 The box has no words of its own. A stage's line is its step's in
 `apothecary/journeys.py`.
@@ -62,9 +65,12 @@ names, in a tab. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
 - the site the journey stands in opened, where another is, as the banner's ▾ opens
-  it (`Journey.site`): the garage, whose pieces and machines every journey but one
-  names, or the universe, where *Join a hose*'s port part and adapter stand; so a
-  stage is the same whichever site the tour was opened in;
+  it (`Journey.site`): the garage, whose pieces and machines every journey but two
+  names, or the universe, where *Compose a badge*'s badge and *Join a hose*'s port
+  part and adapter stand; so a
+  stage is the same whichever site the tour was opened in. What a machine makes may be
+  a part no piece of the garage stands for: *Calibrate a router*'s 😮, named under
+  makes, its file made and its cabinet opened by its name;
 - what the journey is staged on, then what the stage itself needs (`staged_on` and a
   stage's `puts`, in `apothecary/journeys.py`), from a short list of things the page
   already does:
@@ -72,12 +78,12 @@ thing only where it is not so already:
   | Put | What the page does | As |
   |---|---|---|
   | `pin` | a board on a port pinned to a piece, where that port is listed | Pin, in the piece's Device section |
-  | `machine` | a piece chosen, and its Machine opened, in place of another's, where it is not open already; with no board connected, as the site plans it | its badge, or Device › Open |
+  | `machine` | a piece chosen, and its Machine opened, in place of another's, where it is not open already; not connected, as the site plans it | its badge, or Device › Open |
   | `part` | a piece chosen | its row in Site |
   | `fit` | a piece chosen and framed in the world | `f` |
-  | `makes` | the piece named under makes in the open Machine's Print window, and the file kept made from it chosen, where one is kept: nothing is sliced | the card's makes, and its files |
+  | `makes` | the piece named under makes in the open Machine's Print window (a router's Cut), and the file kept made from it chosen, where one is kept: nothing is sliced | the card's makes, and its files |
   | `file` | the open Machine's file made from a part: the one chosen, else the newest kept chosen, else one made (on a reload, not made: ↻ makes it); another part's file chosen before is not the stage's | the card's file, Slice, or a router's Toolpath |
-  | `feedback` | a piece chosen, and its part's cabinet in the Feedback window, where another part's or none is shown | Part › View › Feedback |
+  | `feedback` | a piece chosen, and its part's cabinet in the Feedback window, where another part's or none is shown; a part the open Machine makes that no piece stands for, its cabinet by its name | Part › View › Feedback, or the window's pieces |
   | `edit` | a part's editor opened | Part › Edit |
   | `scad` | a part's SCAD in its window | Part › SCAD |
   | `bench` | the Bench opened on a piece's sketch | Device › Flash sketch |
@@ -111,7 +117,7 @@ box opens on what the stage needs, in the page's own words for it -- *esp32_blin
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
 section*. With that done, ↻ takes the page the rest of the way. A stage that stands
 without what its journey is staged on is not stopped by it: Flash a board's Bench
-builds a sketch with no board connected, so it opens on the sketch whatever the board.
+builds a sketch while not connected, so it opens on the sketch whatever the board.
 A picture that is not there is named inside the pictures folder, as a person names
 it, never by where the server keeps that folder.
 
@@ -123,7 +129,11 @@ not ready while the layout is valid; the stage says which is which.
 **Nothing is armed, started, sent or made.** Print's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
-Make are a person's.
+Make are a person's. So are Level a bed's heating, probing, measuring and fitting: Heat
+brings the Machine forward, Probe its Runs, Measure bed_shims' Parameters, where the bed
+screw and the mount's outer diameter are typed and kept, and Fit opens bed_shims'
+cabinet in Part › Feedback, where each shim's thickness clicked on the part with Measure
+shown is read, and names what to do.
 
 A window chosen in the page that another stage of the journey owns -- its tab, ⊞
 Windows or a stack's + -- moves the box to that stage, and takes the page nowhere. One chosen while the page is

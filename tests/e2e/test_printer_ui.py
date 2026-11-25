@@ -1030,6 +1030,8 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     expect(page.locator("#level-job")).to_have_text("", timeout=30000)
     expect(page.locator("#level-history > div")).to_have_count(2, timeout=5000)
     expect(page.locator("#level-stats")).to_contain_text("probe ·")
+    # The probe said where each point lies (G29 V3), and the line says where the grid is.
+    expect(page.locator("#level-stats")).to_contain_text("probed X 10–176, Y 10–210 mm")
     expect(page.locator("#log .tx.control", has_text="G29")).to_have_count(1)
     expect(page.locator("#log .sys", has_text="bed reading saved")).to_have_count(2)
     record_id = page.evaluate("() => window.apothecaryMachine.level.shown().id")
@@ -1054,6 +1056,11 @@ def test_the_reading_shown_is_drawn_over_the_bed(page: Page, printer_url: str):
     shown = f"() => {marks} && {marks}.marks && {marks}.marks.mesh()"
     page.wait_for_function(f"(id) => ({shown})() && ({shown})().record_id === id", arg=probe_id)
     assert page.evaluate(f"() => {marks}.marks.mesh().rows") == 5
+    # Drawn where the probe said its points lie, not by the estimate.
+    assert page.evaluate(f"() => {marks}.marks.mesh().bounds") == {
+        "min": {"x": 10, "y": 10},
+        "max": {"x": 176, "y": 210},
+    }
     machine.locator("#level-history .pick", has_text="read").first.click()
     expect(machine.locator("#level-stats")).to_contain_text("read ·")
     page.wait_for_function(f"(id) => ({shown})().record_id === id", arg=read_id)
@@ -1167,9 +1174,12 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#print-start")).to_be_hidden()
-    page.locator("#print-file").set_input_files(
-        {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
-    )
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/firmware/printers/prints" in r.url
+    ) as slow:
+        page.locator("#print-file").set_input_files(
+            {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
+        )
     expect(page.locator("#print-pick")).to_contain_text(
         "slow cube.gcode · 6000 lines", timeout=8000
     )
@@ -1180,9 +1190,8 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
         {"name": "eeprom.gcode", "mimeType": "text/plain", "buffer": b"G28\nM500\n"}
     )
     expect(page.locator("#print-pick")).to_contain_text("refused: line 2: M500", timeout=8000)
-    page.locator("#print-pick").select_option(
-        label=page.locator("#print-pick option", has_text="slow cube").text_content()
-    )
+    # By its id, which keeping it again keeps; its label's kept time moves.
+    page.locator("#print-pick").select_option(slow.value.json()["id"])
 
     # Disarmed: the button is greyed and says why, so nothing leaves the page.
     expect(page.locator("#print-start")).to_be_disabled(timeout=8000)

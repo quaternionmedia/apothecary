@@ -8,6 +8,7 @@ only be edited, which is the loop this tooling exists to replace.
 from __future__ import annotations
 
 import re
+from typing import Literal, get_args, get_origin
 
 import pytest
 
@@ -31,13 +32,31 @@ def _parts_with_params():
     return [pytest.param(part, id=name) for name, part in sorted(found.items())]
 
 
-def _moved(value):
-    """A different valid value for a number or a flag; anything else unchanged."""
+def _moved(value, choices=()):
+    """A different valid value for a number, a flag, a list of numbers (each one more),
+    a choice among words (another of them) or a word (one letter more); anything else
+    unchanged."""
     if isinstance(value, bool):
         return not value
     if isinstance(value, (int, float)):
         return value + 1
+    if (
+        isinstance(value, list)
+        and value
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
+    ):
+        return [v + 1 for v in value]
+    others = [c for c in choices if c != value]
+    if others:
+        return others[0]
+    if isinstance(value, str) and value:
+        return value + "x"
     return value
+
+
+def _choices(part, field: str) -> tuple:
+    annotation = part.params_model.model_fields[field].annotation
+    return get_args(annotation) if get_origin(annotation) is Literal else ()
 
 
 def scad_numerics(path) -> list[str]:
@@ -56,19 +75,25 @@ def test_every_scad_number_has_a_parameter(part):
 def _reaches(part, field: str) -> bool:
     """Whether moving ``field`` changes the SCAD a part built by Python geometry
     generates or the interfaces it declares, from its defaults or from one of its
-    presets: a move the part refuses there is no move."""
+    presets: a move the part refuses there is no move, and a number is tried a step
+    either side of one, for a part that bounds it close."""
     for at in [{}, *(part.preset(name) for name in part.presets)]:
         here = part.params_model(**at)
-        try:
-            moved = part.validate_overrides({**at, field: _moved(getattr(here, field))})
-        except ValueError:
-            continue
+        value = getattr(here, field)
+        moves = [_moved(value, _choices(part, field))]
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            moves += [value + 0.1, value + 3]
         before = part.validate_overrides(at)
-        if (geometry_scad(part, moved), part.interfaces(moved or None)) != (
-            geometry_scad(part, before),
-            part.interfaces(before or None),
-        ):
-            return True
+        for move in moves:
+            try:
+                moved = part.validate_overrides({**at, field: move})
+            except ValueError:
+                continue
+            if (geometry_scad(part, moved), part.interfaces(moved or None)) != (
+                geometry_scad(part, before),
+                part.interfaces(before or None),
+            ):
+                return True
     return False
 
 

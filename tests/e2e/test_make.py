@@ -9,7 +9,7 @@ chooses the part under makes and slices it there. Nothing is armed, started or s
 
 Runs against a server of its own with nothing pinned but where a test pins the
 simulated printer (idle on ``/dev/ttyFAKE1``) to printer_1's mainboard, and takes it
-back; elsewhere printer_1 is opened as the garage plans it, with no board connected.
+back; elsewhere printer_1 is opened as the garage plans it, not connected.
 No real port is opened. The slicer is the scripted OrcaSlicer of the unit tests
 (tests/slicer_helpers.py).
 """

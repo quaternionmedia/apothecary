@@ -135,7 +135,7 @@ def test_a_plan_names_a_part_of_the_site_and_a_file_of_the_machine_s_kind():
 
 def test_the_ring_offers_toolpath_to_a_router_with_no_board():
     """The coupon's ring, with nothing pinned anywhere: Toolpath to the router, planned
-    with no board connected. A printer with no board is offered on no ring: Print and
+    not connected. A printer with no board is offered on no ring: Print and
     Slice would stand on every part's, and its plan is made in its own Machine."""
     told = {
         "context": {"pointing": "node", "targets": ["router_coupon"]},

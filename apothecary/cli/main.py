@@ -3,6 +3,7 @@
 import click
 
 from .airgap import airgap
+from .bed import bed
 from .cabinet import cabinet
 from .census import census
 from .docs import docs
@@ -49,7 +50,7 @@ The dev loop, once it runs:
   apothecary test changed          the loop, before each commit: the tests the change reaches
   apothecary test run              the ordinary command: the unit tests and the walkthrough
   apothecary test all              before a merge, once, on the stack's head merged onto main
-  git pull && uv sync && git submodule update --init
+  git pull && uv sync && git submodule update --init --recursive
                                    others' commits in, with their packages and pin
 docs/dev-loop.md says each step, and how a change is integrated."""
 
@@ -106,6 +107,7 @@ cli.add_command(lighting)
 cli.add_command(airgap)
 cli.add_command(loop)
 cli.add_command(tuning)
+cli.add_command(bed)
 cli.add_command(cabinet)
 cli.add_command(rig)
 cli.add_command(evidence)

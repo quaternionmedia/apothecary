@@ -47,7 +47,7 @@ from ..firmware import devices
 from ..meshes import MeshError, read_stl
 from ..models.measures import MeasurePlan
 from ..state_folder import private_folder, state_dir, write_whole
-from . import filaments, tuning
+from . import compose, filaments, tuning
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -282,11 +282,46 @@ def model_size(stl: bytes) -> Optional[List[float]]:
     return [round(max(p[i] for p in points) - min(p[i] for p in points), 3) for i in range(3)]
 
 
+def asked_levelling(target: Target, levelling: Optional[str]) -> tuple:
+    """The levelling a slice of ``target`` asks, and who asks it: the slice's own (the
+    Print window's row), else what the part declares, else none (the printer's own)."""
+    if levelling is not None:
+        return levelling, "this slice"
+    declared = target.declared.values.get("levelling")
+    if declared is not None:
+        return declared, f"{target.declared.by}, which declares it,"
+    return None, "this slice"
+
+
+def first_layer(target: Target, profile: PrinterProfile) -> dict:
+    """What a slice of ``target`` levels and holds with where it asks neither (the
+    Print window's rows left at their first choice): what the part declares, else
+    the printer profile's -- its start's levelling piece, or homing alone; its
+    adhesion is the slicer profile's own, which this does not read. ``by`` says
+    whose each is: ``part`` or ``printer``."""
+    declared = target.declared.values
+    if declared.get("levelling") is not None:
+        levelling = {"value": declared["levelling"], "by": "part"}
+    else:
+        named = [m for m in profile.start.modules if m in compose.LEVELLING]
+        levelling = {"value": named[-1] if named else "home", "by": "printer"}
+    held = {k: declared[k] for k in ("brim_width", "raft_layers") if declared.get(k) is not None}
+    return {"levelling": levelling, "adhesion": {"by": "part" if held else "printer", **held}}
+
+
 def slice_into(
-    target: Target, printer: Printer, runner: Runner, slicer: Optional[str] = None
+    target: Target,
+    printer: Printer,
+    runner: Runner,
+    slicer: Optional[str] = None,
+    levelling: Optional[str] = None,
+    adhesion: Optional[str] = None,
 ) -> SliceRecord:
     """Slice ``target`` for ``printer`` with the module chosen, keep the G-code
-    where the Print card keeps a file, and record the slice beside it."""
+    where the Print card keeps a file, and record the slice beside it. ``levelling``
+    is the start's levelling this slice asks over the profile's (compose.levelled),
+    ``adhesion`` how its first layer holds over what the part declares
+    (Declared.adhered)."""
     module = get_module(chosen_id(slicer, printer.profile))
     status = module.status()
     if not status.ok:
@@ -302,7 +337,9 @@ def slice_into(
     # settings its tuning holds for that filament, fed back from pieces it made.
     profile = filaments.chosen(printer.profile, printer.at.site, printer.at.path, module.id)
     profile = tuning.applied(profile, printer.at.site, printer.at.path, module.id)
-    resolved = module.settings(profile, target.declared, port=printer.at.port)
+    profile = compose.levelled(profile, *asked_levelling(target, levelling))
+    declared = target.declared.adhered(adhesion)
+    resolved = module.settings(profile, declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(
             0,

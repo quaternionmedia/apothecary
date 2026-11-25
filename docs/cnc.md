@@ -240,18 +240,21 @@ Resume, Cancel (a hold and a reset), the cut's progress with the operation it is
 in, what the file holds, and the router's jobs, each control there once what it
 needs holds (Toolpath once a part is chosen, ▶ Cut once a file is, Hold and
 Abort while a cut runs, Resume while it is held;
-[walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures each). Under a
-toolpath that names what to measure -- the 😮 of `parts/router_emoji`, cut to calibrate
-the router -- **measured** takes what the piece measures and Keep keeps the tool's
+[walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures each). The Cut
+window measures nothing. A toolpath that names what to measure -- the 😮 of
+`parts/router_emoji`, cut to calibrate the router -- says so as it is written, and the
+piece it cut is measured in its part's cabinet, Part › Feedback, which opens on it at
+the cut's end: **measured** takes what the piece measures and Keep keeps the tool's
 allowance it makes for the router's next toolpaths
-([docs/cam.md](cam.md#measured-by-hand-fed-back)). A line the controller refuses
+([docs/cam.md](cam.md#measured-by-hand-fed-back);
+[walkthrough page 56](../walkthrough/56-a-router-calibrated-by-a-face.md) pictures it). A line the controller refuses
 (`error:15`) or an alarm it raises (`ALARM:3`) is said in GRBL's words beside
 the line in the log, in the refusal the status line carries, in the reason a
 job that stopped gives, and in the state card. A cut that would leave the travel
 stops where it would, as `ALARM:2`, so the tool is zeroed with the cut's depth
 under it. The ring's Control
 on a router is its own (`menu.router_control_options`): Home (All, X, Y, Z), Unlock, Jog
-(with Stop jog), Spindle, Zero (with Probe Z), Cut (with Measure), Stop, Arm. The router's badge
+(with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge
 in the world and its row on Site's tree say 🪚 and its state, its spindle while
 it turns and the cut's progress, its hour in the Workspace charts the spindle,
 and its marks stand on the table:

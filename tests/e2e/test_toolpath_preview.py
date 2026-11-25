@@ -133,15 +133,17 @@ def _open(page: Page, url: str, machine: Machine):
     windows.machine_ready(page, machine.kind)
     body = windows.machine(page)
     windows.from_the_windows_menu(page, "machine-print")
-    body.locator("#print-file").set_input_files(
-        {"name": machine.file, "mimeType": "text/plain", "buffer": machine.text.encode()}
-    )
-    expect(body.locator("#print-pick option", has_text=machine.file).first).to_be_attached(
-        timeout=5000
-    )
-    body.locator("#print-pick").select_option(
-        label=body.locator("#print-pick option", has_text=machine.file).first.inner_text()
-    )
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/firmware/printers/prints" in r.url
+    ) as kept:
+        body.locator("#print-file").set_input_files(
+            {"name": machine.file, "mimeType": "text/plain", "buffer": machine.text.encode()}
+        )
+    # Chosen by its id: the same bytes kept again keep their id, while the label's kept
+    # time moves, so a label read before the list is drawn again names no option after.
+    file_id = kept.value.json()["id"]
+    expect(body.locator(f"#print-pick option[value='{file_id}']")).to_be_attached(timeout=5000)
+    body.locator("#print-pick").select_option(file_id)
     return body
 
 

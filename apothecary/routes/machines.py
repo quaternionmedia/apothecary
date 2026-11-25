@@ -10,6 +10,9 @@
   registered part -- in the shape
   ``GET /jobs/choices`` answers for a board's port, with no port; where it stands, as
   ``/firmware/printers/where`` says of a pinned board's printer; and its plan.
+- ``GET /sites/{name}/machines/{path}/missing``: why its board is not connected -- each
+  board pinned there that no port holds, how far it got (``firmware/missing.py``),
+  and every serial port plugged in now.
 - ``PUT /sites/{name}/machines/{path}/plan``: keep the part it will make and the kept
   file of its kind that makes it. ``DELETE`` lets the plan go.
 
@@ -132,3 +135,65 @@ def keep_plan(name: str, path: str, body: PlanRequest):
 def let_plan_go(name: str, path: str):
     _machine(name, path)
     return {"cleared": machine_plans.clear(name, path)}
+
+
+@router.get("/{name}/machines/{path}/missing")
+def machine_missing(name: str, path: str):
+    """Why the machine's board is not connected: each board pinned at the machine or
+    beneath it that the port scan names on no port, with the checks a board gets
+    through on its way to being found (``firmware/missing.py``), and every serial
+    port plugged in now with the node a pin names it for. No port is opened, and no
+    scan started: a fresh one is the page's to ask for (``GET /sites/{name}/devices?fresh=1``)."""
+    from ..firmware import devices, missing
+    from ..firmware.bindings import bindings_for_site
+    from ..firmware.toolchains import ToolchainError
+
+    site, _, kind = _machine(name, path)
+    # The newest scan however old, so asking every few seconds starts none; the
+    # USB list and the serial engine's port list are read now (a board on its
+    # port and not in the scan is scanned for afresh by the page, once, through
+    # its model's rescan, so the page's own rows name it too).
+    try:
+        found = devices.detected_devices(any_age=True)
+    except ToolchainError:
+        found = []
+    rows = bindings_for_site(name, site, devices=found)
+    mine = [r for r in rows if r.path == path or r.path.startswith(path + ".")]
+    state = devices.get_state()
+    pins = {b.path: b for b in state.bindings(name)}
+    usb = missing.usb_devices()
+    listed = devices.ports_now()
+    expected = []
+    for row in mine:
+        if row.device is not None or not row.identity:
+            continue
+        pin = pins.get(row.path)
+        last_port, last, seen = state.last_found(row.identity)
+        expected.append(
+            {
+                "pinned_at": row.path,
+                "how": row.binding_source,
+                **missing.explain(
+                    row.identity,
+                    (pin.kind if pin else None) or kind,
+                    usb=usb,
+                    listed=listed,
+                    last_port=last_port,
+                    last=last,
+                    seen=seen,
+                ),
+            }
+        )
+    return {
+        "site": name,
+        "path": path,
+        "kind": kind,
+        "connected": [
+            {"path": r.path, "port": r.device.port} for r in mine if r.device is not None
+        ],
+        "expected": expected,
+        "plugged": missing.plugged(
+            usb, listed, {r.device.port: r.path for r in rows if r.device is not None}
+        ),
+        "usb_read": usb is not None,
+    }

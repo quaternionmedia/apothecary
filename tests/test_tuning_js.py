@@ -1,5 +1,5 @@
 """What the Print window's measured row says of a printer's tuning (apothecary/static/tuning.js):
-the plan's rows, what a row's field reads, which document is the slice's, what Apply and
+what a row's field reads, which document is the slice's, what Apply and
 Undo turn would be refused for, and a turn and a trend in a line. The module is pure, so
 node runs it here, on a document the server itself built."""
 
@@ -30,9 +30,6 @@ SCRIPT = """
 import * as t from "%(module)s";
 const record = %(record)s, entry = %(entry)s, applied = %(applied)s;
 const out = {};
-out.plan = t.planOf(record).map((f) => f.name);
-out.box = t.planOf({ size: [10, 20, 30] }).map((f) => [f.name, f.nominal]);
-out.none = t.planOf(null);
 out.applies = t.appliesOf(record);
 out.reads = ["20.08 20.1", "", "20,1", "x", "-1", " 7 "].map(t.parseReads);
 out.found = t.documentFor([entry], out.applies) === entry;
@@ -113,8 +110,6 @@ def test_the_measured_row_reads_the_servers_document(tmp_path, monkeypatch):
     done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
     out = json.loads(done.stdout)
-    assert out["plan"][:3] == ["plate_x", "plate_y", "a_x"] and len(out["plan"]) == 16
-    assert out["box"] == [["x", 10], ["y", 20], ["z", 30]] and out["none"] == []
     assert out["applies"] == PLA
     assert out["reads"] == [[20.08, 20.1], [], [20, 1], None, None, [7]]
     assert out["found"] is True and out["other"] is None

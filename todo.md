@@ -15,6 +15,7 @@ here: run `apothecary problems`.
 - A whiteboard to a model, what is left: the sorter leaning on a marker's colour, a camera aimed at a whiteboard, a note's words read freely through qmcp, and a whiteboard's history kept across a restart: [docs/plans/whiteboard-loop-2026-11-09.md](docs/plans/whiteboard-loop-2026-11-09.md#what-it-leaves).
 - A look's brim lever is likely inert on printer_1: it moves `brim_width`, while the Ender-3 process profile leaves `brim_type` unset and a slice by OrcaSlicer 2.4.2 records `brim_type = auto_brim`, `brim_width = 0`, under which OrcaSlicer sizes the brim itself. A slice with the lever applied would say whether its width reaches the G-code; if not, the lever sets `brim_type` to an outer brim beside the width ([docs/print-tuning.md](docs/print-tuning.md)).
 - The cabinet, what it leaves on the way to the viewer review's fifth aim ([docs/cabinet.md](docs/cabinet.md), [docs/plans/viewer-review-2026-11-19.md](docs/plans/viewer-review-2026-11-19.md)): a job's own record names no variant, parameters or STL hash (its drawer does); the cabinet is not drawn in the world beside a part stepped into; a piece made from a picture has no drawer; a photograph of a piece is not filed with it; and Part › View › Feedback's Take turn and Undo turn are not greyed on the ring by the tuning document, as the window's buttons are, but refused with its reason when chosen. Of the pieces Part › Variants lists: a piece rendered from an edit of a variant's body that leaves its numbers as they were is listed under that variant, "with its values", where its draft is no save of it; a piece of no saved variant has no Draw, which wants a ring cell with it; and the list is empty, saying nothing, when the cabinet does not answer.
+- A printed piece checked against its design, what it leaves ([docs/cabinet.md](docs/cabinet.md#dimensions), [walkthrough 55](walkthrough/55-a-printed-piece-checked-against-its-design.md)): a part drawn as it rests (the footpedal, the fife, solderfan) is not the box it was sliced in, so only a side as long as designed is marked in the world -- the footpedal's x -- and its other dimensions are read in Part › Feedback alone; drawing the part as it prints while its piece's dimensions are marked would mark them all. A part that names a plan has no lines in the world until a piece of it is sliced, as the plan comes with the slice; a route for a part's plan at the parameters drawn would draw them before. printer_1's profile holds no `tolerance` under `measured`, so its pieces are checked with the part's or the default; a tolerance the bench measured, with its source, is the owner's to add. A cut piece's sizes have no line in the world, and are checked with the default.
 - Machines kept open beside the one in front, what is left ([docs/firmware.md](docs/firmware.md#in-the-viewer-one-machine-per-board)): a reload reopens the Machine in front alone (the address names one board); three are kept at most; each Machine's elements keep their ids, so two open hold two `#ctl`, `#control` and the rest, and a label's `for` in a kept window can reach the Machine in front's control; the Loops window, the deck's knobs and Panels › Machine › Control pad act on the Machine in front only.
 - The bed mesh layer, hidden: a badge behind the relief can still be dimmed as covered by it, since `anchors.js` `occluded` reads each hit object's own `visible` and the layer hides the group above the relief (`machine_marks.js`); the bed's plane under it covers most such sights anyway. No test drives the router's table map under the layer, which rests on the `setMesh` it shares with the printer's.
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
@@ -99,6 +100,20 @@ here: run `apothecary problems`.
   left edge, or scrolled sideways, with the caret in view either way. Which one a run
   gets does not follow the commit, so a picture of it past the drift tolerance is not
   a change to the page.
+- `tests/test_firmware_gcode.py::test_release_reconnect_reset_and_upload_are_refused_mid_print`
+  read a cancel already `cancelled` where it asks for `cancelling`, once, in a whole unit
+  run at a load near 9 on four cores; it passed alone three times at that load.
+- A checkout's first browser run builds every part's STL inside its first test's setup
+  (`every_stl_built`, `tests/e2e/conftest.py`), under the same phase cap as the test, so
+  where none is built yet -- a fresh worktree -- the build outlasts the cap and the run
+  ends in setup (seen: `Timeout (0:03:14)` in `_built`). Running
+  `tests/e2e/parts_built.py` first with an empty `APOTHECARY_TOOLS_DIR`, as the fixture
+  does, builds them; the fixture could build before the cap starts counting.
+- Page 39's picture of Read a drawing has two grey blanks where the whiteboard's mark
+  badges stand, or none, from run to run (0.36% of its pixels): its test blanks
+  `.world-badge` for that journey, and whether a badge is there when the picture is taken
+  does not follow the commit. A picture of it past the drift tolerance is not a change to
+  the page.
 - A check before a cut that its toolpath fits the travel from the work zero, in the
   Cut card, from the toolpath's recorded bounds and the controller's position: a cut
   zeroed too low or too high stops at its first move past the travel, with the
@@ -162,7 +177,8 @@ here: run `apothecary problems`.
     Marlin, GRBL, a port's task) and the tool finder every installer uses; `slicer`,
     `cam`, `evidence` and `openscad_installer` depend on it for the last two.
   - What is cut can differ from what is drawn: `part_cuts` reads a variant's
-    `params`, so an edit of its SCAD's body is drawn and not cut, and the router
+    `params`, or a draft's top-level values where its record has none, so an edit
+    of its SCAD's body is drawn and not cut, and the router
     coupon's cuts restate its SCAD's 20 mm offsets as constants. No test compares
     a toolpath with the SCAD.
   - A router's travel has two sources: the page draws the tool at its position plus

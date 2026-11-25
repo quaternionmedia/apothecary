@@ -1,12 +1,11 @@
 # 20 — A part through the router
 
 **Hermetic.** The controller here is the simulated one; nothing opens a port.
-
 This page is run by `uv run pytest` (the quick loop) and by `apothecary test
 run`, as a doctest: every value shown is the value the run computed, and a
 run that computes another fails here. The examples drive the seam in this
 process against the simulated controller (`grbl.SimulatedRouter`), its moves
-taking no time; nothing opens a port, and the real router is section I of
+taking no time; the real router is section I of
 [docs/bench-checklist.md](../docs/bench-checklist.md).
 
 The subtractive loop, station by station, on one part: a design that says how
@@ -16,7 +15,8 @@ again. [docs/cam.md](../docs/cam.md) is the reference for the toolpath,
 [docs/cnc.md](../docs/cnc.md) for the router, and
 [the plan](../docs/plans/subtractive-loop-2026-11-04.md) for what comes next.
 [Page 24](24-a-cut-from-the-card.md) is the same cut from the page's Cut card, pictured
-step by step.
+step by step, and [page 56](56-a-router-calibrated-by-a-face.md) the 😮 of its last
+section cut and measured in the page.
 
 ## The design: a coupon on the router's table
 

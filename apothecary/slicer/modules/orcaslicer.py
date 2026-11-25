@@ -28,6 +28,14 @@ top, then the part's declared print settings:
   a line as wide as the nozzle (the model's own reckoning, "usually 3x nozzle").
 - ``tolerance`` is not passed: it is what the part's geometry already allows
   for a fit, and a slicer compensating as well would take it twice.
+- ``brim_width`` is the process's brim, round each piece's outside
+  (``brim_type`` ``outer_only``) that wide, or none at 0.
+- ``raft_layers`` is the process's ``raft_layers``: a raft that many layers
+  under each piece, or none at 0.
+- ``skirt_loops`` is the process's ``skirt_loops``: that many loops round the
+  pieces, or none at 0.
+- ``levelling`` is not a process setting: it chooses the start's levelling piece
+  (``compose.levelled``) where the slice asks none.
 
 The machine's start G-code is composed from the pieces the printer's profile
 names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
@@ -487,6 +495,39 @@ class OrcaSlicerModule(SlicerModule):
                 origin="declared",
                 source=declared.by,
                 note=f"wall_thickness {thickness:g} mm: {loops} lines of {line:g} mm reach it",
+            )
+        if "brim_width" in values:
+            width = float(values["brim_width"])
+            process["brim_type"] = "outer_only" if width > 0 else "no_brim"
+            process["brim_width"] = _plain(width)
+            said = f"a {width:g} mm brim round each piece" if width > 0 else "no brim"
+            for name in ("brim_type", "brim_width"):
+                origins[("process", name)] = Setting(
+                    name=name,
+                    value=process[name],
+                    origin="declared",
+                    source=declared.by,
+                    note=f"brim_width {width:g} mm: {said}",
+                )
+        if values.get("skirt_loops") is not None:
+            loops = int(values["skirt_loops"])
+            process["skirt_loops"] = str(loops)
+            origins[("process", "skirt_loops")] = Setting(
+                name="skirt_loops",
+                value=str(loops),
+                origin="declared",
+                source=declared.by,
+                note=f"{loops} loops of skirt round the pieces" if loops else "no skirt",
+            )
+        if "raft_layers" in values:
+            layers = int(values["raft_layers"])
+            process["raft_layers"] = str(layers)
+            origins[("process", "raft_layers")] = Setting(
+                name="raft_layers",
+                value=str(layers),
+                origin="declared",
+                source=declared.by,
+                note=f"a raft of {layers} layers under each piece" if layers else "no raft",
             )
         if "tolerance" in values:
             origins[("part", "tolerance")] = Setting(

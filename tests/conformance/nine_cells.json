@@ -532,6 +532,8 @@
       "94": "print:start",
       "99": "print:preview",
       "93": "print:plan",
+      "91": "print:level",
+      "97": "print:adhesion",
       "38": "control:motors-off",
       "36": "control:quickstop",
       "32": "control:break-wait",
@@ -579,6 +581,8 @@
       "794": "print:start",
       "799": "print:preview",
       "793": "print:plan",
+      "791": "print:level",
+      "797": "print:adhesion",
       "738": "control:motors-off",
       "736": "control:quickstop",
       "732": "control:break-wait",
@@ -629,6 +633,8 @@
       "4794": "print:start",
       "4799": "print:preview",
       "4793": "print:plan",
+      "4791": "print:level",
+      "4797": "print:adhesion",
       "4738": "control:motors-off",
       "4736": "control:quickstop",
       "4732": "control:break-wait",
@@ -1145,6 +1151,34 @@
               "colour": null,
               "children": null,
               "cell": 3
+            },
+            {
+              "id": "print:level",
+              "label": "Levelling",
+              "action": "print:level",
+              "enabled": true,
+              "why": null,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "group": null,
+              "colour": null,
+              "children": null,
+              "cell": 1
+            },
+            {
+              "id": "print:adhesion",
+              "label": "Adhesion",
+              "action": "print:adhesion",
+              "enabled": true,
+              "why": null,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "group": null,
+              "colour": null,
+              "children": null,
+              "cell": 7
             }
           ],
           "cell": 9
@@ -1897,6 +1931,34 @@
                   "colour": null,
                   "children": null,
                   "cell": 3
+                },
+                {
+                  "id": "print:level",
+                  "label": "Levelling",
+                  "action": "print:level",
+                  "enabled": true,
+                  "why": null,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "group": null,
+                  "colour": null,
+                  "children": null,
+                  "cell": 1
+                },
+                {
+                  "id": "print:adhesion",
+                  "label": "Adhesion",
+                  "action": "print:adhesion",
+                  "enabled": true,
+                  "why": null,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "group": null,
+                  "colour": null,
+                  "children": null,
+                  "cell": 7
                 }
               ],
               "cell": 9
@@ -2706,6 +2768,34 @@
                       "colour": null,
                       "children": null,
                       "cell": 3
+                    },
+                    {
+                      "id": "print:level",
+                      "label": "Levelling",
+                      "action": "print:level",
+                      "enabled": true,
+                      "why": null,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "group": null,
+                      "colour": null,
+                      "children": null,
+                      "cell": 1
+                    },
+                    {
+                      "id": "print:adhesion",
+                      "label": "Adhesion",
+                      "action": "print:adhesion",
+                      "enabled": true,
+                      "why": null,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "group": null,
+                      "colour": null,
+                      "children": null,
+                      "cell": 7
                     }
                   ],
                   "cell": 9

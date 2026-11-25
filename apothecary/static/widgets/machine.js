@@ -76,8 +76,8 @@
  * as in the log; a print started is said there, naming where it is followed, and
  * a print that ends, how it ended (failed, and why, as an error). `variantFor(path)`
  * names the applied variant the page draws a part from, or null, so Slice slices
- * the part as drawn. `afterPrint(job)` names what comes next once a print is done,
- * said after how it ended, or null; `afterHello(sketch)` the same once a devkit is
+ * the part as drawn. `afterPrint(job)` names what comes next once a print ends, done,
+ * cancelled or failed, said after how it ended, or null; `afterHello(sketch)` the same once a devkit is
  * heard saying the hello of the sketch it runs. destroy() stops watching and frees what the module put on the
  * window.
  */
@@ -87,6 +87,7 @@ import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/
 import { clock, degrees, heater, mm as mmText, sentence, span, stamp, viaRing } from "/static/format.js";
 import { toolPosition as toolPositionOf, fileOrigin, MOVE_COLORS } from "/static/machine_marks.js";
 import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
+import { ADHESION, LEVELLING, options, own, words as firstLayerWords } from "/static/first_layer.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
@@ -130,6 +131,8 @@ const CARDS = `
     <div class="card printer-only gcode"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div><div class="s old" id="c-age" hidden></div></div>
     <div class="card wide needs" id="c-needs-card" hidden><div class="k">Needs you</div><div class="needs-list" id="c-needs"></div></div>
     <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+    <div class="card wide missing" id="c-missing-card" hidden><div class="k">Its board, not connected</div><div id="c-missing"></div>
+        <div class="missing-do" id="missing-said"></div></div>
 </div>
 <div data-section="status">
 <div class="cards">
@@ -189,6 +192,17 @@ const CARDS = `
         <div class="row" id="print-filament-row" hidden><label for="print-filament">filament</label>
             <select id="print-filament" title="The filament loaded on this printer: its next slices are made with it, and take its own tuning"></select>
             <span class="s" id="print-filament-said"></span>
+        </div>
+        <div class="row" id="print-level-row" hidden><label for="print-level">levelling</label>
+            <select id="print-level" title="How the next slice levels the bed at the start of its print: as the part declares, else as this printer's profile says; a probe once the bed is hot (G29, the mesh on for that print); or homing alone">
+                ${options(LEVELLING)}
+            </select>
+            <span class="s" id="print-level-said"></span>
+        </div>
+        <div class="row" id="print-adhesion-row" hidden><label for="print-adhesion">adhesion</label>
+            <select id="print-adhesion" title="How the next slice's first layer holds: as the part declares, else as this printer's profile says; a brim round each piece; a raft under each; or neither">
+                ${options(ADHESION)}
+            </select>
         </div>
         <div class="row"><label for="print-pick">file</label>
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
@@ -402,7 +416,7 @@ const OLD_MS = 5000;
 // the markup, which carries none of its own.
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null, onFound = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -438,7 +452,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         get polling() { return state.port ? !!b().polling : false; },  // a poll asked and not yet answered
         get entries() { return state.port ? b().log : []; },
     };
-    // Planning: the Machine of a machine with no board connected (machineAt, its site
+    // Planning: the Machine of a machine not connected (machineAt, its site
     // and node, with no port). What makes it, its slice or toolpath, the files and the
     // path drawn ask the board nothing; ▶ and every control are its board's.
     const planning = () => !state.port && !!machineAt;
@@ -901,7 +915,57 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     window.addEventListener("apothecary:board", onBoard);
     onWindow.push(["apothecary:board", onBoard]);
 
+    // Planned, with a board pinned at the machine that no port holds: why it is not
+    // found, read with no port opened (GET /sites/{site}/machines/{path}/missing), each
+    // check a board gets through on its way in its order, and the first that is off
+    // said as what to do. Asked again every few seconds while it shows; a board come up
+    // on its port and not yet in the scan is scanned for once, and a board found opens
+    // its own Machine (onFound).
+    const MISSING_MS = 4000;
+    const miss = { timer: null, asked: 0, scannedFor: null };
+    const MARK = { ok: "✓", off: "✗", unread: "?", after: "·" };
+    async function loadMissing({ again = false } = {}) {
+        clearTimeout(miss.timer); miss.timer = null;
+        if (!planning()) { $("c-missing-card").hidden = true; return; }
+        const at = machineAt, asked = ++miss.asked;
+        if (again) { $("missing-said").textContent = "scanning the ports…"; try { await model.rescan(); } catch (e) { /* the route says what is there */ } }
+        let d = null;
+        try { d = await api(`/sites/${encodeURIComponent(at.site)}/machines/${encodeURIComponent(at.path)}/missing`); } catch (e) { d = null; }
+        if (asked !== miss.asked || !planning()) return;
+        if (d && d.connected.length && !d.expected.length) {
+            $("c-missing-card").hidden = true;
+            const found = d.connected[0];
+            if (say) say(`${at.path}'s board is found on ${found.port}: its Machine opens with it`, "success");
+            // The page's own scan names it too before its Machine is opened on it.
+            if (!again) { try { await model.rescan(); } catch (e) { /* onFound waits for it */ } }
+            if (asked === miss.asked && planning() && onFound) onFound(at.path, found.port);
+            return;
+        }
+        renderMissing(d, again);
+        // On its port, open to this user, and not in the scan: scanned for once.
+        const ready = d && d.expected.find((e) => e.checks.every((c) => c.id === "scan" || c.state === "ok"));
+        if (ready && !again && miss.scannedFor !== ready.identity) { miss.scannedFor = ready.identity; return loadMissing({ again: true }); }
+        miss.timer = setTimeout(loadMissing, document.hidden ? 4 * MISSING_MS : MISSING_MS);
+    }
+    function renderMissing(d, looked) {
+        const card = $("c-missing-card");
+        if (!d || !d.expected.length) { card.hidden = true; return; }
+        card.hidden = false;
+        const boards = d.expected.map((e) => {
+            const checks = e.checks.map((c) => `<li class="check ${esc(c.state)}"><span class="mark">${MARK[c.state] || "·"}</span> ${esc(c.label)}${c.says ? ` — ${esc(c.says)}` : ""}</li>`).join("");
+            return `<div class="expected"><b>${esc(e.board)}</b>, pinned at ${esc(e.pinned_at)}.${e.last_said ? ` ${esc(e.last_said)}` : ""}</div>`
+                + `<ul class="checks">${checks}</ul>`
+                + (e.todo ? `<div class="todo">${esc(e.todo)}</div>` : "");
+        }).join("");
+        const plugged = (d.plugged || []).map((p) => `<b>${esc(p.port)}</b> ${esc(p.bridge)}${p.serial ? " " + esc(p.serial) : ""}${p.for ? ` — ${esc(p.for)}'s` : " — pinned nowhere"}`);
+        $("c-missing").innerHTML = boards
+            + `<div class="plugged">Plugged in now: ${plugged.length ? plugged.join(" · ") : "no serial port"}${d.usb_read ? "" : " (USB is not read here)"}</div>`;
+        $("missing-said").textContent = `${looked ? "scanned afresh" : "checked"} at ${clock(new Date())}; checked again every few seconds`;
+    }
+
     async function selectPort(port) {
+        clearTimeout(miss.timer); miss.timer = null; miss.asked++;
+        $("c-missing-card").hidden = true;
         if (state.port && state.port !== port) model.unwatch(state.port, who);
         if (flash && flash.port !== port) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
         state.port = port; state.kind = null; state.history = []; state.listening = false;
@@ -910,7 +974,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!port) {
             applyKind(); renderAll(); loadLevel(); loadPrintJobs();
             if (!planning()) { loadChoices(); loadPrintFiles(); }
-            if (planning()) $("ident").textContent = `${machineAt.path}: no board connected -- planned here; ${words().start} is its board's`;
+            if (planning()) { $("ident").textContent = `${machineAt.path}: not connected -- planned here; ${words().start} is its board's`; loadMissing(); }
             return;
         }
         // Watched at once as what it is known to be, so a verb carried the moment
@@ -1146,7 +1210,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const job = prt.job, running = !!(job && job.running);
         const chosen = prt.files.find((f) => f.id === $("print-pick").value);
         if (!state.port) {
-            out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
+            out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} is not connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
         } else if (running) {
             out["print.start"] = { ok: false, kind: "held", why: `a ${job.kind || "job"} from here is under way` };
         } else if (chosen && ofAnother(chosen, $("print-part").value)) {
@@ -1381,11 +1445,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             meshEl.innerHTML = [...rows].reverse().map((row) => row.map((v) => `<div class="cell" style="background:${heat(v, st.min, st.max)}" title="${v.toFixed(3)} mm">${v.toFixed(2)}</div>`).join("")).join("");
             const c = st.corners || {};
             // A router's map says where its points lie (record.area) and reads in machine
-            // coordinates; a printer's mesh is its firmware's, with the leveling state.
-            const a = rec.area;
+            // coordinates; a printer's mesh is its firmware's, with the leveling state, and
+            // where its probe said the points lie when it said (G29 V3).
+            const a = rec.area, table = rec.method === "G38.2";
             statsEl.innerHTML = `${esc(rec.method)} · ${stamp(rec.at)} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm ${esc(w.across)}<br>`
                 + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b>`
-                + (a ? ` · Z in machine coordinates · X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm from the front-left corner` : ` · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`)
+                + (table && a ? ` · Z in machine coordinates · X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm from the front-left corner` : ` · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`)
+                + (!table && a ? ` · probed X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm, where the probe said` : "")
                 + (rec.probe_offset ? ` · probe offset X${rec.probe_offset.x} Y${rec.probe_offset.y} Z${rec.probe_offset.z}` : "")
                 + (rec.bed_c != null ? ` · bed ${degrees(rec.bed_c)}` : "") + (rec.hotend_c != null ? ` hotend ${degrees(rec.hotend_c)}` : "")
                 + (rec.note ? `<br>note: ${esc(rec.note)}` : "");
@@ -1412,20 +1478,42 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("level-job").textContent = job.running ? levelStage(job) : (job.error ? `failed: ${job.error}` : "");
             if (job.running) { level.timer = setTimeout(watchLevelJob, 1000); return; }
             level.timer = null;
-            if (job.record_id) { await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel(); }
+            if (job.record_id) {
+                await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel();
+                // A reading kept: the windows of the bed (Runs, Differences) take it.
+                window.dispatchEvent(new CustomEvent("apothecary:leveled", { detail: { port: state.port, records: job.record_ids || [job.record_id] } }));
+            }
             await pollNow();
         } catch (e) { $("level-job").textContent = e.message; }
     }
-    async function startLevel(probe) {
-        if (!state.port) return;
-        if (probe && !ctl.armed) { refuse("probing moves the machine: arm control first"); return; }
-        if (probe && !confirm(words().level.ask.replace("{port}", state.port))) return;
+    // `hot`: probe hot -- the bed heated to hot.heat °C and held hot.soak s first, probed
+    // twice, a reading each, and turned off after. { said } or { refused }.
+    async function startLevel(probe, hot = null) {
+        const no = (text) => { refuse(text); return { refused: text }; };
+        if (!state.port) return { refused: "no port" };
+        if (probe && !ctl.armed) return no("probing moves the machine: arm control first");
+        const ask = hot
+            ? `Heat ${state.port}'s bed to ${hot.heat} °C, hold it ${hot.soak} s, then home and probe it twice? It is turned off after.`
+            : words().level.ask.replace("{port}", state.port);
+        if (probe && !confirm(ask)) return { refused: "not asked to" };
+        const body = hot ? { port: state.port, probe, heat_c: hot.heat, soak_s: hot.soak, times: 2 } : { port: state.port, probe };
         try {
-            const job = await post("/firmware/printers/level", { port: state.port, probe });
+            const job = await post("/firmware/printers/level", body);
             $("level-job").textContent = levelStage(job);
             level.timer = setTimeout(watchLevelJob, 800);
             forgetRefusal();
-        } catch (e) { refuse(`${words().level.card}: ` + e.message); $("level-job").textContent = e.message; }
+            return { said: hot ? `${state.port}'s bed heating to ${hot.heat} °C, held ${hot.soak} s, then probed twice: the Machine's Bed level follows it, and the bed is turned off after` : `${state.port}: ${levelStage(job)}` };
+        } catch (e) { $("level-job").textContent = e.message; return no(`${words().level.card}: ` + e.message); }
+    }
+    // The bed temperature of the filament the Print window holds (the loaded one, else the
+    // profile's), or null where none is known.
+    function bedTemperature() {
+        const a = fil.answer;
+        if (!a || !a.choices) return null;
+        const name = $("print-filament").value || (a.loaded ? a.loaded.loaded.filament : a.profile);
+        const found = a.choices.find((c) => c.name === name);
+        const t = found ? Number(found.bed_temperature) : NaN;
+        return Number.isFinite(t) && t > 0 ? t : null;
     }
     $("level-probe").onclick = () => startLevel(true);
     $("level-read").onclick = () => startLevel(false);
@@ -1452,7 +1540,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
     // `wanted` is a part asked for from outside (print.choose), chosen once listed.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null };
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null, ownFor: null };
     // Slicing: the slicer's status (whether one is installed), and the task that
     // slices what makes names, followed by tasks.js at the slicer's own routes.
     // `shown` is the kept file whose slice the card says, the one chosen in its files.
@@ -1703,7 +1791,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const chosen = prt.files.find((f) => f.id === picked);
         $("print-pick").hidden = !prt.files.length;
         $("print-delete").hidden = !picked;
-        $("print-delete").disabled = running && job.file_id === picked;
+        setReason($("print-delete"), running && job.file_id === picked ? `the ${job.kind || "job"} from here is sending it` : null, "Forget the chosen file");
         $("print-preview-row").hidden = !picked;
         $("print-start").hidden = !picked;
         setTip($("print-start"), words().startTitle);
@@ -1714,10 +1802,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-verbs").hidden = !picked && !running;
         const slicerOk = !words().slice || !!(slc.status && slc.status.ok);
         $("print-slice").hidden = !part;
-        $("print-slice").disabled = slc.running;
-        $("print-slice").title = slicerOk
+        // A printer's slice levels as chosen here, for that slice (compose.levelled).
+        $("print-level-row").hidden = !words().slice || !part;
+        $("print-adhesion-row").hidden = !words().slice || !part;
+        if (words().slice) sayTheOwn(part);
+        setReason($("print-slice"), slc.running ? "a slice is running; its log is in this window, with its Cancel" : null, slicerOk
             ? words().prepareTitle
-            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`;
+            : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Tools › Bench › Install › OrcaSlicer installs it`);
         const went = !!(job && (running || job.stage));
         $("print-progress-row").hidden = !went;
         $("print-bar").hidden = !went;
@@ -1931,16 +2022,38 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (variant === undefined) variant = variantFor ? variantFor(part) : null;
         let task;
         const at = state.port ? { port: state.port } : { site: machineAt.site, printer: machineAt.path };
-        try { task = await post("/slicer/slice", variant ? { ...at, part, variant } : { ...at, part }); }
+        const levelling = $("print-level").value || null;
+        const adhesion = $("print-adhesion").value || null;
+        const body = { ...at, part, ...(variant ? { variant } : {}), ...(levelling ? { levelling } : {}), ...(adhesion ? { adhesion } : {}) };
+        try { task = await post("/slicer/slice", body); }
         catch (e) { slc.running = false; renderPrint(); refuse(`slice: ${e.message}`); return false; }
         $("print-slice-box").hidden = false;
         $("print-slice-task").hidden = false;
         $("print-slice-said").innerHTML = "";
         const ending = sliceTasks().start(async () => task, "/slicer/tasks");
-        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}: its log is in Print from here, and its G-code is chosen there when it ends`);
+        const levelled = [levelling ? $("print-level") : null, adhesion ? $("print-adhesion") : null]
+            .filter(Boolean).map((el) => `, ${el.selectedOptions[0].textContent.split(":")[0]}`).join("");
+        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in Print from here, and its G-code is chosen there when it ends`);
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
+    }
+    // The rows' first choice said as what it comes to for the part under makes on this
+    // printer: the part's own where it declares one, else the printer's (GET
+    // /slicer/first-layer), asked once each time the part or the printer changes.
+    async function sayTheOwn(part) {
+        const at = state.port ? { port: state.port } : machineAt ? { site: machineAt.site, printer: machineAt.path } : null;
+        const key = part && at ? JSON.stringify([part, at]) : null;
+        if (key === prt.ownFor) return;
+        prt.ownFor = key;
+        let resolved = null;
+        if (key) {
+            try { resolved = await api(`/slicer/first-layer?${new URLSearchParams({ part, ...at })}`); } catch (e) { resolved = null; }
+        }
+        if (prt.ownFor !== key) return;  // another part or printer since
+        for (const [id, row, choices] of [["print-level", "levelling", LEVELLING], ["print-adhesion", "adhesion", ADHESION]]) {
+            $(id).options[0].textContent = own(row, resolved) || firstLayerWords(choices[0]);
+        }
     }
     // Toolpath: what makes names, its cuts written for this router (POST /cam/cut),
     // the file kept and chosen, what it holds said under makes. True when it was kept.
@@ -1958,7 +2071,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-slice-task").hidden = true;
         $("print-slice-said").innerHTML = toolpathSaid(r);
         const cut = r.operations.filter((o) => o.cut).length;
-        tell(`${r.name} kept and chosen: the toolpath of ${r.part}${r.variant ? `, the variant drawn (${r.variant.slice(0, 8)})` : ""} for ${r.router.name}, ${cut} of ${r.operations.length} operations, ${r.lines} lines, ${span(r.time_s)} at the feeds written${r.messages.length ? `; ${r.messages.length} said` : ""}; ▶ Cut cuts it`);
+        // A toolpath that names what to measure says so: the piece it cuts is measured in
+        // its part's cabinet, which opens on it at the cut's end.
+        const named = (r.features || []).map((f) => f.name);
+        const measure = named.length ? `, then measure its ${named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}` : named[0]} across, under measured in Part › Feedback` : "";
+        tell(`${r.name} kept and chosen: the toolpath of ${r.part}${r.variant ? `, the variant drawn (${r.variant.slice(0, 8)})` : ""} for ${r.router.name}, ${cut} of ${r.operations.length} operations, ${r.lines} lines, ${span(r.time_s)} at the feeds written${r.messages.length ? `; ${r.messages.length} said` : ""}; ▶ Cut cuts it${measure}`);
         $("print-card").scrollIntoView({ block: "nearest" });
         emit("apothecary:sliced", { port: state.port, file_id: r.file_id });
         return true;
@@ -1971,6 +2088,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             ["tool", `${r.tool.label}`], ["stock", `${r.stock.x} x ${r.stock.y} x ${r.stock.thickness} mm, zero at its front-left top corner`],
             ["feeds", `cut ${r.feeds.cut}, plunge ${r.feeds.plunge} mm/min, ${r.feeds.rpm} rpm`],
             ...r.operations.map((o) => [`op ${o.index}`, `${o.words}${o.cut ? ` · ${o.passes} pass${o.passes === 1 ? "" : "es"}` : " · not cut"}`]),
+            // What a person measures of the piece, as designed: Part › Feedback's measured.
+            ...((r.features || []).length ? [["measure", r.features.map((f) => f.words).join("; ")]] : []),
         ].map(([k, v]) => `<div class="declared"><span>${esc(k)}</span> <span>${esc(v)}</span> <span class="meta">part</span></div>`).join("")
             // The router's allowance every offset took, and the measurement it came from.
             + (r.allowance ? `<div title="${esc(r.allowance.source)}"><span>tool_allowance</span> <span>${esc(signed(r.allowance.value))}</span> <span class="meta">${esc(r.allowance.origin)}</span></div>` : "");
@@ -2022,8 +2141,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // The ring's Slice on a piece or a part, and the page's Make: chosen under makes,
     // then sliced -- as `variant` where one is given (startSlice).
-    async function slicePart(path, variant = undefined) {
+    // The Print cell's Levelling and Adhesion: the next of that row's choices, told.
+    function stepRow(id, what) {
+        const el = $(id);
+        el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
+        renderPrint();
+        tell(`${what} of the next slices: ${el.selectedOptions[0].textContent}`);
+    }
+    // `levelling` and `adhesion`, when given, are chosen in the Print window's rows for this
+    // slice and the ones after it ("" the part's own: what it declares, else the profile's).
+    async function slicePart(path, variant = undefined, { levelling = undefined, adhesion = undefined } = {}) {
         if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
+        if (levelling !== undefined) $("print-level").value = levelling || "";
+        if (adhesion !== undefined) $("print-adhesion").value = adhesion || "";
         const before = refusals;
         const started = await startSlice(variant);
         if (!started) return { refused: refusals > before ? lastRefusal : `${path} could not be sliced` };
@@ -2034,8 +2164,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // as said, failed as an error with its reason.
     function toldEnded(job) {
         const what = `${job.name} on ${state.port}${job.part ? `, making ${job.part}` : ""}`;
-        if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}`, "error"); return; }
-        const next = job.stage === "done" && afterPrint ? afterPrint(job) : null;
+        // Done or not, the page is told: a piece's drawer opens in Part › Feedback, and a
+        // print that stopped says there where, and what to try.
+        const next = afterPrint ? afterPrint(job) : null;
+        if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}${next ? `; ${next}` : ""}`, "error"); return; }
         tell(`${what}, ended: ${job.stage}, ${job.sent}/${job.total} lines${next ? `; ${next}` : ""}`);
     }
     // A print followed until it ends; its end is told (the printer's jobs, the site's,
@@ -2199,6 +2331,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:start") { await startPrint(); return true; }
         if (action === "print:preview") { togglePreview(); return true; }
         if (action === "print:plan") return keepPlan();
+        if (action === "print:level") { stepRow("print-level", "levelling"); return true; }
+        if (action === "print:adhesion") { stepRow("print-adhesion", "adhesion"); return true; }
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -2247,6 +2381,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-start"), "print:start"]);
         out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-plan"), "print:plan"]);
+        out.push([$("print-level"), "print:level"]);
+        out.push([$("print-adhesion"), "print:adhesion"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);
@@ -2268,13 +2404,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         flashing: () => flash,
         kind: () => state.kind,
         device, carry, pairs, pad: togglePad, padBack,
-        level: { start: startLevel, corner: (which) => { const lines = cornerLines(which); return lines ? enqueue(lines) : refuse(NO_CORNERS); }, lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, fileOf: chooseFileOf, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
+        level: { start: startLevel, hot: (heat, soak) => startLevel(true, { heat, soak }), corner: (which) => { const lines = cornerLines(which); return lines ? enqueue(lines) : refuse(NO_CORNERS); }, lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, bedTemperature, fileOf: chooseFileOf, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
         plan: { keep: keepPlan, load: loadPlan, shown: () => pl.plan, planning },
         destroy() {
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer); clearInterval(knob.timer); clearInterval(ageTimer);
+            clearTimeout(miss.timer); miss.asked++;
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);

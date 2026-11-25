@@ -27,17 +27,23 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
 
 ## Start here
 
-[Walkthrough page 00, *Getting started*](walkthrough/00-getting-started.md): install, then
+Python 3.11 or newer and [uv](https://docs.astral.sh/uv/), then
 
 ```bash
+git clone --recurse-submodules https://github.com/quaternionmedia/apothecary.git
+cd apothecary
+uv sync
 uv run apothecary check              # what is installed here, and what is missing
 uv run apothecary openscad install   # an OpenSCAD with Manifold, before the first serve
 uv run apothecary serve --simulated  # the viewer, with a simulated printer and board
 ```
 
-and the five loops -- designing a part, editing its SCAD, a picture to a print, firmware,
-a whiteboard to a model -- with what each needs. `uv run apothecary --help` ends with the same three
-steps.
+[Walkthrough page 00, *Getting started*](walkthrough/00-getting-started.md) says each step
+-- a clone made without its submodules, the OpenSCAD renders use, what `serve` prints --
+then the five loops -- designing a part, editing its SCAD, a picture to a print, firmware,
+a whiteboard to a model -- with what each needs, and the installs only some of them want:
+the slicer, each firmware toolchain and the browser the tests drive.
+`uv run apothecary --help` gives the same three steps after its commands.
 
 ## What it does, and how to see it
 
@@ -67,11 +73,14 @@ browser test is in no row, or when a page a run writes is in no row that names t
 | A projector aimed at a machine's bed: a black page of its own that draws what is about to be made and the machine's state in the bed's millimetres, through four points marked on the bed | A machine's ring, Camera › Projector; C to mark the four points ([docs/projector.md](docs/projector.md)) | `e2e/test_projector_page.py`, `test_projector.py`, `test_homography.py`, `test_surfaces.py` | |
 | The router beside the Ender: cnc_router's controller pinned to the simulated GRBL router, its Machine's state, positions, spindle and pins, its pad's home, jog, spindle, zero and probe, a cut from here, the soft reset, its table mapped by its probe and laid over the table, and what it needs of a person: Needs you, each axis's home proved first, armed on its badge | On simulated machines, cnc_router's 🪚 badge: its Machine, ⚙ Control and its pad, its Table map ([docs/cnc.md](docs/cnc.md)) | `e2e/test_router_ui.py`, `e2e/test_router_table_map.py`, `e2e/test_router_needs.py`, `test_firmware_grbl.py`, `test_firmware_table_map.py`, `test_menu.py` | [19](walkthrough/19-the-router.md), [31](walkthrough/31-what-the-router-needs.md) |
 | A part through the router: the coupon on its table says how it is cut, Toolpath writes the cut in GRBL's dialect and says what it bored to the tool, the work zeroed, the cut names its operation as it streams, the simulated router's trace is measured against the design, and the design is changed and cut again | On simulated machines, the coupon's ring › Toolpath, or Toolpath in cnc_router's Machine ([docs/cam.md](docs/cam.md)) | `test_cam.py`, `e2e/test_router_ui.py` | [20](walkthrough/20-a-part-through-the-router.md), [24](walkthrough/24-a-cut-from-the-card.md) |
+| The router calibrated by its 😮: the face, an eye and the mouth named in its toolpath as what to measure, cut, measured with calipers in its cabinet, and the tool's allowance they give kept for the router and taken by its next toolpaths | On simulated machines, the tour's Calibrate a router; or router_emoji under makes in cnc_router's Cut window, Toolpath, ▶ Cut, then measured in Part › Feedback ([docs/cam.md](docs/cam.md#measured-by-hand-fed-back)) | `test_cam_measured.py`, `e2e/test_router_ui.py` | [56](walkthrough/56-a-router-calibrated-by-a-face.md) |
+| A badge composed: a face drawn after its emoji from circles and strokes, or a word in one of OpenSCAD's fonts, engraved in a plate; a face's toolpath its eyes bored and its strokes grooves, a word printed and refused by the router in its words | `uv run apothecary parts info badge`; a face's toolpath, `badge` under makes in cnc_router's Cut window ([parts/badge/README.md](parts/badge/README.md)); in the page, the tour's Compose a badge, or the badge in the universe and ⊞ Windows › Badge | `test_badge.py`, `test_cam.py`, `e2e/test_badge.py` | [57](walkthrough/57-a-badge-composed.md) |
 | The Stream Deck + at the bench: found on USB, its eight keys and strip drawn from here, its keys, knobs and touches heard, in the Deck window; a simulated deck is pressed from it | On simulated machines, the `stream_deck` piece's Open Deck, or ⊞ Windows › Deck ([docs/stream-deck.md](docs/stream-deck.md)) | `test_firmware_deck.py`, `test_stream_deck_part.py`, `e2e/test_deck.py` | [26](walkthrough/26-the-stream-deck.md) |
 | The Stream Deck +'s knobs jogging the router and the printer through the control latch, the dialect's bounds and the machine's own stop: the layout drawn on the deck, a turn disarmed moving nothing, an armed jog, the step key, the stop key, two long presses arming a machine, DISARM, UNLOCK after an alarm | On simulated machines, the Deck window's knobs after arming control in a machine's Machine or by two long presses of its key ([docs/stream-deck.md](docs/stream-deck.md#the-controller)) | `test_firmware_deck_control.py`, `e2e/test_deck_jog.py` | [27](walkthrough/27-the-deck-jogging-the-machines.md) |
 | The Stream Deck +'s strip while a print streams: the knobs' screen, Progress and Status, a swipe along the strip walking them, a print bringing Progress forward once | On simulated machines, the Deck window during a print; drag along its strip ([docs/stream-deck.md](docs/stream-deck.md)) | `e2e/test_deck_screens.py`, `test_deck_screens.py`, `test_firmware_deck_control.py` | [41](walkthrough/41-the-deck-while-a-print-streams.md) |
 | A toolpath previewed: a kept file's path drawn in the world on its machine, a printer's layers or a router's passes scrubbed through on one slider, from one core, a router's standing at its work zero | The Print or Cut card's preview slider, or Device › Control › Print or Cut › Preview ([docs/toolpath-preview.md](docs/toolpath-preview.md)) | `test_preview.py`, `e2e/test_toolpath_preview.py` | [21](walkthrough/21-a-toolpath-previewed.md) |
 | A machine planned before its board is connected: its Machine opens as its plan, the part it makes, its slice or toolpath written and drawn over it, kept and chosen whenever its Machine opens | A machine with no board: its badge, its ring, or ⚙ View › Machine ([docs/firmware.md](docs/firmware.md#a-machine-planned-before-its-board-is-connected)) | `test_machine_plans.py`, `e2e/test_machine_plans.py` | |
+| A machine whose pinned board is not connected says why, read with no port opened: on USB, given a serial port, open to this user, found by the scan, the first that fails said as what to try, where it was last found and every serial port plugged in now; its own Machine opens once it comes up | A machine with its board pinned and not plugged in: its Machine's *Its board, not found* card; `GET /sites/{name}/machines/{path}/missing` ([docs/firmware.md](docs/firmware.md#its-board-pinned-and-not-connected)) | `test_missing.py`, `e2e/test_missing_board.py` | |
 | A part made on a machine from wherever a person is looking at it: a printer's or a router's Machine opens with its Print or Cut window, whose makes lists every part of the apothecary, and ⚒ Make in the header makes the part selected or stepped into on the first machine that makes it, in any site | ⚒ Make in the header, or a machine's badge; `GET /sites/{name}/makers` ([docs/viewer.md](docs/viewer.md#the-header)) | `test_machine_plans.py`, `test_job_api.py`, `e2e/test_make.py` | |
 | The ring: every verb of what it opens on, at an address; the pointer and the keys | `m` or Ctrl + right-click on a piece; a digit reaches a cell; Settings | `e2e/test_ring.py`, `e2e/test_the_pointer_and_the_keys.py`, `test_menu.py` | |
 | The world: site, assembly and part at any depth, drawn as OpenSCAD draws them on a floor grid under the level, the panels as windows of one layout, any window opened from a stack's + or the header's ⊞ Windows, views that lay windows out together, the site's problems and pins, and the windows a person opened open again after a reload where they were | Double-click a piece to step in, Page Up to step out; drag a window's tab or a splitter; a stack's +; ⚙ View › Part, Machine or Airgap, then reload; the Site panel | `e2e/test_viewer.py`, `e2e/test_viewer_regressions.py`, `e2e/test_world_resize.py`, `e2e/test_render_on_demand.py`, `e2e/test_the_page_keeps_up.py`, `e2e/test_site_panel.py`, `e2e/test_windows_over_a_reload.py`, `e2e/test_docs_fractal_viewer.py`, `e2e/test_window_manager.py`, `e2e/test_journeys.py`, `e2e/test_focused_systems.py`, `test_systems.py` | [33](walkthrough/33-windows-kept-over-a-reload.md) |
@@ -82,14 +91,14 @@ browser test is in no row, or when a page a run writes is in no row that names t
 | The view banner: the header's one trail of where you are, the universe first, then the site (its own level, and under ▾ the other sites), then each piece stepped into | The header: `🧪 Apothecary › garage ▾ › cnc_router`; the first crumb, the site's crumb and its ▾ ([docs/viewer.md](docs/viewer.md#the-header)) | `e2e/test_view_banner.py`, `test_viewer_assets.py` | |
 | Simulated machines, and the paths a newcomer takes | The banner over simulated machines; the bare `/viewer` address; the header's Docs | `e2e/test_simulated_machines.py`, `e2e/test_onboarding.py`, `e2e/test_paths_people_take.py`, `test_simulated.py` | [00](walkthrough/00-getting-started.md) |
 | The HTTP API, and the docs it serves | `/openapi.json`, `/docs`, `/walkthrough` | `test_api.py`, `test_docs_site.py` | [10](walkthrough/10-serving-it.md) |
-| Scenes to OpenSCAD, and the parts library | `uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad`; `uv run apothecary parts list` | `test_models.py`, `test_scene_render.py`, `test_registry.py` | [07](walkthrough/07-a-part.md), [09](walkthrough/09-an-assembly.md) |
+| Scenes to OpenSCAD, and the parts library | `uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad`; `uv run apothecary parts list` | `test_models.py`, `test_scene_render.py`, `test_registry.py` | [00](walkthrough/00-getting-started.md), [07](walkthrough/07-a-part.md), [09](walkthrough/09-an-assembly.md) |
 | Parts that meet: a part's interfaces, whether two fit and how far one goes into the other, held to the render, parts placed where their interfaces meet, and the adapter generated between two ends | `uv run apothecary parts interfaces hose_adapter`; `uv run apothecary parts fit hose_adapter dust_port@port_32`; `uv run apothecary parts adapter dust_port@hose_40 dust_port@port_32` | `test_interfaces.py`, `test_fittings.py`, `test_part_interfaces.py`, `test_dust_parts.py`, `test_connections.py`, `test_parts_fit.py`, `test_adapters.py` | [43](walkthrough/43-parts-that-meet.md) |
 | Two ends joined in the page: a part's presets in Parameters, ⇄ Adapter keeping one end and making the adapter between it and another, its fits said and checked again after each Apply | `/viewer/sites/apothecary`, `dust_port`'s ring, Part › Edit; a preset, ⇄ Adapter, another, ⇄ Adapter | `e2e/test_join_two_ends.py`, `test_ends_js.py` | [43](walkthrough/43-parts-that-meet.md) |
-| A gap that is not one number: measured along a ray and to the nearest point at any pose, and where its least travels; a rotor that rolls inside its stator and a rotor on leaves printed with its stator, each measured from its own outlines | `/viewer/parts/rolling_rotor` and `/viewer/parts/flexure_rotor`, the part's ring, Part › Edit, its `orbit` or `swing`; `uv run apothecary parts verify rolling_rotor` | `test_gap_geometry.py`, `test_rolling_rotor_part.py`, `test_flexure_rotor_part.py` | [44](walkthrough/44-a-gap-that-travels.md) |
+| A bed levelled on its solid mounts: the newest heated pair of probes made into the least shims that lift the low corners to the highest, the bow no shim fixes said against the bound for a stored mesh, the shims sliced as a part and probed again after | `uv run apothecary bed shims --site garage --printer printer_1`; `bed runs`, `bed mount`, `bed compare`; the tour's Level a bed, and Panels › Machine › Bed ([docs/bed-shims.md](docs/bed-shims.md)) | `test_bed_shims.py`, `e2e/test_level_a_bed.py` | [52](walkthrough/52-shims-that-level-a-bed.md), [53](walkthrough/53-a-bed-levelled-in-the-page.md) |
 | A printer tuned from what its prints measure: a coupon made to be measured, its readings solved into the printer's errors with what they cannot separate said, half of each taken out of OrcaSlicer's own settings, the next coupon confirming it or not, every turn kept in one document | `uv run apothecary tuning plan print_coupon`; a coupon sliced, printed and read, then `uv run apothecary tuning turn FILE_ID --csv readings.csv --explain` and `tuning apply`; the Feedback window's **measured** row ([docs/print-tuning.md](docs/print-tuning.md)) | `test_print_tuning.py`, `test_slicer_tuning.py`, `test_tuning_cli.py`, `test_tuning_js.py`, `test_print_coupon_part.py`, `e2e/test_make.py` | [46](walkthrough/46-a-printer-tuned-from-its-prints.md) |
 | A printer tuned from what its prints show, with the filament loaded on it: the filament chosen among OrcaSlicer's profiles that fit the printer, each fault a person sees on a piece (stringing, corners lifting, layers splitting, ...) kept as a look in the same per-filament document, which moves one setting at a time and puts back one that did not govern the fault | the Print window's **filament** row and the Feedback window's **seen** row; `GET /slicer/filaments`, `POST /slicer/slices/FILE_ID/seen`, `GET /slicer/faults` ([docs/print-tuning.md](docs/print-tuning.md)) | `test_print_faults.py`, `test_filaments_and_looks.py`, `test_tuning_js.py`, `e2e/test_make.py` | [50](walkthrough/50-a-printer-tuned-from-what-it-shows.md) |
-| A part's cabinet: a drawer for each piece made of it, opened as its print or cut begins and told how it ended, and what is read, seen or noted of the piece filed there, each filing naming the turn, look or allowance it made | a part's piece's ring, Part › View › Feedback, or a print's end; `uv run apothecary cabinet`; `/cabinet` ([docs/cabinet.md](docs/cabinet.md)) | `test_cabinet.py`, `e2e/test_make.py`, `e2e/test_router_ui.py`, `e2e/test_simulated_machines.py` | [51](walkthrough/51-a-part-s-cabinet.md) |
-| Parts that meet: a part's interfaces, whether two fit and how far one goes into the other, held to the render, and parts placed where their interfaces meet | `uv run apothecary parts interfaces hose_adapter`; `uv run apothecary parts fit hose_adapter dust_port_32` | `test_interfaces.py`, `test_fittings.py`, `test_part_interfaces.py`, `test_dust_parts.py`, `test_connections.py`, `test_parts_fit.py` | [43](walkthrough/43-parts-that-meet.md) |
+| A part's cabinet: a drawer for each piece made of it, opened as its print or cut begins and told how it ended -- a print that stopped told on which layer, and tried again with probe first, a brim or a raft -- and what is read, seen or noted of the piece filed there, each filing naming the turn, look or allowance it made | a part's piece's ring, Part › View › Feedback, or a print's end; `uv run apothecary cabinet`; `/cabinet` ([docs/cabinet.md](docs/cabinet.md)) | `test_cabinet.py`, `e2e/test_make.py`, `e2e/test_router_ui.py`, `e2e/test_simulated_machines.py`, `e2e/test_a_print_that_stopped.py` | [51](walkthrough/51-a-part-s-cabinet.md), [54](walkthrough/54-a-print-that-stopped.md) |
+| A printed piece checked against its design: a part's piece's dimensions marked on the part with Measure shown, a dimension's label clicked into Part › Feedback, what calipers read kept and checked against the design with the tolerance and whose it is, there and on the dimension in the world | Layers, Measure shown, a part's piece selected, a dimension's label clicked; `GET /cabinet/{part}/dimensions` ([docs/cabinet.md](docs/cabinet.md#dimensions)) | `test_cabinet.py`, `test_measure_world.py`, `e2e/test_a_piece_against_its_design.py` | [55](walkthrough/55-a-printed-piece-checked-against-its-design.md) |
 | A gap that is not one number: measured along a ray and to the nearest point at any pose, and where its least travels; a rotor that rolls inside its stator, a rotor on leaves printed with its stator and a disc on a ring of pins, each measured from its own outlines, and each played in the viewer through its motion, its pieces drawn once and moved | `/viewer/parts/rolling_rotor`, `/viewer/parts/flexure_rotor` and `/viewer/parts/cycloidal_disc`, the part's ring, Part › View › Motion › Play; `uv run apothecary parts verify cycloidal_disc` | `e2e/test_part_motion.py`, `test_gap_geometry.py`, `test_rolling_rotor_part.py`, `test_flexure_rotor_part.py`, `test_cycloidal_disc_part.py`, `test_motion.py`, `test_part_motion_js.py`, `test_bought.py` | [44](walkthrough/44-a-gap-that-travels.md), [49](walkthrough/49-a-disc-on-its-pins.md) |
 | A heater's loop: its plant identified from a step, a relay or a perturbation, a controller designed by a named rule, the loop's margins, and experiments run on a printer behind the latch, each ending with the heater off | `uv run apothecary loop design --gain 2 --time-constant 60 --dead-time 8`; `uv run apothecary loop simulate step --ceiling 200 --max-duration 1200 --base 180 --step 5 --settle 600 --after 400` ([docs/control-loops.md](docs/control-loops.md)) | `test_control_loops.py`, `test_loop_document.py`, `test_loop_tuning.py`, `test_loop_cli.py` | [45](walkthrough/45-a-heater-s-loop.md) |
 | A heater's loop in the page: the board's gains beside the design, an experiment typed, started and followed from the stream, its plots and figures as the server says them, and the designed gains set and read back | A printer's Machine, then ⊞ Windows › Loops or the ring's Panels › Machine › Loops ([docs/control-loops.md](docs/control-loops.md#the-loops-window)) | `e2e/test_loops_window.py`, `test_loop_plots.py`, `test_loop_tuning.py`, `test_census.py` | [48](walkthrough/48-a-heater-s-loop-in-the-page.md) |
@@ -103,32 +112,10 @@ browser test is in no row, or when a page a run writes is in no row that names t
 | It stays on this machine: the server answers this machine only, and the process connects nowhere else | `curl -H 'Host: evil.example' http://127.0.0.1:6283/sites/garage/attached` answers 403; without the header, the garage's cameras and views | `test_stays_local.py` | [02](walkthrough/02-the-bench-as-it-is.md) |
 | The checks before a push, and what a project pinning this one may rely on | `uv run --group preflight apothecary preflight` | `test_cli_testing.py`, `test_e2e_shards.py`, `test_browser_suite_is_not_gated.py` | [15](walkthrough/15-preflight.md), [16](walkthrough/16-being-depended-on.md) |
 
-## Install
-
-Python 3.11+ and [uv](https://docs.astral.sh/uv/); page 00's first step is the clone and
-`uv sync`. A clone made without `--recurse-submodules` has an empty `governance/qm` and no
-gridfinity library: run `git submodule update --init --recursive`.
-
-Rendering STLs needs OpenSCAD; nothing else does. Run `uv run apothecary openscad install`
-before the first `serve`: it puts a development snapshot with Manifold into the tools
-folder, and renders use it. [docs/openscad.md](docs/openscad.md) says what it installs on
-each platform, which OpenSCAD a render uses, and what 2021.01, the version most package
-managers carry, cannot do.
-
-The rest is optional, each into the same tools folder: the slicer, each firmware
-toolchain and the browser the tests drive. Page 00's
-[last install section](walkthrough/00-getting-started.md#6-the-installs-only-some-loops-want)
-names each.
-
 ## First commands
 
-```bash
-uv run apothecary serve                             # the viewer: http://127.0.0.1:6283/viewer
-```
-
-`serve` keeps its terminal until Ctrl+C; run the rest in another one. It listens on
-6283 unless `--port` or `APOTHECARY_PORT` names another, so a second checkout's server
-runs beside it; [docs/dev-loop.md](docs/dev-loop.md) is the loop from a change to `main`.
+None of these needs the server. `serve` keeps its terminal until Ctrl+C, so beside it they
+run in another one.
 
 ```bash
 uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad   # a scene to OpenSCAD
@@ -144,15 +131,9 @@ shapes in it, and Picture › Make stands one up as a piece to slice and print
 ([docs/pictures.md](docs/pictures.md); [walkthrough 03](walkthrough/03-a-picture-to-a-print.md)
 goes round twice).
 
-From Python:
-
-```python
-from apothecary import Cube, Scene, Sphere, Translate, Union, Vector3D
-
-base = Cube(size=Vector3D(x=20, y=20, z=5))
-dome = Translate(v=Vector3D(x=10, y=10, z=5), children=[Sphere(r=8)])
-print(Scene(name="example", objects=[Union(children=[base, dome])]).render())
-```
+From Python, a scene is a few Pydantic models and its `render()` OpenSCAD's text:
+[page 00's *A scene from Python*](walkthrough/00-getting-started.md#a-scene-from-python)
+runs one and shows what it writes.
 
 STLs are build products and are not committed. `apothecary serve` builds the missing ones
 in the background when OpenSCAD is present (`APOTHECARY_SKIP_STL_GENERATION=1` skips that);

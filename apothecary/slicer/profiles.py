@@ -157,6 +157,15 @@ def printers() -> List[str]:
     return sorted(found)
 
 
+# What one slice may ask of how its first layer holds, over what its part declares (the
+# Print window's adhesion row, a failed print's Feedback): each the declared values it sets.
+ADHESIONS: Dict[str, Dict[str, float]] = {
+    "brim": {"brim_width": 5.0, "raft_layers": 0},
+    "raft": {"raft_layers": 3, "brim_width": 0.0},
+    "none": {"brim_width": 0.0, "raft_layers": 0},
+}
+
+
 @dataclass
 class Declared:
     """A part's or a piece's declared print settings: only what it declared."""
@@ -173,4 +182,19 @@ class Declared:
             return cls(by=by)
         return cls(
             by=by, values={name: getattr(settings, name) for name in settings.model_fields_set}
+        )
+
+    def adhered(self, adhesion: Optional[str]) -> "Declared":
+        """These settings with one slice's adhesion over them (ADHESIONS); as they are
+        with none asked."""
+        if adhesion is None:
+            return self
+        if adhesion not in ADHESIONS:
+            raise SlicerError(
+                f"a slice's adhesion is one of {', '.join(ADHESIONS)}, not {adhesion!r}"
+            )
+        return Declared(
+            by=f"{self.by}, this slice's adhesion {adhesion!r}",
+            values={**self.values, **ADHESIONS[adhesion]},
+            note=self.note,
         )

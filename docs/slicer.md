@@ -75,8 +75,8 @@ what it will do, before anything is built. The printer's profile names its piece
 | Kind | Piece | What it does | |
 |---|---|---|---|
 | start | `home` | The printer's own start, as its OrcaSlicer profile has it: heat, home every axis (G28), prime the nozzle; no levelling | printer_1's |
-| start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1); refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
-| start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29); refused without the probe whose offset the profile holds | built; a person names it |
+| start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1), and have the board say it and the probe's offset (M420 V, M851), which the print keeps; refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
+| start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29 V3, saying each point), turn levelling on (M420 S1) and have the board say the mesh and the probe's offset (M420 V, M851), which the print keeps; refused without the probe whose offset the profile holds | built; a person names it |
 | start | `first-layer-offset` | A first-layer Z offset measured at the bench, added to every Z | stub |
 | filament | `printer` | The printer's one filament, named in its profile | built |
 | filament | `choose` | The filament loaded on the printer, chosen among OrcaSlicer's profiles of its vendor that fit its machine (`GET /slicer/filaments`, the Print window's filament row); the profile's own until one is loaded | printer_1's |
@@ -99,6 +99,26 @@ the host cannot see is whether a probed mesh was stored: Marlin keeps a probe
 in RAM until it is stored from the printer's screen, so storing it is the
 bench's box, and the piece trusts the newest probe.
 
+One slice may level otherwise than its profile names: the Print window's
+**levelling** row (the part's own -- what it declares, else its profile's start --
+probe first, or home only) is sent with
+the slice as `levelling` (`POST /slicer/slice`), and the start is composed with
+that piece in place of the profile's levelling (`compose.levelled`), each piece's
+precondition checked as it is when the profile names it, before a task starts.
+The profile is not changed: the slice's `start` setting says the slice asked.
+Beside it, the **adhesion** row (the part's own, a 5 mm brim, a raft of 3 layers,
+or neither) is sent as `adhesion` and set over what the part declares
+(`profiles.ADHESIONS`, `Declared.adhered`), each value's source saying the slice
+asked. The ring's Print › Levelling and Adhesion step the two rows. Each row's
+first choice says what it comes to for the part under *makes* on this printer
+(`GET /slicer/first-layer`): *the part's own: probe first* where the part declares
+it, *the printer's: home only* where the profile's start names no levelling, and
+*the printer's own* adhesion where the part declares neither brim nor raft.
+Fixes' Make these chooses probe first, since the shims are printed on a bed not
+yet level. The rows' choices are said in one set of words
+(`apothecary/static/first_layer.js`), which Part › Feedback's tries on a print that stopped
+and its drawer's made row say too ([cabinet.md](cabinet.md#a-print-that-stopped)).
+
 ## Print settings from the part
 
 A part's print settings are what its wrapper declares as `print_settings` --
@@ -114,6 +134,10 @@ piece's answer says so.
 | `layer_height` | The process's `layer_height`, inside the machine's range |
 | `wall_thickness` | The process's `wall_loops`: as many lines as wide as the nozzle as reach it |
 | `tolerance` | Reported, not passed: the part's geometry already allows for it |
+| `brim_width` | The process's brim round each piece's outside (`brim_type` `outer_only`) that wide, or none (`no_brim`) at 0 |
+| `raft_layers` | The process's `raft_layers`: a raft that many layers under each piece, or none at 0 |
+| `skirt_loops` | The process's `skirt_loops`: that many loops round the pieces, or none at 0; not declared, the printer's own |
+| `levelling` | Not a process setting: the start's levelling piece (`home`, `stored-mesh`, `probe-each-print`), chosen as the Print window's levelling row chooses one, where the slice asks none; the start's `source` says the part asked |
 
 Every slice's answer lists each value with its `origin` (`declared` or
 `printer`) and its `source`.
@@ -148,6 +172,7 @@ used. The routes:
 | `GET /slicer/status` | Each slicer module, the one a slice uses, and the printers that keep a profile |
 | `POST /slicer/install` | Install the pinned release (a task) |
 | `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer; `variant`, a part's cached variant, is sliced in place of its own STL |
+| `GET /slicer/first-layer?part=...` | With the printer named as `POST /slicer/slice` names it: how a slice levels and holds where it asks neither, and whose each is -- `levelling` the part's declared, else the printer profile's start (homing alone where it names no levelling piece); `adhesion` the part's declared `brim_width` and `raft_layers`, else the slicer profile's own. The Print window's rows say it as their first choice |
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |

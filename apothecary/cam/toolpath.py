@@ -7,7 +7,8 @@ The work zero is the stock's front-left top corner; the tool travels at
 in raster lines inset from its walls by the tool's radius, then its walls are
 taken in one lap. A hole wider than the tool is bored in a circle; one the tool's
 size, or smaller, is plunged, and the smaller one is said. An outline, or a disc,
-is cut around from outside, the tool's radius beyond its edge.
+is cut around from outside, the tool's radius beyond its edge. A groove is the tool's
+centre along its points, there and back pass by pass, or round again where it is closed.
 
 Every offset is the tool's radius as the router cuts with it: its diameter plus the
 ``allowance`` the router's measured correction gives (``measured.py``), none unless
@@ -26,6 +27,7 @@ from .models import (
     Cuts,
     Disc,
     Feature,
+    Groove,
     Hole,
     Operation,
     OperationSaid,
@@ -266,11 +268,36 @@ def _disc(w: _Writer, op: Disc, label: str, messages: List[str]) -> Tuple[int, b
     return len(zs), True
 
 
+def _strokes(op: Groove) -> str:
+    n = len(op.points) - 1
+    return f"{n} stroke{'' if n == 1 else 's'}"
+
+
+def _groove(w: _Writer, op: Groove, label: str, messages: List[str]) -> Tuple[int, bool]:
+    zs = _through(w, "groove", op.depth, messages)
+    closed = op.points[0] == op.points[-1]
+    start = op.points[0]
+    w.up()
+    w.rapid(x=start[0], y=start[1])
+    for n, z in enumerate(zs, 1):
+        w.comment(
+            f"{label} pass {n}/{len(zs)}: groove of {_strokes(op)} from "
+            f"{fmt(start[0])},{fmt(start[1])} to z {fmt(z)}"
+        )
+        w.plunge(z)
+        # An open groove goes back the way it came on the next pass; a closed one round again.
+        line = op.points if closed or n % 2 else op.points[::-1]
+        for px, py in line[1:]:
+            w.feed(x=px, y=py)
+    w.up()
+    return len(zs), True
+
+
 def feature(w: _Writer, op: Operation) -> Optional[Feature]:
     """What a person measures of a named operation once it is cut: a hole bored or a
     disc across, a pocket or an outline along X. None for one with no name, or a hole
-    plunged, which is the tool's size whatever the router's allowance."""
-    if op.name is None:
+    plunged, or a groove, each the tool's size whatever the router's allowance."""
+    if op.name is None or isinstance(op, Groove):
         return None
     if isinstance(op, Hole):
         if not _bored(w, op):
@@ -325,6 +352,13 @@ def write(cuts: Cuts, name: str = "part", allowance: float = 0.0) -> Toolpath:
         elif isinstance(op, Disc):
             n, cut = _disc(w, op, label, messages)
             words = f"disc {fmt(op.diameter)} mm at {fmt(op.x)},{fmt(op.y)}, {fmt(op.depth)} deep"
+        elif isinstance(op, Groove):
+            n, cut = _groove(w, op, label, messages)
+            (x0, y0) = op.points[0]
+            words = (
+                f"groove of {_strokes(op)}{' closed' if op.points[0] == op.points[-1] else ''}"
+                f" from {fmt(x0)},{fmt(y0)}, {fmt(op.depth)} deep"
+            )
         else:
             n, cut = _outline(w, op, label, messages)
             words = f"outline {fmt(op.w)} x {fmt(op.h)} at {fmt(op.x)},{fmt(op.y)}, {fmt(op.depth)} deep"

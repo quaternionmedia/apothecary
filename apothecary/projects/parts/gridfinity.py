@@ -8,7 +8,7 @@ The gridfinity-rebuilt-openscad library is included as a git submodule at:
     parts/gridfinity/gridfinity-rebuilt-openscad/
 
 To initialize the submodule:
-    git submodule update --init
+    git submodule update --init --recursive
 
 Reference:
     - https://gridfinity.com - Original Gridfinity system
@@ -201,7 +201,7 @@ class GridfinityBinPart(BasePart):
     def can_generate_stl(self, openscad: Optional[Path] = None) -> Tuple[bool, str]:
         """The submodule's SCAD is present, and an OpenSCAD new enough for it."""
         if not self.submodule_initialized:
-            return False, "Submodule not initialized. Run: git submodule update --init"
+            return False, "Submodule not initialized. Run: git submodule update --init --recursive"
         return super().can_generate_stl(openscad)
 
 

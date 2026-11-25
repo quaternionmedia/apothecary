@@ -635,10 +635,14 @@ class BedReading(BaseModel):
     probe_offset: Optional[dict] = None  # Marlin's: M851
     hotend_c: Optional[float] = None
     bed_c: Optional[float] = None
-    # A router's: where the grid lies in the working area, min and max x and y in mm
-    # from its front-left corner (mpos + travel), so the relief is drawn where it was
-    # probed; a printer's grid has no positions and is placed by estimate.
+    # Where the grid lies, min and max x and y in mm from the front-left corner, so the
+    # relief is drawn and the plane fitted where it was probed: a router's in its working
+    # area (mpos + travel); a printer's from the points its probe said it touched
+    # (`points`), and without them none, its grid placed by estimate.
     area: Optional[dict] = None
+    # A printer's probe's points as Marlin said them (G29 V3): x and y where the probe
+    # stood, in bed coordinates, and the height read; none for a read of the stored mesh.
+    points: Optional[List[List[float]]] = None
     lines: List[str] = Field(default_factory=list)  # everything the firmware said, for the log
 
 
@@ -670,6 +674,11 @@ class LevelingRequest(ProbeRequest):
     probe: bool = True  # False: read the stored mesh without probing (a printer's)
     note: Optional[str] = Field(None, max_length=200)
     grid: Optional[TableGrid] = None  # a router's grid; left out, three by three
+    # Probe hot, a printer's: the bed heated to this first (M190) and held this long, then
+    # probed `times` over, and turned off after; none, probed as it stands.
+    heat_c: Optional[float] = Field(None, gt=0, le=130)
+    soak_s: float = Field(0.0, ge=0, le=3600)
+    times: int = Field(1, ge=1, le=2)
 
 
 class PrintFile(BaseModel):

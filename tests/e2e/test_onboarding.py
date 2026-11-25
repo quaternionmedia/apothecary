@@ -103,10 +103,10 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
     so. printer_1's Device then shows the board via its mainboard, its ring's Device
     opens its Machine, and Slice on a part slices for it. Device › Unpin on printer_1
     takes the board's pin back. Before the pin, and with a pin whose board is not
-    connected, Slice plans it: printer_1's Machine opens with no board connected and
+    connected, Slice plans it: printer_1's Machine opens not connected and
     slices there (apothecary/machine_plans.py)."""
     _open(page, url)
-    # Nothing pinned: Slice plans it, in printer_1's Machine with no board connected.
+    # Nothing pinned: Slice plans it, in printer_1's Machine, not connected.
     _sliced_as_planned(page)
     _row(page, "printer_1").click()
     section = page.locator("#selected-body .device-section")

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from apothecary import jobs, sites
 from apothecary.api import app, routers_in
 from apothecary.cam import measure, service, toolpath
-from apothecary.cam.models import CutFor, Cuts, Feeds, Hole, Outline, Pocket, Stock
+from apothecary.cam.models import CutFor, Cuts, Feeds, Groove, Hole, Outline, Pocket, Stock
 from apothecary.firmware import devices, gcode, grbl
 from apothecary.menu import Context, PartSeen, PictureContext, Pointing, resolve
 from apothecary.preview.moves import split_comments
@@ -94,6 +94,34 @@ def test_a_hole_wider_than_the_tool_is_bored_in_a_circle_of_its_size():
     assert len(moves) == toolpath.CIRCLE_SEGMENTS
     assert written.bounds is not None
     assert written.bounds.min[:2] == [20.0, 20.0] and written.bounds.max[:2] == [30.0, 30.0]
+
+
+def test_a_groove_runs_its_points_there_and_back_and_a_closed_one_round_again():
+    """A stroke engraved: the tool's centre along the points, the next pass back the way
+    it came; a closed groove goes round again each pass. It is never a size to measure."""
+    line = [(10.0, 10.0), (20.0, 10.0), (30.0, 15.0)]
+    cuts = Cuts(
+        stock=Stock(x=50, y=50, thickness=10),
+        operations=[Groove(points=line, depth=3, name="smile")],
+        step_down=2,
+    )
+    written = toolpath.write(cuts)
+    assert written.messages == [] and written.features == []
+    assert written.operations[0].words == "groove of 2 strokes from 10,10, 3 deep"
+    feeds = [ln for ln in written.lines if ln.startswith("G1 X")]
+    assert feeds == ["G1 X20 Y10 F800", "G1 X30 Y15 F800", "G1 X20 Y10 F800", "G1 X10 Y10 F800"]
+    assert written.bounds is not None
+    assert written.bounds.min == [7.0, 7.0, -3.0] and written.bounds.max[:2] == [33.0, 18.0]
+    closed = toolpath.write(
+        Cuts(
+            stock=Stock(x=50, y=50, thickness=10),
+            operations=[Groove(points=[*line, line[0]], depth=3)],
+            step_down=2,
+        )
+    )
+    assert closed.operations[0].words == "groove of 3 strokes closed from 10,10, 3 deep"
+    rounds = [ln for ln in closed.lines if ln.startswith("G1 X")]
+    assert rounds[:3] == rounds[3:] == ["G1 X20 Y10 F800", "G1 X30 Y15 F800", "G1 X10 Y10 F800"]
 
 
 def test_an_outline_below_the_stock_stops_a_millimetre_into_the_spoilboard():

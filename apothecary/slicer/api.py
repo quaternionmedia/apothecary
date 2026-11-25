@@ -65,7 +65,7 @@ opens a serial port or sends anything to a printer.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.routing import APIRoute
@@ -133,6 +133,12 @@ class SliceRequest(BaseModel):
     # A cached variant of the part (its key, as generate answered it): the
     # variant a page draws is what is sliced, and the record names it.
     variant: Optional[str] = Field(None, pattern=VARIANT_KEY)
+    # The start's levelling for this slice over the printer's profile (compose.levelled):
+    # "home" none, or a levelling piece; none said is the profile's own.
+    levelling: Optional[Literal["home", "stored-mesh", "probe-each-print"]] = None
+    # How its first layer holds over what the part declares (profiles.ADHESIONS); none
+    # said is the part's own.
+    adhesion: Optional[Literal["brim", "raft", "none"]] = None
 
 
 class MeasuredRequest(BaseModel):
@@ -230,12 +236,24 @@ def slicer_slice(body: SliceRequest):
     status = module.status()
     if not status.ok:
         raise NotInstalled(f"{module.label}: " + "; ".join(status.problems))
+    asked, by = service.asked_levelling(target, body.levelling)
+    if asked is not None:
+        # A levelling whose precondition fails is refused now, not once the task runs.
+        levelled = compose.levelled(printer.profile, asked, by)
+        compose.chosen(compose.START, levelled.start.modules, levelled, printer.at.port)
     named = f"{target.made.name} ({target.made.variant})" if target.made.variant else None
     title = f"Slice {named or target.made.name} for {printer.at.name}"
 
     def work(running: Running) -> None:
         try:
-            record = service.slice_into(target, printer, running, slicer=module.id)
+            record = service.slice_into(
+                target,
+                printer,
+                running,
+                slicer=module.id,
+                levelling=body.levelling,
+                adhesion=body.adhesion,
+            )
         except service.SliceFailed as exc:
             service.remember(
                 running.task.id,
@@ -255,6 +273,20 @@ def slicer_slice(body: SliceRequest):
         service.remember(running.task.id, {"ok": True, "record": record.model_dump(mode="json")})
 
     return _snapshot(get_runner().run_staged("slice", title, work))
+
+
+@router.get("/first-layer")
+def slicer_first_layer(
+    part: str = Query(..., pattern=NODE_PATH),
+    port: Optional[Port] = None,
+    site: Optional[str] = Query(None, pattern=SITE_NAME),
+    printer: Optional[str] = Query(None, pattern=NODE_PATH),
+    variant: Optional[str] = Query(None, pattern=VARIANT_KEY),
+):
+    """How a slice of ``part`` for the printer named as a slice names it levels and
+    holds with neither asked: the part's own, else the printer's (service.first_layer)."""
+    target, at = service.resolve(part, port=port, site=site, printer=printer, variant=variant)
+    return service.first_layer(target, at.profile)
 
 
 @router.get("/tasks")
@@ -317,6 +349,10 @@ def slicer_slice_measured(file_id: str, body: MeasuredRequest):
             doc, turn = tuning.add_turn(record, values, instrument, body.assume)
     except (tuning.Refused, cabinet.Refused) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if turn is None:  # a check alone, filed in the drawer: the last turn already reads it
+        at = record.printer
+        doc = tuning.load(at.site, at.path, tuning.applies_of(record), at.part)
+        return _tuned(doc) | {"turn": None, "said": drawer.filed[-1].said, **_filed_in(drawer)}
     return _tuned(doc) | {"turn": turn.id, "said": tuning.said(turn), **_filed_in(drawer)}
 
 

@@ -44,7 +44,7 @@ import time
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional
+from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 try:  # the state file's cross-process lock
     import fcntl
@@ -344,6 +344,24 @@ class FirmwareState:
         what a simulated devkit, which is its port, runs."""
         records = [rec for rec in self.flashes() if rec.port == port]
         return max(records, key=lambda rec: rec.flashed_at, default=None)
+
+    def last_found(self, identity: str) -> Tuple[Optional[str], Optional[DeviceInfo], Optional[dict]]:
+        """Where the board ``identity`` names was last found: the port, its record
+        there and what the port list said of that port; Nones for a board never
+        found. Read whether or not it is plugged in now (``cached_device`` is not)."""
+        data = self._load()
+        wanted = identity.strip().lower()
+        for port, raw in data["devices"].items():
+            try:
+                device = DeviceInfo(**raw)
+            except (TypeError, ValueError):
+                continue
+            if wanted in device.names or port == identity:
+                return port, device, data["seen"].get(port)
+        for port, seen in data["seen"].items():
+            if wanted == (seen.get("serial_number") or "").strip().lower():
+                return port, None, seen
+        return None, None, None
 
     def remember_device(self, device: DeviceInfo) -> None:
         """Keep ``device`` as the record of the board on its port, beside what the
@@ -1490,9 +1508,16 @@ class LevelingJob:
         links: gcode.PrinterLinks,
         dialect: dialects.Dialect = dialects.MARLIN,
         grid: Optional[TableGrid] = None,
+        heat_c: Optional[float] = None,
+        soak_s: float = 0.0,
+        times: int = 1,
     ):
         self.port, self.probe, self.note, self.links = port, probe, note, links
         self.dialect = dialect
+        # Probe hot: the bed heated to heat_c and held soak_s before it is probed, times
+        # over, and turned off after.
+        self.heat_c, self.soak_s, self.times = heat_c, soak_s, times
+        self.records: List[LevelingRecord] = []
         # A table map's grid (three by three, left out), and the points done of its
         # total, known before the port is touched; a printer's mesh is its firmware's.
         self.grid = grid or (TableGrid() if dialect.stored_mesh is None else None)
@@ -1521,6 +1546,10 @@ class LevelingJob:
             "finished": self.finished.isoformat() if self.finished else None,
             "error": self.error,
             "record_id": self.record.id if self.record else None,
+            "record_ids": [r.id for r in self.records],
+            "heat_c": self.heat_c,
+            "soak_s": self.soak_s,
+            "times": self.times,
             "running": self.finished is None,
         }
 
@@ -1562,13 +1591,17 @@ class LevelingJob:
         self.link = link
         link.job = self.snapshot()
         try:
-            reading = self.dialect.bed_reading(
-                link, probe=self.probe, grid=self.grid, stage=self._stage
-            )
-            record = _as_record(self.port, reading, self.note)
-            _save_leveling(record)
-            self.record = record  # named by the id it is kept under, never before it is kept
-            link.log.add("sys", f"{self.what} saved: {self.record.id}", "control")
+            if self.heat_c is not None:
+                self._heat(link)
+            for n in range(self.times):
+                reading = self.dialect.bed_reading(
+                    link, probe=self.probe, grid=self.grid, stage=self._stage
+                )
+                record = _as_record(self.port, reading, self._note(n))
+                _save_leveling(record)
+                self.records.append(record)
+                self.record = record  # named by the id it is kept under, never before it is kept
+                link.log.add("sys", f"{self.what} saved: {self.record.id}", "control")
             self._stage("saved")
         except (ToolchainError, ValueError) as exc:
             self.error = str(exc)
@@ -1578,9 +1611,49 @@ class LevelingJob:
             self.finished = datetime.now(timezone.utc)
             link.job = None
             link.stopped = None
+            if self.heat_c is not None:
+                self._bed_off(link)
+
+    def _heat(self, link: gcode.GcodeLink) -> None:
+        """The bed to ``heat_c``, waited for (M190), then held ``soak_s`` so the plate
+        settles through, the seconds counted as points."""
+        self._stage("heating")
+        link.command(f"M190 S{self.heat_c:g}", timeout=LEVELING_HEAT_TIMEOUT_S, origin="control")
+        total = int(round(self.soak_s))
+        self._stage("soaking", {"done": 0, "total": total})
+        for done in range(1, total + 1):
+            time.sleep(1.0)
+            self._stage("soaking", {"done": done, "total": total})
+
+    def _bed_off(self, link: gcode.GcodeLink) -> None:
+        """The bed heated for the reading turned off, however the reading ended."""
+        try:
+            link.command("M140 S0", timeout=10.0, origin="control")
+            link.log.add("sys", "the bed heated for the reading turned off", "control")
+        except ToolchainError as exc:
+            link.log.add(
+                "sys", f"the bed heated for the reading was not turned off: {exc}", "control"
+            )
+
+    def _note(self, n: int) -> Optional[str]:
+        """A reading's note: what was said of it, and, probed hot, how and which of the run."""
+        if self.heat_c is None and self.times == 1:
+            return self.note
+        said = []
+        if self.heat_c is not None:
+            said.append(f"heated {self.heat_c:g} C, soaked {self.soak_s:g} s")
+        if self.times > 1:
+            said.append(f"{n + 1} of {self.times}")
+        if self.note:
+            said.append(self.note)
+        return ", ".join(said)
 
 
 _LEVELING: Dict[str, LevelingJob] = {}
+
+
+# How long a bed heated for its reading may take to reach its temperature (M190).
+LEVELING_HEAT_TIMEOUT_S = 900.0
 
 
 def leveling_job(port: str) -> Optional[LevelingJob]:
@@ -1595,10 +1668,15 @@ def start_leveling(
     state: Optional[FirmwareState] = None,
     links: Optional[gcode.PrinterLinks] = None,
     grid: Optional[TableGrid] = None,
+    heat_c: Optional[float] = None,
+    soak_s: float = 0.0,
+    times: int = 1,
 ) -> LevelingJob:
     """Begin a bed reading on ``port`` in its dialect: a printer's mesh, probed
     (``probe``) or read as stored; a router's table, probed at ``grid``. A probe
-    needs the control latch armed.
+    needs the control latch armed. Probe hot, a printer's: with ``heat_c`` the bed is
+    heated to it and held ``soak_s`` first, probed ``times`` over (a reading each), and
+    turned off after, however the job ends.
 
     Raises ``ControlNotArmed`` for a probe with the latch down, ``PortHeld`` when
     a job already holds the port, ``ToolchainError`` when it is not a G-code
@@ -1607,7 +1685,7 @@ def start_leveling(
     state = state or get_state()
     links = links or gcode.get_printer_links()
     with _STARTING:
-        return _start_leveling(port, probe, note, state, links, grid)
+        return _start_leveling(port, probe, note, state, links, grid, heat_c, soak_s, times)
 
 
 def _start_leveling(
@@ -1617,7 +1695,16 @@ def _start_leveling(
     state: FirmwareState,
     links: gcode.PrinterLinks,
     grid: Optional[TableGrid],
+    heat_c: Optional[float] = None,
+    soak_s: float = 0.0,
+    times: int = 1,
 ) -> LevelingJob:
+    if heat_c is not None and not probe:
+        raise ValueError("a bed heated for its reading is probed: a stored mesh is read cold")
+    if heat_c is not None and not 0 < heat_c <= gcode.BED_MAX_C:
+        raise ValueError(f"a bed is heated to over 0 and at most {gcode.BED_MAX_C} degC")
+    if not 1 <= times <= 2 or (times > 1 and not probe):
+        raise ValueError("a bed is probed once or twice in one reading")
     can.raise_for(
         can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port), _tuning_on(port)),
         "held",
@@ -1652,6 +1739,10 @@ def _start_leveling(
             "reading kept now could not be told whose: unplug the other first"
         )
     dialect = dialects.BY_MACHINE[board.kind]
+    if heat_c is not None and dialect.stored_mesh is None:
+        raise ToolchainError(
+            f"{port}: a bed heated to be probed is a printer's, and {port} holds a {board.kind}"
+        )
     if not probe and dialect.stored_mesh is None:
         # The mesh (M420 V), the probe offset (M851) and the temperatures are Marlin's
         # lines; a GRBL controller answers each error:20, and keeps no mesh: its reading
@@ -1660,7 +1751,17 @@ def _start_leveling(
             f"{port}: a stored mesh is a printer's to read, and {port} holds a {board.kind}, "
             "whose reading probes the table"
         )
-    job = LevelingJob(port, probe, note, links, dialect=dialect, grid=grid)
+    job = LevelingJob(
+        port,
+        probe,
+        note,
+        links,
+        dialect=dialect,
+        grid=grid,
+        heat_c=heat_c,
+        soak_s=soak_s,
+        times=times,
+    )
     _LEVELING[port] = job
     job.thread.start()
     return job
@@ -2005,8 +2106,9 @@ class PrintJob:
             # Told to the jobs' readers when the stage or the whole percent has changed.
             jobs.moved(self.job.id, self.now)
 
-    def _end(self, outcome: str, tail: List[str]) -> jobs.Job:
-        """The job as it ended, kept; a store that cannot be written does not stop the end."""
+    def _end(self, outcome: str, tail: List[str], start: Optional[dict] = None) -> jobs.Job:
+        """The job as it ended, kept; a store that cannot be written does not stop the end.
+        ``start`` is what the board said of its levelling before the first layer."""
         if outcome == "failed":
             reason = self.error
         elif outcome == "cancelled":
@@ -2024,7 +2126,7 @@ class PrintJob:
                 "outcome": outcome,
                 "reason": reason,
                 "progress": self.progress(),
-                "detail": self._detail(),
+                "detail": self._detail() | ({"start": start} if start else {}),
                 "log": tail,
             }
         )
@@ -2045,6 +2147,9 @@ class PrintJob:
             self.finished = self.record.finished_at
             return
         tail: List[str] = []
+        # What the board answered before the first layer: the start's levelling said.
+        start: List[str] = []
+        starting = True
         outcome = "done"
         kind = self.op.kind
         try:
@@ -2054,6 +2159,8 @@ class PrintJob:
             self._announce()
             boots = link.restarts
             for raw in text.splitlines():
+                if raw.startswith(";LAYER_CHANGE"):
+                    starting = False
                 for said in split_comments(raw)[1]:
                     if OPERATION_COMMENT.match(said):
                         self.operation = said
@@ -2069,6 +2176,8 @@ class PrintJob:
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
+                if starting and len(start) < START_SAID_MOST:
+                    start += lines
                 self.sent += 1
                 self._same_boot(link, boots)
                 if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
@@ -2113,7 +2222,7 @@ class PrintJob:
                 self.stage = "failed"
         if outcome != "done" and not self._quiet:
             tail = (tail + safe_off(link, self.op.machine, kind))[-200:]
-        ended = self._end(outcome, tail).finished_at
+        ended = self._end(outcome, tail, None if self.grbl else levelled_by(start)).finished_at
         link.log.add(
             "sys",
             f"{kind} {outcome}: {self.file.name}, {self.sent}/{self.total} lines"
@@ -2122,6 +2231,31 @@ class PrintJob:
         )
         link.job = None
         self.finished = ended  # last: a snapshot that says "not running" names the record
+
+
+# The board's answers kept from a print's start, before its first layer: a probe of a
+# 5 x 5 grid at verbosity 3 says a few lines a point, its mesh and offset a few more.
+START_SAID_MOST = 400
+
+
+def levelled_by(lines: List[str]) -> Optional[dict]:
+    """What a print's start had the board say of its levelling (compose.SAID_LINES):
+    whether levelling was on, the probe's offset, the mesh's range and where its probe
+    said the grid lies. None when it said none of them."""
+    on = gcode.parse_leveling_state(lines)
+    offset = gcode.parse_probe_offset(lines)
+    meshes = gcode.parse_meshes(lines)
+    points = gcode.parse_probed_points(lines)
+    if on is None and offset is None and not meshes and not points:
+        return None
+    mesh = meshes[0] if meshes else []
+    said: dict = {"leveling_on": on, "probe_offset": offset}
+    if mesh:
+        said["mesh_range"] = gcode.mesh_stats(mesh).get("range")
+    if points:
+        said["area"] = gcode.probed_area(points, mesh)
+        said["points"] = len(points)
+    return said
 
 
 def safe_off(link: gcode.GcodeLink, machine: str, origin: str) -> List[str]:

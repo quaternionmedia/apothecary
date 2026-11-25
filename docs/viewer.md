@@ -326,7 +326,7 @@ then Kinds, each over its categories, then words.
 | A word | The pieces of a word neither facet holds, a picture's | Shown, Selectable |
 | Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
-| Measure | Dimension lines on the selection, and a click that drops a point to measure between and reads the diameter or the wall under it ([below](#measure)) | Shown (off at first) |
+| Measure | Dimension lines on the selection -- a part's piece's dimensions, each read against its design -- and a click that drops a point to measure between and reads the diameter or the wall under it, or picks a dimension by its label ([below](#measure)) | Shown (off at first) |
 | Bed mesh | A machine's bed reading, the relief laid over its bed: a printer's bed mesh, a router's table map ([A machine's frame](#a-machines-frame)). Hidden, a reading taken or shown afterwards is hidden too, until the tick is on again | Shown |
 
 **Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
@@ -377,7 +377,9 @@ Select walls and Measure, which are the page's session's.
 Ticking **Measure** (the Layers window's last row, or the ring's View › Layers › World ›
 Measure › Shown) lets a person read any dimension in the world. A
 measurement is a reading of the model and of the mesh drawn, not of the made part: a
-printed part differs by what the printer does. Every number says where it comes from.
+printed part differs by what the printer does, and what calipers read of a made piece is
+typed onto the part's dimensions ([below](#measure), *A made piece, against its design*).
+Every number says where it comes from.
 
 - **The selection reads its size.** The selected piece wears a dimension line along
   each of its own axes, a few pixels thick in the measurement's colour whatever the
@@ -454,6 +456,22 @@ printed part differs by what the printer does. Every number says where it comes 
     told. It says which, and gives no number.
   - *What a mesh cannot tell* is a printed part's real size: a printer closes a hole and
     swells a boss by what it does, and only the made part, measured, says by how much.
+- **A made piece, against its design.** A part's piece selected wears its dimensions, what
+  a person reads of a piece of it with calipers, as its cabinet says them
+  ([cabinet.md](cabinet.md#dimensions)): its box's x, y and z along the selection's own
+  lines, or, for a part that names a plan, each of the plan's features along the line its
+  jaws close on, in the part's own frame. They are of the piece Part › Feedback has chosen,
+  else the part's newest. A piece is the part as it prints, and the world may draw the part
+  as it rests ([parts-authoring.md](parts-authoring.md#how-it-rests)) or as another
+  variant: a side is marked as a dimension only where it is as long as that dimension was
+  designed, and a plan's lines only where the part is drawn in the box it was sliced in;
+  the reading names those read in Part › Feedback alone. A dimension's label clicked drops no point: Part › Feedback comes
+  in front on that piece, the dimension's row is marked and given the caret, and the status
+  line says what it is and its designed size. What calipers read is typed there and kept
+  with Enter or Keep; the label then carries the reading and how far it is from the design,
+  and the line and the label are drawn in the page's colour for within the piece's
+  tolerance, or for outside it. The reading under the Layers window's rows names the
+  piece, the tolerance and whose it is, and each dimension read.
 - **A click measures while the layer is shown.** Measure is a mode: the layer being
   shown is the whole of the choice, because a click that sometimes selected and sometimes
   measured would be a surprise at the moment it matters, and a modifier would be a
@@ -635,7 +653,9 @@ site, a target no longer in it or nothing at its level, Site with no site regist
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back) and
   Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
-  Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
+  Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)) and
+  Bed (Runs, Differences, Fixes and History, then Keep mount and Make these, on the
+  printer whose Machine is open, [bed-shims.md](bed-shims.md#in-the-page)); Windows › World alone (as
   `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view;
   Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
   slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
@@ -807,6 +827,19 @@ Play, Back, Step, Reset, a slider -- each gap the server measured drawn where
 it is least and read with its unit, and what is bought drawn in a colour of
 its own while Bought is ticked ([airgap.md](airgap.md#the-motion-view)).
 
+**A badge composed.** The Badge window, in the Part group and the column beside
+the world, closed until asked for (⊞ Windows, or *Compose a badge*'s stages),
+composes the badge selected, `parts/badge` -- in the universe, where every part
+stands. Its buttons are six faces, each drawn after its emoji (😮 🙂 😐 😉 🙁 😀),
+and the word, each a cell of the badge's ring, Part › View › Badge: the face, or the
+word, staged in its editor and drawn at once. Under them are the word's
+text, font and size, or the face's diameter: the Parameters window's own
+controls, staging there too, the badge drawn once they rest. **⚒ Print** and
+**⚒ Cut** make the badge drawn on the first printer or router of any site that
+makes it, as ⚒ Make does, that site opened with the variant drawn; ⚒ Cut is
+greyed for a word, which the router does not cut, its tip the part's own words
+([parts/badge](../parts/badge/README.md)).
+
 ### Journeys
 
 A journey is a path a person takes through the windows, a step at a time
@@ -826,10 +859,13 @@ what it made:
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
 | **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print, 6 Measure | a job on the printer, and its correction |
 | **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut, 6 Measure | a job on the router, and its tool's allowance |
+| **Calibrate a router** (`calibrate`) | 1 Choose, 2 Toolpath, 3 Cut, 4 Measure, 5 Kept | the router's tool allowance from its 😮 (`parts/router_emoji`) measured by hand, which its next toolpaths take ([cam.md](cam.md#measured-by-hand-fed-back)) |
 | **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
 | **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
 | **Run a site** (`run`) | 1 Steps, 2 Members, 3 Audit, 4 Space, 5 Hour | a site in working order, and what each machine's hour held |
 | **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
+| **Level a bed** (`level`) | 1 Heat, 2 Probe, 3 Compare, 4 Measure, 5 Shims, 6 Print, 7 Fit, 8 After | the shims that level printer_1's bed on its mounts, for Print a part: heating, probing, measuring and fitting are the person's ([bed-shims.md](bed-shims.md#in-the-page)) |
+| **Compose a badge** (`compose`) | 1 Pick, 2 Shape, 3 Make | a badge, a face or a word, for Print a part or Cut a part: it stands in the universe ([above](#the-windows)) |
 | **Join a hose** (`join`) | 1 Ends, 2 Adapter, 3 Ready | the adapter between two ends, for Print a part: it stands in the universe, where the port part and the adapter are ([above](#presets-and-the-adapter-between-two-ends)) |
 
 *Print a part* in full, as each is written in `apothecary/journeys.py`:
@@ -841,7 +877,7 @@ what it made:
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
 | 5 | **Print** | the Print window, then Jobs | the Machine, Jobs |
-| 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure | the Feedback window |
+| 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure, or a dimension clicked on the part with Measure shown | the Feedback window |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
 listed in ⚙ View › Views and has a cell on the ring's Panels › Windows, which is
@@ -876,7 +912,8 @@ stage.
   **Problems** (its tab counts them, red while there are any; each row selects
   its piece, at its level), what is **Pinned** in every site (each with its
   Remove or Unpin), the site's **Jobs** (its tab counts them and the running
-  ones; a row opens its machine) and its **SCAD**, generated from the tree.
+  ones; a row opens its machine, and the drawer of the piece it made in Part ›
+  Feedback beside it) and its **SCAD**, generated from the tree.
 - **Selected**: the selected piece -- its name, place (each field to two places
   at the most; the place itself is kept whole, and a field changes it only when
   typed in) and footprint, a
@@ -906,6 +943,11 @@ stage.
   experiment's plots and figures -- a window of the Machine's group beside the
   world, closed until asked for (⊞ Windows › Loops, or Panels › Machine › Loops;
   [control-loops.md](control-loops.md#the-loops-window)).
+- **Runs**, **Differences**, **Fixes** and **History**: the bed of the printer whose
+  Machine is open -- its readings, how they differ, the shims that level it and what
+  they fit, its range over the readings -- four windows of the Machine's group beside
+  the world, closed until asked for (⊞ Windows, or Panels › Machine › Bed;
+  [bed-shims.md](bed-shims.md#in-the-page)).
 - **The control pad**: an armed printer's pad opens as a window of its own
   beside the world, its tab (*🔓 Control pad*, as the ring names it, so it is
   never a second tab named for the machine) and frame red, its frame pulsing as it opens, and

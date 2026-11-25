@@ -98,14 +98,14 @@ The page reloaded: the box is open again on the stage it showed, where it was le
 Print a part · 5. Print
 ```
 
-## 9. A machine with no board connected is taken as the site plans it
+## 9. A machine whose board is not connected is taken as the site plans it
 
-Cut a part, chosen: its stages are on the router's Machine, and this server's router has no board connected. Its Machine opens all the same, as its badge opens it: what it makes is planned there, its toolpath written and drawn, and ▶ Cut is its board's once it is connected.
+Cut a part, chosen: its stages are on the router's Machine, and this server's router is not connected. Its Machine opens all the same, as its badge opens it: what it makes is planned there, its toolpath written and drawn, and ▶ Cut is its board's once it is connected.
 
 ```
-cnc_router's Machine opened with no board connected: what it makes is planned there
+cnc_router's Machine opened, not connected: what it makes is planned there
 router_coupon chosen
-router_coupon named under makes in cnc_router's Print window
+router_coupon named under makes in cnc_router's Cut window
 Cut a part entered, its windows laid out
 Cut a part › 1 Choose (the tour): a part that says how it is cut, among the site's pieces
 ```

@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; a drawing photographed into shapes, which stand up as parts to design; and two ends joined by an adapter the server derives between them. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
+Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the router calibrated by a piece it cut, measured by hand; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; a drawing photographed into shapes, which stand up as parts to design; a printer's bed levelled by shims computed from its readings; a badge composed in a window, a face or a word; and two ends joined by an adapter the server derives between them. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
 
 **Runtime-bound.** It drives a real browser against `apothecary serve --simulated`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of that server refuses a real serial port.
 
@@ -54,7 +54,7 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
 5 Print: footpedal chosen
     Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it, as Part › View › Feedback does
-    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured, or each fault marked under seen, filed, and Take turn takes either into the printer's next slices
+    Print a part › 6 Measure (the tour): the piece printed, in its part's cabinet, Part › Feedback: each feature it names typed under measured -- or its label clicked on the part, Measure shown in Layers -- and checked against its design, or each fault marked under seen, filed; Take turn takes either into the printer's next slices
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table
@@ -64,7 +64,7 @@ The same path through another machine. cnc_router's Machine is opened in front, 
 ![Cut a part: its toolpath written for the router, drawn on the table](screenshots/39-03-cut-a-part-its-toolpath-written-for-the-router-dra.png)
 
 ```
-1 Choose: cnc_router's Machine opened; router_coupon chosen; router_coupon named under makes in cnc_router's Print window; Cut a part entered, its windows laid out
+1 Choose: cnc_router's Machine opened; router_coupon chosen; router_coupon named under makes in cnc_router's Cut window; Cut a part entered, its windows laid out
     Cut a part › 1 Choose (the tour): a part that says how it is cut, among the site's pieces
 2 Toolpath: router_coupon chosen
     Cut a part › 2 Toolpath (the tour): the router's Cut window: the part under makes, then Toolpath
@@ -78,11 +78,30 @@ The same path through another machine. cnc_router's Machine is opened in front, 
     Cut a part › 6 Measure (the tour): the piece cut, in its part's cabinet, Part › Feedback: each size it names typed under measured, checked against what was designed, filed, and the tool's allowance kept for the router's next toolpaths
 ```
 
-## 4. Flash a board: its sketch on the Bench, its Flashing, what it says
+## 4. Calibrate a router: its 😮's toolpath, saying what to measure
+
+The router that cut a part is trued by a piece made to be measured. cnc_router's Machine stays open and its Cut window names router_emoji under makes, a part no piece of the garage stands for; Toolpath writes its cut where none is kept, draws it on the table and says what a person measures of the piece: an eye, the mouth and the face. Cut is the Machine and Jobs; Measure is the 😮's cabinet in Part › Feedback, opened by its name, under measured what to type; Kept is the Cut window again, where the next Toolpath takes the allowance. The picture is Toolpath: the cut and the calipers are the person's.
+
+![Calibrate a router: its 😮's toolpath, saying what to measure](screenshots/39-04-calibrate-a-router-its-s-toolpath-saying-what-to-m.png)
+
+```
+1 Choose: router_emoji named under makes in cnc_router's Cut window; Calibrate a router entered, its windows laid out
+    Calibrate a router › 1 Choose (the tour): the 😮 under makes in the router's Cut window: a face cut around, two eyes and a mouth bored, each a circle calipers read across
+2 Toolpath: router_emoji's toolpath written for cnc_router, as Toolpath does: router_emoji-cnc_router.nc
+    Calibrate a router › 2 Toolpath (the tour): router_emoji-cnc_router.nc's path is drawn on cnc_router and framed, all of it: the preview slider in its Cut goes through each pass
+3 Cut: nothing more to do
+    Calibrate a router › 3 Cut (the tour): control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs; at its end the piece's drawer opens in Part › Feedback
+4 Measure: router_emoji's cabinet in Part › Feedback, its newest kept file chosen, none printed or cut from here: a piece made from it elsewhere is filed under it, as Part › View › Feedback does
+    Calibrate a router › 4 Measure (the tour): the 😮 cut, in its cabinet, Part › Feedback: an eye, the mouth and the face across, typed under measured, Keep: each checked against what was designed, filed
+5 Kept: nothing more to do
+    Calibrate a router › 5 Kept (the tour): the tool's allowance kept for this router and its tool: Toolpath again takes it, tool_allowance measured, the face's path a little further out
+```
+
+## 5. Flash a board: its sketch on the Bench, its Flashing, what it says
 
 A machine runs on a board, and a board on firmware. The simulated devkit stands on its port unpinned, so the page pins it to esp32_blink, as Pin in the piece's Device section does, and opens its Machine: Pin's stage is Selected, where the site says which device is which. The Bench is opened on esp32_blink's sketch, as its ring's Device › Flash sketch does: each build of it with its toolchain. Flash's stage is the board's Flashing window, Hear's its Sketch and its Log. The picture is Hear. Compile, upload and Listen are left to the person.
 
-![Flash a board: its sketch on the Bench, its Flashing, what it says](screenshots/39-04-flash-a-board-its-sketch-on-the-bench-its-flashing.png)
+![Flash a board: its sketch on the Bench, its Flashing, what it says](screenshots/39-05-flash-a-board-its-sketch-on-the-bench-its-flashing.png)
 
 ```
 1 Pin: /dev/ttyFAKE2 pinned to esp32_blink, as Pin in its Device section does; esp32_blink's Machine opened; esp32_blink framed in the world, as f does; Flash a board entered, its windows laid out
@@ -95,11 +114,11 @@ A machine runs on a board, and a board on firmware. The simulated devkit stands 
     Flash a board › 4 Hear (the tour): its Sketch and its Log: what it should run, and what it was heard saying
 ```
 
-## 5. Drive a machine: the Stream Deck, and the printer beside it
+## 6. Drive a machine: the Stream Deck, and the printer beside it
 
 Hands on what was made to move. The stream_deck piece is chosen and the Deck window brought forward: its keys and strip as the server draws them. Knobs opens printer_1's Machine beside it, the machine the deck has chosen, where its control is armed before a knob moves anything. The picture is Knobs, the printer disarmed.
 
-![Drive a machine: the Stream Deck, and the printer beside it](screenshots/39-05-drive-a-machine-the-stream-deck-and-the-printer-be.png)
+![Drive a machine: the Stream Deck, and the printer beside it](screenshots/39-06-drive-a-machine-the-stream-deck-and-the-printer-be.png)
 
 ```
 1 Deck: stream_deck chosen; stream_deck framed in the world, as f does; Drive a machine entered, its windows laid out
@@ -108,11 +127,11 @@ Hands on what was made to move. The stream_deck piece is chosen and the Deck win
     Drive a machine › 2 Knobs (the tour): its knobs jog the machine chosen on it, once armed: the printer's Machine beside it
 ```
 
-## 6. Run a site: its procedure, the family's members, the hub's audit, then its Workspace
+## 7. Run a site: its procedure, the family's members, the hub's audit, then its Workspace
 
 The machines one at a time become a site brought up in order, then watched. No machine's window is in this journey, so each one open is closed. Steps is the Procedure, each step a member's of the family and fired through the hub on GO; Members is each member and its door; Audit is the hub's deliveries. A site that is up is watched: Space is the Workspace on the garage, in front of the Procedure; Hour chooses printer_1 and opens its hour there: its state poll by poll, and where a camera over it would keep its frames. The picture is Steps: GO is a person's.
 
-![Run a site: its procedure, the family's members, the hub's audit, then its Workspace](screenshots/39-06-run-a-site-its-procedure-the-family-s-members-the-.png)
+![Run a site: its procedure, the family's members, the hub's audit, then its Workspace](screenshots/39-07-run-a-site-its-procedure-the-family-s-members-the-.png)
 
 ```
 1 Steps: printer_1's, cnc_router's and esp32_blink's Machines closed: Run a site has no machine in it; Run a site entered, its windows laid out
@@ -127,11 +146,11 @@ The machines one at a time become a site brought up in order, then watched. No m
     Run a site › 5 Hour (the tour): one machine's hour: its state and heaters poll by poll, and the cameras over it
 ```
 
-## 7. Read a drawing: the whiteboard photographed, squared, read
+## 8. Read a drawing: the whiteboard photographed, squared, read
 
 Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen on the garage's wall; Picture pins the folder's photograph of it there, as its ring's Picture › Folder does, squared and laid in front; Shapes finds its closed strokes; Marks sorts each mark; Models is where an image model is asked and never trusted; Pieces is where Picture › Make stands each shape up, which is left to the person: a piece made is a part, to design. The picture is Marks.
 
-![Read a drawing: the whiteboard photographed, squared, read](screenshots/39-07-read-a-drawing-the-whiteboard-photographed-squared.png)
+![Read a drawing: the whiteboard photographed, squared, read](screenshots/39-08-read-a-drawing-the-whiteboard-photographed-squared.png)
 
 ```
 1 Board: whiteboard chosen; whiteboard framed in the world, as f does; Read a drawing entered, its windows laid out
@@ -148,14 +167,54 @@ Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen
     Read a drawing › 6 Pieces (the tour): Picture › Make stands each shape up as a piece: a part, to design and to make
 ```
 
-## 8. Join a hose: two ends, each one part at its numbers, and the adapter between them
+## 9. Level a bed: its readings, what a shim fits, and the shims that level it
 
-A part can be made between two others. The universe opens, where every part stands; the dust port is chosen and its editor opened, its presets above its numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's numbers it asks the server for the adapter between them. Adapter is the adapter's editor, where each end's fit is said; Ready is whether it can be printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the numbers measured, are the person's.
+A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat and Probe are the person's, and Runs lists what the bench kept, the printer framed; Compare is the second run less the first, the floor a shim must clear. Measure chooses bed_shims, the piece on printer_1's bed, its numbers in Parameters: the bed screw chosen, a mount's outer diameter typed from calipers, and Keep mount in Fixes keeps both as printer_1's. Shims draws each at its screw; Print slices them for the printer, where Print a part goes on. The picture is Measure: what is measured is the person's.
 
-![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-08-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
+![Level a bed: its readings, what a shim fits, and the shims that level it](screenshots/39-09-level-a-bed-its-readings-what-a-shim-fits-and-the-.png)
 
 ```
-1 Ends: apothecary opened, where Join a hose stands (garage was open); dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
+1 Heat: printer_1's Machine opened; Level a bed entered, its windows laid out
+    Level a bed › 1 Heat (the tour): the bed on at the loaded filament's printing temperature, control armed in the Machine, then about ten minutes' soak: the plate and the probe move as they warm
+2 Probe: printer_1 framed in the world, as f does
+    Level a bed › 2 Probe (the tour): ▤ Probe hot in Runs: the bed heated, held and probed twice; each run in Runs, heated or cold, the one chosen drawn over the bed
+3 Compare: nothing more to do
+    Level a bed › 3 Compare (the tour): the second run less the first in Differences: the floor a shim must clear, and the bow, which no shim fixes
+4 Measure: bed_shims chosen
+    Level a bed › 4 Measure (the tour): what a shim fits, measured at the bench and typed in bed_shims' Parameters: the bed screw chosen, M3 or M4, the hole typed over where it needs another; a mount's outer diameter where it meets the bed, read with calipers, as the ring; then Keep mount in Fixes keeps both as printer_1's
+5 Shims: printer_1 framed in the world, as f does
+    Level a bed › 5 Shims (the tour): each corner's shim in Fixes, drawn at its screw in the world as wide as the mount: the highest none, one under a layer or under the floor skipped
+6 Print: nothing more to do
+    Level a bed › 6 Print (the tour): Make these in Fixes: the shims rendered at their thicknesses and the mount kept, and sliced for the printer in its Print window to probe first, the bed not yet level; ▶ Print is a person's
+7 Fit: bed_shims's cabinet in Part › Feedback, nothing made of it yet, as Part › View › Feedback does
+    Level a bed › 7 Fit (the tour): each shim's thickness clicked on bed_shims, Measure shown in Layers, what calipers read typed in its row in Part › Feedback and checked against its design; each on the mount its label names, slot first, its tab out past the mount; then the bed heated, soaked and probed twice again
+8 After: nothing more to do
+    Level a bed › 8 After (the tour): after less before in Differences, and each reading's range in History against the bound for a stored mesh
+```
+
+## 10. Compose a badge: a face or a word, in the Badge window
+
+A part composed in a window of its own. The universe opens, where every part stands, and the badge's editor is opened, as Part › Edit opens it. Pick is the Badge window: six faces, each drawn after its emoji, and the word, each staged in the badge's editor and drawn; Shape is its word and font, or its face's size, there, and its other numbers in Parameters; Make is ⚒ Print or ⚒ Cut, which takes the badge drawn to the garage, where Print a part or Cut a part goes on. The picture is Pick: a face chosen is the person's.
+
+![Compose a badge: a face or a word, in the Badge window](screenshots/39-10-compose-a-badge-a-face-or-a-word-in-the-badge-wind.png)
+
+```
+1 Pick: apothecary opened, where Compose a badge stands (garage was open); badge's editor opened, as Part › Edit does; Compose a badge entered, its windows laid out
+    Compose a badge › 1 Pick (the tour): a face drawn after its emoji, or the word, in the Badge window: each a cell of the badge's ring, Part › View › Badge, staged and drawn
+2 Shape: nothing more to do
+    Compose a badge › 2 Shape (the tour): the word typed and its font chosen, or the face's size, in the Badge window; its depth and plate in Parameters; drawn once the controls rest
+3 Make: nothing more to do
+    Compose a badge › 3 Make (the tour): ⚒ Print takes the badge drawn to the first printer that makes it, ⚒ Cut a face to the router: there Print a part or Cut a part goes on
+```
+
+## 11. Join a hose: two ends, each one part at its numbers, and the adapter between them
+
+A part can be made between two others. In the universe, where every part stands, the dust port is chosen and its editor opened, its presets above its numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's numbers it asks the server for the adapter between them. Adapter is the adapter's editor, where each end's fit is said; Ready is whether it can be printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the numbers measured, are the person's.
+
+![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-11-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
+
+```
+1 Ends: dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
     Join a hose › 1 Ends (the tour): each end one part at its numbers: a preset chosen in Parameters, what calipers read typed over it; ⇄ Adapter in Selected keeps the first
 2 Adapter: nothing more to do
     Join a hose › 2 Adapter (the tour): ⇄ Adapter again at the other end's numbers: the adapter between them derived, drawn, and each end's fit said in Selected

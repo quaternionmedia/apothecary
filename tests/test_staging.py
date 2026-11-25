@@ -127,6 +127,6 @@ class TestStagingReachesTheViewer:
         panel = page[page.index("renderSelectedPanel() {") : page.index("bindPictureFacts() {")]
         assert "this.appendEditor(this.pieceTarget(" in panel
         assert panel.index("this.shownFacts") < panel.index("this.appendEditor(this.pieceTarget(")
-        editor = page[page.index("appendEditor(target) {") : page.index("openEditor(path) {")]
+        editor = page[page.index("appendEditor(target) {") : page.index("openEditor(path, {")]
         for element in ("part-params", "stage-summary", "apply-btn", "revert-btn", "part-envelope"):
             assert f'id="{element}"' in editor, element

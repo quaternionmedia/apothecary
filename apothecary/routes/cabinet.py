@@ -9,13 +9,21 @@
   of (``cabinet.by_variant``), and those of none (``unsaved``): Part › Variants lists them.
 - ``GET /cabinet/{part}/drawers/{id}``: one drawer whole, with what its machine keeps of
   it now: a printer's tuning for the filament and process the piece used (``tuning``),
-  a router's tool allowance (``allowance``); null where none is kept.
+  a router's tool allowance (``allowance``); null where none is kept; its
+  ``dimensions`` (``cabinet.dimensions``); and what its part declares of its print, only
+  what it set (``declared``), which Part › Feedback's tries read.
+- ``GET /cabinet/{part}/dimensions``: a piece's dimensions, each as designed with its newest
+  reading kept, and the tolerance a reading is checked with: ``?drawer=`` that drawer's,
+  ``?file=`` the newest drawer of that kept file (or the file's, as designed, where no
+  drawer holds it), else the part's newest drawer, else its newest kept file.
 - ``POST /cabinet/{part}/drawers`` ``{"file_id"}``: a drawer for a kept slice or cut of
   the part no job here ran, or the newest one of it; 404 for a file no slice or cut keeps,
   422 for one of another part.
 - ``POST /cabinet/{part}/drawers/{id}/measured`` ``{"readings": {feature: mm}}``: what
-  calipers read of the piece, filed: a print's next turn of its printer's tuning, a cut's
-  router allowance (each feature one size, null where not measured).
+  calipers read of the piece, each checked against its design and filed: a print's next
+  turn of its printer's tuning (``turn`` null where its last turn already reads the
+  piece: a check alone), a cut's router allowance (each feature one size, null where not
+  measured).
 - ``POST /cabinet/{part}/drawers/{id}/seen`` ``{"seen": {fault: 0-3}, "where", "note"}``:
   a print's faults read by eye, filed as its printer's next look.
 - ``POST /cabinet/{part}/drawers/{id}/note`` ``{"note"}``: a note, filed.
@@ -36,6 +44,7 @@ from pydantic import BaseModel, Field
 from .. import cabinet
 from ..cam import measured as cut_measured
 from ..slicer import tuning
+from ..slicer.models import SliceRecord
 
 router = APIRouter(prefix="/cabinet", tags=["cabinet"])
 
@@ -88,7 +97,27 @@ def _kept(drawer: cabinet.Drawer) -> dict:
 
 
 def _whole(drawer: cabinet.Drawer) -> dict:
-    return drawer.model_dump(mode="json", by_alias=True) | {"line": drawer.said()} | _kept(drawer)
+    return (
+        drawer.model_dump(mode="json", by_alias=True)
+        | {"line": drawer.said()}
+        | _kept(drawer)
+        | {"dimensions": cabinet.dimensions(drawer.part, drawer).model_dump(mode="json")}
+        | {"declared": _declared(drawer.part)}
+    )
+
+
+def _declared(part: str) -> dict:
+    """The print settings ``part`` declares, only those it set (slicer Declared); none for
+    a part that is not registered."""
+    from ..projects.parts.skeleton import ROOT
+    from ..projects.registry import PartLoadError, part_named
+    from ..slicer.profiles import Declared
+
+    try:
+        found = part_named(part, ROOT)
+    except (KeyError, PartLoadError):
+        return {}
+    return Declared.of(getattr(found, "print_settings", None), f"part {part}").values
 
 
 def _applies(drawer: cabinet.Drawer) -> tuning.AppliesTo:
@@ -176,22 +205,67 @@ def cabinet_drawer(part: str, drawer_id: str):
     return _whole(_drawer(part, drawer_id))
 
 
-@router.post("/{part}/drawers")
-def cabinet_open(part: str, body: OpenRequest):
-    """A drawer for the kept file ``file_id``, a slice or a cut of ``part``."""
+def _kept_file(part: str, file_id: str):
+    """The slice or cut record keeping ``file_id``, a piece of ``part``'s: 404 for a file
+    none keeps, 422 for another part's. Opening a drawer and reading a piece's dimensions
+    both find a kept file here."""
     from ..cam import service as cam_service
     from ..slicer import service as slicer_service
 
-    record = slicer_service.get_record(body.file_id)
-    cut = cam_service.get_record(body.file_id) if record is None else None
-    if record is None and cut is None:
-        raise HTTPException(status_code=404, detail=f"no slice or cut keeps {body.file_id!r}")
-    made = cabinet.part_of_slice(record) if record is not None else cut.part
+    record = slicer_service.get_record(file_id) or cam_service.get_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"no slice or cut keeps {file_id!r}")
+    made = cabinet.part_of_slice(record) if isinstance(record, SliceRecord) else record.part
     if made != part:
         what = made or "a piece made from a picture"
-        raise HTTPException(status_code=422, detail=f"{body.file_id} made {what}, not {part}")
+        raise HTTPException(status_code=422, detail=f"{file_id} made {what}, not {part}")
+    return record
+
+
+def _newest_file(part: str):
+    """The newest kept slice or cut of ``part``, or None."""
+    from ..cam import service as cam_service
+    from ..slicer import service as slicer_service
+
+    kept = [r for r in slicer_service.records() if cabinet.part_of_slice(r) == part]
+    kept += [r for r in cam_service.records() if r.part == part]
+    return max(kept, key=lambda r: r.at, default=None)
+
+
+@router.get("/{part}/dimensions")
+def cabinet_dimensions(
+    part: str,
+    drawer: Optional[str] = Query(None, pattern=cabinet.DRAWER_ID),
+    file: Optional[str] = Query(None, pattern=FILE_ID),
+):
+    """The dimensions of a piece of ``part`` -- the drawer named, else the newest drawer of
+    the kept file named, else the part's newest drawer -- each as designed and with its
+    newest reading kept; a kept file no drawer holds, as designed. Part › Feedback's rows
+    and the world's Measure layer read them."""
+    if drawer is not None:
+        return cabinet.dimensions(part, _drawer(part, drawer)).model_dump(mode="json")
     try:
-        drawer = cabinet.for_slice(record) if record is not None else cabinet.for_cut(cut)
+        found = cabinet.drawers(part)
+    except cabinet.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if file is not None:
+        record = _kept_file(part, file)
+        held = next((d for d in found if d.file.file_id == file), None)
+        return cabinet.dimensions(part, held, record).model_dump(mode="json")
+    if found:
+        return cabinet.dimensions(part, found[0]).model_dump(mode="json")
+    return cabinet.dimensions(part, None, _newest_file(part)).model_dump(mode="json")
+
+
+@router.post("/{part}/drawers")
+def cabinet_open(part: str, body: OpenRequest):
+    """A drawer for the kept file ``file_id``, a slice or a cut of ``part``."""
+    record = _kept_file(part, body.file_id)
+    try:
+        if isinstance(record, SliceRecord):
+            drawer = cabinet.for_slice(record)
+        else:
+            drawer = cabinet.for_cut(record)
     except cabinet.Refused as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _whole(drawer)
@@ -223,6 +297,8 @@ def cabinet_measured(part: str, drawer_id: str, body: MeasuredRequest):
         drawer, _, turn = cabinet.measured(drawer, values, instrument, body.assume)
     except (cabinet.Refused, tuning.Refused, cut_measured.Refused) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if turn is None:  # a check alone: the printer's last turn already reads the piece
+        return _whole(drawer) | {"said": drawer.filed[-1].said, "turn": None}
     return _whole(drawer) | {"said": tuning.said(turn), "turn": turn.id}
 
 

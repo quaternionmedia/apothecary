@@ -1,0 +1,48 @@
+/* The bed's windows: Runs, Differences, Fixes and History (widgets/bed_shims.js). */
+
+.bed-window { padding: 6px 8px; font-size: 12px; line-height: 1.4; overflow: auto; height: 100%; box-sizing: border-box; }
+.bed-window p { margin: 4px 0; }
+.bed-window h4 { margin: 8px 0 2px; font-size: 12px; font-weight: 600; }
+.bed-empty { color: var(--muted, #9aa09a); }
+.bed-head { color: var(--muted, #9aa09a); }
+
+.bed-heat { display: grid; gap: 1px; margin: 4px 0; max-width: 260px; }
+.bed-cell { font-size: 9px; text-align: center; padding: 2px 0; color: #101410; font-variant-numeric: tabular-nums; }
+
+.bed-run { display: flex; gap: 8px; align-items: flex-start; padding: 4px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+.bed-run .bed-heat { width: 120px; flex: none; }
+.bed-run .bed-cell { font-size: 0; padding: 0; height: 12px; }
+.bed-run:hover { border-color: var(--line, #3a3f3a); }
+.bed-run.on { border-color: var(--group-machine, #e8b04a); }
+.bed-run-words { flex: 1; }
+
+.bed-warm { padding: 0 4px; border-radius: 3px; font-size: 11px; }
+.bed-warm.heated { background: #e8b04a; color: #101410; }
+.bed-warm.cold { background: #6fb3e8; color: #101410; }
+.bed-warm.unknown { border: 1px solid var(--line, #3a3f3a); }
+
+.bed-diff { margin-bottom: 10px; }
+
+.bed-top { width: 100%; max-width: 280px; display: block; margin: 6px 0; }
+.bed-top .bed-plate { fill: #2a302a; stroke: #5a605a; }
+.bed-top .bed-grid { fill: none; stroke: #6fb3e8; stroke-dasharray: 4 3; }
+.bed-top text { fill: #d8dcd8; font-size: 10px; }
+.bed-top .bed-screw circle { stroke: #101410; stroke-width: 1; }
+.bed-top .bed-screw.shim circle { fill: #e8b04a; }
+.bed-top .bed-screw.highest circle { fill: #6fdb75; }
+.bed-top .bed-screw.skipped circle { fill: none; stroke: #9aa09a; stroke-dasharray: 2 2; }
+.bed-shims { margin: 4px 0; padding-left: 16px; }
+.bed-make { margin-right: 6px; }
+.bed-window code { font-size: 11px; word-break: break-all; }
+
+.bed-history { width: 100%; max-width: 360px; display: block; }
+.bed-history text { fill: #9aa09a; font-size: 9px; }
+.bed-history .tick line { stroke: #2f342f; }
+.bed-history .bed-bound line { stroke: #ff8080; stroke-dasharray: 5 3; }
+.bed-history .bed-bound text { fill: #ff8080; }
+.bed-history .bed-point circle { stroke-width: 1.5; }
+.bed-history .bed-point.heated circle { fill: #e8b04a; stroke: #e8b04a; }
+.bed-history .bed-point.cold circle { fill: none; stroke: #6fb3e8; }
+.bed-history .bed-point.read circle { stroke-dasharray: 2 2; }
+.bed-default { padding: 0 4px; border-radius: 3px; font-size: 11px; border: 1px dashed #e8b04a; color: #e8b04a; }
+.bed-mount { margin-top: 8px; }

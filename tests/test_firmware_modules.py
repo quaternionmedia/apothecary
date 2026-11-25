@@ -423,6 +423,33 @@ def test_a_node_bound_by_its_sketch_finds_the_board_either_implementation_ran_on
     assert row.expected.record.sketch_id == RUST
 
 
+def test_a_node_names_its_sketch_by_the_sketch_s_name_else_by_one_folder(tmp_path):
+    """A node's reference names a sketch by the sketch's own name, its sketch_ref first;
+    else by a folder of the sketch's path under parts/ that one sketch's path alone
+    holds. A folder two hold names neither and says which, and a reference no sketch
+    answers to says so; a node that names nothing has no sketch and nothing to say."""
+    from types import SimpleNamespace
+
+    from apothecary.firmware.models import SketchInfo
+
+    parts = tmp_path / "parts"
+    blink = SketchInfo(name="esp32_blink", path=parts / "esp32_blink")
+    plow = SketchInfo(name="plow_lights", path=parts / "rc" / "snowplow")
+    lift = SketchInfo(name="lift_motor", path=parts / "rc" / "forklift")
+    sketches = [blink, plow, lift]
+
+    def named(sketch_ref=None, part_ref=None):
+        node = SimpleNamespace(sketch_ref=sketch_ref, part_ref=part_ref)
+        return bindings.sketch_for_node(node, sketches, parts)
+
+    assert named("esp32_blink") == (blink, None)
+    assert named("esp32_blink", part_ref="snowplow") == (blink, None)
+    assert named(part_ref="snowplow") == (plow, None)
+    assert named(part_ref="rc") == (None, "ambiguous: lift_motor, plow_lights")
+    assert named(part_ref="tractor") == (None, "no sketch for 'tractor'")
+    assert named() == (None, None)
+
+
 # --- the CLI ---------------------------------------------------------------------
 
 

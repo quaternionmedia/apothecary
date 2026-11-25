@@ -794,6 +794,8 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "print:start",
         "print:preview",
         "print:plan",
+        "print:level",
+        "print:adhesion",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",
@@ -845,6 +847,12 @@ def test_the_control_ring_says_what_the_machine_s_windows_say():
     )
     assert piece["feedback:tune-apply"] == button("feedback-tune-apply", feedback) == "Take turn"
     assert piece["feedback:tune-undo"] == button("feedback-tune-undo", feedback) == "Undo turn"
+    for action, name, label in (
+        ("feedback:try-probe", "feedback-try-probe", "Probe first"),
+        ("feedback:try-brim", "feedback-try-brim", "Brim"),
+        ("feedback:try-raft", "feedback-try-raft", "Raft"),
+    ):
+        assert piece[action] == button(name, feedback) == label
     assert printer["control:sd-abort"] == router["control:job-abort"] == button("print-cancel")
     assert button("print-cancel") == "Abort"
     assert printer["control:sd-pause"] == pause["Print"] == "Pause"
@@ -1448,8 +1456,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in part.children] == [
         ("Selected", "panel:toggle:selected", 8),
         ("Motion", "panel:toggle:motion", 6),
+        ("Badge", "panel:toggle:badge", 2),
     ]
     assert address_of(root, "panel:selected") == "468"
+    assert address_of(root, "panel:badge") == "462"
     tools = next(c for c in panels.children if c.label == "Tools")
     assert [(c.label, c.action, c.cell) for c in tools.children] == [
         ("Bench", None, 8),
@@ -1496,6 +1506,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Control pad", "panel:pad", 6),
         # The heater loops of the printer whose Machine is open.
         ("Loops", None, 2),
+        # Its bed's readings and the shims that level it.
+        ("Bed", None, 4),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
@@ -1540,6 +1552,24 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Rule", None, 7),
     ]
     assert address_of(root, "panel:loops") == "4428"
+    # Bed: the four windows of the printer's bed, then Fixes' Keep and Make these, then
+    # Runs' Probe hot, seated after them so none of theirs moves.
+    bed = next(c for c in machine.children if c.label == "Bed")
+    assert [(c.label, c.action) for c in bed.children] == [
+        ("Runs", "panel:toggle:bed-runs"),
+        ("Differences", "panel:toggle:bed-differences"),
+        ("Fixes", "panel:toggle:bed-fixes"),
+        ("History", "panel:toggle:bed-history"),
+        ("Keep mount", "bed:keep"),
+        ("Make these", "bed:make"),
+        ("Probe hot", "bed:probe-hot"),
+    ]
+    assert [c.cell for c in bed.children[:6]] == [8, 6, 2, 4, 9, 3]
+    assert address_of(root, "panel:bed-runs") == "4448"
+    assert address_of(root, "bed:make") == "4443"
+    assert carried_by("bed:keep").name == carried_by("bed:make").name == "VIEWER"
+    assert carried_by("bed:probe-hot").name == "VIEWER"
+    assert address_of(root, "bed:probe-hot") == "4441"
     assert address_of(root, "loops:start") == "4422"
     assert address_of(root, "loops:loop:bed") == "44236"
     assert address_of(root, "loops:kind:perturbation") == "44212"
@@ -2230,8 +2260,16 @@ def test_a_part_that_is_made_has_its_cabinet_under_view_after_motion():
         ("Note", "feedback:note"),
         ("Take turn", "feedback:tune-apply"),
         ("Undo turn", "feedback:tune-undo"),
+        ("Try again", None),
     ]
-    assert all(carried_by(c.action).name == "VIEWER" for c in feedback.children)
+    tries = feedback.children[-1].children
+    assert [(c.label, c.action) for c in tries] == [
+        ("Probe first", "feedback:try-probe"),
+        ("Brim", "feedback:try-brim"),
+        ("Raft", "feedback:try-raft"),
+    ]
+    acts = [c for c in [*feedback.children[:-1], *tries]]
+    assert all(carried_by(c.action).name == "VIEWER" for c in acts)
     still = on("footpedal", part=PartSeen(editable=True, motion=True))
     assert address_of(still, "part:fit") == address_of(ring, "part:fit")
     assert address_of(still, "feedback:open")[:-2] == address_of(ring, "feedback:open")[:-2]

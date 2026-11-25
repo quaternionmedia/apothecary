@@ -515,3 +515,241 @@ def test_a_line_is_drawn_where_it_is_seen_and_faint_where_it_is_behind_something
     rod, faint, label = drawn["order"]
     assert rod < faint < label
     assert drawn["boxes"] >= 1
+
+
+# ---- a part's dimensions: marked, read, and picked by their labels --------------------
+
+DIMENSIONS = (
+    FAKE_DOCUMENT
+    + """
+import * as THREE from "three";
+import { dimensionLabel, dimensionLines, drawnAs, partToMesh, pickAt, mountMeasureWorld } from "/static/measure_world.js";
+import { makePickScope, MEASURE } from "/static/pick_scope.js";
+const out = {};
+const check = (measured, within) => ({ name: "x", designed: 10, measured, deviation: measured - 10, tolerance: 0.1, tolerance_from: "part", within });
+const read = (measured, within) => ({ filed: "filed-1", at: "2026-11-22T10:00:00Z", made: "turn-1", read: [measured], checked: check(measured, within) });
+const dims = {
+    part: "cube", drawer: "20261122T100000.000", file_id: "f1", made: "print", machine: "printer_1",
+    tolerance: { value: 0.1, source: "part", said: "cube's print settings" },
+    dimensions: [
+        { name: "x", words: "the part across X, at its widest", kind: "outside", designed: 10, frame: "box", reading: read(10.25, false) },
+        // As it prints, 12 mm across Y: not the cube drawn here, whose y is 10 mm.
+        { name: "y", words: "the part across Y, at its widest", kind: "outside", designed: 12, frame: "box", reading: null },
+        { name: "z", words: "the part's height, bed face to top", kind: "height", designed: 10, frame: "box", reading: read(10.05, true) },
+    ],
+};
+out.labels = [dimensionLabel("x", 10, "mesh"), dimensionLabel("x", 10, "mesh", dims.dimensions[0].reading)];
+out.lines = dimensionLines("cube", dims, ["x", "y", "z"]);
+out.apart = dimensionLines("cube", dims, ["x"])[1];
+out.drawnAs = [drawnAs(10, 10.004), drawnAs(10, 10.05), drawnAs(106.593, 102)];
+out.nothing = [dimensionLines("cube", null), dimensionLines("cube", { part: "cube", dimensions: [], why: "nothing made" })];
+out.kept = dimensionLines("cube", { ...dims, drawer: null, tolerance: { value: 0.2, source: "default", said: "a default, 0.2 mm: nothing states one" },
+    dimensions: dims.dimensions.map((d) => ({ ...d, reading: null })) }, ["x", "y", "z"]);
+// A point of the part's frame put in its centred mesh, and read back as the layer reads one.
+const local = partToMesh([5, -4, 8], [1, 2, 3]);
+out.local = local;
+out.back = [local[0] + 1, -local[2] + 2, local[1] + 3];
+const picks = [{ name: "a", box: { l: 0, r: 10, t: 0, b: 10 } }, { name: "b", box: { l: 5, r: 20, t: 5, b: 20 } }];
+out.picks = [pickAt(picks, 7, 7)?.name, pickAt(picks, 2, 2)?.name, pickAt(picks, 30, 30)];
+
+// A cube, a part's piece, selected with Measure shown: its box lines are its dimensions.
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 800 / 600, 0.1, 1000);
+camera.position.set(30, 25, 40); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+const mesh = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshBasicMaterial());
+mesh.userData.key = "cube"; scene.add(mesh); mesh.updateMatrixWorld();
+const canvas = { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }) };
+const nodes = { cube: { part_ref: "cube" } };
+const scope = makePickScope({ storage: { getItem: () => null, setItem() {}, removeItem() {} } });
+const asked = [], picked = [], said = [];
+const m = mountMeasureWorld({
+    scope, scene: () => scene, camera: () => camera, canvas: () => canvas, pick: () => [],
+    nodeOf: (k) => nodes[k], meshOf: (k) => (k === "cube" ? mesh : null), selected: () => "cube",
+    envelopeOf: () => null, frameOf: () => null, fallbackColour: 0x4488cc,
+    dispose: (o) => o.traverse((x) => { x.geometry?.dispose(); x.material?.dispose(); }),
+    setStatus: (words, kind) => said.push([kind, words]), invalidate: () => {}, refresh: () => {},
+    dimensionsOf: (part) => { asked.push(part); return Promise.resolve(dims); },
+    pickDimension: (p) => picked.push({ part: p.part, key: p.key, name: p.name, drawer: p.dims && p.dims.drawer }),
+});
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+scope.setShown(MEASURE, true);
+m.layersApplied();
+await settle(); await settle();
+out.asked = [...asked];
+out.texts = m.labels.map((s) => s.userData.text);
+out.inks = m.rods.map((r) => r.material.color.getHexString());
+out.readings = m.lines.filter((l) => l.startsWith("cube's"));
+m.place();
+const x = m.picks.find((p) => p.name === "x");
+out.pickable = m.picks.map((p) => p.name).sort();
+m.click({ clientX: (x.box.l + x.box.r) / 2, clientY: (x.box.t + x.box.b) / 2 });
+await settle();
+out.picked = picked;
+out.points = m.points.length;
+// Forgotten (a filing in Part › Feedback), asked again.
+m.forgetDimensions("cube");
+await settle(); await settle();
+out.askedAgain = asked.length;
+// A part nothing was made of: its box lines as they were, no label a pick.
+const bare = new THREE.Scene();
+bare.add(mesh);
+const m2 = mountMeasureWorld({
+    scope, scene: () => bare, camera: () => camera, canvas: () => canvas, pick: () => [],
+    nodeOf: (k) => nodes[k], meshOf: (k) => (k === "cube" ? mesh : null), selected: () => "cube",
+    envelopeOf: () => null, frameOf: () => null, fallbackColour: 0x4488cc,
+    dispose: (o) => o.traverse((x) => { x.geometry?.dispose(); x.material?.dispose(); }),
+    setStatus: () => {}, invalidate: () => {}, refresh: () => {},
+    dimensionsOf: () => Promise.resolve({ part: "cube", dimensions: [], why: "nothing made of cube yet" }),
+});
+m2.layersApplied();
+await settle(); await settle();
+m2.place();
+out.unmade = { picks: m2.picks.length, texts: m2.labels.map((l) => l.userData.text).sort(), lines: m2.lines.filter((l) => l.startsWith("cube's")) };
+// A part that names a plan: a feature's line through (x, 5, 5) of its own frame, across it
+// from x 0 to x 10, on a cube whose box stood from 0 to 10 in that frame.
+const planned = (size) => {
+    const scene3 = new THREE.Scene();
+    const coupon = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshBasicMaterial());
+    coupon.userData.centredFrom = [5, 5, 5];
+    scene3.add(coupon); coupon.updateMatrixWorld();
+    const plan = { ...dims, size, dimensions: [{ name: "a_x", words: "across a", kind: "outside", axis: "x", designed: 10, frame: "part", at: [0, 5, 5], faces: [0, 10], reading: null }] };
+    const m3 = mountMeasureWorld({
+        scope, scene: () => scene3, camera: () => camera, canvas: () => canvas, pick: () => [],
+        nodeOf: (k) => nodes[k], meshOf: (k) => (k === "cube" ? coupon : null), selected: () => "cube",
+        envelopeOf: () => null, frameOf: () => null, fallbackColour: 0x4488cc,
+        dispose: (o) => o.traverse((x) => { x.geometry?.dispose(); x.material?.dispose(); }),
+        setStatus: () => {}, invalidate: () => {}, refresh: () => {},
+        dimensionsOf: () => Promise.resolve(plan),
+    });
+    return m3;
+};
+for (const [name, size] of [["asSliced", [10, 10, 10]], ["otherwise", [10, 12, 10]]]) {
+    const m3 = planned(size);
+    m3.layersApplied();
+    await settle(); await settle();
+    m3.place();
+    const s3 = m3.labels.find((l) => l.userData.text.startsWith("a_x"));
+    out[name] = { picks: m3.picks.map((p) => p.name), from: s3 ? s3.userData.from.toArray() : null, to: s3 ? s3.userData.to.toArray() : null,
+        apart: m3.lines.filter((l) => l.includes("not drawn here")) };
+}
+// An answer slow to come, forgotten (a piece chosen in Part › Feedback) and asked again
+// meanwhile: the newer answer stands when the older comes in after it.
+{
+    const scene4 = new THREE.Scene();
+    const cube4 = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshBasicMaterial());
+    cube4.userData.key = "cube"; scene4.add(cube4); cube4.updateMatrixWorld();
+    const late = [];
+    let calls = 0;
+    const m4 = mountMeasureWorld({
+        scope, scene: () => scene4, camera: () => camera, canvas: () => canvas, pick: () => [],
+        nodeOf: (k) => nodes[k], meshOf: (k) => (k === "cube" ? cube4 : null), selected: () => "cube",
+        envelopeOf: () => null, frameOf: () => null, fallbackColour: 0x4488cc,
+        dispose: (o) => o.traverse((x) => { x.geometry?.dispose(); x.material?.dispose(); }),
+        setStatus: () => {}, invalidate: () => {}, refresh: () => {},
+        dimensionsOf: () => (++calls === 1 ? new Promise((resolve) => late.push(resolve)) : Promise.resolve({ ...dims, drawer: "newer" })),
+    });
+    m4.layersApplied();
+    await settle();
+    m4.forgetDimensions("cube");
+    await settle(); await settle();
+    late[0]({ ...dims, drawer: "older" });
+    await settle(); await settle();
+    m4.place();
+    out.race = { calls, piece: m4.lines.filter((l) => l.startsWith("cube's dimensions")) };
+}
+console.log(JSON.stringify(out));
+"""
+)
+
+
+@pytest.fixture(scope="module")
+def marked(tmp_path_factory):
+    return run_module(tmp_path_factory.mktemp("measure_dimensions"), DIMENSIONS)
+
+
+def test_a_dimension_s_label_says_its_size_and_its_newest_reading(marked):
+    assert marked["labels"] == ["x 10.00 mm · mesh", "x 10.00 mm · mesh · read 10.25 +0.25"]
+
+
+def test_the_readings_say_the_piece_its_tolerance_and_each_dimension_read(marked):
+    assert marked["drawnAs"] == [True, False, False]
+    assert marked["apart"] == (
+        "cube's y, z: not drawn here, the part drawn not being as it was sliced (as it rests, "
+        "or another variant); read in Part › Feedback"
+    )
+    assert marked["lines"] == [
+        "cube's dimensions, as printed on printer_1: its piece 20261122T100000.000, each checked "
+        "within ± 0.10 mm (part's: cube's print settings); a dimension's label clicked takes its "
+        "reading in Part › Feedback",
+        "cube's x, the part across X, at its widest: designed 10.00 mm, read 10.25 mm (filed-1, "
+        "turn-1), +0.25 mm: outside ± 0.10",
+        "cube's z, the part's height, bed face to top: designed 10.00 mm, read 10.05 mm (filed-1, "
+        "turn-1), +0.05 mm: within ± 0.10",
+    ]
+    assert marked["nothing"] == [[], []]
+    assert marked["kept"] == [
+        "cube's dimensions, as printed on printer_1: its kept file f1, no drawer yet, each checked "
+        "within ± 0.20 mm (a default, 0.2 mm: nothing states one); a dimension's label clicked "
+        "takes its reading in Part › Feedback"
+    ]
+
+
+def test_a_point_of_the_part_s_frame_is_put_where_its_centred_mesh_reads_it_back(marked):
+    assert marked["local"] == [4, 5, 6]
+    assert marked["back"] == [5, -4, 8]
+    assert marked["picks"] == ["b", "a", None]
+
+
+def test_a_part_s_piece_wears_its_dimensions_coloured_by_whether_each_is_within(marked):
+    """The cube's box lines are its x and z, whose sides are as long as designed: x read
+    outside its tolerance in the page's --bad, z within in --ok, each label a pick; y, 12 mm
+    as it prints and 10 drawn, is a plain line in the layer's own colour, no pick, and the
+    readings say it is read in Part › Feedback alone."""
+    assert marked["asked"] == ["cube"]
+    assert sorted(marked["texts"]) == [
+        "x 10.00 mm · mesh · read 10.25 +0.25",
+        "y 10.00 mm · mesh",
+        "z 10.00 mm · mesh · read 10.05 +0.05",
+    ]
+    assert sorted(set(marked["inks"])) == ["4488cc", "6fdb75", "ff8080"]
+    assert len(marked["readings"]) == 4 and "cube's y: not drawn here" in marked["readings"][1]
+    assert marked["pickable"] == ["x", "z"]
+
+
+def test_a_dimension_s_label_clicked_picks_it_and_drops_no_point(marked):
+    assert marked["picked"] == [
+        {"part": "cube", "key": "cube", "name": "x", "drawer": "20261122T100000.000"}
+    ]
+    assert marked["points"] == 0
+    assert marked["askedAgain"] == 2
+
+
+def test_a_part_nothing_was_made_of_wears_its_box_lines_as_they_were(marked):
+    assert marked["unmade"] == {
+        "picks": 0,
+        "texts": ["x 10.00 mm · mesh", "y 10.00 mm · mesh", "z 10.00 mm · mesh"],
+        "lines": [],
+    }
+
+
+def test_a_plan_s_feature_is_drawn_along_its_line_where_the_part_is_drawn_as_sliced(marked):
+    """In the part's own frame its line runs from (0, 5, 5) to (10, 5, 5): in the cube
+    centred on that box, from x -5 to x 5 through the middle. Drawn in another box than the
+    one sliced, the plan is not drawn, and the reading says so."""
+    assert marked["asSliced"]["picks"] == ["a_x"]
+    assert marked["asSliced"]["from"] == pytest.approx([-5, 0, 0])
+    assert marked["asSliced"]["to"] == pytest.approx([5, 0, 0])
+    assert marked["asSliced"]["apart"] == []
+    assert marked["otherwise"]["picks"] == [] and marked["otherwise"]["from"] is None
+    assert marked["otherwise"]["apart"] == [
+        "cube's a_x: not drawn here, the part drawn not being as it was sliced (as it rests, "
+        "or another variant); read in Part › Feedback"
+    ]
+
+
+def test_an_older_answer_come_late_leaves_the_newer_standing(marked):
+    """Asked, forgotten as a piece is chosen in Part › Feedback, and asked again: the
+    second answer comes first, and the first, come after it, is let go."""
+    assert marked["race"]["calls"] == 2
+    (line,) = marked["race"]["piece"]
+    assert "its piece newer" in line, line

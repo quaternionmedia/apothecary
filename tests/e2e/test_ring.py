@@ -601,6 +601,12 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         # The Loops window, beside the world and a cell of the Machine's ring, closed
         # until asked for.
         "loops",
+        # A printer's bed: Runs, Differences, Fixes and History, of the Machine's group,
+        # closed until asked for.
+        "bed-runs",
+        "bed-differences",
+        "bed-fixes",
+        "bed-history",
         # The Workspace, a tab of Site's ring, closed until asked for.
         "working",
         # The Procedure, a tab of Site's ring, closed until asked for.
@@ -610,6 +616,8 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         # The Motion window, a part's pieces moved through its motion, closed until
         # asked for.
         "motion",
+        # The Badge window, the badge selected composed, closed until asked for.
+        "badge",
     ]
     assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)

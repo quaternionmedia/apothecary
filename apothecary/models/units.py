@@ -5,6 +5,8 @@ OpenSCAD is unit-agnostic; every number here is mm.
 
 from __future__ import annotations
 
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -55,6 +57,20 @@ class PrintSettings(BaseModel):
     layer_height: float = Field(0.2, gt=0)
     wall_thickness: float = Field(1.2, gt=0)  # Usually 3x nozzle
     tolerance: float = Field(0.2, ge=0)
+    # A brim this wide round each piece's first layer, 0 for none: what a part whose
+    # pieces are small or thin declares, so its first layer is held down.
+    brim_width: float = Field(0.0, ge=0, le=20)
+    # Layers of raft under each piece, 0 for none: what lifts a first layer that will
+    # not hold off the bed, at the cost of a rougher underside.
+    raft_layers: int = Field(0, ge=0, le=10)
+    # Loops of skirt round the pieces, 0 for none; None leaves the printer's own. What a
+    # part whose first layer is all of it declares, so a skirt that lifts drags nothing.
+    skirt_loops: Optional[int] = Field(None, ge=0, le=10)
+    # How the start levels the bed for the part's prints, one of the slicer's levelling
+    # pieces (apothecary/slicer/compose.py), over the printer's own; a slice that asks
+    # one itself (the Print window's levelling row) is asked over this. None: the
+    # printer's own.
+    levelling: Optional[Literal["home", "stored-mesh", "probe-each-print"]] = None
 
     def clearance_hole(self, nominal: float) -> float:
         """Calculate clearance hole size for given nominal diameter."""

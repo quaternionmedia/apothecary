@@ -278,10 +278,10 @@ def test_a_site_is_grouped_by_system_its_loose_words_named():
     for value in sent["values"]:
         assert all(w["colour"] == value["colour"] for w in value["words"])
     # The parts standing loose, by their kinds: the boards, the Stream Deck and the
-    # footpedal on the bench, router_coupon, the whiteboard.
+    # footpedal on the bench, router_coupon, printer_1's bed shims, the whiteboard.
     assert [(v["name"], [w["word"] for w in v["words"]]) for v in sent["kinds"]] == [
         ("Electronics", ["electrical", "electronics"]),
-        ("Test pieces", ["coupon"]),
+        ("Test pieces", ["calibration", "coupon"]),
         ("Things", ["furniture"]),
     ]
     for value in sent["kinds"]:
@@ -333,6 +333,7 @@ def test_each_piece_of_the_garage_is_sent_with_its_kind_and_system():
         "garage_building.north_wall": (None, "Building"),
         "fluids": (None, "Plumbing"),
         "router_coupon": ("Test pieces", None),
+        "bed_shims": ("Test pieces", None),
         "arduino_uno": ("Electronics", None),
         "stream_deck": ("Electronics", None),
         "whiteboard": ("Things", None),

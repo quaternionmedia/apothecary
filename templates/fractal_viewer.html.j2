@@ -883,6 +883,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/layers.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/loops.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/bed_shims.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/feedback.css">
     <script type="importmap">
     {
@@ -936,6 +937,7 @@
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountLayers, layerLabel } from '/static/widgets/layers.js';
         import { mountLoops } from '/static/widgets/loops.js';
+        import { mountBedShims } from '/static/widgets/bed_shims.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
@@ -949,6 +951,7 @@
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
         import { mountMotion } from '/static/widgets/motion.js';
+        import { mountBadge } from '/static/widgets/badge.js';
         import { mountFeedback } from '/static/widgets/feedback.js';
         import { knownWindows, transientWindows, mountSystems, defineJourneyViews, openFor } from '/static/systems.js';
         import { mountScadEditor, variantChoices, historyRows, trashRows, madeOf, madeApart } from '/static/widgets/scad_editor.js';
@@ -1403,7 +1406,17 @@
                     raycaster: () => this.raycaster,
                     interfacesOf: (ref) => fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/interfaces`)
                         .then((r) => (r.ok ? r.json() : null)).then((body) => (body ? body.interfaces : null)).catch(() => null),
+                    // A part's piece's dimensions: the piece Part › Feedback has chosen, as it
+                    // read them, where it shows that part; else the part's newest piece's.
+                    dimensionsOf: (part) => (this.feedback && this.feedback.part() === part && this.feedback.dimensions()
+                        ? this.feedback.dimensions()
+                        : fetch(`${BASE_URL}/cabinet/${encodeURIComponent(part)}/dimensions`).then((r) => (r.ok ? r.json() : null)).catch(() => null)),
+                    pickDimension: (picked) => this.pickDimension(picked),
                 });
+                // A piece chosen or filed in Part › Feedback, a slice kept, a job begun or
+                // ended: the dimensions the world marks are asked for again.
+                window.addEventListener('apothecary:feedback-shown', (e) => this.measure.forgetDimensions(e.detail && e.detail.part));
+                for (const told of ['apothecary:sliced', 'apothecary:jobs-changed']) window.addEventListener(told, () => this.measure.forgetDimensions());
                 // What the layers do to what the world draws (layers_world.js).
                 this.layersWorld = mountLayersWorld({
                     scope: this.pickScope,
@@ -1697,7 +1710,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'motion', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'bed-runs', 'bed-differences', 'bed-fixes', 'bed-history', 'motion', 'badge', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
@@ -1932,6 +1945,7 @@
                             this.feedback = mountFeedback(sections.feedback, {
                                 base: BASE_URL,
                                 say: (t, kind) => this.setStatus(t, kind === 'error' ? 'error' : 'success'),
+                                retry: (drawer, how) => this.sliceAgain(drawer, how),
                             });
                             window.apothecaryFeedback = this.feedback;
                             return {
@@ -2028,6 +2042,53 @@
                         window.apothecaryLoops = this.loopsWidget;
                     },
                     onOpen: () => { if (this.loopsWidget) this.loopsWidget.load(); },
+                });
+                // Bed: a printer's bed readings and the shims that level it
+                // (widgets/bed_shims.js), four windows of the Machine's group beside the
+                // world, closed until asked for, of the printer whose Machine is open: Runs,
+                // Differences, Fixes and History, one widget in four bodies. Panels ›
+                // Machine › Bed opens each; its Make these and Keep are Fixes' buttons. A run
+                // chosen is drawn over the printer's bed in the world, and Fixes' shims at
+                // their screws, on the bed mesh layer. Keep takes the screw hole and the ring
+                // from bed_shims' Parameters (the garage's piece on printer_1's bed).
+                const bedBodies = {};
+                for (const k of ['runs', 'differences', 'fixes', 'history']) {
+                    bedBodies[k] = document.createElement('div');
+                    bedBodies[k].className = `bed-window bed-${k}`;
+                }
+                this.bedShims = mountBedShims(bedBodies, {
+                    base: BASE_URL,
+                    printer: () => (this.machine && this.machine.path ? { site: this.siteName, path: this.machine.path } : null),
+                    say: (text, kind) => this.setStatus(text, kind),
+                    draw: (record, newest) => this.drawReading(this.machine?.path, record, newest),
+                    shims: (list, mount) => this.drawShims(this.machine?.path, list, mount),
+                    make: (params) => this.makeShims(params),
+                    stand: (params) => this.standShims(params),
+                    measured: () => this.shimsMeasured(),
+                    // Probe hot, in the open Machine's own probe; the filament its Print
+                    // window holds says the bed's temperature.
+                    probeHot: async (heat, soak) => (this.machine?.handle?.level?.hot
+                        ? this.machine.handle.level.hot(heat, soak)
+                        : { refused: "open a printer's Machine: its bed is probed there" }),
+                    bedTemperature: () => this.machine?.handle?.print?.bedTemperature?.() ?? null,
+                });
+                window.apothecaryBedShims = this.bedShims;
+                const bedLoad = () => this.bedShims.load();
+                this.panels.register('bed-runs', {
+                    title: 'Runs', group: 'Machine', home: 'beside', open: false, body: bedBodies.runs, onOpen: bedLoad,
+                    hint: "The bed readings of the printer whose Machine is open, newest first: each heated or cold, its range and note; one chosen is drawn over the bed",
+                });
+                this.panels.register('bed-differences', {
+                    title: 'Differences', group: 'Machine', home: 'bed-runs', open: false, body: bedBodies.differences, onOpen: bedLoad,
+                    hint: 'Two runs one after the other, the floor a shim must clear; the newest pair less the pair before; the bow no shim fixes',
+                });
+                this.panels.register('bed-fixes', {
+                    title: 'Fixes', group: 'Machine', home: 'bed-runs', open: false, body: bedBodies.fixes, onOpen: bedLoad,
+                    hint: 'The shims that level the bed, each at its screw, and what they fit: Keep takes the screw and the mount from Parameters, Make these slices them',
+                });
+                this.panels.register('bed-history', {
+                    title: 'History', group: 'Machine', home: 'bed-runs', open: false, body: bedBodies.history, onOpen: bedLoad,
+                    hint: "Each reading's range over the readings, cold and heated told apart, against the bound for a stored mesh",
                 });
                 // Workspace: the site as every kind of evidence has it, and a
                 // printer's hour in it (widgets/working_space.js) -- a tab of Site's ring,
@@ -2133,6 +2194,88 @@
                     },
                     onOpen: () => this.motion?.act('open'),
                 });
+                // The Badge (widgets/badge.js): a face or a word engraved in a plate,
+                // parts/badge, composed through its editor and made by ⚒ Print or ⚒ Cut; a
+                // window of the Part group in the column, closed until asked for: ⊞ Windows,
+                // or Compose a badge's stages. It follows the selection.
+                this.badge = null;
+                // The editor opened or applied brings Parameters forward, a tab of the same
+                // stack where no view has laid them apart: the Badge, in front before, is put
+                // in front again.
+                const badgeInFront = async (work) => {
+                    const shown = this.panels.isShown('badge');
+                    const out = await work();
+                    if (shown && !this.panels.isShown('badge')) this.panels.open('badge');
+                    return out;
+                };
+                // The badge's editor: the one open on it, else opened on it without the cursor.
+                const badgeEditor = async (key) => {
+                    if (this.editorTarget && this.selectedName === key && this.editorOpenFor === key) {
+                        await this.editorLoading;
+                        if (this.editorTarget && this.selectedName === key) return this.editorTarget;
+                    }
+                    return badgeInFront(() => this.editorOn(key, { focus: false }));
+                };
+                this.panels.register('badge', {
+                    title: 'Badge', group: 'Part', home: 'column', after: 'selected', open: false,
+                    hint: 'The badge selected composed: a face drawn after its emoji, or a word in a font, and made on a printer or the router',
+                    body: (slot) => {
+                        this.badge = mountBadge(slot, {
+                            selected: () => {
+                                const key = this.selectedName, node = key && this.renderNodeByKey[key];
+                                return node ? { key, ref: node.part_ref || null } : null;
+                            },
+                            editor: async (key) => {
+                                const target = await badgeInFront(() => this.editorOn(key, { focus: false }));
+                                const stage = target && this.partStages[target.key];
+                                return stage ? { fields: stage.spec?.fields ?? [], staged: { ...stage.staged } } : null;
+                            },
+                            // What the badge's editor has staged now, where it is open on it:
+                            // read, never opened, so the window brought forward opens nothing.
+                            staged: (key) => {
+                                const target = this.editorTarget;
+                                const stage = target && this.selectedName === key ? this.partStages[target.key] : null;
+                                return stage ? { ...stage.staged } : null;
+                            },
+                            // A value staged once the editor, and the text it is staged into
+                            // where the part's SCAD is its source, are there to take it: the
+                            // editor open on the badge is staged into as it stands, so a word
+                            // typed keeps its keys in the Badge window; else it is opened,
+                            // the cursor left where it is.
+                            stage: async (key, name, value) => {
+                                const target = await badgeEditor(key);
+                                if (!target || this.selectedName !== key) return;
+                                if (target.part && target.scadUrl) await this.scadLoading;
+                                this.stageValue(target, name, value);
+                                this.showStaged(target);
+                            },
+                            // Apply: what is staged drawn. Nothing staged is what is drawn
+                            // already. A render that failed is refused in the status line's
+                            // words; one a newer Apply stopped says so, and nothing is drawn.
+                            apply: async (key) => {
+                                const target = await badgeEditor(key);
+                                if (!target || this.selectedName !== key) return { refused: `${key} is not the badge selected: nothing drawn` };
+                                const refused = await badgeInFront(() => this.applyNow(target, key));
+                                if (refused && !refused.includes('nothing is staged')) return { refused };
+                                if (refused) return { said: `${key}: drawn already` };
+                                const said = this.statusEl.textContent;
+                                if (this.statusType === 'error') return { refused: said };
+                                if (this.statusType === 'loading') return { superseded: true, said };
+                                return { said };
+                            },
+                            make: (key, kind) => this.makePiece(key, { kind }),
+                            controlFor: (field, value, onStage) => buildParamControl(field, value, { onStage }),
+                            addressOf: (action) => (this.badgeTaught ? this.badgeTaught[action] || null : null),
+                            say: (text, kind) => text && this.setStatus(text, kind),
+                        });
+                        window.apothecaryBadge = this.badge;
+                        // The selection followed while the window is in front; brought
+                        // forward again, it follows what was selected meanwhile.
+                        new MutationObserver(() => { if (this.panels.isShown('badge')) this.badge.follow(); }).observe(this.selectedBodyEl, { childList: true });
+                        this.badge.follow();
+                    },
+                    onOpen: async () => { await this.badge?.follow(); this.badge?.refresh(); },
+                });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
                 this.windowsMenuEl.addEventListener('toggle', () => {
@@ -2199,7 +2342,7 @@
                 this.following = {};   // port -> the world's own watch of a machine it draws (followMachines)
                 this.leavingSite = false;  // a site left while the next loads: nothing of it is followed
                 // The site's machines by the part each is drawn from (GET /sites/{name}/machines):
-                // what a machine with no board connected is planned as; `machinesLoaded`
+                // what a machine not connected is planned as; `machinesLoaded`
                 // settles once the site in view's have answered (loadMachinesHere).
                 this.machinesHere = [];
                 this.machinesLoaded = Promise.resolve();
@@ -5513,19 +5656,20 @@
             // Part › Edit: the editor in Selected, its Parameters window open under it,
             // the cursor in its first control. A machine drawn as a part shows the one
             // row that says so until it is asked for; asked for, its editor opens under
-            // the machine's panel.
-            openEditor(path) {
+            // the machine's panel. `focus: false` leaves the cursor where it is, for a
+            // window that opens the editor to stage into it (the Badge window).
+            openEditor(path, { focus = true } = {}) {
                 const node = this.renderNodeByKey[path];
                 const made = this.pictureMarks.madeRecord(path);
                 if (!node || !(node.part_ref || made)) return false;
                 this.editorOpenFor = path;
-                this.editorFocusWanted = this.isCameraNode(node) ? `camera:${this.siteName}:${path}`
+                this.editorFocusWanted = !focus ? null : this.isCameraNode(node) ? `camera:${this.siteName}:${path}`
                     : made ? `made:${this.siteName}:${path}` : `part:${node.part_ref}`;
                 this.editorFocusFrom = document.activeElement;
                 if (this.selectedName !== path) this.selectPath(path); else this.renderSelectedPanel();
                 this.panels.open('selected');
                 this.systems.part.showSection('parameters');
-                this.focusEditor();
+                if (focus) this.focusEditor();
                 return true;
             }
 
@@ -5923,8 +6067,8 @@
 
             // The editor for what `path` is, opened and its numbers read: what
             // Part › Apply and Part › Revert act on, as its buttons do.
-            async editorOn(path) {
-                if (!this.openEditor(path)) return null;
+            async editorOn(path, { focus = true } = {}) {
+                if (!this.openEditor(path, { focus })) return null;
                 await this.editorLoading;
                 return this.editorTarget;
             }
@@ -8561,7 +8705,15 @@
                 const machine = this.bearerPathFor(pinned);
                 this.selectAtItsLevel(machine);
                 if (!this.openMachine(machine)) return false;
-                this.setStatus(`Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, 'success');
+                // The piece it made, beside the Machine: its drawer in Part › Feedback.
+                const piece = job.part?.path;
+                if (!piece || !this.nodeByPath(piece)?.part_ref) {
+                    this.setStatus(`Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}${piece ? '' : '; it made no part, so it has no drawer'}`, 'success');
+                    return true;
+                }
+                this.openFeedback(piece, { job: job.id }).then((opened) => this.setStatus(opened.refused
+                    ? `Opened ${machine}: its ${job.kind} of ${job.input.name}, ${job.outcome}; ${opened.refused}`
+                    : `Opened ${machine} and ${opened.said}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, opened.refused ? 'error' : 'success'));
                 return true;
             }
 
@@ -8761,7 +8913,9 @@
                 if (!job.part) return null;
                 const node = this.nodeByPath(job.part);
                 const part = node?.part_ref || String(job.part).split('.').pop();
-                // A part's piece has a drawer; a piece made from a picture is no part's.
+                // A part's piece has a drawer; a piece made from a picture is no part's. A print
+                // that stopped says there where, and what to try; its board is no next step.
+                if (job.stage !== 'done') return node && !node.part_ref ? null : `its drawer is open in Part › Feedback: the layer it stopped on, a fault to file there, and what to try`;
                 const said = node && !node.part_ref ? [] : [`its drawer is in Part › Feedback`];
                 const row = Object.values(this.bindings || {}).find((r) => r.sketch === part);
                 if (row) said.push(row.device
@@ -8780,6 +8934,15 @@
                     // The piece among those made of its part, in the Variants window.
                     if (found && this.scadTarget?.part === found.part) await this.loadMade(this.scadTarget);
                 } catch { /* the cabinet did not answer: the print's end is said all the same */ }
+            }
+
+            // A dimension's label clicked in the world (measure_world.js): Part › Feedback in
+            // front on the part's cabinet, the piece whose dimensions were marked chosen, and
+            // the dimension's row given the caret, said on the status line.
+            async pickDimension({ key, name, dims }) {
+                const opened = await this.openFeedback(key, { drawer: dims?.drawer || null });
+                if (opened.refused) { this.setStatus(`Measure: ${opened.refused}`, 'error'); return; }
+                this.feedback.pick(name);
             }
 
             // Part › Feedback in front on a part's cabinet -- a part's name, or a piece's
@@ -9061,14 +9224,16 @@
                 if (this.panels.applyView('machine') && machine.path) this.frameArmed(machine.path);
                 return done;
             }
-            // A piece made on the first machine that makes it (makersOf). In another site,
+            // A piece made on the first machine that makes it (makersOf), or the first of
+            // ``kind`` (a printer, a router) where one is asked for, a site's before the
+            // universe's. In another site,
             // that site is opened first, as the banner's ▾ does, the variant drawn going with
             // it, so a Slice or Toolpath there again makes that variant and not the part as
             // saved. The machine's Machine opened, its Print or Cut in front (makingWith),
             // the piece chosen under makes -- in another site, the part by its name -- and
             // sliced, or its toolpath written, as the drawn variant where one is applied.
             // Nothing is armed, started or sent: ▶ is the person's. What it says, or why not.
-            async makePiece(path) {
+            async makePiece(path, { kind = null } = {}) {
                 const until = async (test, ms) => {
                     const end = Date.now() + ms;
                     while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
@@ -9076,7 +9241,11 @@
                 };
                 const say = (done) => { this.setStatus(done.refused ? `Make: ${done.refused}` : done.said, done.refused ? 'error' : 'success'); return done; };
                 const node = this.nodeByPath(path), ref = node && node.part_ref;
-                const [chosen] = await this.makersOf(path);
+                const makers = (await this.makersOf(path)).filter((m) => !kind || m.kind === kind);
+                // Asked for a kind (the Badge window's ⚒ Print and ⚒ Cut), a site's machine
+                // comes before the universe's piece of a machine's part, which no board drives.
+                const [chosen] = kind ? [...makers.filter((m) => m.site !== UNIVERSE), ...makers.filter((m) => m.site === UNIVERSE)] : makers;
+                if (!chosen && kind) return say({ refused: `no ${kind} of any site makes ${ref || path}` });
                 if (!chosen) return say({ refused: `no machine of any site makes ${ref || path}${ref ? '' : `: a piece made from a picture is made on ${this.siteName}'s printers, and it has none`}` });
                 const variant = ref ? this.variantByPart[ref] ?? null : null;
                 const away = chosen.site !== this.siteName;
@@ -9098,6 +9267,90 @@
                 const started = await machine.handle.print.slice(subject, variant);
                 return started.refused ? say({ refused: started.refused }) : done;
             }
+            // A bed reading drawn over the bed of the printer at `path` in the world, and the
+            // shims Fixes says drawn at its screws (widgets/bed_shims.js), on the bed mesh
+            // layer; nothing where the printer's marks are not drawn.
+            drawReading(path, record, newest) {
+                const m = path && this.marks[path];
+                if (!m || !m.marks || !record) return;
+                m.readingChosen = { id: record.id, newest: m.readingId ?? newest ?? null };
+                m.marks.setMesh(record);
+            }
+            // Kept for the printer, so marks made after Fixes drew -- a site still
+            // loading, a page reloaded -- stand them all the same; called with the path
+            // alone, as its marks are made.
+            drawShims(path, ...given) {
+                if (!path) return;
+                this.shimsFor ??= {};
+                if (given.length) this.shimsFor[path] = given;
+                const m = this.marks[path];
+                if (m && m.marks && this.shimsFor[path]) m.marks.setShims(...this.shimsFor[path]);
+            }
+            // What Parameters holds for bed_shims, which Fixes' Keep keeps as the printer's:
+            // the bed screw, a hole typed over the screw's (none where it is 0, the screw's
+            // own) and the ring, staged over what is drawn; null where bed_shims was never
+            // shown in Parameters here.
+            shimsMeasured() {
+                const stage = this.partStages['part:bed_shims'];
+                if (!stage) return null;
+                const at = { ...(stage.committed || {}), ...(stage.staged || {}) };
+                if (at.outer_d == null) return null;
+                const screw = at.screw === 'M3' || at.screw === 'M4' ? at.screw : null;
+                const hole = Number(at.hole_d) > 0 ? Number(at.hole_d) : null;
+                return { screw, hole_d: hole, outer_d: Number(at.outer_d) };
+            }
+            // The shims a printer's readings call for (Fixes' parameters: their thicknesses,
+            // labels and the mount kept) stood on the site's bed_shims pieces in this tab, as
+            // an Apply of those numbers stands them: the variant rendered, or found in the
+            // cache, drawn on every piece of the part, its numbers what Parameters shows and
+            // what a Slice or ⚒ Make of the part makes. Nothing when it is drawn already.
+            // Whether it drew; an Error saying why it could not.
+            async standShims(params) {
+                const ref = 'bed_shims';
+                const response = await fetch(`${BASE_URL}/parts/${ref}/stl/generate?${AS_IT_RESTS}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params }),
+                });
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `${ref} was not rendered (${response.status})`);
+                const variant = body.saved ? null : body.variant;
+                if ((this.variantByPart[ref] ?? null) === (variant ?? null) && variant) return false;
+                if (variant) this.useVariant(ref, variant, body); else this.forgetVariant(ref);
+                const url = variant ? this.variantUrl(ref, variant) : `${BASE_URL}/parts/${ref}/stl?${AS_IT_RESTS}&t=${Date.now()}`;
+                const reloads = Object.values(this.renderNodeByKey)
+                    .filter((n) => n.part_ref === ref && this.meshByName[nodeKey(n)]
+                        && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
+                    .map((n) => this.loadAndUpgrade(n, this.loadGeneration, async () => {
+                        const mesh = await this.loadSTLMesh(n, url, variant ? body.measured : null);
+                        if (variant) mesh.userData.variant = variant;
+                        return mesh;
+                    }));
+                await this.addToWave(Promise.all(reloads));
+                this.clearFailure(ref);
+                const stage = this.partStages[`part:${ref}`];
+                if (stage) {
+                    Object.assign(stage.committed, JSON.parse(JSON.stringify(params)));
+                    Object.assign(stage.staged, JSON.parse(JSON.stringify(params)));
+                    if (this.editorTarget?.key === `part:${ref}`) this.showStaged(this.editorTarget);
+                }
+                this.showDrawn(ref);
+                return true;
+            }
+            // Fixes' Make these: the shims stood on bed_shims (standShims) and that variant,
+            // the one drawn, chosen and sliced in the open Machine's Print window, as ⚒ Make
+            // does a part, with its levelling probe first: the shims are printed on a bed not
+            // yet level, so the mesh is on for their print. Nothing is armed, started or
+            // sent: ▶ Print is the person's.
+            async makeShims(params) {
+                const machine = this.machine;
+                if (!machine || !machine.handle) throw new Error("open a printer's Machine: the shims are sliced for it");
+                await this.standShims(params);
+                const variant = this.variantByPart['bed_shims'] ?? null;
+                this.makingWith(machine);
+                const started = await machine.handle.print.slice('bed_shims', variant, { levelling: 'probe-each-print' });
+                if (started && started.refused) throw new Error(started.refused);
+                const thick = params.thicknesses.map((t) => Number(t).toFixed(1)).join(', ');
+                return `bed_shims as drawn, ${thick} mm (${params.labels}), chosen in ${machine.path}'s Print window and sliced to probe first, the bed not yet level${started && started.said ? `: ${started.said}` : ''}; then ▶ Print with control armed`;
+            }
             // A board's Machine (widgets/machine.js): a printer's cards and controls or
             // a devkit's sketch and serial output, with the board's one log, a tab
             // beside Pictures and the Bench, in front -- every way into a Machine comes
@@ -9107,7 +9360,7 @@
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
                 if (!port) {
-                    // No board connected: a machine of the site is planned instead.
+                    // Not connected: a machine of the site is planned instead.
                     const planned = this.plannedMachineOf(path);
                     if (planned) return this.showPlan(planned);
                     this.setStatus(this.noMachine(path), 'error');
@@ -9220,14 +9473,14 @@
                 }
                 return null;
             }
-            // A machine's Machine with no board connected: what it makes, its slice or
+            // A machine's Machine, not connected: what it makes, its slice or
             // toolpath, the files and the path drawn over it, kept as its plan.
             showPlan(planned) {
                 if (this.machine && this.machine.plan && this.machine.path === planned.path) { this.panels.open('machine'); this.makingWith(this.machine); return true; }
                 this.mountMachinePanel('', planned.path, null, planned);
                 this.panels.open('machine');
                 const card = planned.kind === 'router' ? 'Cut' : 'Print';
-                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} plans what it makes, and ▶ ${card} is its board's once it is connected`, 'success');
+                this.setStatus(`Opened ${planned.path}'s Machine, not connected: its ${card} plans what it makes, and ▶ ${card} is its board's once it is connected`, 'success');
                 return true;
             }
             // Why a machine has no Machine to open: nothing pinned, or a pin whose board
@@ -9253,6 +9506,24 @@
                 if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Print again` };
                 if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
                 return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
+            }
+            // A print that stopped, tried again from Part › Feedback: the piece sliced again
+            // for the printer that made it, in its Print window, with `how` chosen there --
+            // "probe" its levelling probe first, "brim" or "raft" its adhesion -- and the
+            // variant it was made of. Nothing is sent: ▶ Print is the person's.
+            async sliceAgain(drawer, how) {
+                const printer = drawer.machine?.path;
+                if (!printer || !this.nodeByPath(printer)) return { refused: `${drawer.part}'s piece was printed on ${drawer.machine?.name || 'a printer'}, which ${this.siteName} does not hold: open that site, then try again` };
+                const piece = drawer.slice?.made?.path || drawer.part;
+                if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Slice again') };
+                const machine = this.machine;
+                const end = Date.now() + 15000;
+                while (machine.handle?.kind() !== 'printer' && Date.now() < end) await new Promise((r) => setTimeout(r, 150));
+                if (machine.handle?.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it, then try again` };
+                this.makingWith(machine);
+                const chosen = how === 'probe' ? { levelling: 'probe-each-print' } : { adhesion: how };
+                const started = await machine.handle.print.slice(piece, drawer.variant ?? null, chosen);
+                return started.refused ? started : { said: `${printer}'s Print window: ${started.said}` };
             }
             // Slice, from a made piece's ring or a part's: the printer's Machine opened
             // with it chosen under makes, as Print does, and a slice of it started
@@ -9546,7 +9817,7 @@
                     if (!this.openMachine(subject) || !(await until(open, 15000))) {
                         return { refused: port ? `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` : this.noMachine(subject) };
                     }
-                    return { did: port ? `${subject}'s Machine opened` : `${subject}'s Machine opened with no board connected: what it makes is planned there` };
+                    return { did: port ? `${subject}'s Machine opened` : `${subject}'s Machine opened, not connected: what it makes is planned there` };
                 }
                 if (verb === 'makes') {
                     const machine = this.machine, print = machine?.handle?.print;
@@ -9559,7 +9830,8 @@
                     // Nothing is sliced here: See does that.
                     const earlier = await print.fileOf(subject);
                     const said = [];
-                    if (partBefore !== subject) said.push(`${subject} named under makes in ${who}'s Print window`);
+                    const card = machine.handle.kind?.() === 'router' ? 'Cut' : 'Print';
+                    if (partBefore !== subject) said.push(`${subject} named under makes in ${who}'s ${card} window`);
                     if (earlier && file() !== fileBefore) said.push(`${earlier}, made from ${subject} before, chosen`);
                     return said.length ? { did: said.join('; ') } : {};
                 }
@@ -9584,9 +9856,14 @@
                     return { did: router ? `${subject}'s toolpath written for ${who}, as Toolpath does: ${kept.file}` : `${subject} sliced for ${who}, as Slice does: ${kept.file}` };
                 }
                 if (verb === 'feedback') {
-                    if (here(subject)) return { refused: here(subject) };
-                    await choose(subject);
-                    const part = this.nodeByPath(subject)?.part_ref;
+                    // A piece of the site is chosen first; a part none stands for -- one
+                    // the open Machine makes, as the router's 😮 -- is opened by its name,
+                    // as the Feedback window's pieces reach it.
+                    const madeHere = !this.renderNodeByKey[subject]
+                        && [...(document.querySelector('#print-part')?.options || [])].some((o) => o.value === subject);
+                    if (!madeHere && here(subject)) return { refused: here(subject) };
+                    if (!madeHere) await choose(subject);
+                    const part = madeHere ? subject : this.nodeByPath(subject)?.part_ref;
                     if (part && this.feedback?.part() === part && this.panels.isOpen('part-feedback')) return {};
                     const opened = await this.openFeedback(subject);
                     return opened.refused ? { refused: opened.refused } : { did: `${opened.said}, as Part › View › Feedback does` };
@@ -9722,7 +9999,7 @@
                     // Never laid out lower than its head -- the latch and ⏹ E-STOP -- and its
                     // state under it, at any width the page is laid out for (panels.js).
                     group: 'Machine', least: 250,
-                    title: planned ? `${anchor} · no board connected: its plan` : (anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`),
+                    title: planned ? `${anchor} · not connected: its plan` : (anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`),
                     // Its tab, beside Pictures and the Bench: the node's name (the
                     // port's last part, pinned nowhere); the whole title its tooltip.
                     tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
@@ -9757,6 +10034,13 @@
                             variantFor: (path) => { const node = this.nodeByPath(path); const ref = node ? node.part_ref : path; return ref ? this.variantByPart[ref] ?? null : null; },
                             afterPrint: (job) => this.afterPrint(job),
                             afterHello: (sketch) => this.afterHello(sketch),
+                            // A plan whose pinned board has come up: the board's own
+                            // Machine in its place, once the page's scan names it.
+                            onFound: async (path) => {
+                                const end = Date.now() + 10000;
+                                while (this.machine === machine && !this.bindingFor(path).row?.device?.port && Date.now() < end) await new Promise((r) => setTimeout(r, 200));
+                                if (this.machine === machine) this.openMachine(path);
+                            },
                         });
                         if (this.machine === machine) { window.apothecaryMachine = machine.handle; if (planned) this.planOpened(planned); else this.machineOpened(port); }
                     },
@@ -9979,6 +10263,7 @@
                 marks.group.userData.key = planned.path;
                 this.scene.add(marks.group);
                 this.marks[planned.path] = { marks, port: null, where: { printer: view }, kind: planned.kind, plan: true, readingAt: 0, readingId: null };
+                this.drawShims(planned.path);
                 // A path told while the marks were on their way is drawn on them now.
                 const told = this.toolpathByPath[planned.path];
                 if (told && told.preview) marks.setToolpath(told.preview, told);
@@ -10192,6 +10477,7 @@
                     // The kind of machine the board answered as: a bed reading is a printer's.
                     const kind = (row.device.printer && row.device.printer.machine) || null;
                     this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
+                    this.drawShims(path);
                     this.followBed(path);
                     const toolpath = this.toolpathByPort[port];
                     if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
@@ -10343,7 +10629,12 @@
                     .then((r) => (r.ok ? r.json() : []))
                     .then((records) => {
                         const newest = records[0];
-                        if (this.marks[path] !== m || !newest || newest.id === m.readingId || !readingOfKind(newest, m.kind)) return;
+                        if (this.marks[path] !== m || !newest || !readingOfKind(newest, m.kind)) return;
+                        // A run chosen in Runs stays drawn until a reading newer than it was
+                        // then is taken.
+                        if (m.readingChosen && newest.id === m.readingChosen.newest) return;
+                        if (!m.readingChosen && newest.id === m.readingId) return;
+                        m.readingChosen = null;
                         m.readingId = newest.id;
                         m.marks.setMesh(newest);
                     })
@@ -11746,6 +12037,17 @@
                     else refuse('the Loops window did not open');
                     return;
                 }
+                // A Bed verb: Fixes shown, and its act done on the open Machine's printer --
+                // the mount kept from Parameters, the shims sliced in its Print window -- or
+                // Runs shown, and its bed probed hot; what came of it, or why not, is said here.
+                if (action.startsWith('bed:')) {
+                    viewer.panels.open(action === 'bed:probe-hot' ? 'bed-runs' : 'bed-fixes');
+                    try {
+                        await viewer.bedShims.load();
+                        viewer.setStatus(`${intent.label}${tail}: ${await viewer.bedShims.act(action.slice('bed:'.length))}`, 'success');
+                    } catch (e) { refuse(e.message); }
+                    return;
+                }
                 // A Procedure verb: the window shown, and GO or Start over done; what came
                 // of it is the window's own last word.
                 if (action.startsWith('procedure:')) {
@@ -11799,6 +12101,17 @@
                     if (viewer.machine && viewer.panels.isOpen('machine')) { viewer.panels.close('machine'); viewer.setStatus(`Closed the machine${tail}`, 'success'); }
                     else if (viewer.selectedName && viewer.openMachine(viewer.selectedName)) viewer.setStatus(`Opened ${viewer.selectedName}${tail}`, 'success');
                     else refuse('select a machine with a board pinned to it first');
+                    return;
+                }
+                // Part › View › Badge: the Badge window shown on the badge, and the button
+                // pressed there (widgets/badge.js); what it did, or refused, is said.
+                if (action.startsWith('part:badge:')) {
+                    if (viewer.selectedName !== path && viewer.renderNodeByKey[path]) viewer.selectPath(path);
+                    viewer.panels.open('badge');
+                    await viewer.badge.follow();
+                    const verb = action.slice('part:badge:'.length);
+                    const done = verb === 'open' ? { said: `${path}'s Badge window: a face or the word, then ⚒ Print or ⚒ Cut` } : await viewer.badge.act(verb);
+                    if (done.refused) refuse(done.refused); else if (!done.superseded) viewer.setStatus(`${done.said}${tail}`, 'success');
                     return;
                 }
                 // Part › View › Motion: the Motion window shown on the piece, and the verb done
@@ -12042,6 +12355,9 @@
             if (viewer.feedback) pairs.push(...viewer.feedback.pairs());
             // The Motion window's controls are the cells of Part › View › Motion.
             viewer.motionTaught = addresses(ring);
+            // The Badge window's faces and word are the cells of Part › View › Badge.
+            viewer.badgeTaught = viewer.motionTaught;
+            for (const el of document.querySelectorAll('.badge-face[data-face]')) pairs.push([el, el.dataset.face === 'word' ? 'part:badge:word' : `part:badge:face:${el.dataset.face}`]);
             for (const [selector, action] of MOTION_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             // The Preset drop-down is Part › Presets, the ring of the part's presets; the
             // Stream Deck +'s Open Deck, its ring's Deck.

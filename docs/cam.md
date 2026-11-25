@@ -29,8 +29,9 @@ from its parameters as `Params` reads them:
 - **The operations**, in the order they are made: a `Pocket` (a rectangle at
   a corner, a depth), a `Hole` (a centre, a diameter, a depth), an `Outline`
   (a rectangle cut around from outside), a `Disc` (a circle cut around from
-  outside: a round part's edge). A depth per pass, a stepover and a safe height
-  complete it.
+  outside: a round part's edge), a `Groove` (the tool's centre along two or more
+  points, closed where the last is the first: a stroke engraved). A depth per
+  pass, a stepover and a safe height complete it.
 - **Names**, where a person measures it: an operation may carry a `name`, and
   each named one that is cut is a feature of the piece -- inside for a pocket
   or a hole bored, outside for an outline or a disc -- which the toolpath's
@@ -42,7 +43,10 @@ column of holes, every size a parameter, standing on the router's table in the
 garage where its toolpath cuts it; its pocket, its holes and its plate are
 named. `parts/router_emoji` is the piece made for calibrating the router: a 😮,
 its face a disc and its eyes and mouth holes bored through it, each a circle
-measured across.
+measured across. `parts/badge` engraves a face: its eyes bored, its smile or
+frown a groove ([walkthrough page 57](../walkthrough/57-a-badge-composed.md)).
+A part whose `cuts` raises a `ValueError` at the numbers asked -- a badge's word,
+which no end mill follows -- is refused with its words, and no toolpath written.
 
 ## What the toolpath does
 
@@ -64,6 +68,10 @@ the tool up and back over the zero, and `M30`.
 - An outline is cut around from outside, the tool's radius beyond its edge, to
   its depth; one asking for more than the stock's thickness stops a millimetre
   into the spoilboard, and says so. A disc is the same around a circle.
+- A groove is the tool's centre along its points, each pass to its depth: an
+  open one back the way it came on the next pass, a closed one round again. It is
+  the tool's width, so it is never a size to measure, and stops a millimetre into
+  the spoilboard as an outline does.
 - A circle -- a hole bored, a disc -- is written as chords, 36 of them or as
   many more as keep each within a hundredth of a millimetre of the circle, so
   the piece measures its size across wherever the calipers sit.
@@ -86,7 +94,11 @@ cut file -- checked as any streamed file is, listed in the Cut card's files --
 and records what made it beside the file (`GET /cam/cuts`, by `file_id`): the
 part, the variant drawn when it was one, its parameters, the router, the stock,
 the tool, the feeds, each operation with its passes, the lines, the length, the
-time, the messages, and the problems the check found.
+time, the messages, and the problems the check found. A variant's parameters are
+its record's; a variant drawn from a draft of the part's text, which carries its
+numbers in that text and none on the side, is cut at the text's top-level values
+the part's model names, so a number changed in the text is the number cut (an edit
+of the text's body is drawn and not cut).
 
 In the page, a router's Cut card has **Toolpath** where a printer's has Slice,
 there once a part is chosen under *makes*: that part gets its toolpath written
@@ -147,11 +159,15 @@ In the page it is the **measured** row of the part's Feedback window
 ([cabinet.md](cabinet.md)), under a piece whose toolpath names what to measure: the sizes
 typed in the order its placeholder shows (`eye × mouth × face mm`, any left out as `-`),
 then **Keep**, which files the measurement in the piece's drawer, or a part's piece's
-ring's Part › View › Feedback › Measure. A part that stands in no site, as the 😮 does, is
-reached from the Feedback window's pieces, where every part's kept toolpaths are listed.
+ring's Part › View › Feedback › Measure. A part that stands in no site, as the 😮 does, has
+its drawer opened there at the end of a cut of it, and is reached from the Feedback window's
+pieces, where every part's kept toolpaths are listed.
 The row says what was designed and the allowance kept; the next Toolpath shows
-`tool_allowance` with the origin `measured`. *Cut a part* ends on it, its sixth step. The
-Cut window measures nothing.
+`tool_allowance` with the origin `measured`. *Cut a part* ends on it, its sixth step, and
+*Calibrate a router* is the 😮 round it whole: chosen under makes, its toolpath written
+saying what to measure, cut, measured, and the allowance kept
+([walkthrough page 56](../walkthrough/56-a-router-calibrated-by-a-face.md)). The Cut
+window measures nothing.
 
 `POST /cam/cuts/{file_id}/measured` `{"sizes": {name: mm}}` measures the piece a
 kept toolpath cut; `GET /cam/corrections?site=&router=` reads what a router

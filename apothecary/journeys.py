@@ -18,10 +18,13 @@ moves the box to it. The box closed, the journey is left, its windows where they
 
 The journeys are in the order of the chain the page manages, each handing the next
 what it made: a part designed; the part made on a printer, or cut on a router; the
-board that runs a machine built, flashed and heard; a deck's knobs on the machines;
+router trued by a piece it cut, measured by hand; the board that runs a machine built,
+flashed and heard; a deck's knobs on the machines;
 the site brought up a step at a time through the family's hub, then watched; a
-drawing photographed into pieces, which are parts to design; and two ends joined by
-an adapter the server derives between them, a part to print.
+drawing photographed into pieces, which are parts to design; the shims that level a
+printer's bed, computed from its readings, a part to print; a badge composed in a
+window, a face or a word, to print or cut; and two ends joined by an adapter the server
+derives between them, a part to print.
 
 The tour takes the page to a stage by its ``puts``: what the page does to stand where
 the stage is, each a verb the page already has and its subject, done only where it is
@@ -82,7 +85,9 @@ class Step:
 #   file      the open Machine keeping a file for a part: sliced, or its toolpath
 #             written, where none is kept
 #   feedback  a part's cabinet in Part › Feedback, the piece chosen first, as its
-#             Part › View › Feedback does
+#             Part › View › Feedback does; a part no piece of the site stands for -- one
+#             a machine makes, as the router's 😮 -- by its name, as the window's pieces
+#             reach it
 #   fit       a piece chosen and framed in the world, as f does
 #   edit      a part's editor opened, as Part › Edit does
 #   scad      a part's SCAD in its window, as Part › SCAD does
@@ -311,13 +316,15 @@ MAKE = Journey(
             "measure",
             "Measure",
             "the piece printed, in its part's cabinet, Part › Feedback: each feature it names "
-            "typed under measured, or each fault marked under seen, filed, and Take turn "
-            "takes either into the printer's next slices",
+            "typed under measured -- or its label clicked on the part, Measure shown in "
+            "Layers -- and checked against its design, or each fault marked under seen, "
+            "filed; Take turn takes either into the printer's next slices",
             forward=("part-feedback",),
             owns=("part-feedback",),
             shown_by=(
                 "46-a-printer-tuned-from-its-prints.md",
                 "50-a-printer-tuned-from-what-it-shows.md",
+                "55-a-printed-piece-checked-against-its-design.md",
             ),
             puts=(("file", "footpedal"), ("feedback", "footpedal")),
         ),
@@ -406,6 +413,76 @@ CUT = Journey(
             owns=("part-feedback",),
             puts=(("file", "router_coupon"), ("feedback", "router_coupon")),
             shown_by=("20-a-part-through-the-router.md",),
+        ),
+    ),
+)
+
+
+# Calibrate a router: the piece made to be measured, cut, measured, and fed back. The 😮 of
+# parts/router_emoji is no piece of the site, a part the router makes: chosen under makes
+# in its Cut window, its toolpath written and drawn, saying what a person measures of the
+# piece; cut; its eye, mouth and face read across with calipers and typed in its cabinet,
+# Part › Feedback; and the tool's allowance they give kept for the router, which its next
+# toolpath takes (docs/cam.md, measured by hand, fed back).
+CALIBRATE = Journey(
+    id="calibrate",
+    title="Calibrate",
+    group="Machine",
+    requires="machine",
+    opened_by="the router's badge or its row in Site, then router_emoji under makes in its Cut window",
+    view=_machine_view("machine-print", "part-feedback", active="machine-print"),
+    name="Calibrate a router",
+    staged_on=(("machine", "cnc_router"), ("makes", "router_emoji")),
+    steps=(
+        Step(
+            "choose",
+            "Choose",
+            "the 😮 under makes in the router's Cut window: a face cut around, two eyes and a "
+            "mouth bored, each a circle calipers read across",
+            forward=("machine-print",),
+            owns=("machine-print",),
+            shown_by=("56-a-router-calibrated-by-a-face.md#1",),
+        ),
+        Step(
+            "toolpath",
+            "Toolpath",
+            "Toolpath writes its cut and draws it on the table, and says what to measure of "
+            "the piece: an eye, the mouth, the face",
+            forward=("machine-print",),
+            draws=True,
+            puts=(("file", "router_emoji"),),
+            shown_by=("56-a-router-calibrated-by-a-face.md#2",),
+        ),
+        Step(
+            "cut",
+            "Cut",
+            "control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs; at its end "
+            "the piece's drawer opens in Part › Feedback",
+            forward=("machine-print", "jobs"),
+            owns=("machine", "jobs"),
+            shown_by=("56-a-router-calibrated-by-a-face.md#3",),
+        ),
+        Step(
+            "measure",
+            "Measure",
+            "the 😮 cut, in its cabinet, Part › Feedback: an eye, the mouth and the face "
+            "across, typed under measured, Keep: each checked against what was designed, filed",
+            forward=("part-feedback",),
+            owns=("part-feedback",),
+            puts=(("file", "router_emoji"), ("feedback", "router_emoji")),
+            shown_by=(
+                "56-a-router-calibrated-by-a-face.md#4",
+                "20-a-part-through-the-router.md",
+            ),
+        ),
+        Step(
+            "kept",
+            "Kept",
+            "the tool's allowance kept for this router and its tool: Toolpath again takes it, "
+            "tool_allowance measured, the face's path a little further out",
+            forward=("machine-print", "part-feedback"),
+            puts=(("file", "router_emoji"),),
+            shown_by=("56-a-router-calibrated-by-a-face.md#5",),
         ),
     ),
 )
@@ -733,6 +810,67 @@ DRAWING = Journey(
 )
 
 
+# Compose a badge: a face drawn after its emoji, or a word in a font, engraved in a plate
+# (parts/badge), in the Badge window; its numbers in Parameters, drawn in the world; then
+# ⚒ Print or ⚒ Cut takes the badge drawn to the first printer or router that makes it, in
+# the garage, where Print a part or Cut a part goes on. It stands in the universe, where
+# every part stands.
+COMPOSE = Journey(
+    id="compose",
+    title="Compose",
+    group="Part",
+    requires="selected",
+    opened_by="the badge's row in the universe's Site, and ⊞ Windows › Badge",
+    view={
+        "row": [
+            {"world": True, "size": 58},
+            {
+                "column": [
+                    {"stack": ["badge"], "size": 42},
+                    {"stack": ["selected", "site"], "size": 22, "active": "selected"},
+                    {
+                        "stack": ["part-parameters", "part-readiness"],
+                        "size": 36,
+                        "active": "part-parameters",
+                    },
+                ],
+                "size": 42,
+            },
+        ]
+    },
+    name="Compose a badge",
+    site=UNIVERSE,
+    staged_on=(("edit", "badge"),),
+    steps=(
+        Step(
+            "pick",
+            "Pick",
+            "a face drawn after its emoji, or the word, in the Badge window: each a cell of "
+            "the badge's ring, Part › View › Badge, staged and drawn",
+            forward=("badge", "selected"),
+            owns=("badge", "selected"),
+            shown_by=("57-a-badge-composed.md",),
+        ),
+        Step(
+            "shape",
+            "Shape",
+            "the word typed and its font chosen, or the face's size, in the Badge window; "
+            "its depth and plate in Parameters; drawn once the controls rest",
+            forward=("badge", "part-parameters"),
+            owns=("part-parameters", "part-readiness"),
+        ),
+        Step(
+            "make",
+            "Make",
+            "⚒ Print takes the badge drawn to the first printer that makes it, ⚒ Cut a face "
+            "to the router: there Print a part or Cut a part goes on",
+            forward=("badge",),
+            owns=("site",),
+        ),
+    ),
+)
+
+
 # Join a hose: two ends, each one part at its numbers -- a preset chosen, what calipers
 # read typed over it -- and the adapter between them derived by the server, drawn, and
 # each end's fit said; its numbers adjusted, each fit said again. It stands in the
@@ -781,10 +919,135 @@ JOIN = Journey(
 )
 
 
+# Level a bed: printer_1's bed heated and probed twice, the two runs set against each
+# other for the floor a shim must clear, what the shims fit measured at the bench and
+# kept for the printer, the shims that lift its low corners to the highest computed and
+# drawn at its screws, handed to Print a part, each shim's thickness read against its
+# design (Part › Feedback, the Measure layer), fitted, and the bed probed again and set
+# against what it was. Heating, probing, measuring and fitting are a person's: a stage
+# that needs one says so, and the tour does none of them. What it hands on is the shims,
+# a part to print, as Join a hose hands on its adapter.
+LEVEL = Journey(
+    id="level",
+    title="Level",
+    group="Machine",
+    requires="machine",
+    opened_by="a printer's badge or its row in Site, then Panels › Machine › Bed",
+    view=_machine_view(
+        "bed-runs",
+        "bed-differences",
+        "bed-fixes",
+        "bed-history",
+        "machine-print",
+        active="bed-runs",
+    ),
+    name="Level a bed",
+    staged_on=(("machine", "printer_1"),),
+    steps=(
+        Step(
+            "heat",
+            "Heat",
+            "the bed on at the loaded filament's printing temperature, control armed in the "
+            "Machine, then about ten minutes' soak: the plate and the probe move as they warm",
+            forward=("machine",),
+            owns=("machine",),
+            shown_by=("52-shims-that-level-a-bed.md",),
+        ),
+        Step(
+            "probe",
+            "Probe",
+            "▤ Probe hot in Runs: the bed heated, held and probed twice; each run in Runs, "
+            "heated or cold, the one chosen drawn over the bed",
+            forward=("bed-runs", "machine"),
+            owns=("bed-runs",),
+            puts=(("fit", "printer_1"),),
+            shown_by=("53-a-bed-levelled-in-the-page.md#1",),
+        ),
+        Step(
+            "compare",
+            "Compare",
+            "the second run less the first in Differences: the floor a shim must clear, and the "
+            "bow, which no shim fixes",
+            forward=("bed-differences",),
+            owns=("bed-differences",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#2",),
+        ),
+        Step(
+            "measure",
+            "Measure",
+            "what a shim fits, measured at the bench and typed in bed_shims' Parameters: the "
+            "bed screw chosen, M3 or M4, the hole typed over where it needs another; a "
+            "mount's outer diameter where it meets the bed, read with calipers, as the ring; "
+            "then Keep mount in Fixes keeps both as printer_1's",
+            forward=("part-parameters", "bed-fixes"),
+            owns=("part-parameters", "selected"),
+            puts=(("part", "bed_shims"),),
+            shown_by=("53-a-bed-levelled-in-the-page.md#3",),
+        ),
+        Step(
+            "shims",
+            "Shims",
+            "each corner's shim in Fixes, drawn at its screw in the world as wide as the mount: "
+            "the highest none, one under a layer or under the floor skipped",
+            forward=("bed-fixes",),
+            owns=("bed-fixes",),
+            puts=(("fit", "printer_1"),),
+            shown_by=("53-a-bed-levelled-in-the-page.md#4",),
+        ),
+        Step(
+            "print",
+            "Print",
+            "Make these in Fixes: the shims rendered at their thicknesses and the mount kept, "
+            "and sliced for the printer in its Print window to probe first, the bed not yet "
+            "level; ▶ Print is a person's",
+            forward=("machine-print", "bed-fixes"),
+            owns=("machine-print",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#5",),
+        ),
+        Step(
+            "fit",
+            "Fit",
+            "each shim's thickness clicked on bed_shims, Measure shown in Layers, what "
+            "calipers read typed in its row in Part › Feedback and checked against its design; "
+            "each on the mount its label names, slot first, its tab out past the mount; then "
+            "the bed heated, soaked and probed twice again",
+            forward=("bed-runs",),
+            puts=(("feedback", "bed_shims"),),
+            shown_by=("53-a-bed-levelled-in-the-page.md#6", "52-shims-that-level-a-bed.md"),
+        ),
+        Step(
+            "after",
+            "After",
+            "after less before in Differences, and each reading's range in History against "
+            "the bound for a stored mesh",
+            forward=("bed-history", "bed-differences"),
+            owns=("bed-history",),
+            shown_by=("53-a-bed-levelled-in-the-page.md#7",),
+        ),
+    ),
+)
+
+
 # In the order of the chain, each handing the next what it made; a view's cell on the
-# ring is the first's alone. Join a hose comes last: an adapter between two ends is a
-# part designed by the server, which hands it to Print a part as Design a part does.
-JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, RUN, DRAWING, JOIN)
+# ring is the first's alone. Calibrate a router follows Cut a part: the router that cut
+# a part is trued by a piece made to be measured. Level a bed, Compose a badge and Join a
+# hose come last, each a part made and handed back to a machine: the shims a printer's
+# readings compute, to Print a part; a badge composed in a window, to Print a part or Cut
+# a part; an adapter between two ends, designed by the server, to Print a part as Design
+# a part does. Join a hose is the last of all.
+JOURNEYS: Tuple[Journey, ...] = (
+    DESIGN,
+    MAKE,
+    CUT,
+    CALIBRATE,
+    BOARD,
+    HANDS,
+    RUN,
+    DRAWING,
+    LEVEL,
+    COMPOSE,
+    JOIN,
+)
 
 
 def by_id(journey_id: str) -> Journey:

@@ -21,6 +21,11 @@
  * not drawn, and the bed stands where the part's own axes put it (its
  * kinematics' rest), as the machine's pieces do.
  *
+ * Where a printer's bed shims are computed (widgets/bed_shims.js), they stand on the bed
+ * at their screws (setShims): a disc as tall as its shim, the relief's stretch on it, as
+ * wide as the mount's ring; a ring where a corner gets none. They are on the bed mesh
+ * layer with the relief, and drawn again whenever it is, so both stand at one stretch.
+ *
  * And the board's badge (makeBoardBadge, sayBoard): ⚡ at the board's own spot,
  * its words what the board model says of it, on the anchors layer's badges.
  */
@@ -46,6 +51,9 @@ const MESH_LOW = [0x6f, 0xb3, 0xe8];   // the bed card's blue, below the mean
 const MESH_HIGH = [0xe8, 0xb0, 0x4a];  // its amber, above
 const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from the probeable edge
 const MESH_POST = 0xffffff;            // the corner posts, where the site sent no colour for the layer
+const SHIM_COLOR = 0xe8b04a;           // a shim to print: the bed card's amber
+const SHIM_NONE = 0x6fdb75;            // the highest corner, which gets none: the page's ok
+const SHIM_SKIPPED = 0x9aa09a;         // a corner left without one: under a layer or the floor
 
 // apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up (frames.js).
 export { toScene };
@@ -222,6 +230,10 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         meshDrawn = null;
     }
     function setMesh(record) {
+        drawMesh(record);
+        if (shimsAsked) drawShims();  // at the stretch the relief now has
+    }
+    function drawMesh(record) {
         clearMesh();
         const rows = record && record.mesh;
         if (!rows || !rows.length || !rows[0].length || !hasVolume) return;
@@ -231,7 +243,8 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         const range = hi - lo;
         const exaggeration = meshExaggeration(range);
         // Where the points lie: a router's map says (record.area, from the working area's
-        // front-left corner, where its probe went); a printer's grid is placed by estimate.
+        // front-left corner, where its probe went), and so does a printer's probe that said
+        // where each point lies (G29 V3); any other printer's grid is placed by estimate.
         const bounds = record.area
             ? { min: { x: record.area.min.x, y: record.area.min.y }, max: { x: record.area.max.x, y: record.area.max.y } }
             : meshBounds(frame.volume, record.probe_offset);
@@ -288,6 +301,49 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
             record_id: record.id || null,
         };
         note(`mesh ${range.toFixed(3)} mm range, drawn ×${exaggeration}`, "mesh");
+    }
+
+    // The shims a bed's readings call for (widgets/bed_shims.js), each at its screw on
+    // the bed: a disc as tall as its shim, stretched as the relief is so it reads against
+    // it; the highest corner, which gets none, a ring; a corner skipped, a ring dimmed.
+    // On the bed mesh layer with the relief, shown and hidden with it.
+    let shimGroup = null;
+    let shimsDrawn = null;
+    let shimsAsked = null;  // the shims and mount last asked for, drawn again with each relief
+    function clearShims() {
+        shimsDrawn = null;
+        if (!shimGroup) return;
+        bedGroup.remove(shimGroup);
+        shimGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        shimGroup = null;
+    }
+    function setShims(list, mount) {
+        shimsAsked = list && list.length ? { list, mount } : null;
+        drawShims();
+    }
+    function drawShims() {
+        clearShims();
+        if (!shimsAsked || !hasVolume) return;
+        const { list, mount } = shimsAsked;
+        const stretch = meshDrawn ? meshDrawn.exaggeration : 10;
+        const ring = (mount && mount.outer_d ? mount.outer_d : 12) / 2;
+        shimGroup = new THREE.Group();
+        for (const s of list) {
+            const tall = s.printed != null ? s.printed * stretch : 0.6;
+            const base = toScene({ x: volumeOrigin.x + s.x, y: volumeOrigin.y + s.y, z: volumeOrigin.z + tall / 2 });
+            const colour = s.printed != null ? SHIM_COLOR : s.none === "the highest" ? SHIM_NONE : SHIM_SKIPPED;
+            const geometry = s.printed != null
+                ? new THREE.CylinderGeometry(ring, ring, tall, 24)
+                : new THREE.TorusGeometry(ring, 0.6, 6, 24).rotateX(Math.PI / 2);
+            const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, transparent: s.printed == null, opacity: s.printed == null ? 0.7 : 1 }));
+            mesh.position.copy(base);
+            mesh.userData.shim = { label: s.label, printed: s.printed, none: s.none };
+            shimGroup.add(mesh);
+        }
+        shimGroup.userData.layer = BED_MESH;
+        shimGroup.visible = meshWanted;
+        bedGroup.add(shimGroup);
+        shimsDrawn = { ring: ring * 2, stretch, shims: list.map((s) => ({ label: s.label, x: s.x, y: s.y, printed: s.printed, none: s.none })) };
     }
 
     // A G-code file's path, from the preview's segments, in the file's coordinates:
@@ -379,12 +435,15 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         target() { return { ...target }; },
         setMesh,
         mesh() { return meshDrawn ? JSON.parse(JSON.stringify(meshDrawn)) : null; },
+        setShims,
+        shims() { return shimsDrawn ? JSON.parse(JSON.stringify(shimsDrawn)) : null; },
         // The bed reading shown or hidden, now and for each reading drawn after (the bed
         // mesh layer, pick_scope.js); whether it changed.
         showMesh(on) {
             if (!!on === meshWanted) return false;
             meshWanted = !!on;
             if (meshGroup) meshGroup.visible = meshWanted;
+            if (shimGroup) shimGroup.visible = meshWanted;
             return true;
         },
         volume() {
@@ -394,6 +453,7 @@ export function makeMachineMarks(printer, { drawVolume = true, meshShown = true,
         },
         destroy() {
             clearMesh();
+            clearShims();
             clearPath();
             group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
             if (group.parent) group.parent.remove(group);

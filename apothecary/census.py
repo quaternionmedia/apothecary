@@ -486,6 +486,33 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a button that puts depth and every layer back as they began",
     ),
+    # ---- Bed, apothecary/static/widgets/bed_shims.js -----------------------------------
+    # A printer's bed readings and the shims that level it, in four windows: Fixes' two
+    # acts, each a cell of Panels › Machine › Bed (RING_BACKED). A run chosen in Runs is a
+    # row of a list, LISTENING's.
+    "bed-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps the screw hole and the ring Parameters holds for bed_shims as "
+        "the printer's mount",
+    ),
+    "bed-make": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that renders the shims at their thicknesses and slices them for the "
+        "printer in its Print window",
+    ),
+    "bed-hot-c": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for the bed's temperature to probe it at, the filament's filled in",
+    ),
+    "bed-soak": (WIDGET, WHAT_YOU_SEE, "a field for how long the bed is held before it is probed"),
+    "bed-probe-hot": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that heats the bed, holds it, probes it twice and turns it off after",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -656,6 +683,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
     ),
+    "print-adhesion": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of how the next slice's first layer holds: the part's own, a brim, a"
+        " raft, or neither",
+    ),
+    "print-level": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of how the next slice levels the bed at its start: the part's own,"
+        " probe first, or home only",
+    ),
     "print-filament": (
         WIDGET,
         WHAT_IS_THERE,
@@ -730,6 +769,22 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "a button that drops the last turn of that printer's tuning, and what it applied",
+    ),
+    "feedback-try-probe": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on a print that stopped that slices the piece again, its printer's"
+        " levelling probe first",
+    ),
+    "feedback-try-brim": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on a print that stopped that slices the piece again with a brim",
+    ),
+    "feedback-try-raft": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on a print that stopped that slices the piece again on a raft",
     ),
     # ---- Procedure, apothecary/static/widgets/procedure.js -------------------
     # A site's procedures. GO and Start over are Site › Procedure too (RING_BACKED).
@@ -845,6 +900,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "a tick-box that draws what is bought -- pins, inserts -- in a colour of its own",
+    ),
+    # ---- the Badge, apothecary/static/widgets/badge.js ----------------------------
+    # A badge composed through its part's editor: a face or the word, each a cell of its
+    # ring's Part › View › Badge, and made on a machine as ⚒ Make makes a part. Its word,
+    # font and size are the Parameters window's own controls.
+    "badge-face": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that stages a face of the badge, or the word, and draws it",
+    ),
+    "badge-make": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that makes the badge drawn on the first printer or router that makes it:"
+        " chosen there and sliced, or its toolpath written",
     ),
     # ---- the Tour, apothecary/static/widgets/tour_popover.js -------------------
     # The journeys a stage at a time, in a box over the page: a journey chosen, Back and
@@ -969,6 +1039,12 @@ RING_BACKED: Dict[str, str] = {
     "motion-step": "part:motion:step",
     "motion-reset": "part:motion:reset",
     "motion-bought": "part:motion:bought",
+    # A face or the word is its cell of Part › View › Badge; ⚒ Print and ⚒ Cut do what a
+    # part's Slice and Toolpath cells do on the first machine of their kind that makes it,
+    # as ⚒ Make does across sites.
+    "badge-face": "part:badge:face:smile",
+    "badge-make": "slice:piece:printer_1",
+    "badgeEl:click:clicked": "part:badge:face:smile",
     "motionEl:click:clicked": "part:motion:play",
     "motionEl:input:scrubbed": "part:motion:step",
     "motionEl:change:ticked": "part:motion:bought",
@@ -1079,6 +1155,10 @@ RING_BACKED: Dict[str, str] = {
     "print-preview": "print:preview",
     # Keep as plan keeps the machine's plan, its board connected or not.
     "print-plan": "print:plan",
+    # The levelling of the next slice: the Print cell's Levelling steps it.
+    "print-level": "print:level",
+    # Its first layer's hold: the Print cell's Adhesion steps it.
+    "print-adhesion": "print:adhesion",
     # A part's piece's Feedback › Measure files what is typed under measured, as Keep does,
     # and takes a person to the field when nothing is typed; a fault chosen under seen and
     # nothing read, it files the look, as Keep look does. Note files the note, or takes a
@@ -1092,7 +1172,12 @@ RING_BACKED: Dict[str, str] = {
     "feedback-note-keep": "feedback:note",
     "feedback-tune-apply": "feedback:tune-apply",
     "feedback-tune-undo": "feedback:tune-undo",
+    # A print that stopped, tried again: Feedback › Try again's cells.
+    "feedback-try-probe": "feedback:try-probe",
+    "feedback-try-brim": "feedback:try-brim",
+    "feedback-try-raft": "feedback:try-raft",
     "feedback-note:keydown:keepNote": "feedback:note",
+    "feedback-measure-plan:keydown:keepOnEnter": "feedback:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
@@ -1198,6 +1283,14 @@ RING_BACKED: Dict[str, str] = {
     "loops-set": "loops:set",
     "root:click:onLoopsClick": "loops:start",
     "root:change:onLoopsChange": "loops:loop:hotend",
+    # Fixes' Keep and Make these are the cells of Panels › Machine › Bed.
+    "bed-keep": "bed:keep",
+    "bed-make": "bed:make",
+    # Runs' Probe hot: the cell Panels › Machine › Bed › Probe hot, its fields the ones it reads.
+    "bed-probe-hot": "bed:probe-hot",
+    "bed-hot-c": "bed:probe-hot",
+    "bed-soak": "bed:probe-hot",
+    "fixes:click:onFixesClick": "bed:make",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1740,6 +1833,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "filing the typed note in the piece's drawer, by Enter",
     ),
+    "feedback-measure-plan:keydown:keepOnEnter": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "filing what is typed in a printed piece's dimensions' rows, by Enter in one",
+    ),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
     # Render on demand: the move arrows lighting up under the pointer change nothing
@@ -1825,6 +1923,28 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "the depth stepper's - and +, or Reset, in the Layers window",
+    ),
+    # ---- Bed (widgets/bed_shims.js): a run chosen in Runs, by a click or Enter on its ----
+    # row, and Fixes' buttons, by one listener on its window.
+    "runs:click:onRunsClick": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a run chosen in Runs, drawn over the printer's bed in the world; or Probe hot above",
+    ),
+    "hotC:input:(nothing)": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a bed temperature typed in Runs, kept over the filament's as the runs redraw",
+    ),
+    "runs:keydown:onRunsKey": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a run chosen in Runs with Enter, drawn over the printer's bed in the world",
+    ),
+    "fixes:click:onFixesClick": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "Keep or Make these in Fixes, told which by its id",
     ),
     # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
     # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the
@@ -1959,6 +2079,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "Bought ticked or not, what is bought shown or hidden",
+    ),
+    # ---- Badge (widgets/badge.js): one listener on the window ----
+    "badgeEl:click:clicked": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a face, the word, ⚒ Print or ⚒ Cut, each doing what its cell or ⚒ Make does",
     ),
     # ---- the Workspace ------------------------------------------------------
     "root:click:closest": (
