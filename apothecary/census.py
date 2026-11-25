@@ -283,8 +283,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "breadcrumb": (LIST, WHAT_YOU_SEE, "the trail back to where you came from"),
     # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
     # One board, close up. The header: how often to poll, and the link itself.
-    "auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that polls on a schedule"),
-    "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll"),
+    "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll, off among its choices"),
     "poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the printer once"),
     "reconnect": (WIDGET, WHAT_YOU_SEE, "a button that reopens the serial link"),
     "identify": (WIDGET, WHAT_YOU_SEE, "a button that asks the board what it is"),
@@ -1923,7 +1922,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "choosing which kept file the buttons mean",
     ),
-    "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:query": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
     "show-polls:change:renderLog": (WIDGET, WHAT_YOU_SEE, "the poll-traffic tick-box"),

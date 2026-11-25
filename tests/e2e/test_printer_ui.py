@@ -289,7 +289,7 @@ def test_a_printer_s_machine_polls_it_within_a_bound(page: Page, printer_url: st
     machine = windows.machine(page)
     expect(machine.locator("#poll")).to_be_visible(timeout=15000)
     expect(machine.locator("#poll")).to_have_text("⟳ Poll")  # identified: a printer's Machine
-    machine.locator("#auto").uncheck()
+    machine.locator("#interval").select_option("0")
     machine.locator("#poll").click()
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=5000)
     expect(machine.locator("#c-hot")).to_contain_text("/210°")  # the simulator wobbles ±0.3°
@@ -436,10 +436,10 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     page.locator("#reset").click()
     expect(page.locator("#log .boot", has_text="start")).to_be_visible(timeout=8000)
 
-    # Release drops the link and stops auto-poll: no poll is left scheduled to reopen it.
+    # Release drops the link and stops polling: no poll is left scheduled to reopen it.
     page.locator("#release").click()
     expect(page.locator("#c-board")).to_contain_text("not held", timeout=5000)
-    assert not page.locator("#auto").is_checked()
+    expect(page.locator("#interval")).to_have_value("0")
     assert page.evaluate(f"() => {MONITOR}.timer") is None
     n1 = page.locator("#log .sys").count()
     page.clock.fast_forward(3 * POLL_MS)
@@ -649,7 +649,7 @@ def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, print
     _identify(printer_url)
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
-    page.locator("#auto").uncheck()  # only the poll this test sends
+    page.locator("#interval").select_option("0")  # only the poll this test sends
 
     # The poll's answer is read at once (disarmed) and handed to the page only once
     # the arm has answered: inside the page, so the arm is not held up.

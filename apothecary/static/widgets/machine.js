@@ -105,8 +105,8 @@ const HEAD = `
     <span id="ident" class="kv">—</span>
     <span class="grow"></span>
     <span class="cluster">
-    <label class="auto printer-only gcode"><input type="checkbox" id="auto" checked> auto-poll
-        <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
+    <label class="auto printer-only gcode" title="How often the board is polled while its Machine is open; off, only when ⟳ Poll asks">poll
+        <select id="interval"><option value="0">off</option><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
     </label>
     <button type="button" id="poll" class="printer-only gcode">⟳ Poll</button>
     </span>
@@ -555,12 +555,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // A jog's position carries no dialect of its own: the kind's is used.
     const toolPosition = (st) => toolPositionOf({ ...(st || {}), dialect: words().dialect });
+    // The one choice of how often to poll: off is 0, polled only when asked.
     const interval = () => Number($("interval").value) || 2000;
-    const isLive = () => (state.kind === "devkit" ? state.listening : $("auto").checked);
+    const isLive = () => (state.kind === "devkit" ? state.listening : Number($("interval").value) > 0);
     function watchNow() {
         if (state.port) model.watch(state.port, who, { kind: state.kind, interval: interval(), live: isLive() });
     }
-    // The poll-on-a-schedule tick-box and its interval (a devkit: listening or not):
+    // How often to poll, off among the choices (a devkit: listening or not):
     // the model's poller for this board, scheduled afresh from now.
     function schedule() {
         if (state.port) model.setWatch(state.port, who, { interval: interval(), live: isLive() });
@@ -578,7 +579,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // --- status ------------------------------------------------------------------------
     const pinRow = () => `${pin.how === "sketch" ? "bound by its sketch to" : "pinned at"} <b>${esc(pin.site)} › ${esc(pin.path)}</b>`;
     // How old the status the cards are drawn from is, said once it is old: a poll
-    // that failed leaves the last one drawn, and so does auto-poll switched off.
+    // that failed leaves the last one drawn, and so does polling switched off.
     // Counted each second while a G-code board's Machine is open.
     function renderAge() {
         const st = isGcode() ? state.status : null;
@@ -993,7 +994,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
 
     // --- header controls ------------------------------------------------------------------
     // Each says what refused it, in the log and in the host's status bar.
-    $("auto").addEventListener("change", schedule);
     $("interval").addEventListener("change", schedule);
     $("poll").onclick = () => (state.port ? model.poll(state.port).catch((e) => refuse(`poll: ${e.message}`)) : Promise.resolve());
     $("reconnect").onclick = async () => {
@@ -1058,8 +1058,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("release").onclick = async () => {
         if (!state.port) return;
         if (state.kind === "devkit") { state.listening = false; schedule(); model.note(state.port, "stopped listening — Listen opens the port again"); renderDevkit(); return; }
-        $("auto").checked = false; schedule();
-        try { const r = await model.release(state.port); logLine("sys", r.released ? "link released — auto-poll off" : "no link was held"); applyControlState(null); }
+        $("interval").value = "0"; schedule();
+        try { const r = await model.release(state.port); logLine("sys", r.released ? "link released — polling off" : "no link was held"); applyControlState(null); }
         catch (e) { refuse("release failed: " + e.message); }
     };
     $("qform").addEventListener("submit", async (ev) => {

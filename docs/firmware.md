@@ -561,7 +561,8 @@ Machine too.
 Every drawer of a board -- its badge in the world, its badge in Site's tree,
 Selected's line and its Machine -- reads one model of it
 (`apothecary/static/boards.js`), which polls a printer at the interval its
-Machine says while its Machine is open with auto-poll on, and every two seconds
+Machine's head says while its Machine is open -- **poll**, off or every 1 to 10 s, off
+meaning only when ⟳ Poll asks -- and every two seconds
 for the world while no Machine is open on it and the server holds its link, so a
 machine drawn in the world follows its board ([viewer.md](viewer.md#a-machines-frame)):
 one poller per board, whatever draws it. The model scans for boards when a site
@@ -692,7 +693,7 @@ is sent at once and is never held by a line in flight, while every other line wa
 turn behind the one in flight. An arm or a disarm that failed is drawn as the server says
 the latch is, asked again, and never as what was asked for; with no answer the label is
 marked *not confirmed*. An open Machine follows its port's latch whoever armed it or
-let it go, with auto-poll off too. Once the status its cards are drawn from is more
+let it go, with its polling off too. Once the status its cards are drawn from is more
 than a few seconds old, the State card says how old and the values dim. A Machine is
 its board's: its pinned board found on another port, it is opened again there.
 

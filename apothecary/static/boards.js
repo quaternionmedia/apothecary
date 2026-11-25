@@ -15,7 +15,7 @@
  * it is watching goes quiet, so a replugged board is found without anyone asking.
  *
  * A board is polled only while something watches it live -- its Machine,
- * open, with auto-poll on; the world, for a machine it draws whose link the
+ * open, its poll not off; the world, for a machine it draws whose link the
  * server holds while no Machine is open on it -- by one self-scheduled poller
  * at the shortest live watcher's interval: never two requests in flight for
  * one board, and a one-shot poll from a button shares the one in flight.
