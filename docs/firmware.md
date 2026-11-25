@@ -834,13 +834,13 @@ probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
 (`G28`, `G29 V3`) and then reads; probed hot (`heat_c`, `soak_s`, `times`: Runs' Probe
 hot), the bed is heated first (`M190`), held, probed up to twice, a reading each, and
-turned off after (`M140 S0`), however the job ends. It is offered once the latch is armed, and runs as a job that
+turned off after (`M140 S0`), however the job ends. It is greyed, saying why, until the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
 tilt (a least-squares plane) and each corner against the mean, and as a
-relief over the printer's bed in the world. The corner buttons, offered with
-the probe once the latch is armed, move the nozzle to paper height at each
+relief over the printer's bed in the world. The corner buttons, greyed with
+the probe until the latch is armed, move the nozzle to paper height at each
 corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
 the `G29 W` points an `M503` prints. At verbosity 3 Marlin's probe says where

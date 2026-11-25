@@ -259,7 +259,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         shown=_words(card.locator("#print-plan-said").inner_text()),
     )
 
-    # 5. Armed: the pad, the probe offered, and the work zeroed where the tool stands.
+    # 5. Armed: the pad, the probe going, and the work zeroed where the tool stands.
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     # A hold interrupts and goes with the latch down; a resume moves the machine again,
@@ -269,7 +269,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     expect(hold).to_have_attribute("data-can", "interrupt")
     expect(resume).to_have_attribute("data-can", "resume")
     expect(resume).to_be_enabled(timeout=WITHIN_A_POLL)
-    expect(machine.locator("#level-probe")).to_be_visible()
+    expect(machine.locator("#level-probe")).to_be_enabled()
     # The tool over where a stock's corner is touched off, from wherever it stood: the
     # cut's depth under it and the safe height over it, within the travel.
     at = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0).json()
@@ -291,8 +291,8 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     story.shows(
         "⚙ Control armed: the pad, Probe table offered, and the work zeroed",
         "⚙ Control arms the latch for five minutes of activity and opens the control pad, "
-        "a loud window beside the world. The Table map's Probe table is there now, since "
-        "it moves the machine. The tool jogged over the stock's corner, the pad's XYZ zero "
+        "a loud window beside the world. The Table map's Probe table goes now: it moves "
+        "the machine, so it was greyed until the latch was armed. The tool jogged over the stock's corner, the pad's XYZ zero "
         "here makes that the work zero, and the path drawn moves with it.",
         blank=CHANGING,
     )

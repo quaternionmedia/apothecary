@@ -1130,7 +1130,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ttl = ctl.armed ? span(left) : "";
         $("ctl-ttl").textContent = ttl + (ctl.unknown ? " ?" : ""); $("ctl-ttl2").textContent = ttl;
         placePad();
-        renderLevelVerbs();
         renderCan();
         clearInterval(ctl.timer); ctl.timer = null;
         if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
@@ -1431,14 +1430,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const a = [0x6f, 0xb3, 0xe8], c2 = [0xe8, 0xb0, 0x4a];
         return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
-    // The probe and the corners move the machine, so they are there once control is
-    // armed; Read mesh moves nothing and is a printer's whenever its Machine is.
-    function renderLevelVerbs() {
-        $("level-probe").hidden = !ctl.armed;
-        for (const btn of $("level-card").querySelectorAll("button[data-corner]")) btn.hidden = !ctl.armed;
-    }
+    // The probe and the corners move the machine: greyed while control is down, saying so,
+    // as every button that needs the latch is (renderCan); Read mesh moves nothing.
     function renderLevel() {
-        renderLevelVerbs();
         const rec = level.shown, w = words().level;
         if (!w) return;  // a devkit has no bed or table to map, and no words for one
         const meshEl = $("mesh"), statsEl = $("level-stats");

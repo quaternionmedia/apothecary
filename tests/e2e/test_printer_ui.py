@@ -1012,9 +1012,12 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     expect(page.locator("#level-history .pick.on")).to_contain_text("read")
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
-    # Disarmed, the probe is not offered, and one asked for all the same is refused
+    # Disarmed, the probe is greyed, saying why, and one asked for all the same is refused
     # before it reaches the board.
-    expect(page.locator("#level-probe")).to_be_hidden()
+    expect(page.locator("#level-probe")).to_be_disabled()
+    expect(page.locator("#level-probe")).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first")
+    )
     page.evaluate("() => window.apothecaryMachine.level.start(true)")
     expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
@@ -1023,7 +1026,7 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     # held for the duration, and the record appears when it is done.
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    expect(page.locator("#level-probe")).to_be_visible()
+    expect(page.locator("#level-probe")).to_be_enabled()
     page.once("dialog", lambda d: d.accept())
     page.locator("#level-probe").click()
     expect(page.locator("#level-job")).to_contain_text("…", timeout=5000)
