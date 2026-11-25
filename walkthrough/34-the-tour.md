@@ -43,7 +43,7 @@ Print a part › 1 Choose (the tour): a part, among the site's pieces
 
 ## 3. ✓ Works keeps the word and takes the page to the next stage, with what to try
 
-✓ Works is kept under a name: with none given the box asks for it, once, and this browser keeps it. Named, the server keeps the word, and the box goes to Shape and takes the page there, Parameters in front. Folded under one line with what the page did is what there is to try on this stage, each a link to a picture of it in the walkthrough.
+✓ Works is kept under a name: with none given the box asks for it, once, and this browser keeps it. Named, the server keeps the word, and the box goes to Shape and takes the page there, Parameters in front. Folded under one line with what the page did is what there is to try on this stage, each a link to the step on its walkthrough page, where its picture is.
 
 ![✓ Works keeps the word and takes the page to the next stage, with what to try](screenshots/34-03-works-keeps-the-word-and-takes-the-page-to-the-nex.png)
 

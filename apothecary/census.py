@@ -968,7 +968,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "tour-pop-page": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a link to the first walkthrough page the stage names",
+        "a link to the walkthrough page the stage names first, at the step it names",
     ),
     # ---- the Workspace, apothecary/static/widgets/working_space.js ---------
     # Its first line's buttons take the step it names; a printer's hour has a row

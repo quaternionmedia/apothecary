@@ -22,8 +22,9 @@ hands the next what it made.
 The box has no words of its own. A stage's line is its step's in
 `apothecary/journeys.py`.
 Under it is what there is to try on the stage: the steps of the walkthrough that go
-through it, each a link to its picture, and the pages that show the same thing whole,
-at the command line (`shown_by`, in `apothecary/journeys.py`).
+through it, each a link to the step on its page -- its words and its picture together,
+under the bar that leads back to the docs and the viewer -- and the pages that show the
+same thing whole, at the command line (`shown_by`, in `apothecary/journeys.py`).
 
 ## Opening it
 
@@ -60,8 +61,8 @@ word on the build the server runs.
 
 Going to a stage -- a journey chosen in the drop-down, a stage's number, ›, ‹, or a
 word said on the one before -- takes the page there, and ↻ beside the stage's words
-takes it there again. **its page**, beside ↻, is the first walkthrough page the stage
-names, in a tab. The page then does what a person would do to get there, each
+takes it there again. **its page**, beside ↻, is the walkthrough page the stage names
+first, in a tab, at the step it names. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
 - the site the journey stands in opened, where another is, as the banner's ▾ opens
@@ -188,8 +189,8 @@ said of each stage.
 ## The ring
 
 Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back,
-Works, Off (with what the box's field says), Next, Its page (the first walkthrough
-page the stage names, in a tab), Take me here, and Who, the field for the name. It is
+Works, Off (with what the box's field says), Next, Its page (the walkthrough page the
+stage names first, at its step, in a tab), Take me here, and Who, the field for the name. It is
 seated after the views, so no cell before it moves.
 
 ## What it does not do

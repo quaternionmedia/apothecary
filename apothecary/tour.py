@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import journeys
-from .docs_site import WALKTHROUGH_ROOT
+from .docs_site import WALKTHROUGH_ROOT, slug
 from .projects.parts.skeleton import ROOT
 from .state_folder import private_folder, state_dir
 
@@ -140,7 +140,10 @@ def stage_id(journey: str, stage: str) -> str:
 
 def _tries(shown_by: Tuple[str, ...], root: Path) -> List[dict]:
     """What a stage names, as what to try on it: a step of a page, or a page whole
-    (``index`` None), which says how the same thing goes at the command line."""
+    (``index`` None), which says how the same thing goes at the command line. A step's
+    ``anchor`` is its heading's on the page as /walkthrough serves it, so a link to it
+    lands on the step, its words and its picture together, with the page's bar above;
+    a page whole has none."""
     out = []
     for ref in shown_by:
         name, _, number = ref.partition("#")
@@ -156,12 +159,14 @@ def _tries(shown_by: Tuple[str, ...], root: Path) -> List[dict]:
                     "words": here.intro,
                     "picture": None,
                     "shown": None,
+                    "anchor": None,
                 }
             )
             continue
         step = next((s for s in here.steps if str(s.index) == number), None)
         if step:
-            out.append({"page": name, **asdict(step)})
+            anchor = slug(f"{step.index}. {step.heading}")
+            out.append({"page": name, **asdict(step), "anchor": anchor})
     return out
 
 

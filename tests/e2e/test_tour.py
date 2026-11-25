@@ -240,8 +240,15 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "Apply draws the variant, marked as not saved",
         ]
     )
+    # Each a link to the step on its page, its words and picture under the page's bar.
     expect(tries.first.locator("a")).to_have_attribute(
-        "href", re.compile(r"/walkthrough/screenshots/04-02-[a-z0-9-]+\.png$")
+        "href",
+        re.compile(
+            r"/walkthrough/04-designing-a-part\.md#2-a-size-dragged-is-checked-once-the-slider-rests$"
+        ),
+    )
+    expect(box.locator(".tour-pop-page")).to_have_attribute(
+        "href", tries.first.locator("a").get_attribute("href")
     )
     _off_the_buttons(page)
     settled(page)
@@ -251,8 +258,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "this browser keeps it. Named, the server keeps the word, and the box goes to "
         "Shape and takes the page there, Parameters in front. Folded under one line "
         "with what the page did is "
-        "what there is to try on this stage, each a link to a picture of it in the "
-        "walkthrough.",
+        "what there is to try on this stage, each a link to the step on its walkthrough "
+        "page, where its picture is.",
         shown="\n".join(tries.all_inner_texts()),
         blank=CHANGING,
     )

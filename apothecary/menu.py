@@ -1518,9 +1518,9 @@ def _tour() -> Option:
     """Panels › Windows › Tour: the tour's box over the page, then its buttons, which
     the page hands to it (widgets/tour_popover.js): Back and Next through the journeys'
     stages, Works and Off saying how the stage is (Off with what the box's field says
-    is off), Take me here, which takes the page to the stage, Its page, the first
-    walkthrough page the stage names, in a tab of its own, and Who, the field for the
-    name a word is kept under."""
+    is off), Take me here, which takes the page to the stage, Its page, the walkthrough
+    page the stage names first, at the step it names, in a tab of its own, and Who, the
+    field for the name a word is kept under."""
     return Option(
         id="panels:tour",
         label="Tour",
