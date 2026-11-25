@@ -104,8 +104,6 @@
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
         }
-        /* An item of the View menu that opens something: Settings. */
-        .view-menu-body .view-menu-item { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
         /* The View menu's views: their heading and an entry each, as wide as the menu,
            a line under them before how the world is drawn. */
         .view-menu-views { align-self: stretch; margin: -0.45rem -0.8rem 0; padding-bottom: 0.3rem; border-bottom: 1px solid #333; }
@@ -804,7 +802,6 @@
                     <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
                         <input type="checkbox" id="walls-toggle"> Select walls
                     </label>
-                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab beside Pictures">Settings</button>
                 </div>
             </details>
             <details id="windows-menu" class="view-menu windows-menu">
@@ -1463,7 +1460,6 @@
                 // (widgets/settings.js): the ring's key and modifier, the keys that step
                 // in and out, and automatic zoom's. A change applies at once.
                 this.settings = makeSettings();
-                this.settingsOpenBtn = document.getElementById('settings-open');
                 this.ringOpenBtn = document.getElementById('ring-open');
                 this.settings.onChange((values, id) => this.settingsChanged(values, id));
                 this.sayInputs();
@@ -1994,8 +1990,8 @@
                 });
                 defineJourneyViews(this.panels, JOURNEYS);
                 // Settings: every shortcut and navigation setting, each with its default
-                // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
-                // from ⚙ View › Settings and the canvas ring's View › Settings.
+                // and a reset (widgets/settings.js) -- a tab beside Pictures, a window of
+                // Tools: ⊞ Windows › Settings, and the ring's Panels › Tools › Settings.
                 this.settingsWidget = null;
                 this.panels.register('settings', {
                     title: 'Settings', group: 'Tools',
@@ -2447,8 +2443,6 @@
                 window.addEventListener('keydown', (e) => this.onEscapeKey(e));
                 // Ctrl+S, while a part's editor is open, saves its variant from anywhere.
                 window.addEventListener('keydown', (e) => this.onSaveKey(e));
-                // ⚙ View › Settings: the Settings panel, its tab in front.
-                this.settingsOpenBtn.addEventListener('click', () => this.openSettings());
                 // ? brings the hint bar back (and puts it away again).
                 window.addEventListener('keydown', (e) => this.onHintKey(e));
                 // o (Settings' See-through windows): the windows see-through, or solid again.
@@ -4262,7 +4256,6 @@
                     this.detailModeEl.dispatchEvent(new Event('change'));
                     return `Detail: ${DETAIL_LABELS[this.detailModeEl.value]}`;
                 }
-                if (verb === 'settings') return this.openSettings();
                 if (verb === 'layers') return this.openLayers();
                 // One level more or less, as the Layers window's stepper.
                 if (verb === 'depth:less' || verb === 'depth:more') {
@@ -4309,14 +4302,6 @@
                 if (verb === 'only') return scope.showOnly(id, set) ? this.layersSaid({ layer: id, only: true }) : `${name}: already the only one of its set shown`;
                 if (verb === 'all') return scope.showAll(set) ? this.layersSaid({ layers: set, all: true }) : `${name}: every one of its set is shown already`;
                 return null;
-            }
-
-            // ⚙ View › Settings, and the ring's View › Settings: the Settings panel, its
-            // tab in front, the menu folded away. Answers what the status line says.
-            openSettings() {
-                this.viewMenuEl.open = false;
-                this.panels.open('settings');
-                return 'Settings: the shortcuts and automatic zoom, each with its default and a reset';
             }
 
             // A setting changed (widgets/settings.js), or all of them reset (id null):
@@ -12425,7 +12410,6 @@
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
-            pairs.push([viewer.settingsOpenBtn, 'view:settings']);
             // The header's Docs: Panels › Tools › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
             // The header's Tour and the tour's box: Panels › Windows › Tour.

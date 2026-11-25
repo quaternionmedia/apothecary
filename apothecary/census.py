@@ -132,11 +132,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # the views panels.js lists there as it opens.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
-    "settings-open": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "an item of the View menu that opens the Settings panel",
-    ),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
@@ -1214,9 +1209,6 @@ RING_BACKED: Dict[str, str] = {
     "detail-mode": "view:detail:full",
     "overlay-toggle": "view:outlines",
     "walls-toggle": "view:walls",
-    # ⚙ View › Settings is the canvas ring's View › Settings: the Settings panel shown.
-    "settings-open": "view:settings",
-    "settingsOpenBtn:click:openSettings": "view:settings",
     "snapToggle:change:setTranslationSnap": "view:snap",
     "detailModeEl:change:clear": "view:detail:full",
     "overlayToggle:change:renderFocus": "view:outlines",
@@ -1454,11 +1446,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "the tick-box that lets a click pick walls, for the session",
-    ),
-    "settingsOpenBtn:click:openSettings": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "⚙ View › Settings, showing the Settings panel with its tab in front",
     ),
     # The View menu folds away when a press lands anywhere else, as a menu does.
     "document:pointerdown:foldViewMenu": (

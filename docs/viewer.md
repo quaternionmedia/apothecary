@@ -78,10 +78,10 @@ Left to right, one row:
   every part.
 - **⚙ View**: how the page looks: the views, windows laid out together for one
   kind of work ([below](#the-windows)), then how the world is drawn
-  ([below](#how-the-world-is-drawn)), and Settings ([below](#settings)).
+  ([below](#how-the-world-is-drawn)).
 - **⊞ Windows**: see-through's switch, then every window by its group, ●
   open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
-  front.
+  front. [Settings](#settings) is one, under Tools.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
   its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Tools › Docs opens the same.
@@ -288,12 +288,12 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full, and so is a machine stepped into; Selected's Detail overrides it for one piece |
 | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
-| Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
-| Layers (the ring's View › Layers) | A ring of the site's layers ([below](#layers)): Window opens the Layers window, beside the world (the menu has no item of its own for it, and ⊞ Windows lists it), then each layer's own acts |
 | Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click, and One less and One more, the Layers window's stepper, which goes to eight |
+| Layers (the ring's View › Layers) | A ring of the site's layers ([below](#layers)): Window opens the Layers window, beside the world (the menu has no item of its own for it, and ⊞ Windows lists it), then each layer's own acts |
 
 None of the first four is remembered: a reload starts from the defaults.
-Settings, and the depth and the layers, are kept by this browser.
+The depth and the layers are kept by this browser, as [Settings](#settings) are, a
+window of its own.
 
 ### Layers
 
@@ -1213,8 +1213,8 @@ has none. The routes are `/parts/{name}/draft/check`, `/draft/render` and
 ## Settings
 
 **Settings**, a tab beside Pictures, holds every shortcut and navigation
-setting of the page, and how its windows look, and is the reference for every binding. ⚙ View ›
-Settings and the canvas ring's View › Settings open it. Each row says its default under its name, and its ↺ puts it back;
+setting of the page, and how its windows look, and is the reference for every binding. It is
+a window of Tools: ⊞ Windows › Settings and the canvas ring's Panels › Tools › Settings open it. Each row says its default under its name, and its ↺ puts it back;
 **Reset all**, at the foot, puts every one back. A change applies at once,
 with no reload.
 

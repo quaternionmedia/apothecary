@@ -873,8 +873,8 @@ PANELS: Sequence[Tuple[str, str]] = (
     # their own under its cell (_bench).
     ("bench", "Bench"),
     # Settings: every shortcut and navigation setting, kept per browser, a tab
-    # beside Pictures registered at start. Its cell is View's (View › Settings),
-    # as ⚙ View › Settings opens it, not one of Panels'.
+    # beside Pictures registered at start, a window of Tools: its cell is Panels ›
+    # Tools › Settings, as ⊞ Windows lists it under Tools, and View has none.
     ("settings", "Settings"),
     # The Airgap: the airgap part as a field, torque and dynamics model, a tab
     # beside Pictures registered at start and shown when asked for; it follows the
@@ -1061,8 +1061,7 @@ def _panels(rig: bool = False) -> Option:
             _tour(),
         ],
     )
-    # Tools: the Bench and its verbs, Settings (View › Settings opens it too), the Deck
-    # with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of
+    # Tools: the Bench and its verbs, Settings, the Deck with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of
     # the browser's own, as the header's Docs opens them.
     tools = Option(
         id="panels:tools",
@@ -1121,14 +1120,13 @@ def _view(
     lets a click in the world pick a wall, which it otherwise passes through, for
     the page's session. Snap, Outlines and Select walls each turn what they name the
     other way, as their tick-boxes do, and the status line says which way it went;
-    the ring is not told how they stand. Settings opens the Settings panel --
-    the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
-    before it moves. Layers and Depth come after it, in the two cells left: Layers is
-    a ring of the layers of what lies beneath the level in view (``under``), each a ring
-    of its own acts (``_layers``), and Depth
+    the ring is not told how they stand. Depth and Layers come after them: Depth
     is how many levels below this one a click reaches and the world draws, one to four
-    by name and one more or less, as the Layers window's stepper (to eight). Select
-    walls is the wall layer's Selectable tick.
+    by name and one more or less, as the Layers window's stepper (to eight), and Layers
+    is a ring of the layers of what lies beneath the level in view (``under``), each a
+    ring of its own acts (``_layers``), seated last so it keeps cell 1. Select walls is
+    the wall layer's Selectable tick. Settings is a window, Panels › Tools › Settings,
+    and View has no cell of it.
     """
     return Option(
         id="view",
@@ -1147,9 +1145,6 @@ def _view(
             ),
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
-            Option(id="view:settings", label="Settings", action="view:settings"),
-            # After Settings, which keeps its cell: the two cells still free.
-            _layers(site, part_category, under),
             Option(
                 id="view:depth",
                 label="Depth",
@@ -1167,6 +1162,8 @@ def _view(
                     Option(id="view:depth:more", label="One more", action="view:depth:more"),
                 ],
             ),
+            # Last, so Layers keeps cell 1 (21).
+            _layers(site, part_category, under),
         ],
     )
 
