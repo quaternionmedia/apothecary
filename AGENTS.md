@@ -191,7 +191,7 @@ The governance corpus is a submodule at `governance/qm`, and a plain clone
 leaves it empty. `git clone --recurse-submodules`, or after the fact:
 
 ```bash
-git submodule update --init    # governance/qm, or it is an empty directory
+git submodule update --init --recursive    # governance/qm, or it is an empty directory
 ```
 
 Without it every record this file cites is unreadable, the governance CI gates

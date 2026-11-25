@@ -137,7 +137,7 @@ names an address nobody reads.
 ```bash
 git switch main && git pull          # on a branch instead: git fetch && git merge origin/main
 uv sync                              # the lock as it is now
-git submodule update --init          # governance/qm at its pin
+git submodule update --init --recursive   # governance/qm at its pin
 uv run apothecary check              # a tool a new part or loop needs
 uv run apothecary test run           # what moved under the change
 ```
