@@ -200,7 +200,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
 
     # A fault seen, filed on the layer it stopped on.
     feedback.locator("select.seen-read[data-fault='first_layer']").select_option("3")
-    feedback.locator("#feedback-seen-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(feedback.locator("#feedback-filed")).to_contain_text("look", timeout=10000)
     whole = http.get(f"/cabinet/bed_shims/drawers/{drawer['id']}").json()
     (look,) = [f for f in whole["filed"] if f["kind"] == "look"]

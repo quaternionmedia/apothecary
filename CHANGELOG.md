@@ -228,6 +228,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- Part › Feedback has one Keep for a piece's drawer, where Keep, Keep look and Keep note stood: what is read, the faults seen and the note, whichever is typed or chosen, each filed as before, and Enter in any of their fields keeps too; Feedback › Measure on the ring is that Keep, and Note files the note alone. ([docs/cabinet.md](docs/cabinet.md))
 - The Machine's head has one choice of how often to poll its board, *off* among 1 to 10 s, where an auto-poll tick-box stood beside an interval; Release sets it off. ([docs/firmware.md](docs/firmware.md))
 - The Print window's levelling and adhesion rows say what their first choice comes to for the part under makes on this printer: *the part's own: probe first*, *the printer's: home only* (`GET /slicer/first-layer`, [docs/slicer.md](docs/slicer.md)).
 - A machine whose board is not there is *not connected* wherever the page says so: its Machine's head and status, its ▶'s reason and its card, *Its board, not connected* ([docs/firmware.md](docs/firmware.md#its-board-pinned-and-not-connected)).
