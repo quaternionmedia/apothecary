@@ -1502,7 +1502,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("level-job").textContent = levelStage(job);
             level.timer = setTimeout(watchLevelJob, 800);
             forgetRefusal();
-            return { said: hot ? `${state.port}'s bed heating to ${hot.heat} °C, held ${hot.soak} s, then probed twice: the Machine's Bed level follows it, and the bed is turned off after` : `${state.port}: ${levelStage(job)}` };
+            return { said: hot ? `${state.port}'s bed heating to ${hot.heat} °C, held ${hot.soak} s, then probed twice: Runs lists each reading as it is kept, and the bed is turned off after` : `${state.port}: ${levelStage(job)}` };
         } catch (e) { $("level-job").textContent = e.message; return no(`${words().level.card}: ` + e.message); }
     }
     // The bed temperature of the filament the Print window holds (the loaded one, else the

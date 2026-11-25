@@ -2071,6 +2071,8 @@
                         ? this.machine.handle.level.hot(heat, soak)
                         : { refused: "open a printer's Machine: its bed is probed there" }),
                     bedTemperature: () => this.machine?.handle?.print?.bedTemperature?.() ?? null,
+                    // A window's next step opened as Panels › Machine › Bed opens it.
+                    open: (id) => this.panels.open(id),
                 });
                 window.apothecaryBedShims = this.bedShims;
                 const bedLoad = () => this.bedShims.load();

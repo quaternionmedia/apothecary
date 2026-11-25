@@ -859,6 +859,23 @@ def test_the_control_ring_says_what_the_machine_s_windows_say():
     assert router["control:job-hold"] == pause["Cut"] == "Hold"
 
 
+def test_the_bed_windows_buttons_say_what_their_ring_cells_say():
+    """Fixes' Keep mount, Make these and Here, and Runs' Probe hot, are worded as their
+    cells of Panels › Machine › Bed are (widgets/bed_shims.js)."""
+    from apothecary import menu
+
+    bed = (STATIC / "widgets" / "bed_shims.js").read_text(encoding="utf-8")
+    cells = _labels_by_action(menu._bed([]).children)
+    for action, name in (
+        ("bed:keep", "bed-keep"),
+        ("bed:make", "bed-make"),
+        ("bed:probe-hot", "bed-probe-hot"),
+        ("bed:where", "bed-where-here"),
+    ):
+        said = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', bed)[1]
+        assert re.sub(r"^\W+", "", said) == cells[action], (name, said)
+
+
 def test_a_machine_drawn_as_a_part_has_no_slice_and_its_ring_holds():
     """The router is a part (anolex_4060_evo_ultra_2) standing in the garage; with a
     printer pinned there it is no more sliced than printer_1 is, and its ring, with its

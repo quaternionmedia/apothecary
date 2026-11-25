@@ -526,6 +526,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a button that keeps where the printer's nozzle stands, as its board says, as that "
         "screw or corner",
     ),
+    # A window's step after it, at its foot: one button, written once, opening the window
+    # that step is in -- Differences from Runs, Fixes from Differences, Runs from Fixes.
+    "bed-next": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button at the foot of a bed window that opens the window of the step after it",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -1307,6 +1314,8 @@ RING_BACKED: Dict[str, str] = {
     "bed-where-here": "bed:where",
     "bed-where-what": "bed:where",
     "fixes:click:onFixesClick": "bed:make",
+    # Each the cell of Panels › Machine › Bed that opens the window it names.
+    "bed-next": "panel:toggle:bed-differences",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1960,7 +1969,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "fixes:click:onFixesClick": (
         WIDGET,
         WHAT_IS_THERE,
-        "Keep or Make these in Fixes, told which by its id",
+        "Keep mount, Make these or Here in Fixes, told which by its id",
+    ),
+    "body:click:onNext": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a bed window's step after it, the window it is in opened",
     ),
     # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
     # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the

@@ -458,6 +458,12 @@ def test_probe_hot_heats_holds_probes_twice_and_turns_the_bed_off(page: Page, si
     second = runs.locator(".bed-run", has_text="heated 60 C, soaked 0 s, 2 of 2")
     expect(second).to_have_count(1, timeout=30000)
     expect(runs.locator(".bed-run", has_text="heated 60 C, soaked 0 s, 1 of 2")).to_have_count(1)
+    # A heated pair: Runs names Differences and opens it, and Differences Fixes.
+    runs.locator(".bed-next", has_text="Differences").click()
+    _shown(page, "bed-differences")
+    windows.panel(page, "bed-differences").locator(".bed-next", has_text="Fixes").click()
+    _shown(page, "bed-fixes")
+    expect(windows.panel(page, "bed-fixes")).to_contain_text("Where the nozzle stands")
     assert asked and "60 °C" in asked[0] and "probe it twice" in asked[0], asked
     with httpx.Client(base_url=url, timeout=15.0) as http:
         job = http.get("/firmware/printers/level", params={"port": PRINTER}).json()
