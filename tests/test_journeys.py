@@ -125,6 +125,14 @@ def test_a_journey_through_one_system_lays_out_that_system_s_view():
     assert _layout_windows(FAMILY.view) - {"world"} == stages
 
 
+def test_the_procedure_stands_alone_beside_the_world_in_the_family_view():
+    """A window the page opens while the Family view is laid out -- a step's door opening
+    a Machine, whose home is with the tabbed windows (panels.js), the Workspace among them
+    -- must not open over the Procedure: its stack beside the world holds it alone."""
+    beside_the_world = [c for c in FAMILY.view["row"] if "stack" in c]
+    assert beside_the_world == [{"stack": ["procedure"], "size": 30}]
+
+
 def test_a_journey_s_view_is_laid_out_by_the_tour_and_listed_nowhere_else():
     """A journey is chosen in the Tour box and nowhere else, so its view is neither an
     entry of ⚙ View nor a cell of the ring's Panels › Windows: those are the systems'
@@ -259,8 +267,9 @@ def test_calibrate_a_router_goes_from_the_face_chosen_to_the_allowance_kept():
 def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():
     """One journey where Drive a machine hands on: the procedure, the family's members
     and the hub's audit, then the Workspace on the site and on one machine's hour, in a
-    view that holds each half's windows -- the Workspace behind the Procedure in the tall
-    stack, so each is in front in its own stages. No board's Machine is in it."""
+    view that holds each half's windows -- the Procedure tall and alone beside the world,
+    the Workspace in front of Jobs' stack in its own stages, so the two are seen together.
+    No board's Machine is in it."""
     run = by_id("run")
     assert (run.name, run.title, run.group, run.requires) == (
         "Run a site",
@@ -289,8 +298,10 @@ def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():
         "selected",
     } <= named
     assert not any(w == "machine" or w.startswith("machine-") for w in named)
-    tall = run.view["row"][1]
-    assert tall["stack"] == ["procedure", "working"] and tall["active"] == "procedure"
+    assert run.view["row"][1]["stack"] == ["procedure"]
+    column = run.view["row"][2]["column"]
+    workspace = next(s for s in column if "working" in s["stack"])
+    assert workspace["stack"] == ["jobs", "working", "site"]
     assert run.steps[3].puts == (("working", ""),)
     assert run.steps[4].puts == (("fit", "printer_1"), ("working", "printer_1"))
 
