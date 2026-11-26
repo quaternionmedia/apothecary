@@ -594,7 +594,7 @@
                                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stage-actions #apply-btn { flex-grow: 2; }
         #apply-btn { background: #4a9eff; color: #0b0d10; }
-        #revert-btn, #defaults-btn { background: #2a2f38; color: #d7dae0; }
+        #revert-btn { background: #2a2f38; color: #d7dae0; }
         /* Undo and Redo of the staged numbers, and the ghost, under the stage's actions. */
         .stage-more { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
         .stage-more button { padding: 2px 8px; border: 0; border-radius: 4px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; }
@@ -5561,8 +5561,7 @@
                       <div id="stage-summary" class="clean">No staged changes</div>
                       <div class="stage-actions">
                         <button type="button" id="apply-btn" disabled title="Render what is staged and draw it in this tab (F6 or Ctrl+Enter in the SCAD editor)">Apply</button>
-                        <button type="button" id="revert-btn" title="Put what is staged back to what is drawn">Revert</button>
-                        ${target.part ? `<button type="button" id="defaults-btn" title="Stage the part's own values">Defaults</button>` : ''}
+                        <button type="button" id="revert-btn" title="Put what is staged back to what is drawn, a step of Undo">Revert</button>
                       </div>
                       <div class="stage-more">
                         <button type="button" id="undo-btn" disabled title="Undo the last change: a part's draft, its text and its controls both, a step back; a piece's or a camera's staged numbers (Ctrl+Z, outside a box being typed in)">↶ Undo</button>
@@ -5794,6 +5793,7 @@
                 if (busy !== !!this.stageBusy) { this.stageBusy = busy; this.placeStageBar(); }
                 this.markStagedControls(diff);
                 this.refreshUndoButtons(target);
+                this.showGoingBack(target, count);
                 this.showBuildNote(target);
                 // What this tab keeps of it, should it be reloaded.
                 this.keepWork(target);
@@ -5908,9 +5908,11 @@
                     if (this.toSaved(target)) this.drawSaved(target);
                     else if (this.stagedValid) this.applyEditor(target);
                 };
-                this.partEl('#revert-btn').onclick = () => this.revertStaged(target);
-                const defaults = this.partEl('#defaults-btn');
-                if (defaults) defaults.onclick = () => this.stageDefaults(target);
+                // Revert, or Defaults once nothing is staged: what showGoingBack made it.
+                this.partEl('#revert-btn').onclick = (ev) => {
+                    if (ev.currentTarget.dataset.does === 'defaults') this.stageDefaults(target);
+                    else this.revertStaged(target);
+                };
                 const say = ({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error');
                 this.partEl('#undo-btn').onclick = () => say(this.undoStaged(target));
                 this.partEl('#redo-btn').onclick = () => say(this.redoStaged(target));
@@ -5985,6 +5987,28 @@
                     if (name in stage.staged) wrap.setValue(stage.staged[name]);
                 }
                 this.refreshStage();
+            }
+
+            // The bar's one button that goes back, a step further each press: Revert while
+            // anything is staged against what is drawn; once nothing is, Defaults, where the
+            // part's own numbers are not what is staged; else greyed, saying why. Part ›
+            // Revert and Part › Defaults on the ring are its two steps.
+            showGoingBack(target, count) {
+                const button = this.partEl('#revert-btn');
+                if (!button) return;
+                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
+                const staged = count > 0 || this.textDiffersFromDrawn(target) || this.toSaved(target);
+                const own = stage?.tied ? !scad || scad.text === scad.own
+                    : !stage?.defaults || Object.entries(stage.defaults).every(([k, v]) => sameValue(stage.staged[k], v));
+                const defaults = !staged && Boolean(target.part) && !own;
+                button.dataset.does = defaults ? 'defaults' : 'revert';
+                button.textContent = defaults ? 'Defaults' : 'Revert';
+                const tip = defaults
+                    ? "Stage the part's own numbers -- its SCAD as saved -- a step of Undo; Apply then draws the saved part"
+                    : 'Put what is staged back to what is drawn, a step of Undo';
+                const why = staged || defaults ? null
+                    : target.part ? "nothing is staged, and the part's own numbers are what is drawn" : 'nothing is staged: its numbers are what is drawn';
+                setReason(button, why, tip);
             }
 
             refreshUndoButtons(target) {
@@ -11694,7 +11718,7 @@
         ];
         // The part editor's buttons, by the cell of Part each one is.
         const PART_VERBS = [
-            ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
+            ['#apply-btn', 'part:apply'], ['#revert-btn:not([data-does="defaults"])', 'part:revert'], ['#revert-btn[data-does="defaults"]', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
             ['#scad-save', 'part:save'], ['#join-btn', 'part:adapter'],
         ];

@@ -61,9 +61,13 @@ def test_a_preset_is_staged_over_the_part_s_defaults_and_applied(page: Page, url
     expect(part_editing.param(page, "diameter").locator(".param-number")).to_have_value("25")
     page.locator("#apply-btn").click()
     _applied(page, "dust_port")
-    # Defaults lets the preset go.
-    page.locator("#defaults-btn").click()
+    # Nothing staged, the bar's Revert reads Defaults, which lets the preset go; then
+    # Revert, the step back from it.
+    going_back = page.locator("#revert-btn")
+    expect(going_back).to_have_text("Defaults")
+    going_back.click()
     expect(page.locator("#part-preset")).to_have_value("")
+    expect(going_back).to_have_text("Revert")
 
 
 @pytest.mark.e2e

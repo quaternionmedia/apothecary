@@ -97,7 +97,7 @@ calibration_cube from the cache, nothing rendered: drawn as saved
 
 ## 10. Round two, the size typed in its box
 
-A second size, 47.50 mm, typed a key at a time in the box beside the slider, which follows it; checked once, and applied from the part's ring, Part › Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the editor's own Defaults and Apply: the saved part again, nothing rendered.
+A second size, 47.50 mm, typed a key at a time in the box beside the slider, which follows it; checked once, and applied from the part's ring, Part › Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the bar's Revert, which reads Defaults once nothing is staged, and Apply: the saved part again, nothing rendered.
 
 ```
 calibration_cube from the cache, nothing rendered: drawn as saved

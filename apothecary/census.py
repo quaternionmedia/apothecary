@@ -146,7 +146,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
-    "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
     # The staged numbers' undo and redo, and the ghost of what was drawn before:
     # Part › History and Part › View.
     "undo-btn": (
@@ -1216,7 +1215,6 @@ RING_BACKED: Dict[str, str] = {
     "probe": "device:probe",
     "ctl:change:arm": "control:arm",
     # the part editor's Defaults, Apply and Revert are Part's on its ring
-    "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
     # the SCAD editor's Save, and a saved variant chosen, are too

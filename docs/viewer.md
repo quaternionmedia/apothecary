@@ -791,7 +791,7 @@ which the page, the ring and the tests all read.
 
 | System | Main window | Sections |
 |---|---|---|
-| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), the SCAD editor (beside the world, maximised by Part › View › Fullscreen) |
+| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert -- Defaults once nothing is staged -- Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), the SCAD editor (beside the world, maximised by Part › View › Fullscreen) |
 | Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Status, Cut, Table map (a router's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 | Family | The Procedure: the site's steps and GO | Members (each member, how it is reached, its door), Deliveries (the hub's audit, newest first) -- tabs beside the Procedure ([family.md](family.md#a-procedure)) |
@@ -1018,7 +1018,7 @@ Where this OpenSCAD cannot build the part at all (gridfinity on
 [2021.01](openscad.md#what-openscad-202101-cannot-do)), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
-The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
+The bar of what is staged -- Apply, Revert, Undo, Redo, Ghost --
 is Selected's, and Selected shows the piece's name, place and facts first.
 While the piece is being edited -- Part › Edit asked for its editor, or
 something is staged -- the bar stands pinned at the top of Selected, above its body, in its own space: in view however far the parameters
@@ -1038,11 +1038,13 @@ when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
 address carries `?variant=`, so a reload or the link draws it again. The
 focus stays where it was: in the box or the slider last moved, or in the SCAD
-editor. **Revert** puts the text drawn back; **Defaults** puts the part's
-own text back -- its defaults are its SCAD as saved -- and Apply, saying
-"Apply: the saved part", then draws the saved part. Each of these is an edit
-of the text, which Undo takes back, and each is also a cell of Part on the
-ring.
+editor. **Revert** is the one button that goes back, a step further each
+press: while anything is staged it puts the text drawn back; once nothing is,
+it reads **Defaults** and puts the part's own text back -- its defaults are
+its SCAD as saved -- and Apply, saying "Apply: the saved part", then draws the
+saved part; with the part's own drawn and nothing staged it is greyed, saying
+so. Each step is an edit of the text, which Undo takes back, and each is also a
+cell of Part on the ring, Part › Revert and Part › Defaults.
 
 **A failed render** -- any error OpenSCAD says, though it finished -- is drawn
 greyed where the part stands, as far as OpenSCAD built it, a red flag over it
@@ -1105,7 +1107,7 @@ whose numbers drive its model (a part built by Python; a part whose SCAD is
 the one draft offers none here yet) has a **Preset** drop-down above its
 controls in Parameters, and Part › Presets › each on its ring: one chosen stages its numbers over the part's
 defaults, a step of Undo, and Apply draws it. What calipers read is then typed
-over it; Defaults lets the preset go.
+over it; Defaults (the bar's Revert, once nothing is staged) lets the preset go.
 
 A part with one round end, a spigot or a socket (`dust_port`), has **⇄ Adapter**
 in Selected, and Part › Adapter on its ring. The first press keeps this end at

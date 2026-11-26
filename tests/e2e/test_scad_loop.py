@@ -658,8 +658,8 @@ def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
     """The way back after a SCAD edit: the text is the one draft, so the edit drawn is
     what is drawn and nothing is staged. Defaults puts the part's own SCAD back -- its
     defaults are its SCAD as saved -- and Apply, saying it draws the saved part, draws
-    it, the mark and the address's variant gone: from the ring, and with the editor's
-    own Defaults and Apply."""
+    it, the mark and the address's variant gone: from the ring, and with the bar's own
+    buttons, its Revert reading Defaults while nothing is staged."""
     quarter = "translate([0, 0, size]) cube(size / 4);"  # 12.5 mm tall, this test's own
     assert page.request.post(f"{scad_url}/parts/{PART}/stl/generate").ok
     _open(page, f"{scad_url}/viewer/sites/apothecary")
@@ -688,7 +688,10 @@ def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
                 "the part's own SCAD is back in its editor", timeout=10000
             )
         else:
-            page.locator("#defaults-btn").click()
+            # Nothing staged: the bar's Revert reads Defaults, the next step back.
+            going_back = page.locator("#revert-btn")
+            expect(going_back).to_have_text("Defaults")
+            going_back.click()
         # The part's own text, and still the saved part to go to.
         assert _text(page) == own
         expect(page.locator("#stage-summary")).to_contain_text("Apply draws the saved part")

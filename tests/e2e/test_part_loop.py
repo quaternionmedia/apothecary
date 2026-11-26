@@ -6,7 +6,7 @@ declared ones, a reload drawing what the tab had applied (its address keeps the
 variant), OpenSCAD's error shown by line and the refused size put back (Part › Revert),
 then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for nothing
 (Part › Defaults and Part › Apply), and round once more, the size typed in its box
-(Part › Apply, then the editor's Defaults and Apply); an earlier apply drawn again from
+(Part › Apply, then the bar's Defaults and Apply); an earlier apply drawn again from
 Recent applies; a size staged and not applied kept over a reload, in its text, and
 restored; then two tabs applying different values at once, each drawing its own. It
 writes walkthrough/04-designing-a-part.md and its pictures as it goes.
@@ -456,14 +456,18 @@ def _a_round(
 
 def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> str:
     """Defaults then Apply -- Part › Defaults and Part › Apply on the part's ring, or
-    the editor's buttons: the saved part again, and nothing rendered. The status line."""
+    the bar's buttons, its Revert reading Defaults once nothing is staged: the saved part
+    again, and nothing rendered. The status line."""
     if from_the_ring:
         _ring_on_the_part(page, "Part", "Defaults")
         expect(_status(page)).to_contain_text(
             "the part's own SCAD is back in its editor", timeout=10000
         )
     else:
-        page.locator("#defaults-btn").click()
+        going_back = page.locator("#revert-btn")
+        expect(going_back).to_have_text("Defaults")
+        going_back.click()
+        expect(going_back).to_have_text("Revert")
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page, from_the_ring)
     assert answer.ok and answer.json()["regenerated"] is False, answer.text()
@@ -875,7 +879,8 @@ def test_designing_a_part_twice_round(
         f"A second size, {second:.2f} mm, typed a key at a time in the box beside the "
         "slider, which follows it; checked once, and applied from the part's ring, Part › "
         "Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the "
-        "editor's own Defaults and Apply: the saved part again, nothing rendered.",
+        "bar's Revert, which reads Defaults once nothing is staged, and Apply: the saved "
+        "part again, nothing rendered.",
         shown=back,
     )
 

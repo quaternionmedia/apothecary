@@ -227,6 +227,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The part editor's bar has one button that goes back: Revert while anything is staged, Defaults once nothing is and the part's own numbers are not what is staged, greyed with the reason otherwise; the separate Defaults button is gone, and Part › Revert and Part › Defaults stay on the ring. ([doc](docs/viewer.md#the-part-editor))
 - Part › View › Fullscreen maximises the SCAD editor's window, as its stack's own maximise does, in place of laying the editor over the whole page; the editor's own Fullscreen button is gone, and Escape in it puts the windows back. ([doc](docs/viewer.md#the-scad-editor))
 - Work a tab kept from before a reload is put back as the part's editor opens -- staged, a step of Undo, said in a note under the bar -- in place of an offer to answer with Restore or Discard; Revert lets it go. ([doc](docs/viewer.md#the-part-editor))
 - The part's SCAD window is the **SCAD editor**, in its tab and on the ring (Part › View › SCAD editor), so the Part view never shows two tabs named SCAD: Site's SCAD is the site's generated OpenSCAD. ([doc](docs/viewer.md#the-scad-editor))
