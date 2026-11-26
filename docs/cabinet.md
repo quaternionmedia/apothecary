@@ -36,7 +36,8 @@ A drawer's **made** row (Part › Feedback) says how the piece was made: its val
 variant's, those drawn, or the part's own -- and, for a print, how its start levelled
 (probe first, the stored mesh, or home only), its skirt, brim and raft, and what
 the board said of its levelling as the print began: levelling on or off, the probe's
-offset, the mesh's range and where the probe said the grid lies (`job.levelled`). A
+offset, the mesh's range and where the probe said the grid lies (`job.levelled`, which
+keeps the mesh itself too, as a bed reading keeps one). A
 start that probes or turns the stored mesh on has the board say them (`M420 S1 V`,
 `M851`); the print keeps its answers from before its first layer
 (`devices.levelled_by`). The drawer's answer also carries what the part declares of its
