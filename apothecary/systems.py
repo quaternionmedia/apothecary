@@ -393,20 +393,22 @@ FAMILY = System(
             "milliseconds and the instance that took it",
         ),
     ),  # fmt: skip
-    # The Procedure tall beside the world, the Workspace behind it; Members and
-    # Deliveries in the column, then Jobs with Site behind it, and Selected. A Machine
-    # that is open stays where it is: a step's door opens it. Run a site lays out the
-    # same (journeys.py), so the view and the journey agree on what goes together.
+    # The Procedure tall beside the world, alone in its stack; Members and Deliveries in
+    # the column, then Jobs with the Workspace and Site behind it, the tallest there, as a
+    # machine's hour holds its cameras' frames, and Selected. A window
+    # the page opens later -- a step's door opening a Machine, whose home is with the
+    # tabbed windows, the Workspace among them -- opens there, never over the Procedure.
+    # Run a site lays out the same (journeys.py), so the view and the journey agree.
     view={
         "row": [
             {"world": True, "size": 34},
-            {"stack": ["procedure", "working"], "size": 30, "active": "procedure"},
+            {"stack": ["procedure"], "size": 30},
             {
                 "column": [
-                    {"stack": ["family-members"], "size": 20},
-                    {"stack": ["family-deliveries"], "size": 26},
-                    {"stack": ["jobs", "site"], "size": 22, "active": "jobs"},
-                    {"stack": ["selected"], "size": 32},
+                    {"stack": ["family-members"], "size": 18},
+                    {"stack": ["family-deliveries"], "size": 22},
+                    {"stack": ["jobs", "working", "site"], "size": 36, "active": "jobs"},
+                    {"stack": ["selected"], "size": 24},
                 ],
                 "size": 36,
             },
