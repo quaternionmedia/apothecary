@@ -85,9 +85,8 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     )
     for digit in address[1:]:
         page.keyboard.press(digit)
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
-        "printer_1", timeout=5000
-    )
+    # A machine's name is a field, which renames it (renames.py).
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1", timeout=5000)
     expect(page.locator("#status")).to_contain_text(f"⌗{address}")
     expect(page.locator("#contents-list li[data-path='printer_1']")).to_have_attribute(
         "data-address", address

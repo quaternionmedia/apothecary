@@ -1043,8 +1043,11 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
     if bench_bounds is None:
         return LayoutReport(violations=violations)
 
+    from .renames import written
+
     for structure in site.children:
-        if structure.name not in BENCH_MOUNTED_STRUCTURES:
+        # By the name the program gives it, whatever a person renamed it (renames.py).
+        if written("garage", structure.name) not in BENCH_MOUNTED_STRUCTURES:
             continue
         bounds = structure.world_bounds()
         if bounds is None:

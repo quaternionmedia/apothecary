@@ -5223,8 +5223,15 @@
                             : ''}
                     </div>`;
                 const at = camera ? ' title="Where its lens is"' : '';
+                // A machine's name is a field: a name typed renames it, its path with it,
+                // and what is kept under its old path moves to the new one (renames.py).
+                const nameRow = statusWords
+                    ? `<div class="prop-row"><label for="name-input">Name</label>
+                         <input type="text" id="name-input" value="${esc(node.name)}" maxlength="64" spellcheck="false"
+                           title="Rename ${esc(node.name)}: letters, digits, _ and -, no dot. Its path changes with it, and its board's pin, plan, filament, first-layer offset, tuning, bed places, slices, jobs and drawers move to the new one. Refused while the bench is at work"></div>`
+                    : `<div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>`;
                 this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
+                    ${nameRow}
                     ${statusRow}
                     <div class="prop-row pos-row"><label${at}>Position</label>
                         <span class="axis">X</span><input type="number" id="pos-x" aria-label="X in mm" step="10" value="${fieldMm(node.position.x)}">
@@ -5250,6 +5257,11 @@
                 const statusSelect = this.selectedBodyEl.querySelector('#status-select');
                 if (statusSelect) {
                     statusSelect.addEventListener('change', (e) => this.submitStatus(node.name, e.target.value));
+                }
+                const nameInput = this.selectedBodyEl.querySelector('#name-input');
+                if (nameInput) {
+                    const path = this.selectedName;
+                    nameInput.addEventListener('change', (e) => this.renameMachine(path, e.target.value));
                 }
                 this.bindZoomInAffordance(node);
             }
@@ -8454,6 +8466,33 @@
             // (only meaningful at focusPath.length === 0 -- see
             // renderSelectedPanel's comment on why).
             // ---------------------------------------------------------------
+
+            // A machine renamed (PUT /sites/{site}/machines/{path}/name): the site drawn
+            // again at its new path, the machine selected there, and what moved said.
+            async renameMachine(path, name) {
+                const was = path.split('.').pop();
+                name = (name || '').trim();
+                if (!name || name === was) { this.renderSelectedPanel(); return false; }
+                this.setStatus(`Renaming ${was} to ${name}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/machines/${encodeURIComponent(path)}/name`,
+                        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }
+                    );
+                    const body = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(body.detail || `rename refused (${response.status})`);
+                    await this.loadSite(this.siteName);
+                    this.selectPath(body.path);
+                    const moved = body.moved.length ? `; moved: ${body.moved.join(', ')}` : '';
+                    const failed = body.failed.length ? `; not moved: ${body.failed.join('; ')}` : '';
+                    this.setStatus(`${was} is ${name} now${moved}${failed}`, body.failed.length ? 'error' : 'success');
+                    return true;
+                } catch (err) {
+                    this.setStatus(`${was} not renamed: ${err.message}`, 'error');
+                    this.renderSelectedPanel();
+                    return false;
+                }
+            }
 
             async submitStatus(name, status) {
                 this.setStatus(`Updating ${name} status...`, 'loading');
@@ -12102,6 +12141,23 @@
                     if (r.refused) refuse(r.refused); else viewer.setStatus(`${r.said}${tail}`, 'success');
                     return;
                 }
+                // Panels › Machine › Rename: the Name field of the machine selected, else of
+                // the machine whose Machine is open, chosen in Selected, for a name typed.
+                if (action === 'machine:rename') {
+                    const selected = viewer.selectedName && viewer.statusWordsFor(viewer.nodeByPath(viewer.selectedName), viewer.selectedName)
+                        ? viewer.selectedName : null;
+                    const bearer = !selected && viewer.machine && viewer.machine.path ? viewer.statusBearerFor(viewer.machine.path) : null;
+                    const path = selected || (bearer ? viewer.pathOf(bearer) : null);
+                    if (!path) { refuse('Select a machine, or open its Machine: Rename names it in Selected'); return; }
+                    if (path !== viewer.selectedName) viewer.selectPath(path);
+                    viewer.panels.open('selected');
+                    const field = document.getElementById('name-input');
+                    if (!field) { refuse(`${path} has no name to type here`); return; }
+                    field.focus();
+                    field.select();
+                    viewer.setStatus(`Type ${path}'s new name in Selected, then Enter${tail}`, 'success');
+                    return;
+                }
                 // Panels › Windows: the world alone or every window back (~), and the
                 // page's own layout again.
                 if (action === 'panel:world:toggle') {
@@ -12468,6 +12524,9 @@
             // An armed printer's pad, popped out or put back: Panels › Machine › Control pad.
             const padToggle = document.getElementById('ctl-pop');
             if (padToggle) pairs.push([padToggle, 'panel:pad']);
+            // A machine's Name in Selected: Panels › Machine › Rename.
+            const nameField = document.getElementById('name-input');
+            if (nameField) pairs.push([nameField, 'machine:rename']);
             // The Deck window's controls and a pad's Knobs here: Panels › Tools › Deck.
             if (window.apothecaryDeck && window.apothecaryDeck.pairs) pairs.push(...window.apothecaryDeck.pairs());
             for (const el of document.querySelectorAll('#deck-here')) pairs.push([el, 'deck:here']);

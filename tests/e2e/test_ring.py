@@ -491,7 +491,8 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#ring-overlay")).to_have_count(0)
     intent = _intents(page)[-1]
     assert intent["action"] == "select:printer_1" and intent["address"] == address
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
+    # A machine's name is a field, which renames it (renames.py).
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1")
     # The row it chose wears that address, from the canvas ring.
     expect(page.locator("#contents-list .contents-item[data-path='printer_1']")).to_have_attribute(
         "data-address", address, timeout=5000
@@ -518,7 +519,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     up_cell = next(c for c, label in wedges.items() if label == "Parent")
     page.keyboard.press(up_cell)
     assert _intents(page)[-1]["action"] == "select:printer_1"
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1")
 
     # Stepped in, the canvas ring's Pieces are the level's two pieces and Step out, seated
     # after every cell the canvas ring always has, steps out.

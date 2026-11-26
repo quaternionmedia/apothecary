@@ -452,6 +452,23 @@ class FirmwareState:
             self._save(data)
             return True
 
+    def move_bindings(self, site: str, old: str, new: str) -> List[str]:
+        """Each pin of ``site`` to the node ``old`` or to anything inside it, pinned to
+        the same place under ``new`` instead (a node renamed, ``apothecary/renames.py``),
+        in its order and with when it was made; the paths it is pinned to now."""
+        moved: List[str] = []
+        with self._lock:
+            data = self._load()
+            for b in data["bindings"]:
+                path = b.get("path") or ""
+                if b.get("site") != site or not (path == old or path.startswith(old + ".")):
+                    continue
+                b["path"] = new + path[len(old) :]
+                moved.append(b["path"])
+            if moved:
+                self._save(data)
+        return moved
+
     def bindings(self, site: Optional[str] = None) -> List[ManualBinding]:
         rows = [ManualBinding(**b) for b in self._load()["bindings"]]
         return [b for b in rows if site is None or b.site == site]

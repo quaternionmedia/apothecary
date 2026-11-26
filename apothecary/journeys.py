@@ -1049,8 +1049,21 @@ def by_id(journey_id: str) -> Journey:
     return next(j for j in JOURNEYS if j.id == journey_id)
 
 
+def _now(site: str, put: Tuple[str, str]) -> List[str]:
+    """A put as the page reads it: its piece at the name it has now, however a person
+    renamed it (``apothecary/renames.py``); a part's name is no piece's and stays."""
+    from .renames import current
+
+    verb, subject = put
+    if verb in ("pin", "picture", "shapes") and ":" in subject:
+        piece, _, rest = subject.partition(":")
+        return [verb, f"{current(site, piece)}:{rest}"]
+    return [verb, current(site, subject)]
+
+
 def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
-    """Every journey (or those given: a test's own) as the page reads it: plain JSON."""
+    """Every journey (or those given: a test's own) as the page reads it: plain JSON,
+    each put at the names its site's pieces have now."""
     return [
         {
             "id": j.id,
@@ -1060,7 +1073,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
             "opened_by": j.opened_by,
             "view": j.view,
             "name": j.name,
-            "staged_on": [list(put) for put in j.staged_on],
+            "staged_on": [_now(j.site, put) for put in j.staged_on],
             "site": j.site,
             "steps": [
                 {
@@ -1070,7 +1083,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
                     "forward": list(s.forward),
                     "owns": list(s.owns),
                     "draws": s.draws,
-                    "puts": [list(put) for put in s.puts],
+                    "puts": [_now(j.site, put) for put in s.puts],
                     "stands_alone": s.stands_alone,
                 }
                 for s in j.steps
