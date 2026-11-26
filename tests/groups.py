@@ -188,6 +188,7 @@ GROUPS = {
             "test_tuning_js.py",
             "test_first_layer_js.py",
             "test_first_layer_offset.py",
+            "test_print_area.py",
         ),
     },
     "parts": {

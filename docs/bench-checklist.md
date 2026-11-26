@@ -202,9 +202,13 @@ one machine on the number another held; nothing in them moves a machine.
       235 mm plate (`parts/ender3/slicer.json` `measured.bed_screws`, *not
       measured on printer_1*); a print drawn at the bed's centre in the world
       stands off its centre on the real bed by what this differs.
-- [ ] Where each levelling screw is in the nozzle's coordinates: jog the nozzle
-      over each screw's head and read X and Y from the Machine's position;
-      `measured.bed_screws` holds the frame model's 7.5 and 212.5.
+- [ ] Where each levelling screw is in the nozzle's coordinates: **Home all**,
+      jog the nozzle over each screw's head, and Fixes' **⌖ Here** with that
+      screw chosen; `measured.bed_screws` holds the frame model's 7.5 and 212.5
+      until each is kept. Then the plate's front-left and back-right corners the
+      same way: Fixes draws the plate where they are, and a slice after takes
+      the rectangle between them as its print area (its `printable_area`
+      setting, *measured*), arranged at the plate's middle.
 - [ ] A first layer with the mesh on: a slice that probes first (the Print
       window's levelling *probe first*, or `bed_shims`, which declares it),
       printed and cancelled once its first layer is down. Its drawer's *made*

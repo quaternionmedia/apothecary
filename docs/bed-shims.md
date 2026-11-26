@@ -154,7 +154,12 @@ from; the shims are taken at the kept ones from then on.
 The plate's two corners are kept the same way, the nozzle over the plate's
 front-left corner and then its back-right (`plate_front_left`,
 `plate_back_right`): where the plate lies under the nozzle's 0, 0, and its width
-and depth, which Fixes says and draws the bed by.
+and depth, which Fixes says and draws the bed by. Both kept, the rectangle between
+them is the printer's print area: every slice made for it after takes it as
+OrcaSlicer's `printable_area`, origin measured, and is arranged at the plate's middle
+rather than at the middle of the profile's figure (`apothecary/slicer/print_area.py`;
+two corners kept less than 50 mm apart, or the wrong way round, are no plate, and the
+profile's area stays).
 
 ## Where the grid lies
 

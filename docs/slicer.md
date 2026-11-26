@@ -58,7 +58,7 @@ how a slice uses it:
 | Measured | Source | Used |
 |---|---|---|
 | Firmware: Marlin TH3D UFW 2.94a | [the bench](validation/2026-09-20-ender-bench.md), M115 | `gcode_flavor` marlin |
-| Build volume 220 x 220 x 250 mm | Creality's figure (the part's `BUILD`) and the bench's pin of printer_1 | `printable_area`, `printable_height` |
+| Build volume 220 x 220 x 250 mm | Creality's figure (the part's `BUILD`) and the bench's pin of printer_1 | `printable_area`, `printable_height`; once its plate's two corners are kept with Here, the rectangle between them is the `printable_area` its slices take, origin measured ([bed-shims.md](bed-shims.md#where-the-screws-are)) |
 | Probe offset X-44 Y-10 Z-3.15 | the bench, M851 | Held, nothing applied: the firmware applies it when G28 homes Z with the probe; the profile's `z_offset` is 0, and the [first-layer offset](#a-printers-first-layer-offset) kept for the printer stands in its place |
 | The stored mesh, leveling off | the bench, M420 V | Held, nothing applied: the start is `home` alone |
 | A bound on a probe's range: 0.3 mm | [the machine-setup record](validation/2026-11-07-machine-setup.md#recommendations) of 2026-11-07, the Ender's first recommendation: after tramming, Probe bed is expected to find a range under it | The `stored-mesh` piece: the board's newest reading must be a probe under it |
