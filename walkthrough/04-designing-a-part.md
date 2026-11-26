@@ -116,10 +116,10 @@ envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 
 ## 12. A size staged and not applied is kept over a reload
 
-A size of 20 mm staged and not applied, and the page reloaded: the browser asks before leaving, the status line names the part with work kept -- its SCAD as edited, the size in it -- and Part › Edit offers it back. Restore stages it again, its line and its control both; Discard would let it go.
+A size of 20 mm staged and not applied, and the page reloaded: the browser asks before leaving, the status line names the part with work kept -- its SCAD as edited, the size in it -- and Part › Edit puts it back: staged again, its line and its control both, not drawn. Revert lets it go.
 
 ```
-Kept in this tab from before it was reloaded: its SCAD edited, size 20. Restore puts it back; Discard lets it go.
+Put back from before the reload: its SCAD edited, size 20. Apply draws it; Revert lets it go.
 ```
 
 ## 13. Two tabs apply at once, and each draws its own

@@ -93,19 +93,19 @@ The last line made a small cube 12 mm under the part, and F5 in the editor, Open
 calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git
 ```
 
-## 11. A draft is kept over a reload, and offered back
+## 11. A draft is kept over a reload, and put back
 
-A line that does not read typed at the end, and the page reloaded: the browser asks before leaving, the status line names the part with work kept in this tab, and Part › Edit draws what the address names and offers the draft back. Restore is the next step.
+A line that does not read typed at the end, and the page reloaded: the browser asks before leaving, the status line names the part with work kept in this tab, and Part › Edit draws what the address names and puts the draft back in the editor, the note under the bar saying so; Revert would let it go.
 
-![A draft is kept over a reload, and offered back](screenshots/06-11-a-draft-is-kept-over-a-reload-and-offered-back.png)
+![A draft is kept over a reload, and put back](screenshots/06-11-a-draft-is-kept-over-a-reload-and-put-back.png)
 
 ```
-Kept in this tab from before it was reloaded: its SCAD edited from short-top. Restore puts it back; Discard lets it go.
+Put back from before the reload: its SCAD edited from short-top. Apply draws it; Revert lets it go.
 ```
 
-## 12. Restore puts the draft back, and the editor keeps its undo while another part is edited
+## 12. The draft put back is checked, and the editor keeps its undo while another part is edited
 
-Restore: the draft back in the editor, checked, its refusal marked. Then v_slot's editor, and calibration_cube's again: its text as it was left, and Ctrl+Z undoes the restore, as it would have before v_slot was opened.
+The draft back in the editor, checked, its refusal marked. Then v_slot's editor, and calibration_cube's again: its text as it was left, and Ctrl+Z undoes putting it back, as it would have before v_slot was opened.
 
 ## What this page does not show
 

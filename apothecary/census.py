@@ -160,13 +160,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a tick-box that shows a ghost of what was drawn before the newest Apply",
     ),
-    # What a tab kept of a part's work before it was reloaded, offered back.
-    "kept-restore": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts back the work the tab kept from before a reload",
-    ),
-    "kept-discard": (WIDGET, WHAT_YOU_SEE, "a button that lets go of that kept work"),
     # One control per parameter (widgets/part_controls.js), written there as markup,
     # so the census counts them.
     "param-slider": (WIDGET, WHAT_YOU_SEE, "a slider that stages one of a part's numbers"),

@@ -10,7 +10,7 @@ saved with Ctrl+S; then the first variant drawn from the ring (Part › Variants
 name › Draw). Round three: the name box letting go of the variant once the
 text moves on and taking it back on Ctrl+Z, Save asking before it replaces a variant, F5
 checking and drawing at once a change that reaches under the floor; then a draft that
-does not read kept over a reload and restored, and the editor's undo kept while another
+does not read kept over a reload and put back, and the editor's undo kept while another
 part is edited. It writes walkthrough/06-editing-a-parts-scad.md and its pictures as it
 goes.
 
@@ -569,7 +569,7 @@ def test_editing_a_parts_scad_twice_round(
     )
 
     # A draft that does not read, kept over a reload: leaving asks first, the page names
-    # the part, and its editor offers the draft back.
+    # the part, and its editor puts the draft back as it opens.
     drawn = _text(page)
     _into_code(page)
     page.keyboard.press("Control+End")
@@ -590,24 +590,21 @@ def test_editing_a_parts_scad_twice_round(
     _ring(page, "Part", "Edit")
     windows.part_view(page)
     expect(_code(page)).to_be_visible(timeout=20000)
-    offer = page.locator("#kept-offer")
-    expect(offer).to_be_visible(timeout=10000)
-    expect(offer).to_contain_text("its SCAD edited")
-    assert _text(page) == drawn  # what the address draws, until it is restored
-    offer.evaluate(UNDER_THE_STAGE_BAR)
-    story.shows(
-        "A draft is kept over a reload, and offered back",
-        "A line that does not read typed at the end, and the page reloaded: the browser "
-        "asks before leaving, the status line names the part with work kept in this tab, "
-        "and Part › Edit draws what the address names and offers the draft back. Restore "
-        "is the next step.",
-        shown=offer.locator(".kept-said").inner_text(),
-        blank=BLANK,
-    )
-    page.locator("#kept-restore").click()
-    expect(offer).to_be_hidden()
+    note = page.locator("#kept-note")
+    expect(note).to_be_visible(timeout=10000)
+    expect(note).to_contain_text("its SCAD edited")
+    note.evaluate(UNDER_THE_STAGE_BAR)
     assert _text(page).endswith(REFUSED)
     expect(_scad_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
+    story.shows(
+        "A draft is kept over a reload, and put back",
+        "A line that does not read typed at the end, and the page reloaded: the browser "
+        "asks before leaving, the status line names the part with work kept in this tab, "
+        "and Part › Edit draws what the address names and puts the draft back in the "
+        "editor, the note under the bar saying so; Revert would let it go.",
+        shown=note.inner_text(),
+        blank=BLANK,
+    )
 
     # Another part edited, and back: the editor as it was left, its undo with it.
     page.locator("#contents-list .contents-item[data-path='v_slot']").click(
@@ -624,10 +621,10 @@ def test_editing_a_parts_scad_twice_round(
     page.keyboard.press("Control+z")
     assert _text(page) == drawn
     story.says(
-        "Restore puts the draft back, and the editor keeps its undo while another part is edited",
-        "Restore: the draft back in the editor, checked, its refusal marked. Then v_slot's "
-        "editor, and calibration_cube's again: its text as it was left, and Ctrl+Z undoes "
-        "the restore, as it would have before v_slot was opened.",
+        "The draft put back is checked, and the editor keeps its undo while another part is edited",
+        "The draft back in the editor, checked, its refusal marked. Then v_slot's editor, "
+        "and calibration_cube's again: its text as it was left, and Ctrl+Z undoes putting "
+        "it back, as it would have before v_slot was opened.",
     )
     _settled_render(page)
 

@@ -600,10 +600,9 @@
         .stage-more button { padding: 2px 8px; border: 0; border-radius: 4px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; }
         .stage-more .ghost-label { margin-left: auto; color: #9cc4e8; display: flex; align-items: center; gap: 3px; cursor: pointer; }
         .stage-more .ghost-label input { accent-color: #9cc4e8; margin: 0; }
-        /* What this tab kept from before a reload, offered back. */
-        .kept-offer { margin-top: 6px; padding: 5px 7px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
-        .kept-offer[hidden] { display: none; }
-        .kept-offer button { padding: 1px 7px; border: 0; border-radius: 3px; background: #4a4326; color: #f0e6c0; cursor: pointer; font: inherit; }
+        /* What this tab kept from before a reload, put back: said until nothing differs from what is drawn. */
+        .kept-note { margin-top: 6px; padding: 5px 7px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
+        .kept-note[hidden] { display: none; }
         .ghost-said { font-size: 11px; color: #9cc4e8; margin: 0 0 4px; }
         .ghost-said[hidden] { display: none; }
         /* This tab's recent applies, each drawn again from the cache by a click. */
@@ -3010,9 +3009,9 @@
                     // selected -- focusing alone leaves the panel unbuilt.
                     this.selectFocusedPart();
                     // A part with work this tab kept from before a reload: said, and its
-                    // editor offers it back.
+                    // editor puts it back as it opens.
                     const kept = this.keptHere();
-                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit offers back` : ''}`, 'success');
+                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit puts back` : ''}`, 'success');
                     // The scan shells out to arduino-cli (a second or two): asked
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
@@ -5575,9 +5574,7 @@
                       </div>
                       <div id="part-build-note" class="build-note" hidden></div>
                       <div id="part-queue" class="queue-said" hidden></div>
-                      <div id="kept-offer" class="kept-offer" hidden><span class="kept-said"></span>
-                        <button type="button" id="kept-restore" title="Put back what this tab had before it was reloaded">Restore</button>
-                        <button type="button" id="kept-discard" title="Let it go: what is drawn stays">Discard</button></div>
+                      <div id="kept-note" class="kept-note" role="status" hidden></div>
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     </div>
@@ -5820,6 +5817,8 @@
                     return;
                 }
                 if (!count) {
+                    // What was put back from before a reload is let go of: nothing differs now.
+                    if (!this.textDiffersFromDrawn(target)) this.partEl('#kept-note')?.setAttribute('hidden', '');
                     summary.className = 'clean';
                     summary.textContent = 'No staged changes';
                     this.greyed(apply, 'nothing is staged against what is drawn: change a number first');
@@ -5923,8 +5922,6 @@
                     ghost.checked = this.ghostShown;
                     ghost.onchange = () => say(this.setGhost(ghost.checked));
                 }
-                this.partEl('#kept-restore').onclick = () => say(this.restoreKept(target));
-                this.partEl('#kept-discard').onclick = () => say(this.discardKept(target));
             }
 
             // One value staged by a control: a step of undo (a slider dragged through
@@ -6367,6 +6364,14 @@
                 this.invalidate?.();
             }
 
+            // Whether the SCAD in the editor is other than the SCAD drawn: typed and not yet
+            // rendered, or a tied part's values staged in it and not applied. SCAD only read
+            // (a part built by Python, a made piece) follows its numbers, and never differs.
+            textDiffersFromDrawn(target) {
+                const scad = this.scadStages[target?.key];
+                return Boolean(scad && scad.editable && scad.text !== null && scad.text !== (scad.drawnText ?? scad.own));
+            }
+
             // Whether a part is drawn from a variant this tab applied -- its numbers
             // moved, or its SCAD edited -- rather than as saved.
             drawnIsVariant(target) {
@@ -6507,7 +6512,8 @@
                     this.renderHistory(target);
                     this.showPresets(target, spec);
                     this.showJoin(target);
-                    this.offerKeptWork(target);
+                    stage.built = true;
+                    this.restoreKeptWork(target);
                     this.focusEditor();
                 } catch (err) {
                     console.error(err);
@@ -6559,7 +6565,8 @@
                 this.bindStageActions(target);
                 this.refreshStage();
                 this.renderHistory(target);
-                this.offerKeptWork(target);
+                stage.built = true;
+                this.restoreKeptWork(target);
                 this.focusEditor();
             }
 
@@ -6941,12 +6948,13 @@
                 if (this.scadEditor && this.scadTarget?.key === target.key) this.scadEditor.mark(messages ?? []);
             }
 
-            // ---- what a tab keeps, and offers back ----------------------------
+            // ---- what a tab keeps, and puts back ------------------------------
             //
             // A part's work -- numbers staged and not applied, its SCAD edited -- is kept
-            // in the tab's own storage as it changes, so a reload offers it back in the
-            // part's editor (Restore, Discard); a tab that keeps nothing offers nothing.
-            // Leaving with work not rendered, or SCAD not saved, asks first.
+            // in the tab's own storage as it changes, so after a reload the part's editor
+            // puts it back as it opens: staged, a step of Undo, and Revert lets it go. A
+            // tab that keeps nothing puts nothing back. Leaving with work not rendered, or
+            // SCAD not saved, asks first.
 
             readKeptWork() {
                 const kept = {};
@@ -6991,75 +6999,57 @@
             }
 
             // The editor of a target that had work kept before a reload, other than what it
-            // now shows: offered back, saying what it was.
-            offerKeptWork(target) {
-                const offer = this.partEl('#kept-offer');
-                if (!offer || this.partSection.dataset.target !== target.key) return;
+            // now shows: put back as it opens -- once its SCAD is in the editor, so the text
+            // goes back with the numbers -- and said, in the note under the bar and on the
+            // status line. What the address draws stays drawn until Apply.
+            restoreKeptWork(target) {
+                if (this.partSection?.dataset.target !== target.key) return;
                 const kept = this.keptWork[target.key];
-                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
-                if (!kept) {
-                    if (stage) stage.offerPending = false;
-                    offer.hidden = true;
-                    return;
-                }
-                const numbers = stage?.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => stage && k in stage.staged && !sameValue(stage.staged[k], v));
-                // Its SCAD not read yet: what was kept stays kept, and is asked about again once it is.
-                const waiting = Boolean(target.scadUrl && !scad);
-                const text = kept.scad && scad && kept.scad !== scad.text ? kept.scad : null;
+                const stage = this.partStages[target.key];
+                if (!kept) { if (stage) stage.offerPending = false; return; }
+                // Kept as it was, not overwritten, until it is put back: once its controls are
+                // built (a part whose SCAD is the one draft known to be so) and its SCAD is
+                // in the editor, whichever is last.
                 if (stage) stage.offerPending = true;
-                if (waiting && !numbers.length) return;
-                if (!numbers.length && text === null && !waiting) {
-                    delete this.keptWork[target.key];
-                    if (stage) stage.offerPending = false;
-                    offer.hidden = true;
-                    return;
-                }
-                // A tied part's text kept: the values in it that differ from what is shown.
-                const values = text !== null && stage?.tied
-                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
-                    : [];
-                const what = [
-                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
-                    numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
-                ].filter(Boolean).join(', and ');
-                offer.querySelector('.kept-said').textContent = `Kept in this tab from before it was reloaded: ${what}. Restore puts it back; Discard lets it go.`;
-                offer.hidden = false;
+                if (!stage?.built || (target.scadUrl && !(this.scadStages[target.key] && this.scadTarget?.key === target.key && this.scadEditor))) return;
+                const { ok, said } = this.restoreKept(target);
+                if (ok) this.setStatus(said, 'success');
             }
 
             restoreKept(target) {
                 const kept = this.keptWork[target.key];
                 const stage = this.partStages[target.key], scad = this.scadStages[target.key];
-                if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to restore` };
+                if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to put back` };
                 delete this.keptWork[target.key];
                 stage.offerPending = false;
-                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k]) => k in stage.staged);
+                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => k in stage.staged && !sameValue(stage.staged[k], v));
                 if (numbers.length) {
                     this.noteUndo(stage);
                     for (const [k, v] of numbers) stage.staged[k] = v;
                     this.showStaged(target);
                 }
-                let text = false;
-                if (kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor) {
+                const text = kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor ? kept.scad : null;
+                // A tied part's text: the values in it that differ from what is shown.
+                const values = text !== null && stage.tied
+                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
+                    : [];
+                if (text !== null) {
                     if (kept.from) scad.from = kept.from;
                     // A tied part's: put back staged, checked, and drawn by Apply, as a
                     // control's move is; else as typed: checked, and rendered once it reads.
-                    if (stage.tied) this.scadEditor.replaceText(kept.scad);
-                    else this.scadEditor.setText(kept.scad);
-                    text = true;
+                    if (stage.tied) this.scadEditor.replaceText(text);
+                    else this.scadEditor.setText(text);
                 }
-                this.partEl('#kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
-                const what = [text ? (stage.tied ? 'its edited SCAD, staged: checked, and Apply draws it' : 'its edited SCAD, checked and rendered once it reads') : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
-                return { ok: true, said: `${target.label}: restored from before the reload, ${what || 'nothing that differed'}` };
-            }
-
-            discardKept(target) {
-                delete this.keptWork[target.key];
-                const stage = this.partStages[target.key];
-                if (stage) stage.offerPending = false;
-                this.partEl('#kept-offer')?.setAttribute('hidden', '');
-                this.keepWork(target, { now: true });
-                return { ok: true, said: `${target.label}: what this tab kept from before the reload is let go; what is drawn stays` };
+                const what = [
+                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
+                    numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
+                ].filter(Boolean).join(', and ');
+                const note = this.partEl('#kept-note');
+                if (!what) { note?.setAttribute('hidden', ''); return { ok: false, said: `${target.label}: what was kept is what is drawn` }; }
+                const next = text !== null && !stage.tied ? 'checked, and drawn once it reads' : 'Apply draws it';
+                if (note) { note.textContent = `Put back from before the reload: ${what}. ${next[0].toUpperCase()}${next.slice(1)}; Revert lets it go.`; note.hidden = false; }
+                return { ok: true, said: `${target.label}: put back from before the reload, ${what}: ${next}, and Revert lets it go` };
             }
 
             // The parts of this site with work kept from before a reload.
@@ -7879,7 +7869,7 @@
                     else if (scad.text === own) editor.say("The part's own SCAD: edit it here; it is checked once typing stops and rendered once it reads.");
                     else editor.say(scad.text === scad.savedText && scad.from ? `The variant ${scad.from}, as saved.` : 'Edited, not saved: Save keeps it in git.');
                     if (editable) await this.loadSavedVariants(target);
-                    this.offerKeptWork(target);
+                    this.restoreKeptWork(target);
                 } catch (err) {
                     console.error(err);
                     if (slot) slot.textContent = `Could not open the SCAD: ${err.message}`;

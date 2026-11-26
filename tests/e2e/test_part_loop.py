@@ -608,8 +608,8 @@ def _drawn_again_from_the_history(page: Page, side: float) -> str:
 def _kept_over_a_reload(page: Page, staged: float, drawn: float) -> str:
     """A size staged and not applied, and the page reloaded: leaving asks first (the
     browser's question, answered by leaving), the status line names the part with
-    work kept -- its text, the size in it -- and its editor offers it back; Restore
-    stages it again. The offer's words."""
+    work kept -- its text, the size in it -- and its editor puts it back as it opens,
+    staged again and not drawn. The note's words."""
     _type_size(page, staged)
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
     asked = []
@@ -624,18 +624,16 @@ def _kept_over_a_reload(page: Page, staged: float, drawn: float) -> str:
     assert asked == ["beforeunload"], asked
     expect(_status(page)).to_contain_text(f"{PART} has work kept from before the reload")
     _edit(page)
-    offer = page.locator("#kept-offer")
-    expect(offer).to_be_visible(timeout=10000)
-    expect(offer).to_contain_text(f"its SCAD edited, size {staged:g}")
-    words = offer.locator(".kept-said").inner_text()
-    # Nothing is staged until it is restored: what is drawn is what the address names.
-    assert float(_size_box(page).input_value()) == pytest.approx(drawn, abs=0.05)
-    page.locator("#kept-restore").click()
-    expect(offer).to_be_hidden()
+    note = page.locator("#kept-note")
+    expect(note).to_be_visible(timeout=10000)
+    expect(note).to_contain_text(f"its SCAD edited, size {staged:g}")
+    words = note.inner_text()
+    # Staged again, its line and its control both; what is drawn is what the address names.
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
     expect(_size_box(page)).to_have_value(f"{staged:g}")
     assert _size_line(page).startswith(f"size = {staged:g};")
-    expect(_status(page)).to_contain_text("restored from before the reload")
+    committed = page.evaluate("() => window.fractalViewer.committedParams.size")
+    assert committed == pytest.approx(drawn, abs=0.05)
     return words
 
 
@@ -908,12 +906,13 @@ def test_designing_a_part_twice_round(
         "A size staged and not applied is kept over a reload",
         "A size of 20 mm staged and not applied, and the page reloaded: the browser asks "
         "before leaving, the status line names the part with work kept -- its SCAD as "
-        "edited, the size in it -- and Part › Edit offers it back. Restore stages it "
-        "again, its line and its control both; Discard would let it go.",
+        "edited, the size in it -- and Part › Edit puts it back: staged again, its line "
+        "and its control both, not drawn. Revert lets it go.",
         shown=kept,
     )
     page.locator("#revert-btn").click()
     expect(page.locator("#stage-summary")).to_have_text("No staged changes", timeout=10000)
+    expect(page.locator("#kept-note")).to_be_hidden()
 
     # Two tabs, at once.
     _two_tabs(page, site, story)

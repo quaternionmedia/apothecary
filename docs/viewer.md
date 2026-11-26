@@ -1085,9 +1085,11 @@ open.
 **Work is kept, per tab.** A part's SCAD as edited -- its values with it -- and
 a made piece's or a camera's numbers staged and not applied are kept in the
 tab's own storage as they change; after a reload
-the status line says which parts have work kept, and each one's editor offers
-it back: **Restore** puts it back, **Discard** lets it go. A browser that keeps
-nothing for the page offers nothing. Leaving the page with numbers staged and
+the status line says which parts have work kept, and each one's editor **puts it
+back** as it opens: staged, its text and its controls both, a step of Undo, and
+said in a note under the bar until nothing differs from what is drawn. What the
+address draws stays drawn until Apply; **Revert** lets the work go. A browser that
+keeps nothing for the page puts nothing back. Leaving the page with numbers staged and
 not applied, or SCAD edited and not rendered or not saved, asks first. Each
 part keeps its editor -- the SCAD's text, its undo and where it was scrolled --
 while another part is selected.

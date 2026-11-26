@@ -64,8 +64,8 @@ not lower the meter; deleting the control does. A control is not backed when
 no cell does exactly what it does:
 
 - a value no cell can type: a number box, the name a variant is saved under;
-- a question that stands only until it is answered: the offer of a tab's kept
-  work (Restore, Discard), a computed value's Replace or Keep;
+- a question that stands only until it is answered: a computed value's Replace
+  or Keep;
 - a choice no cell makes: the part a print makes, a comparison's drop-downs.
 
 **Taken back** (`TAKEN_BACK`) is the one lasting exception: a row's button that
