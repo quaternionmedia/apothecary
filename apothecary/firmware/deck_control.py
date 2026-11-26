@@ -83,7 +83,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Deque, Dict, List, Optional, Tuple
 
-from .. import jobs
+from .. import jobs, renames
 from . import can, devices, gcode, grbl
 from . import deck as decks
 from . import deck_screens as screens
@@ -130,9 +130,20 @@ ARM_WINDOW_S = 5.0  # the second long press of two must begin within this of the
 
 @dataclass(frozen=True)
 class Machine:
-    name: str  # the garage's node, as the keys say it
+    written: str  # the garage's node, as the program builds it
     kind: str  # "printer" or "router": the dialect's machine kind
-    node: str  # the node its board is pinned to
+    written_node: str  # the node its board is pinned to, as the program builds it
+
+    @property
+    def name(self) -> str:
+        """The garage's node as the keys say it: its name now, however a person renamed it
+        (``apothecary/renames.py``)."""
+        return renames.current(SITE, self.written)
+
+    @property
+    def node(self) -> str:
+        """The node its board is pinned to, at the names its nodes have now."""
+        return renames.current(SITE, self.written_node)
 
 
 MACHINES = (

@@ -627,6 +627,26 @@ connected or not, unless another was chosen meanwhile. A part that says how it
 is cut has Toolpath on its ring for a router with no board as for one with; a
 printer's plan is made in its own Machine.
 
+#### A machine renamed
+
+A machine's **Name** in Selected is a field: a name typed there and Enter
+renames it, and its path with it (`PUT /sites/{name}/machines/{path}/name`,
+`apothecary/machine_names.py`); Panels › Machine › Rename takes a person to the field,
+for the machine selected or the one whose Machine is open. Everything kept under
+its old path moves to the new one: the boards pinned to it or inside it, its
+plan, the filament loaded on it, its first-layer offset, its tuning documents
+and a router's cut correction, its bed's mount and the places kept on it, and the
+slices made for it, the jobs it ran and the drawers of the pieces it made. The
+answer says what moved, and anything that could not, which is left where it was.
+The rename is kept in the state folder (`renames/<site>.json`) and stood in the
+site each time it is built, Reset included; what the program names by its own
+words -- the tour's journeys, the Stream Deck's machine keys, the simulated
+printer's pinned board -- follows it. A name is letters, digits, `_` and `-`, with
+no dot, and not one a node beside it has; typing the program's own name back
+keeps nothing renamed. Refused while the bench is at work (`GET
+/firmware/busy`: a job, a bed reading, an armed port), since a job streaming
+names its machine by the path it began with.
+
 #### Its board pinned and not connected
 
 A machine with a board pinned to it, at its node or beneath it, that no port

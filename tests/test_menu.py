@@ -1534,9 +1534,13 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Loops", None, 2),
         # Its bed's readings and the shims that level it.
         ("Bed", None, 4),
+        # Its name, typed in Selected.
+        ("Rename", "machine:rename", 9),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
+    assert address_of(root, "machine:rename") == "449"
+    assert carried_by("machine:rename").name == "VIEWER"
     # The Deck, a tool: its window, then the Stream Deck +'s knobs and the strip's screen.
     deck = next(c for c in tools.children if c.label == "Deck")
     assert [(c.label, c.action, c.cell) for c in deck.children] == [

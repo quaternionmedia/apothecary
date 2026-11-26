@@ -7,8 +7,8 @@ survive across requests instead of being rebuilt fresh each time, unlike
 keep between calls.
 
 Limits: state is lost on a server restart -- all but the cameras a person
-added, whose records are kept in the state folder and stood in the site as it
-is built again -- and is not shared across multiple worker processes (each
+added and the nodes a person renamed, whose records are kept in the state folder
+and stood in the site as it is built again -- and is not shared across multiple worker processes (each
 Uvicorn worker would get its own store). Fine for a single-process dev server,
 not for anything beyond this prototype -- a real deployment would swap this for
 an actual persistence layer without changing the call sites below.
@@ -64,14 +64,16 @@ class SiteStore:
     def get(self, name: str) -> Assembly:
         """Return the persisted Site, building it from its factory on first access.
 
-        A site built is given its cameras, from their records in the state folder
-        (``apothecary/vision/cameras.py``): they are kept across a restart, and
-        stand where they stood."""
+        A site built is given its nodes' names as a person renamed them
+        (``apothecary/renames.py``) and its cameras, from their records in the state
+        folder (``apothecary/vision/cameras.py``): both are kept across a restart."""
         factory, _validator = self._entry(name)
         if name not in self._sites:
+            from . import renames
             from .vision.cameras import stand
 
             site = factory()
+            renames.stand(name, site)
             stand(name, site)
             self._sites[name] = site
         site = self._sites[name]
@@ -146,12 +148,16 @@ class SiteStore:
         stay pinned (``apothecary/vision/views.py``). A camera a person added
         stays, stood back where it was added, as every other part is stood back
         where the site's code puts it; its device and its lens stay, and so do
-        the pictures it took (``apothecary/vision/cameras.py``)."""
+        the pictures it took (``apothecary/vision/cameras.py``). A node a person
+        renamed keeps its name: what was kept under it moved with it
+        (``apothecary/renames.py``)."""
         factory, _validator = self._entry(name)
+        from . import renames
         from .vision.cameras import stand
         from .vision.views import forget_made
 
         site = factory()
+        renames.stand(name, site)
         forget_made(name)
         stand(name, site, back=True)
         self._sites[name] = site

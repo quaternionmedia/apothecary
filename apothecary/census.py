@@ -134,6 +134,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
+    "name-input": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a box for a machine's name, which renames it and moves what is kept under it",
+    ),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
     "pos-y": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, along"),
     "pos-z": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, up"),
@@ -1067,6 +1072,8 @@ RING_BACKED: Dict[str, str] = {
     "ctl": "control:arm",
     "ctl-disarm": "control:disarm",
     "ctl-pop": "panel:pad",
+    # A machine's Name in Selected: Panels › Machine › Rename takes a person to it.
+    "name-input": "machine:rename",
     "estop": "control:estop",
     "pad-estop": "control:estop",
     "cmd:M104 S{h-hot}": "control:hotend-on",
@@ -1448,6 +1455,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
+    "nameInput:change:renameMachine": (WIDGET, WHAT_IS_THERE, "typing a machine's new name"),
     "zoomInLink:click:stepIn": (WIDGET, WHAT_YOU_SEE, "the step-in button on the chosen piece"),
     # done to the scene itself
     "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to step in"),

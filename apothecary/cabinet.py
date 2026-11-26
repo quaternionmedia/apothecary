@@ -261,6 +261,12 @@ def cabinet_dir() -> Path:
     return state_dir() / "cabinet"
 
 
+def lock() -> threading.RLock:
+    """The lock every drawer is written under: what rewrites drawers from outside, a
+    machine renamed (``machine_names.py``), takes it as this module does."""
+    return _LOCK
+
+
 def _folder(part: str) -> Path:
     if not PART.match(part or ""):
         raise Refused(f"{part!r} is not a part's name")

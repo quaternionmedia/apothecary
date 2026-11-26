@@ -212,6 +212,7 @@ AREAS = {
             "test_toolpath_preview.py",
             "test_machine_plans.py",
             "test_missing_board.py",
+            "test_rename_a_machine.py",
             "test_projector_page.py",
             "test_make.py",
             "test_a_piece_against_its_design.py",

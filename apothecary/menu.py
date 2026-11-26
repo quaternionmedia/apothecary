@@ -1032,6 +1032,8 @@ def _panels(rig: bool = False) -> Option:
                 Option(id="panel:pad", label="Control pad", action="panel:pad"),
                 _loops(toggle("loops", labels["loops"])),
                 _bed([toggle(pid, labels[pid]) for pid in BED_WINDOWS]),
+                # Its name, typed in Selected: last, so no cell before it moves.
+                Option(id="machine:rename", label="Rename", action="machine:rename"),
             ],
         ),
     }
@@ -2636,6 +2638,7 @@ CAN_VERBS: Dict[str, CanVerb] = {
     # or a rule is the window's choice, which nothing the server answers stands in the way of.
     "panel:toggle:machine": None,
     "panel:pad": None,
+    "machine:rename": None,
     "deck:knobs": ByJob("knobs.stop", "knobs.start", running="knobs.machine"),
     "deck:machine:": "knobs.machine",
     "deck:step:": "knobs.step",
@@ -2956,6 +2959,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "toolpath": Carries.VIEWER,
     # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
+    # A machine's name: the page takes a person to it in Selected, where the name typed
+    # is sent (PUT /sites/{site}/machines/{path}/name).
+    "machine": Carries.VIEWER,
     # A printer's Workspace: the page opens the window on the printer, watches
     # its board and keeps frames with its polls (widgets/working_space.js).
     "working": Carries.VIEWER,

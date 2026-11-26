@@ -1399,9 +1399,8 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
         machine = page.locator(".panel[data-panel='machine']")
         expect(machine).to_be_visible(timeout=10000)
         expect(windows.tab(page, "machine")).to_have_attribute("title", "printer_1 · /dev/ttyFAKE1")
-        expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
-            "printer_1"
-        )
+        # A machine's name is a field, which renames it (renames.py).
+        expect(page.locator("#selected-body #name-input")).to_have_value("printer_1")
         # It ends: the row says how, and running is no longer said.
         ended = _until_it_ends(printer_url, cancel=True)
         assert ended["stage"] == "cancelled"
@@ -1570,9 +1569,7 @@ def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page,
     expect(contents.filter(has_text="workbench")).to_be_visible(timeout=10000)
     page.evaluate(FRAMES, 2)
     badge.click()
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
-        "printer_1", timeout=5000
-    )
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1", timeout=5000)
     # Unpinned, the badge and the marks go.
     page.request.delete(f"{printer_url}/sites/garage/nodes/{BOARD}/device")
     page.evaluate("() => window.fractalViewer.rescanDevices()")
