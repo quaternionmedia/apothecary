@@ -1166,7 +1166,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   in), and that a merge brings its values with it -- or, for a variant whose
   values are in a `.variant.json` beside its SCAD and not in its text, that a
   merge does not apply them until it is saved again. The Variants window lists
-  it, and opens when it is closed.
+  it, and opens when it is closed; the status line names the next step, the
+  header's **⚒ Make**, which takes the variant drawn to the machine it names.
+  After an Apply that drew a variant not saved, it names Save in the SCAD editor.
   What would be a failed render is not saved. A part in a submodule
   (gridfinity) is saved as its **overlay**: the include of the upstream file
   and the values set after it, the submodule never touched; an edit of the

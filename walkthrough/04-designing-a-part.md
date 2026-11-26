@@ -45,7 +45,7 @@ Apply: the text rendered, its size in it and nothing passed beside it, into the 
 ![Apply draws the variant, marked as not saved](screenshots/04-03-apply-draws-the-variant-marked-as-not-saved.png)
 
 ```
-calibration_cube regenerated: an applied variant, not saved; Part › Save keeps it in git
+calibration_cube regenerated: an applied variant, not saved; Save in the SCAD editor keeps it in git
 envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 ```
 

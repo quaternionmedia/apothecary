@@ -36,7 +36,7 @@ The line replaced with a smaller cube on top. Checked once typing stops, and 300
 ![A change that reads is rendered soon after its check](screenshots/06-03-a-change-that-reads-is-rendered-soon-after-its-che.png)
 
 ```
-calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git
+calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Save in the SCAD editor keeps it in git
 ```
 
 ## 4. Part › Save keeps it as a variant in git
@@ -46,7 +46,7 @@ calibration_cube's ring, Part › Save: the edited SCAD, its values in it, commi
 ![Part › Save keeps it as a variant in git](screenshots/06-04-part-save-keeps-it-as-a-variant-in-git.png)
 
 ```
-calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Its SCAD editor says how to make it the part's source. (⌗39)
+calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Next, ⚒ Make calibration_cube on ender3, in the header, takes it there to be made. (⌗39)
 ```
 
 ## 5. Fullscreen maximises the SCAD editor
@@ -62,7 +62,7 @@ In the SCAD editor: a name typed, taller, and the top made as big as the cube, r
 ![Round two: a name, a change and Save](screenshots/06-06-round-two-a-name-a-change-and-save.png)
 
 ```
-calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. Its SCAD editor says how to make it the part's source.
+calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. Next, ⚒ Make calibration_cube on ender3, in the header, takes it there to be made.
 ```
 
 ## 7. Part › Variants draws the first again
@@ -90,7 +90,7 @@ The last line made a small cube 12 mm under the part, and F5 in the editor, Open
 ![F5 checks and draws at once, and a part under the floor is flagged](screenshots/06-10-f5-checks-and-draws-at-once-and-a-part-under-the-f.png)
 
 ```
-calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git
+calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Save in the SCAD editor keeps it in git
 ```
 
 ## 11. A draft is kept over a reload, and put back

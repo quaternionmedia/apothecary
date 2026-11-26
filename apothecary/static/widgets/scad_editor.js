@@ -190,7 +190,7 @@ function mergeSaid(v) {
  * the trash. A part in a submodule's variant is an overlay of its upstream SCAD,
  * and says so. */
 export function variantChoices(list, { chosen = null } = {}) {
-    if (!list || !list.length) return `<span class="empty">no variants saved yet: Save keeps one in git</span>`;
+    if (!list || !list.length) return `<span class="empty">no variants saved yet: Save, in the SCAD editor, keeps one in git</span>`;
     return list.map((v) => {
         const head = v.merged
             ? `<span class="in-head" title="HEAD already holds it: merged">in HEAD</span>`
