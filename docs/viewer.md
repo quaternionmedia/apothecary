@@ -649,7 +649,7 @@ site, a target no longer in it or nothing at its level, Site with no site regist
 - **Panels** is one cell per group of windows ([below](#the-windows)), each a ring of
   its group's windows and their verbs: Site › Site, Problems, Pinned, Jobs, SCAD,
   Workspace ([working-space.md](working-space.md)), Lighting (a rig's, greyed on a site
-  without one, [lighting.md](lighting.md)) and Layers; Part › Selected and Motion;
+  without one, [lighting.md](lighting.md)) and Layers; Part › Selected, Motion and Badge;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
   word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
