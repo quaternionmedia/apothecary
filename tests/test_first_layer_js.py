@@ -16,7 +16,7 @@ import pytest
 
 from apothecary.models import PrintSettings
 from apothecary.projects.parts import bed_shims
-from apothecary.slicer import compose
+from apothecary.slicer import compose, first_layer_offset
 from apothecary.slicer.modules import get_module
 from apothecary.slicer.profiles import ADHESIONS, Declared, load_profile
 from apothecary.slicer.service import Target, first_layer
@@ -42,6 +42,8 @@ out.free = ["probe", "brim", "raft"].map((how) => f.tryRefused(how, slices.plain
 out.again = ["probe", "brim", "raft"].map((how) => f.tryRefused(how, slices[how], {}, "cube"));
 out.other = f.tryRefused("raft", slices.brim, {}, "cube");
 out.own = %(resolved)s.map((r) => [f.own("levelling", r), f.own("adhesion", r)]);
+out.offsets = %(offsets)s.map(f.offsetWords);
+out.offsetOptions = f.offsetOptions(%(offsets)s, -0.07);
 console.log(JSON.stringify(out));
 """
 
@@ -61,6 +63,7 @@ def _run(tmp_path: Path, slices: dict, resolved: list) -> dict:
             "module": MODULE.as_uri(),
             "slices": json.dumps(slices),
             "resolved": json.dumps(resolved),
+            "offsets": json.dumps(first_layer_offset.choices()),
         }
     )
     done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=60)
@@ -78,6 +81,10 @@ def out(fake_orcaslicer, tmp_path):
         **{how: _settings(plain.adhered(how)) for how in ADHESIONS},
         "probe": _settings(plain, "probe-each-print"),
         "stored": [{"name": "start", "value": ["home", "stored-mesh"]}],
+        "lowered": [
+            {"name": "start", "value": ["home", "first-layer-offset", "probe-each-print"]},
+            {"name": "z_offset", "value": "-0.05"},
+        ],
     }
     # What GET /slicer/first-layer answers for bed_shims and for a part that declares
     # neither on printer_1, as the server works it out; then answers it may give.
@@ -147,6 +154,21 @@ def test_how_a_slice_was_made_is_said_in_the_rows_words(out):
     assert made["raft"]["adhesion"] == "no brim, raft: 3 layers under each piece"
     assert made["none"]["adhesion"] == "neither brim nor raft"
     assert made["stored"]["levelling"] == "the stored mesh: M420 S1 after G28"
+    # A first-layer offset kept for the printer is said after the levelling; 0 is not said.
+    assert made["lowered"]["levelling"] == (
+        "probe first: G29 once the bed is hot, the nozzle 0.05 mm lower"
+    )
+
+
+def test_the_first_layer_rows_words_are_the_servers(out):
+    """Each offset the first layer row offers, in the words the server says it in, and a
+    kept one that is none of them offered too, in its place."""
+    choices = first_layer_offset.choices()
+    assert out["offsets"] == [first_layer_offset.words(v) for v in choices]
+    options = out["offsetOptions"]
+    assert options.index('value="-0.07">0.07 mm lower<') < options.index('value="-0.05">')
+    assert '<option value="0">as the probe puts it</option>' in options
+    assert '<option value="0.5">0.50 mm higher</option>' in options
 
 
 def test_a_try_the_part_declares_against_or_the_piece_had_is_refused_saying_so(out):

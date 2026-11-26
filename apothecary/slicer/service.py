@@ -47,7 +47,7 @@ from ..firmware import devices
 from ..meshes import MeshError, read_stl
 from ..models.measures import MeasurePlan
 from ..state_folder import private_folder, state_dir, write_whole
-from . import compose, filaments, tuning
+from . import compose, filaments, first_layer_offset, tuning
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -337,6 +337,8 @@ def slice_into(
     # settings its tuning holds for that filament, fed back from pieces it made.
     profile = filaments.chosen(printer.profile, printer.at.site, printer.at.path, module.id)
     profile = tuning.applied(profile, printer.at.site, printer.at.path, module.id)
+    # The first-layer offset kept for the printer, where its profile's start names it.
+    profile = first_layer_offset.applied(profile, printer.at.site, printer.at.path, module.id)
     profile = compose.levelled(profile, *asked_levelling(target, levelling))
     declared = target.declared.adhered(adhesion)
     resolved = module.settings(profile, declared, port=printer.at.port)

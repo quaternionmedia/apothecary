@@ -695,6 +695,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a drop-down of how the next slice levels the bed at its start: the part's own,"
         " probe first, or home only",
     ),
+    "print-offset": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a drop-down of the printer's first-layer offset, the nozzle lower or higher than"
+        " its probe puts it, which keeps the one chosen: its next slices are made with it",
+    ),
     "print-filament": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1150,6 +1156,8 @@ RING_BACKED: Dict[str, str] = {
     "print-level": "print:level",
     # Its first layer's hold: the Print cell's Adhesion steps it.
     "print-adhesion": "print:adhesion",
+    # The printer's first-layer offset: the Print cell's First layer steps it and keeps it.
+    "print-offset": "print:offset",
     # A part's piece's Feedback › Measure is Keep: what is typed and chosen under measured,
     # seen and note filed, or a person taken to the first field when nothing is. Note files
     # the note alone, or takes a person to its field; Take turn and Undo turn are the buttons'.
@@ -1366,6 +1374,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "changing the plate's thickness keeps it for the machine's board",
+    ),
+    # the Print window's first layer row, left without a choice: drawn again as kept
+    "print-offset:blur:renderOffset": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "leaving the first layer drop-down draws it again as the offset kept",
     ),
     "c-needs:click:closest": (
         WIDGET,

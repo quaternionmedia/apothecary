@@ -12,8 +12,14 @@
  *                         it chooses in and its choice there
  *   words(choice)         a choice in words, "probe first: G29 once the bed is hot"
  *   options(choices)      a row's <option>s
+ *   offsetWords(mm)       a first-layer offset as the nozzle's move: "0.05 mm lower", "as
+ *                         the probe puts it" (slicer/first_layer_offset.py words)
+ *   offsetOptions(choices, kept)
+ *                         the first layer row's <option>s: each choice, and the one kept
+ *                         where it is none of them
  *   made(settings)        how a kept slice was made, from its settings: { levelling,
- *                         skirt, adhesion }, each in words, null where it recorded none
+ *                         skirt, adhesion }, each in words, null where it recorded none;
+ *                         a first-layer offset other than 0 is said after its levelling
  *   tryRefused(how, settings, declared, part)
  *                         why a try is not offered on a piece sliced with `settings` of
  *                         `part`, which declares `declared`; null where it is
@@ -61,6 +67,19 @@ export function options(choices) {
     return choices.map((c) => `<option value="${c.value}">${words(c)}</option>`).join("");
 }
 
+export function offsetWords(mm) {
+    const v = Number(mm);
+    if (!Number.isFinite(v) || Math.abs(v) < 1e-9) return "as the probe puts it";
+    return `${Math.abs(v).toFixed(2)} mm ${v < 0 ? "lower" : "higher"}`;
+}
+
+export function offsetOptions(choices, kept) {
+    const all = [...(choices || [])];
+    if (kept != null && !all.some((c) => Math.abs(c - kept) < 1e-9)) all.push(Number(kept));
+    all.sort((a, b) => a - b);
+    return all.map((v) => `<option value="${String(v)}">${offsetWords(v)}</option>`).join("");
+}
+
 // A slice record's settings by name, each its value.
 function named(settings) {
     return Object.fromEntries((settings || []).map((s) => [s.name, s.value]));
@@ -84,6 +103,8 @@ function brimOf(values) {
 export function made(settings) {
     const values = named(settings);
     const levelled = levelledBy(values);
+    const offset = Number(values.z_offset);
+    const lifted = Number.isFinite(offset) && offset !== 0 ? `, the nozzle ${offsetWords(offset)}` : "";
     const skirt = "skirt_loops" in values
         ? (Number(values.skirt_loops) ? `${values.skirt_loops} loops of skirt` : "no skirt")
         : "the printer's own skirt";
@@ -99,7 +120,7 @@ export function made(settings) {
         if (layers) said.push(words(raft(layers)));
         if (said.length) adhesion = said.join(", ");
     }
-    return { levelling: levelled ? words(levelled) : null, skirt, adhesion };
+    return { levelling: levelled ? words(levelled) + lifted : null, skirt, adhesion };
 }
 
 // What a part declares of how its first layer holds, in a few words: the raft before the

@@ -209,9 +209,15 @@ one machine on the number another held; nothing in them moves a machine.
       window's levelling *probe first*, or `bed_shims`, which declares it),
       printed and cancelled once its first layer is down. Its drawer's *made*
       row (Part › Feedback) says what the board said as it began: *levelling
-      on*, its probe's offset, the mesh's range, where it probed. A nozzle too
-      close to extrude, or too far to hold, is the probe's Z offset: the
-      one-layer square below with the mesh on, and the new `M851` kept.
+      on*, its probe's offset, the mesh's range, where it probed; the job keeps
+      the mesh itself. A nozzle too close to extrude, or too far to hold, is the
+      first layer's height: the bed wiped with isopropyl, `first_layer_square`
+      sliced (it probes first) and printed, and the Print window's *first layer*
+      row stepped 0.05 mm at a time until the square's lines press flat into one
+      sheet -- round and standing apart, or not holding, a step lower; thin,
+      see-through or scraped, a step higher. Each square's look filed in its
+      drawer. The offset is the printer's own in the app, on top of `M851`,
+      which stays as the bench measured it.
 
 Shims, once the bed's tilt is to be taken out at its mounts
 ([docs/bed-shims.md](bed-shims.md)):
@@ -270,8 +276,10 @@ Shims, once the bed's tilt is to be taken out at its mounts
       which.
 - [ ] With filament loaded: **▶ Print** it, and watch the first layer. Note
       any stutter on long straight moves.
-- [ ] A one-layer square: the Z offset set on the printer's screen to it, and
-      the new `M851` kept.
+- [ ] A one-layer square (`first_layer_square`): the Print window's *first
+      layer* row kept at what it shows (D, the first layer with the mesh on);
+      the Z offset on the printer's screen left alone, so `M851` stays the
+      bench's.
 - [ ] Hotend **200** held two minutes on the temperature chart: within ±2 °C,
       or PID tuned from the printer's menu.
 - [ ] 100 mm of filament extruded from the printer's screen and measured; the

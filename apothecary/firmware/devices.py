@@ -2248,8 +2248,10 @@ START_SAID_MOST = 400
 
 def levelled_by(lines: List[str]) -> Optional[dict]:
     """What a print's start had the board say of its levelling (compose.SAID_LINES):
-    whether levelling was on, the probe's offset, the mesh's range and where its probe
-    said the grid lies. None when it said none of them."""
+    whether levelling was on, the probe's offset, the mesh it follows and its range, and
+    where its probe said the grid lies. The mesh is kept as a bed reading keeps one
+    (``LevelingRecord.mesh``: its rows as the board printed them), so the bed a print was
+    laid on is read beside the bed readings. None when it said none of them."""
     on = gcode.parse_leveling_state(lines)
     offset = gcode.parse_probe_offset(lines)
     meshes = gcode.parse_meshes(lines)
@@ -2260,6 +2262,7 @@ def levelled_by(lines: List[str]) -> Optional[dict]:
     said: dict = {"leveling_on": on, "probe_offset": offset}
     if mesh:
         said["mesh_range"] = gcode.mesh_stats(mesh).get("range")
+        said["mesh"] = mesh
     if points:
         said["area"] = gcode.probed_area(points, mesh)
         said["points"] = len(points)

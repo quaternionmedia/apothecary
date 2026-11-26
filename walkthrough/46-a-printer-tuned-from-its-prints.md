@@ -140,7 +140,8 @@ A third coupon of the same printer, so other readings: X's scale is read 0.254 %
 0.3 % was planted, two of its standard errors off, as one turn in twenty is. X and Y
 agree, so the XY shrinkage takes half of their mean. The first layer's thickness is
 said and not applied: printer_1's profile holds
-`z_offset` at 0, and a measured first-layer offset is a start piece not yet built.
+`z_offset` at 0, and the first-layer offset its slices take is the one kept in its Print
+window from one-layer squares.
 
     >>> turn.proposal("z_offset").why.startswith("said, not applied")
     True

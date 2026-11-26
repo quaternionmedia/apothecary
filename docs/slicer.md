@@ -59,7 +59,7 @@ how a slice uses it:
 |---|---|---|
 | Firmware: Marlin TH3D UFW 2.94a | [the bench](validation/2026-09-20-ender-bench.md), M115 | `gcode_flavor` marlin |
 | Build volume 220 x 220 x 250 mm | Creality's figure (the part's `BUILD`) and the bench's pin of printer_1 | `printable_area`, `printable_height` |
-| Probe offset X-44 Y-10 Z-3.15 | the bench, M851 | Held, nothing applied: the firmware applies it when G28 homes Z with the probe; `z_offset` stays 0 |
+| Probe offset X-44 Y-10 Z-3.15 | the bench, M851 | Held, nothing applied: the firmware applies it when G28 homes Z with the probe; the profile's `z_offset` is 0, and the [first-layer offset](#a-printers-first-layer-offset) kept for the printer stands in its place |
 | The stored mesh, leveling off | the bench, M420 V | Held, nothing applied: the start is `home` alone |
 | A bound on a probe's range: 0.3 mm | [the machine-setup record](validation/2026-11-07-machine-setup.md#recommendations) of 2026-11-07, the Ender's first recommendation: after tramming, Probe bed is expected to find a range under it | The `stored-mesh` piece: the board's newest reading must be a probe under it |
 
@@ -77,7 +77,7 @@ what it will do, before anything is built. The printer's profile names its piece
 | start | `home` | The printer's own start, as its OrcaSlicer profile has it: heat, home every axis (G28), prime the nozzle; no levelling | printer_1's |
 | start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1), and have the board say it and the probe's offset (M420 V, M851), which the print keeps; refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
 | start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29 V3, saying each point), turn levelling on (M420 S1) and have the board say the mesh and the probe's offset (M420 V, M851), which the print keeps; refused without the probe whose offset the profile holds | built; a person names it |
-| start | `first-layer-offset` | A first-layer Z offset measured at the bench, added to every Z | stub |
+| start | `first-layer-offset` | The nozzle raised or lowered by the [first-layer offset](#a-printers-first-layer-offset) kept for the printer in its Print window: OrcaSlicer's `z_offset`, added to every Z the slicer writes; 0 until one is kept. Writes nothing into the start | printer_1's |
 | filament | `printer` | The printer's one filament, named in its profile | built |
 | filament | `choose` | The filament loaded on the printer, chosen among OrcaSlicer's profiles of its vendor that fit its machine (`GET /slicer/filaments`, the Print window's filament row); the profile's own until one is loaded | printer_1's |
 | declared | `word-print-settings` | A word declares print settings for the pieces made as it, in the shape a part declares them | stub |
@@ -109,7 +109,7 @@ The profile is not changed: the slice's `start` setting says the slice asked.
 Beside it, the **adhesion** row (the part's own, a 5 mm brim, a raft of 3 layers,
 or neither) is sent as `adhesion` and set over what the part declares
 (`profiles.ADHESIONS`, `Declared.adhered`), each value's source saying the slice
-asked. The ring's Print › Levelling and Adhesion step the two rows. Each row's
+asked. The ring's Print › Next slice › Levelling and Adhesion step the two rows. Each row's
 first choice says what it comes to for the part under *makes* on this printer
 (`GET /slicer/first-layer`): *the part's own: probe first* where the part declares
 it, *the printer's: home only* where the profile's start names no levelling, and
@@ -118,6 +118,37 @@ Fixes' Make these chooses probe first, since the shims are printed on a bed not
 yet level. The rows' choices are said in one set of words
 (`apothecary/static/first_layer.js`), which Part › Feedback's tries on a print that stopped
 and its drawer's made row say too ([cabinet.md](cabinet.md#a-print-that-stopped)).
+
+## A printer's first-layer offset
+
+How far a printer's nozzle stands on the first layer from where its probe puts
+it is kept for the printer, and every slice made for it after takes it as
+OrcaSlicer's `z_offset`, added to every Z the slicer writes: negative lowers the
+nozzle, positive raises it (`apothecary/slicer/first_layer_offset.py`). It is
+taken where the printer's profile names the start piece `first-layer-offset`, as
+printer_1's does, and it is 0 until one is kept. The probe's own offset (`M851`)
+is the board's, applied by the board when `G28` homes Z with the probe; this one
+stands on top of it, and is never written to the board. The start's own lines,
+its prime among them, are the profile's and are not moved.
+
+A one-layer square says which way to go: `first_layer_square`, a square one
+first layer thick that declares the first layer `bed_shims` prints with (the bed
+probed first, no brim, no skirt). Lines pressed flat into one sheet are right;
+lines round and standing apart, or not holding, say the nozzle is high; lines
+thin, see-through, ridged or scraped say it is low
+([its README](../parts/first_layer_square/README.md)).
+
+The Print window's **first layer** row holds the offset kept for the printer,
+from 0.50 mm lower to 0.50 mm higher by 0.05 mm, and choosing one keeps it at
+once, with when it was kept; the ring's Print › Next slice › First layer steps it
+by one and keeps it. A slice's `z_offset` setting says the offset it took and
+when it was kept, origin `measured`, or *no first-layer offset kept* where none
+was; Part › Feedback's made row says it after the levelling, *the nozzle 0.05 mm
+lower*. `POST /slicer/first-layer/offset` `{site, printer, offset, note}` keeps
+one, refused outside 0.5 mm either way or past a hundredth of a mm, since an
+offset further out is the probe's own to measure again; the state folder's
+`first-layer-offset/<site>/<printer>.json` holds it with every offset kept
+before.
 
 ## Print settings from the part
 
@@ -172,7 +203,8 @@ used. The routes:
 | `GET /slicer/status` | Each slicer module, the one a slice uses, and the printers that keep a profile |
 | `POST /slicer/install` | Install the pinned release (a task) |
 | `POST /slicer/slice` | `{part, port}` or `{part, site[, printer]}` or `{part, printer}`: slice a part or a made piece for a printer (a task). `part` is a node's path in the printer's site, as `GET /jobs/choices` lists it for the Print card, or a part's name; a site named without its printer slices for its one printer; `variant`, a part's cached variant, is sliced in place of its own STL |
-| `GET /slicer/first-layer?part=...` | With the printer named as `POST /slicer/slice` names it: how a slice levels and holds where it asks neither, and whose each is -- `levelling` the part's declared, else the printer profile's start (homing alone where it names no levelling piece); `adhesion` the part's declared `brim_width` and `raft_layers`, else the slicer profile's own. The Print window's rows say it as their first choice |
+| `GET /slicer/first-layer?part=...` | With the printer named as `POST /slicer/slice` names it: how a slice levels and holds where it asks neither, and whose each is -- `levelling` the part's declared, else the printer profile's start (homing alone where it names no levelling piece); `adhesion` the part's declared `brim_width` and `raft_layers`, else the slicer profile's own. The Print window's rows say it as their first choice. `offset`: the printer's [first-layer offset](#a-printers-first-layer-offset), whether its profile takes one, the one kept and when, and the row's choices |
+| `POST /slicer/first-layer/offset` | `{site, printer, offset, note}`: the printer's first-layer offset kept, mm, negative lower; its next slices take it |
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |

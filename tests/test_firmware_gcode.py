@@ -1966,7 +1966,12 @@ def test_a_print_keeps_what_its_start_said_of_its_levelling(fake_arduino_cli, sc
     assert job.record.outcome == "done"
     sent = ScriptedTransport.instances[0].sent
     assert sent[sent.index("G29 V3") :][:3] == ["G29 V3", "M420 S1 V", "M851"]
-    assert job.record.detail["start"] == {
+    start = job.record.detail["start"]
+    # The mesh itself, as the board printed it and a bed reading keeps one.
+    mesh = start.pop("mesh")
+    assert mesh == gcode.parse_meshes(ScriptedTransport.instances[0].replies["M420 S1 V"])[0]
+    assert len(mesh) == 3 and all(len(row) == 3 for row in mesh)
+    assert start == {
         "leveling_on": True,
         "probe_offset": {"x": -44.0, "y": -10.0, "z": -3.15},
         "mesh_range": 0.4,
