@@ -87,7 +87,7 @@ import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/
 import { clock, degrees, heater, mm as mmText, sentence, span, stamp, viaRing } from "/static/format.js";
 import { toolPosition as toolPositionOf, fileOrigin, MOVE_COLORS } from "/static/machine_marks.js";
 import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
-import { ADHESION, LEVELLING, options, own, words as firstLayerWords } from "/static/first_layer.js";
+import { ADHESION, LEVELLING, offsetOptions, options, own, words as firstLayerWords } from "/static/first_layer.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
@@ -203,6 +203,10 @@ const CARDS = `
             <select id="print-adhesion" title="How the next slice's first layer holds: as the part declares, else as this printer's profile says; a brim round each piece; a raft under each; or neither">
                 ${options(ADHESION)}
             </select>
+        </div>
+        <div class="row" id="print-offset-row" hidden><label for="print-offset">first layer</label>
+            <select id="print-offset" title="This printer's first-layer offset: the nozzle lower or higher than its probe puts it, kept for the printer, and every slice made for it after is made with it (OrcaSlicer's z_offset). A one-layer square (first_layer_square) says which way: lines round and standing apart, or not holding, lower; lines thin, see-through or scraped, higher"></select>
+            <span class="s" id="print-offset-said"></span>
         </div>
         <div class="row"><label for="print-pick">file</label>
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
@@ -1540,7 +1544,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
     // `wanted` is a part asked for from outside (print.choose), chosen once listed.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null, ownFor: null };
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null, ownFor: null, offset: null, offsetDrawn: null };
     // Slicing: the slicer's status (whether one is installed), and the task that
     // slices what makes names, followed by tasks.js at the slicer's own routes.
     // `shown` is the kept file whose slice the card says, the one chosen in its files.
@@ -1805,6 +1809,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         // A printer's slice levels as chosen here, for that slice (compose.levelled).
         $("print-level-row").hidden = !words().slice || !part;
         $("print-adhesion-row").hidden = !words().slice || !part;
+        // The printer's first-layer offset, where its profile's start names it.
+        $("print-offset-row").hidden = !words().slice || !part || !(prt.offset && prt.offset.named);
         if (words().slice) sayTheOwn(part);
         setReason($("print-slice"), slc.running ? "a slice is running; its log is in this window, with its Cancel" : null, slicerOk
             ? words().prepareTitle
@@ -2046,6 +2052,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const key = part && at ? JSON.stringify([part, at]) : null;
         if (key === prt.ownFor) return;
         prt.ownFor = key;
+        prt.offset = null;  // another printer's, until this one's is asked
         let resolved = null;
         if (key) {
             try { resolved = await api(`/slicer/first-layer?${new URLSearchParams({ part, ...at })}`); } catch (e) { resolved = null; }
@@ -2054,7 +2061,52 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         for (const [id, row, choices] of [["print-level", "levelling", LEVELLING], ["print-adhesion", "adhesion", ADHESION]]) {
             $(id).options[0].textContent = own(row, resolved) || firstLayerWords(choices[0]);
         }
+        prt.offset = (resolved && resolved.offset) || null;
+        renderOffset(true);
+        renderPrint();
     }
+    // The first-layer offset: how far the printer's nozzle stands on the first layer from
+    // where its probe puts it, kept for the printer (slicer/first_layer_offset.py) and
+    // taken by every slice made for it after. GET /slicer/first-layer says it with the
+    // rows' first choices; choosing one keeps it.
+    function renderOffset(force) {
+        const o = prt.offset, sel = $("print-offset");
+        // A Machine gone has no row: an answer that lands after it draws nothing.
+        if (!o || !o.named || !sel) return;
+        // Drawn again only when what it offers changed, and never while a person has it.
+        if (force || document.activeElement !== sel) {
+            const html = offsetOptions(o.choices, o.value);
+            if (prt.offsetDrawn !== html) { sel.innerHTML = html; prt.offsetDrawn = html; }
+            sel.value = String(o.value);
+        }
+        $("print-offset-said").textContent = o.kept
+            ? `kept ${o.kept.at.slice(0, 16).replace("T", " ")} UTC${o.kept.note ? ` (${o.kept.note})` : ""}`
+            : "none kept yet";
+    }
+    async function keepOffset() {
+        const at = printerAt();
+        if (!at) { refuse("first layer: this printer stands in no site"); renderOffset(true); return false; }
+        const offset = Number($("print-offset").value);
+        let kept;
+        try { kept = await post("/slicer/first-layer/offset", { ...at, offset }); }
+        catch (e) { refuse(`first layer: ${e.message}`); renderOffset(true); return false; }
+        prt.offset = kept;
+        renderOffset(true);
+        tell(`${at.printer}'s first layer: the nozzle ${kept.words}; its next slices are made with it`);
+        return true;
+    }
+    // The ring's First layer: the next of the row's offsets, kept.
+    function stepOffset() {
+        const el = $("print-offset");
+        if (!prt.offset || !prt.offset.named || !el.options.length) {
+            refuse("first layer: choose what this printer makes under makes first; a printer whose profile keeps no first-layer offset has none");
+            return false;
+        }
+        el.selectedIndex = (el.selectedIndex + 1) % el.options.length;
+        return keepOffset();
+    }
+    $("print-offset").onchange = () => keepOffset();
+    $("print-offset").addEventListener("blur", () => renderOffset());
     // Toolpath: what makes names, its cuts written for this router (POST /cam/cut),
     // the file kept and chosen, what it holds said under makes. True when it was kept.
     async function startToolpath(variant = undefined) {
@@ -2333,6 +2385,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:plan") return keepPlan();
         if (action === "print:level") { stepRow("print-level", "levelling"); return true; }
         if (action === "print:adhesion") { stepRow("print-adhesion", "adhesion"); return true; }
+        if (action === "print:offset") return stepOffset();
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -2383,6 +2436,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-plan"), "print:plan"]);
         out.push([$("print-level"), "print:level"]);
         out.push([$("print-adhesion"), "print:adhesion"]);
+        out.push([$("print-offset"), "print:offset"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);

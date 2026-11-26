@@ -2624,6 +2624,7 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:plan": None,
     "print:level": None,
     "print:adhesion": None,
+    "print:offset": None,
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
@@ -2780,9 +2781,10 @@ def control_options(device: Device) -> List[Option]:
         # The print, whichever is running: the card's (M24/M25/M524) or one
         # the host streams. The page knows which and carries the verb to it;
         # Send file starts a host print of the file the page has chosen.
-        # Levelling and Adhesion, seated last so no address moves, step the Print
-        # window's rows for the next slice: its levelling (the part's, probe first,
-        # home only) and its first layer's hold (the part's, brim, raft, neither).
+        # Next slice, seated last, steps the Print window's rows for the next slice:
+        # Levelling (the part's, probe first, home only), Adhesion, its first layer's
+        # hold (the part's, brim, raft, neither), and First layer, the printer's
+        # first-layer offset by one of its row's steps, kept: its next slices take it.
         Option(
             id="control:sd",
             label="Print",
@@ -2793,8 +2795,15 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
-                Option(id="print:level", label="Levelling", action="print:level"),
-                Option(id="print:adhesion", label="Adhesion", action="print:adhesion"),
+                Option(
+                    id="print:next",
+                    label="Next slice",
+                    children=[
+                        Option(id="print:level", label="Levelling", action="print:level"),
+                        Option(id="print:adhesion", label="Adhesion", action="print:adhesion"),
+                        Option(id="print:offset", label="First layer", action="print:offset"),
+                    ],
+                ),
             ],
         ),
         Option(

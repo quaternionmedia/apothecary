@@ -125,9 +125,9 @@ Generic PLA.
   top under half a layer is not proposed, since the slice would put every top where it
   was.
 - **The first layer is said, not applied.** printer_1's profile holds `z_offset` at 0
-  because the board applies the probe's offset when `G28` homes Z, and a measured
-  first-layer offset is the start piece `first-layer-offset`, a stub
-  ([the slicer](slicer.md#what-a-slice-is-composed-from)). `initial_layer_print_height`
+  because the board applies the probe's offset when `G28` homes Z, and the
+  first-layer offset its slices take is the one kept in its Print window from
+  one-layer squares ([the slicer](slicer.md#a-printers-first-layer-offset)). `initial_layer_print_height`
   is not the first layer's term: it sets how thick the first layer is sliced, and every
   top above stands on it as sliced; a turn records it, because a height's quantization
   depends on it.

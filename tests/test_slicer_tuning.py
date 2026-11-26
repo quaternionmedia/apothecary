@@ -147,7 +147,7 @@ def test_a_coupon_is_read_solved_applied_and_read_again(fake_orcaslicer, built):
     assert proposed["filament_shrink"]["new"] == pytest.approx(100.2, abs=1e-2)
     assert proposed["filament_shrinkage_compensation_z"]["new"] is None
     assert proposed["z_offset"]["new"] is None and not proposed["z_offset"]["applies"]
-    assert "first-layer-offset, a stub" in proposed["z_offset"]["why"]
+    assert "kept in its Print window from one-layer squares" in proposed["z_offset"]["why"]
     assert turn["walls"][0]["feature"] == "fin"
     assert answer["document"]["settings"] == {}  # nothing applied yet
 

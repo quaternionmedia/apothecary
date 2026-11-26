@@ -34,7 +34,8 @@ Machine and, where the job made a part's piece, its drawer beside it.
 
 A drawer's **made** row (Part › Feedback) says how the piece was made: its values -- a
 variant's, those drawn, or the part's own -- and, for a print, how its start levelled
-(probe first, the stored mesh, or home only), its skirt, brim and raft, and what
+(probe first, the stored mesh, or home only) and the printer's first-layer offset where
+it was not 0 (*the nozzle 0.05 mm lower*), its skirt, brim and raft, and what
 the board said of its levelling as the print began: levelling on or off, the probe's
 offset, the mesh's range and where the probe said the grid lies (`job.levelled`, which
 keeps the mesh itself too, as a bed reading keeps one). A

@@ -318,7 +318,9 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
     # Sliced to probe first, the bed not yet level, and with no brim, which would fill
     # each shim's slot and hole.
     said = {s["name"]: s for s in newest["settings"]}
-    assert said["start"]["value"] == ["home", "probe-each-print"], said["start"]
+    assert said["start"]["value"] == ["home", "first-layer-offset", "probe-each-print"], said[
+        "start"
+    ]
     assert said["brim_type"]["value"] == "no_brim", said["brim_type"]
     level = windows.panel(page, "machine-print").locator("#print-level")
     expect(level).to_have_value("probe-each-print")

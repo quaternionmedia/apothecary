@@ -30,6 +30,8 @@ parts/
 │   └── print_coupon.scad   a plate, blocks, pockets, a window and a fin, measured to tune a printer (its plan in the wrapper)
 ├── bed_shims/
 │   └── bed_shims.scad      a shim for each low corner of a bed on solid mounts, lifting it to the highest
+├── first_layer_square/
+│   └── first_layer_square.scad   a square one first layer thick: what a printer's first-layer offset is read from
 ├── ender3/
 │   ├── ender3.scad         the printer, drawn as it is
 │   └── slicer.json         printer_1's slicer profile, kept with its part

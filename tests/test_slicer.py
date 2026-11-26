@@ -283,7 +283,7 @@ def test_a_part_s_levelling_is_its_slices_where_the_slice_asks_none():
     plain = SimpleNamespace(declared=Declared.of(PrintSettings(layer_height=0.2), "part r"))
     assert service.asked_levelling(plain, None) == (None, "this slice")
     probed = compose.levelled(load_profile("ender3"), asked, by)
-    assert probed.start.modules == ["home", "probe-each-print"]
+    assert probed.start.modules == ["home", "first-layer-offset", "probe-each-print"]
     assert probed.start.source.startswith(
         "part bed_shims, which declares it, asked 'probe-each-print'"
     )
@@ -292,10 +292,10 @@ def test_a_part_s_levelling_is_its_slices_where_the_slice_asks_none():
 def test_a_slice_of_a_part_that_declares_a_probe_first_probes(fake_orcaslicer):
     record, _ = _slice(_target({"levelling": "probe-each-print"}, name="bed_shims"))
     start = _by_name(record)["start"]
-    assert start.value == ["home", "probe-each-print"]
+    assert start.value == ["home", "first-layer-offset", "probe-each-print"]
     assert "part bed_shims, which declares it, asked" in start.source
     record, _ = _slice(_target({"levelling": "probe-each-print"}), levelling="home")
-    assert _by_name(record)["start"].value == ["home"]
+    assert _by_name(record)["start"].value == ["home", "first-layer-offset"]
 
 
 def test_a_slices_adhesion_goes_over_what_the_part_declares(fake_orcaslicer):
@@ -578,16 +578,19 @@ def test_a_part_target_builds_the_parts_own_stl(fake_orcaslicer, monkeypatch, tm
 
 def test_the_start_is_composed_from_the_pieces_the_printer_names(fake_orcaslicer):
     """printer_1's start is `home` -- its profile's own start, which homes and does no
-    levelling -- and its filament the one loaded on it, its profile's own until one is
-    said; the answer says both and why."""
+    levelling -- and the first-layer offset kept for it; its filament the one loaded on
+    it, its profile's own until one is said; the answer says each and why."""
     profile = load_profile("ender3")
-    assert profile.start.modules == ["home"] and "owner" in profile.start.source
+    assert profile.start.modules == ["home", "first-layer-offset"]
+    assert "owner" in profile.start.source
     assert profile.filament.modules == ["choose"] and "owner" in profile.filament.source
     resolved = get_module("orcaslicer").settings(profile, Declared(by="part x"))
     shown = _by_name(resolved)
-    assert shown["start"].value == ["home"] and shown["start"].origin == "printer"
+    assert shown["start"].value == ["home", "first-layer-offset"]
+    assert shown["start"].origin == "printer"
     assert "home: the printer's own start" in shown["start"].note
     assert "no levelling" in shown["start"].note
+    assert "first-layer-offset: raise or lower the nozzle" in shown["start"].note
     assert shown["filament"].value == ["choose"]
     assert shown["filament"].note.endswith(": Creality Generic PLA")
     start = resolved.configs["machine"]["machine_start_gcode"]
@@ -606,12 +609,6 @@ def test_the_composed_start_reaches_the_gcode(fake_orcaslicer):
 @pytest.mark.parametrize(
     "kind, named, said",
     [
-        ("start", ["home", "first-layer-offset"], "'first-layer-offset' is a stub, not built yet"),
-        (
-            "start",
-            ["home", "first-layer-offset"],
-            "what it will do: raise or lower the first layer",
-        ),
         ("start", ["stored-mesh", "home"], "a start begins with 'home'"),
         ("start", ["home", "probe-each-print", "probe-each-print"], "a start piece is named once"),
         ("start", [], "a start begins with 'home'"),
@@ -628,6 +625,16 @@ def test_a_profile_that_names_a_stub_or_no_such_piece_is_refused_before_anything
     with pytest.raises(SlicerError, match=re.escape(said)):
         get_module("orcaslicer").settings(profile, Declared(by="part x"))
     assert fake_calls(fake_orcaslicer) == []  # not even OrcaSlicer's --help
+
+
+def test_a_stub_named_is_refused_saying_what_it_will_do():
+    from apothecary.slicer import compose
+
+    profile = load_profile("ender3")
+    with pytest.raises(SlicerError, match="'word-print-settings' is a stub, not built yet"):
+        compose.chosen(compose.DECLARED, ["word-print-settings"], profile)
+    with pytest.raises(SlicerError, match="what it will do: a word declares print settings"):
+        compose.chosen(compose.DECLARED, ["word-print-settings"], profile)
 
 
 def test_a_start_that_does_not_home_is_refused(fake_orcaslicer):
@@ -648,11 +655,11 @@ def test_every_piece_says_what_it_does_and_the_stubs_are_the_ones_decided():
         ("start", "home"),
         ("start", "stored-mesh"),
         ("start", "probe-each-print"),
+        ("start", "first-layer-offset"),
         ("filament", "printer"),
         ("filament", "choose"),
     ]
     assert {(p.kind, p.id) for p in compose.pieces() if p.stub} == {
-        ("start", "first-layer-offset"),
         ("declared", "word-print-settings"),
     }
     assert all(p.does for p in compose.pieces())
@@ -775,11 +782,11 @@ def test_a_slice_levels_as_it_asks_over_the_profile_and_the_profile_is_untouched
     from apothecary.slicer import compose
 
     profile = load_profile("ender3")
-    assert profile.start.modules == ["home"]
+    assert profile.start.modules == ["home", "first-layer-offset"]
     probed = compose.levelled(profile, "probe-each-print")
-    assert probed.start.modules == ["home", "probe-each-print"]
+    assert probed.start.modules == ["home", "first-layer-offset", "probe-each-print"]
     assert "this slice asked 'probe-each-print'" in probed.start.source
-    assert profile.start.modules == ["home"]  # the profile's own is not changed
+    assert profile.start.modules == ["home", "first-layer-offset"]  # the profile's own
     lines = (
         get_module("orcaslicer")
         .settings(probed, Declared(by="part x"))

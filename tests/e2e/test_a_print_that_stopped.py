@@ -1,7 +1,9 @@
 """A print that stopped on its first layer, in the page: its piece's drawer opened by
 itself in Part › Feedback where it stopped, a fault filed on that layer, the piece tried
-again on a raft, and Site's Jobs opening the Machine and the drawer together
-(apothecary/static/widgets/feedback.js, apothecary/cabinet.py; docs/cabinet.md).
+again on a raft, Site's Jobs opening the Machine and the drawer together, and the
+printer's first layer kept lower in its Print window and the piece sliced with it
+(apothecary/static/widgets/feedback.js, apothecary/cabinet.py; docs/cabinet.md,
+docs/slicer.md).
 
 Runs against ``apothecary serve --simulated``, started as a person starts it, with the
 scripted OrcaSlicer its slicer, each move of its file followed by a dwell so the print
@@ -110,8 +112,11 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
             "A print of bed_shims on printer_1 cancelled on its first layer, as a person "
             "cancels a first layer that will not hold: its piece's drawer opened by itself in "
             "Part › Feedback, saying the layer it stopped on, a fault filed there, the piece "
-            "tried again on a raft, and Site's Jobs opening the Machine and the drawer "
-            "together. [docs/cabinet.md](../docs/cabinet.md) is the reference."
+            "tried again on a raft, Site's Jobs opening the Machine and the drawer "
+            "together, and the printer's first layer kept 0.05 mm lower and the piece "
+            "sliced with it. [docs/cabinet.md](../docs/cabinet.md) and "
+            "[docs/slicer.md](../docs/slicer.md#a-printers-first-layer-offset) are the "
+            "reference."
         ),
         runtime=(
             "It drives a real browser against `apothecary serve --simulated`, started as a "
@@ -121,9 +126,10 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
             "is sent."
         ),
         does_not_show=[
-            "**Why a first layer does not hold.** A level bed, the mesh on and the first "
-            "layer's height are the bench's; the page says where the print stopped and "
-            "offers what to slice again with.",
+            "**Why a first layer does not hold.** A level bed, a clean one, and which way "
+            "the nozzle's height is off are the bench's, read on a one-layer square "
+            "(`first_layer_square`); the page says where the print stopped, offers what "
+            "to slice again with, and keeps the height chosen.",
             "**What changes on every run.** Moments are blanked in the pictures.",
         ],
         browser_suite_only=True,
@@ -225,7 +231,11 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     expect(machine.locator("#print-level option:checked")).to_have_text(
         "the part's own: probe first"
     )
-    assert settings["start"]["value"] == ["home", "probe-each-print"], settings["start"]
+    assert settings["start"]["value"] == [
+        "home",
+        "first-layer-offset",
+        "probe-each-print",
+    ], settings["start"]
     stack = _maximised(page, "machine-print", "#print-adhesion-row")
     settled(page)
     story.shows(
@@ -261,6 +271,44 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "drawer, chosen among bed_shims's pieces.",
         blank=CHANGING,
     )
+
+    # The first layer lower: printer_1's first-layer offset, none kept yet, stepped 0.05 mm
+    # lower in its Print window's first layer row, kept as it is chosen; the piece sliced
+    # again takes it as its z_offset.
+    offset = machine.locator("#print-offset")
+    expect(offset).to_be_visible(timeout=10000)
+    expect(offset).to_have_value("0")
+    expect(machine.locator("#print-offset-said")).to_have_text("none kept yet")
+    offset.select_option("-0.05")
+    expect(page.locator("#status")).to_contain_text(
+        "printer_1's first layer: the nozzle 0.05 mm lower; its next slices are made with it"
+    )
+    expect(machine.locator("#print-offset-said")).to_contain_text(re.compile(r"^kept \d{4}-"))
+    at = {"site": "garage", "printer": "printer_1"}
+    kept = http.get("/slicer/first-layer", params={"part": "bed_shims", **at}).json()["offset"]
+    assert kept["value"] == -0.05 and kept["kept"] is not None, kept
+    before = {s["file_id"] for s in http.get("/slicer/slices").json()}
+    machine.locator("#print-slice").click()
+    expect(page.locator("#status")).to_contain_text(
+        "bed_shims.gcode kept and chosen", timeout=60000
+    )
+    newest = [s for s in http.get("/slicer/slices").json() if s["file_id"] not in before]
+    z = {s["name"]: s for s in newest[0]["settings"]}["z_offset"]
+    assert (z["value"], z["origin"]) == ("-0.05", "measured"), z
+    assert "first-layer-offset: garage's printer_1, kept" in z["source"], z
+    stack = _maximised(page, "machine-print", "#print-offset-row")
+    settled(page)
+    story.shows(
+        "The first layer kept lower",
+        "A first layer that did not hold, its lines round and apart, is a nozzle too high "
+        "over the bed. The Print window's first layer row keeps printer_1's first-layer "
+        "offset 0.05 mm lower, as it is chosen, and Slice makes the piece again with it: "
+        "every slice made for printer_1 after takes it as its z_offset, on top of the "
+        "probe's own offset. A one-layer square, first_layer_square, says which way to go. "
+        "Print is maximised here from its stack.",
+        blank=CHANGING + (("#print-offset-said", MOMENT),),
+    )
+    _restored(page, stack)
 
     # Nothing left armed, and no real port touched.
     assert http.get("/firmware/printers/armed").json() == {"armed": {}}

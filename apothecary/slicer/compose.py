@@ -221,9 +221,10 @@ PIECES: Tuple[Piece, ...] = (
     Piece(
         START,
         "first-layer-offset",
-        "raise or lower the first layer by an offset measured at the bench (the paper test), "
-        "added to every Z the slicer writes",
-        stub=True,
+        "raise or lower the nozzle by the first-layer offset kept for the printer in its "
+        "Print window, found by printing one-layer squares (parts/first_layer_square): "
+        "OrcaSlicer's z_offset, added to every Z the slicer writes, on top of the probe's "
+        "own offset; 0 until one is kept (slicer/first_layer_offset.py)",
     ),
     Piece(FILAMENT, "printer", "the printer's one filament, named in its profile"),
     Piece(

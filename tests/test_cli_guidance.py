@@ -76,7 +76,8 @@ def test_slicer_status_puts_its_stubs_under_planned(fake_orcaslicer):
     built, planned = shown.split("Planned, not built:")
     assert "start home:" in built.split("A slice is composed from:")[1]
     assert "start stored-mesh:" in built and "start probe-each-print:" in built
-    assert "start first-layer-offset:" in planned and "first-layer-offset" not in built
+    assert "declared word-print-settings:" in planned and "word-print-settings" not in built
+    assert "start first-layer-offset:" in built and "first-layer-offset" not in planned
     assert "(a stub)" not in shown
 
 
