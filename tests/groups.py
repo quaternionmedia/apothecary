@@ -125,6 +125,7 @@ GROUPS = {
             "test_missing.py",
             "test_machine_words.py",
             "test_projector.py",
+            "test_readings.py",
             "test_rust_installer.py",
             "test_state_folder.py",
             "test_stream_deck_part.py",
