@@ -82,6 +82,10 @@ Left to right, one row:
 - **⊞ Windows**: see-through's switch, then every window by its group, ●
   open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
   front. [Settings](#settings) is one, under Tools.
+- **Tour** opens the tour's box over the page, pressed again closes it and leaves its
+  journey, the windows where they are ([the tour](tour.md)): the one place a journey is
+  chosen and stepped, each stage's windows laid out as the page is taken there ([below](#journeys)).
+  The ring's Panels › Windows › Tour holds it and its buttons.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
   its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Tools › Docs opens the same.
