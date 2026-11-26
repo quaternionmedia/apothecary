@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-A print of bed_shims on printer_1 cancelled on its first layer, as a person cancels a first layer that will not hold: its piece's drawer opened by itself in Part › Feedback, saying the layer it stopped on, a fault filed there, the piece tried again on a raft, and Site's Jobs opening the Machine and the drawer together. [docs/cabinet.md](../docs/cabinet.md) is the reference.
+A print of bed_shims on printer_1 cancelled on its first layer, as a person cancels a first layer that will not hold: its piece's drawer opened by itself in Part › Feedback, saying the layer it stopped on, a fault filed there, the piece tried again on a raft, Site's Jobs opening the Machine and the drawer together, and the printer's first layer kept 0.05 mm lower and the piece sliced with it. [docs/cabinet.md](../docs/cabinet.md) and [docs/slicer.md](../docs/slicer.md#a-printers-first-layer-offset) are the reference.
 
 **Runtime-bound.** It drives a real browser against `apothecary serve --simulated`, started as a person starts it, with a script that answers as OrcaSlicer's command line does, each move of its file followed by a dwell so the print is seen running. The simulated printer prints; the test cancels it once a line of its first layer is sent.
 
@@ -35,9 +35,15 @@ Site's Jobs lists the cancelled print. Its row selects printer_1 and opens its M
 
 ![A job's row opens its Machine and its drawer](screenshots/54-03-a-job-s-row-opens-its-machine-and-its-drawer.png)
 
+## 4. The first layer kept lower
+
+A first layer that did not hold, its lines round and apart, is a nozzle too high over the bed. The Print window's first layer row keeps printer_1's first-layer offset 0.05 mm lower, as it is chosen, and Slice makes the piece again with it: every slice made for printer_1 after takes it as its z_offset, on top of the probe's own offset. A one-layer square, first_layer_square, says which way to go. Print is maximised here from its stack.
+
+![The first layer kept lower](screenshots/54-04-the-first-layer-kept-lower.png)
+
 ## What this page does not show
 
-- **Why a first layer does not hold.** A level bed, the mesh on and the first layer's height are the bench's; the page says where the print stopped and offers what to slice again with.
+- **Why a first layer does not hold.** A level bed, a clean one, and which way the nozzle's height is off are the bench's, read on a one-layer square (`first_layer_square`); the page says where the print stopped, offers what to slice again with, and keeps the height chosen.
 - **What changes on every run.** Moments are blanked in the pictures.
 
 Run it yourself:
