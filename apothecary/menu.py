@@ -1379,13 +1379,19 @@ def _deck(toggle: Option) -> Option:
     )
 
 
-# The cells of Deck › Screen: each screen of the strip in its order, then a step back and on.
+# The cells of Deck › Screen: the strip's first three screens, a step back and on, then the
+# three that came after them, so no cell a hand has learned moves. A printer calls Progress
+# its Print and Status its Temps, a router its Cut and Status, and a router's Bed is its
+# Table (firmware/deck_screens.py LABELS); a cell is either's.
 SCREEN_CELLS = (
-    ("knobs", "Knobs"),
+    ("knobs", "Jog"),
     ("progress", "Progress"),
     ("status", "Status"),
     ("previous", "Back"),
     ("next", "Next"),
+    ("bench", "Bench"),
+    ("home", "Home"),
+    ("bed", "Bed"),
 )
 
 # What a rule's cell says, where its title is longer than a cell holds; a rule this does

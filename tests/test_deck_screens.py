@@ -88,12 +88,46 @@ def test_a_swipe_is_a_drag_far_enough_along_the_strip(touch, want):
 
 def test_a_swipe_walks_the_screens_in_order_and_stops_at_each_end():
     shown = screens.Screens(screens.screens_for("printer"))
-    assert (shown.current, shown.position) == ("knobs", "1/3")
-    assert shown.swipe(screens.BACK) is False and shown.current == "knobs"  # nothing before
-    assert shown.swipe(screens.FORWARD) and shown.current == "progress"
-    assert shown.swipe(screens.FORWARD) and (shown.current, shown.position) == ("status", "3/3")
-    assert shown.swipe(screens.FORWARD) is False and shown.current == "status"  # nothing after
-    assert shown.swipe(screens.BACK) and shown.current == "progress"
+    assert (shown.current, shown.position) == ("knobs", "2/6")  # Jog: where the knobs move
+    assert shown.swipe(screens.BACK) and (shown.current, shown.position) == ("bench", "1/6")
+    assert shown.swipe(screens.BACK) is False and shown.current == "bench"  # nothing before
+    for want in ("knobs", "home", "progress", "status", "bed"):
+        assert shown.swipe(screens.FORWARD) and shown.current == want
+    assert shown.position == "6/6"
+    assert shown.swipe(screens.FORWARD) is False and shown.current == "bed"  # nothing after
+    assert shown.swipe(screens.BACK) and shown.current == "status"
+
+
+def test_a_knob_pressed_walks_the_screens_round():
+    shown = screens.Screens()
+    seen = []
+    for _ in range(6):
+        shown.cycle()
+        seen.append(shown.current)
+    assert seen == ["home", "progress", "status", "bed", "bench", "knobs"]
+
+
+@pytest.mark.parametrize(
+    "touch, want",
+    [
+        ({"kind": "short", "x": 0, "y": 5}, 0),
+        ({"kind": "short", "x": 133, "y": 50}, 0),
+        ({"kind": "short", "x": 134, "y": 50}, 1),
+        ({"kind": "long", "x": 400, "y": 90}, 3),
+        ({"kind": "short", "x": 799, "y": 50}, 5),
+        ({"kind": "short", "x": 900, "y": 50}, 5),  # past the edge: the last
+        ({"kind": "drag", "x": 100, "y": 50, "x_out": 700, "y_out": 50}, None),
+        ({"kind": "short", "y": 50}, None),
+        ("tap", None),
+    ],
+)
+def test_a_tap_is_on_the_screen_whose_name_is_above_it(touch, want):
+    assert screens.tab_at(touch, 6) == want
+
+
+def test_each_machine_names_its_screens_in_its_own_words():
+    assert screens.labels_for("printer") == ["Bench", "Jog", "Home", "Print", "Temps", "Bed"]
+    assert screens.labels_for("router") == ["Bench", "Jog", "Home", "Cut", "Status", "Table"]
 
 
 def test_a_screen_is_brought_forward_by_name_and_an_unknown_one_is_refused():
@@ -257,3 +291,240 @@ def test_the_knobs_words_while_held_are_one_line_the_strip_and_the_window_both_s
         "printer", words
     )
     assert screens.held_words("printer", words) == f"{words} · jogs refused, no knob moves it"
+
+
+# --- the screens' pictures: what each body carries, and that each is drawn ---------------------
+
+
+def _reading(ago, hotend=None, bed=None, rpm=None, state="idle"):
+    from apothecary.firmware.readings import Reading
+
+    return Reading(
+        at=(NOW - timedelta(seconds=ago)).timestamp(),
+        state=state,
+        hotend=hotend,
+        bed=bed,
+        spindle_rpm=rpm,
+    )
+
+
+def test_a_printers_temps_are_a_graph_of_its_readings_with_what_each_was_asked_to_reach():
+    status = _status(hotends=[Heater(actual=180.4, target=215)], bed=Heater(actual=55, target=60))
+    kept = [
+        _reading(300 - 30 * i, hotend=(25 + 15 * i, 215), bed=(22 + 3 * i, 60)) for i in range(10)
+    ]
+    strip = screens.status_strip("printer_1", "printer", status, NOW, "5/6", kept)
+    body = strip.body
+    assert body["kind"] == "graph" and body["window_s"] == screens.GRAPH_S
+    assert body["now"] == pytest.approx(NOW.timestamp())
+    hotend, bed = body["series"]
+    assert (hotend["colour"], hotend["target"], hotend["value"]) == ("hotend", 215.0, "180°")
+    assert (bed["colour"], bed["target"], bed["value"]) == ("bed", 60.0, "55°")
+    assert [p[1] for p in hotend["points"]] == [25 + 15 * i for i in range(10)]
+    assert hotend["points"][0][0] < hotend["points"][-1][0]  # oldest first
+    assert strip.footer.startswith("printer_1 · idle")
+    # A heater turned off draws no target; none read at all is no series.
+    off = screens.status_strip("p", "printer", _status(hotends=[Heater(actual=30)]), NOW, "5/6", ())
+    assert [s["target"] for s in off.body["series"]] == [None] and off.body["series"][0][
+        "aim"
+    ] == "hotend off"
+
+
+def test_a_graph_keeps_at_most_two_hundred_points_and_the_newest():
+    kept = [_reading(600 - i, hotend=(float(i), 0)) for i in range(500)]
+    points = screens.status_strip(
+        "p", "printer", _status(hotends=[Heater(actual=499)]), NOW, "5/6", kept
+    ).body["series"][0]["points"]
+    assert len(points) == 200 and points[-1][1] == 499.0
+
+
+def test_a_routers_status_is_four_panels_its_state_pins_spindle_and_work_zero():
+    status = _status(
+        state="alarm",
+        dialect="grbl",
+        machine_state="Alarm",
+        alarm=2,
+        alarm_text="soft limit",
+        pins=["X", "P"],
+        spindle=Spindle(rpm=0, on=False),
+        feed=0,
+        work_offset={"x": 120, "y": 80, "z": -40},
+    )
+    body = screens.status_strip("cnc_router", "router", status, NOW, "5/6").body
+    state, pins, spindle, zero = body["panels"]
+    assert (state["value"], state["colour"], state["small"]) == ("Alarm", "red", "soft limit")
+    assert (pins["value"], pins["small"]) == ("X P", "limit X, probe") and pins["colour"] == "amber"
+    assert spindle["value"] == "off"
+    assert zero["small"] == "X 120 Y 80 Z -40"
+
+
+def test_the_bench_is_both_machines_their_state_their_numbers_and_a_jobs_bar():
+    printer = _status(hotends=[Heater(actual=214, target=215)], bed=Heater(actual=60, target=60))
+    machines = [
+        {
+            "name": "printer_1",
+            "kind": "printer",
+            "status": printer,
+            "job": _job(0.42),
+            "armed_s": 0,
+        },
+        {"name": "cnc_router", "kind": "router", "status": None, "job": None, "armed_s": 125},
+    ]
+    strip = screens.bench_strip(machines, NOW, "1/6")
+    assert strip.text == "Bench · printer_1 idle · cnc_router no reading · armed 2:05"
+    left, right = strip.body["machines"]
+    assert left["line"] == "hotend 214/215 · bed 60/60" and left["bar"] == 0.42
+    assert left["bar_label"] == "benchy.gcode · 42%"
+    assert right["line"] == "not polled yet" and "bar" not in right
+    assert "knobs move nothing" in strip.footer
+
+
+def test_home_says_each_axis_where_it_stands_and_its_switch():
+    printer = _status(
+        position={"x": 10, "y": 0, "z": 4.2}, endstops={"x_min": "open", "y_min": "TRIGGERED"}
+    )
+    strip = screens.home_strip("printer_1", "printer", printer, NOW, "3/6")
+    x, y, z, home = strip.body["panels"]
+    assert (x["value"], x["small"]) == ("10.0", "min open")
+    assert (y["small"], y["colour"]) == ("min triggered", "amber")
+    assert z["small"] == "endstop not read" and home["value"] == "G28"
+    assert "hold HOME a second" in strip.footer and "control armed" in strip.footer
+    router = _status(
+        dialect="grbl",
+        position={"x": -200, "y": -300, "z": -40},
+        homing=[
+            {"axis": "X", "way": "-", "ready": True},
+            {"axis": "Z", "way": "+", "ready": False},
+        ],
+    )
+    x, y, z, home = screens.home_strip("cnc_router", "router", router, NOW, "3/6").body["panels"]
+    assert x["small"] == "seeks - · proved" and z["small"] == "seeks + · not proved"
+    assert y["small"] == "homing not read" and home["value"] == "$H"
+
+
+def test_bed_is_the_newest_readings_mesh_its_range_its_age_and_a_reading_under_way():
+    from apothecary.firmware.models import LevelingRecord
+
+    mesh = [[-0.1, 0.0, 0.1], [-0.05, 0.02, 0.12], [0.0, 0.04, 0.15]]
+    record = LevelingRecord(
+        id="r1",
+        port="/dev/ttyFAKE1",
+        board="b",
+        machine="printer",
+        at=NOW - timedelta(hours=2),
+        method="probe",
+        mesh=mesh,
+        stats={"rows": 3, "cols": 3, "range": 0.25},
+        bed_c=60,
+        leveling_on=True,
+    )
+    strip = screens.bed_strip("printer_1", "printer", record, None, NOW, "6/6")
+    assert strip.body["mesh"] == mesh
+    assert strip.body["lines"] == ["range 0.250 mm", "3x3 probed 2 h ago · bed 60°", "levelling on"]
+    assert strip.text == "printer_1 · range 0.250 mm" and "probe the bed" in strip.footer
+    running = screens.bed_strip(
+        "printer_1", "printer", record, {"running": True, "stage": "probing"}, NOW, "6/6"
+    )
+    assert running.body["lines"][0] == "probing · probing" and running.colour == "amber"
+    failed = screens.bed_strip(
+        "p", "printer", None, {"running": False, "error": "probe failed"}, NOW, "6/6"
+    )
+    assert failed.colour == "red" and failed.body["lines"][:2] == [
+        "last probe failed",
+        "probe failed",
+    ]
+    none = screens.bed_strip("cnc_router", "router", None, None, NOW, "6/6")
+    assert none.body["mesh"] == [] and none.body["lines"] == ["no reading of the table"]
+    assert "map the table" in none.footer
+
+
+def test_a_machines_key_is_a_tile_of_what_it_is_doing():
+    printer = _status(hotends=[Heater(actual=214.4, target=215)], bed=Heater(actual=60, target=60))
+    kept = [_reading(60 - i, hotend=(200 + i, 215), bed=(60, 60)) for i in range(5)]
+    tile = screens.machine_tile("printer_1", "printer", printer, None, kept, 0.0, True)
+    assert (tile["title"], tile["value"], tile["small"], tile["chosen"]) == (
+        "PRINTER",
+        "214°",
+        "bed 60°",
+        True,
+    )
+    assert [s["colour"] for s in tile["spark"]["series"]] == ["hotend", "bed"]
+    armed = screens.machine_tile("printer_1", "printer", printer, _job(0.42), kept, 125, False)
+    assert armed["accent"] == "green" and armed["small"] == "42% · armed 2:05"
+    assert armed["bar"] == 0.42 and "spark" not in armed  # a job's bar in its place
+    router = _status(
+        state="alarm", machine_state="Alarm:1", dialect="grbl", alarm=1, todo=["unlock"]
+    )
+    tile = screens.machine_tile("cnc_router", "router", router, None, (), 0.0, False)
+    assert (tile["value"], tile["accent"], tile["small"]) == ("Alarm", "red", "spindle off")
+    assert screens.machine_tile("cnc_router", "router", None, None, (), 0.0, False)["value"] == "-"
+
+
+@pytest.mark.parametrize(
+    "screen, kind, want",
+    [
+        ("knobs", "printer", ("STEP", "1 mm")),
+        ("home", "printer", ("HOME", "hold: G28")),
+        ("home", "router", ("HOME", "hold: $H")),
+        ("bed", "printer", ("PROBE", "hold: the bed")),
+        ("bed", "router", ("PROBE", "hold: the table")),
+        ("progress", "router", ("CUT", "no job")),
+        ("status", "printer", ("HOTEND", "-")),
+        ("status", "router", ("SPINDLE", "off")),
+        ("bench", "printer", ("BENCH", "both machines")),
+    ],
+)
+def test_key_2_is_the_screens_own(screen, kind, want):
+    text, small, colour, art = screens.screen_key(screen, kind, None, None, "1")
+    assert (text, small) == want
+    assert (art is None) == (screen in ("knobs", "home", "bed"))  # a key to press is a label
+
+
+def test_every_body_and_tile_is_drawn_at_the_size_the_device_takes():
+    """Each picture an art makes is a JPEG of the key's or the strip's size, with data and
+    without: an empty graph, an empty mesh, a panel with nothing in it draw as well."""
+    import io
+
+    from PIL import Image
+
+    def size(jpeg):
+        return Image.open(io.BytesIO(jpeg)).size
+
+    kept = [
+        _reading(300 - 30 * i, hotend=(25 + 15 * i, 215), bed=(22 + 3 * i, 60)) for i in range(10)
+    ]
+    status = _status(hotends=[Heater(actual=180, target=215)], bed=Heater(actual=55, target=60))
+    bodies = [
+        screens.status_strip("p", "printer", status, NOW, "5/6", kept).body,
+        screens.status_strip("p", "printer", None, NOW, "5/6").body,
+        screens.status_strip("r", "router", _status(dialect="grbl"), NOW, "5/6").body,
+        screens.progress_strip("p", _job(), status, NOW, "4/6").body,
+        screens.progress_strip("p", None, None, NOW, "4/6").body,
+        screens.bed_strip("p", "printer", None, None, NOW, "6/6").body,
+        {"kind": "mesh", "mesh": [[0.1, -0.1], [0.0, 0.2]], "lines": ["a", "b", "c", "d"]},
+        screens.home_strip("p", "printer", None, NOW, "3/6").body,
+        screens.bench_strip(
+            [{"name": "a", "kind": "printer", "status": None, "job": _job(), "armed_s": 0}] * 2,
+            NOW,
+            "1/6",
+        ).body,
+        {"kind": "panels", "panels": [{}, {}, {}, {}]},
+        {},
+    ]
+    for body in bodies:
+        art = {
+            "tabs": screens.labels_for("printer"),
+            "tab": 2,
+            "body": body,
+            "footer": "x" * 300,
+            "footer_colour": "red",
+        }
+        assert size(deck.render_art(deck.STRIP_SIZE, art)) == deck.STRIP_SIZE, body
+    tiles = [
+        screens.machine_tile("p", "printer", status, None, kept, 30, True),
+        screens.machine_tile("p", "printer", None, _job(), (), 0, False),
+        screens.screen_key("status", "printer", status, None, "1", kept)[3],
+        {"kind": "tile"},
+    ]
+    for tile in tiles:
+        assert size(deck.render_key("x", art=tile)) == deck.KEY_SIZE, tile

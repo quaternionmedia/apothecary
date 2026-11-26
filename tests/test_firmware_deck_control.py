@@ -529,10 +529,10 @@ def test_the_page_chooses_what_the_knobs_move_and_their_step_as_the_keys_do(benc
     controller, one, links = bench
     controller.choose(machine="cnc_router")
     assert controller.machine.name == "cnc_router"
-    assert one.keys[1]["colour"] == "green" and one.keys[0]["colour"] == "grey"
+    assert one.keys[1]["art"]["chosen"] and not one.keys[0]["art"]["chosen"]
     assert one.strip["text"].startswith("cnc_router · ")
     controller.choose(port=PRINTER)  # the port printer_1's board is on
-    assert controller.machine.name == "printer_1" and one.keys[0]["colour"] == "green"
+    assert controller.machine.name == "printer_1" and one.keys[0]["art"]["chosen"]
     controller.set_step(10.0)
     assert controller.step_mm == 10.0 and one.keys[2]["small"] == "10 mm"
     assert controller.sent == []
@@ -856,8 +856,16 @@ def _swipe(one, direction):
     one.inject("touch", 0, {"kind": "drag", "x": start, "y": 50, "x_out": end, "y_out": 50})
 
 
-def _tap(one):
-    one.inject("touch", 0, {"kind": "short", "x": 400, "y": 50})
+def _tap(one, x=400):
+    one.inject("touch", 0, {"kind": "short", "x": x, "y": 50})
+
+
+def _to(one, screen, kind="short"):
+    """A tap on ``screen``'s name along the top of the strip: its sixth of the 800."""
+    from apothecary.firmware import deck_screens
+
+    index = deck_screens.ORDER.index(screen)
+    one.inject("touch", 0, {"kind": kind, "x": index * 800 // 6 + 60, "y": 10})
 
 
 def _job(job_id="j1", outcome="running", progress=0.42, stage="printing", kind="print"):
@@ -888,35 +896,67 @@ def _wire(links):
 
 def test_a_swipe_along_the_strip_walks_the_screens_and_stops_at_each_end(bench):
     controller, one, links = bench
-    assert controller.state()["screen"] == "knobs"
+    assert controller.state()["screen"] == "knobs"  # Jog, the second, is where it starts
     before = one.strip["text"]
-    _swipe(one, -1)  # nothing before the knobs
+    _swipe(one, -1)
+    assert controller.state()["screen"] == "bench" and one.strip["text"].startswith("Bench · ")
+    _swipe(one, -1)  # nothing before the Bench
+    assert controller.state()["screen"] == "bench"
+    _swipe(one, +1)
     assert controller.state()["screen"] == "knobs" and one.strip["text"] == before
+    _swipe(one, +1)
+    assert controller.state()["screen"] == "home" and one.strip["text"] == "printer_1 · home"
     _swipe(one, +1)
     assert controller.state()["screen"] == "progress"
     assert one.strip["text"] == "printer_1 · no job"
     _swipe(one, +1)
     assert controller.state()["screen"] == "status" and one.strip["text"].startswith("printer_1 ·")
-    status_text = one.strip["small"]
+    _swipe(one, +1)
+    assert controller.state()["screen"] == "bed"
+    bed_text = one.strip["text"]
     _swipe(one, +1)  # nothing after the last
-    assert controller.state()["screen"] == "status" and one.strip["small"] == status_text
-    _swipe(one, -1)
-    _swipe(one, -1)
-    assert controller.state()["screen"] == "knobs" and one.strip["text"] == before
-    assert controller.state()["screens"] == ["knobs", "progress", "status"]
+    assert controller.state()["screen"] == "bed" and one.strip["text"] == bed_text
+    assert controller.state()["screens"] == ["bench", "knobs", "home", "progress", "status", "bed"]
+    assert list(controller.state()["screen_labels"].values()) == [
+        "Bench",
+        "Jog",
+        "Home",
+        "Print",
+        "Temps",
+        "Bed",
+    ]
+    _choose_router(one)  # the same screen, the router's: its Table
+    assert controller.state()["screen"] == "bed"
+    assert controller.state()["screen_labels"]["bed"] == "Table"
+    assert one.strip["art"]["tabs"] == ["Bench", "Jog", "Home", "Cut", "Status", "Table"]
+    assert one.strip["art"]["tab"] == 5
 
 
-def test_a_tap_or_a_short_drag_changes_no_screen_and_a_swipe_sends_nothing_to_a_machine(bench):
+def test_a_tap_shows_the_screen_named_under_it_and_no_touch_or_press_sends_anything(bench):
+    """A tap, or a long press, of the strip shows the screen whose name is above it, a
+    sixth of the strip each; a drag too short to be a swipe moves nothing; a knob pressed
+    shows the next, and from the last the first. None of it asks a machine anything."""
     controller, one, links = bench
     links.control.arm(ROUTER)  # armed, so a stray send would be accepted
     controller.send = controller.poll = controller.jog = lambda *a: pytest.fail(
         "a machine was asked"
     )
     wire = _wire(links)
-    _tap(one)
-    one.inject("touch", 0, {"kind": "long", "x": 400, "y": 50})
+    for screen in ("bench", "progress", "bed", "home", "status", "knobs"):
+        _to(one, screen)
+        assert controller.state()["screen"] == screen
+    _tap(one, 799)  # the last sixth, wherever in it
+    assert controller.state()["screen"] == "bed"
+    _to(one, "home", kind="long")
+    assert controller.state()["screen"] == "home"
     one.inject("touch", 0, {"kind": "drag", "x": 400, "y": 50, "x_out": 500, "y_out": 50})
-    assert controller.state()["screen"] == "knobs"
+    assert controller.state()["screen"] == "home"
+    seen = []
+    for _ in range(6):
+        one.inject("knob-press", 2, True)
+        one.inject("knob-press", 2, False)
+        seen.append(controller.state()["screen"])
+    assert seen == ["progress", "status", "bed", "bench", "knobs", "home"]
     for direction in (+1, +1, -1, -1, +1):
         _swipe(one, direction)
     assert controller.sent == [] and _wire(links) == wire
@@ -936,11 +976,10 @@ def test_progress_shows_the_job_its_part_its_stage_how_far_and_how_long(bench):
 def test_status_shows_the_machines_state_and_what_it_reads(bench):
     controller, one, links = bench
     devices.printer_status(PRINTER)  # a poll anyone made: the deck shows the newest
-    _swipe(one, +1)
-    _swipe(one, +1)
+    _to(one, "status")
     assert one.strip["text"] == "printer_1 · idle"
     assert one.strip["small"].startswith("hotend ") and " · bed " in one.strip["small"]
-    assert one.strip["small"].endswith("3/3")
+    assert one.strip["small"].endswith("5/6")
 
 
 def test_a_print_beginning_brings_progress_forward_once_and_never_fights_a_swipe(bench):
@@ -952,16 +991,14 @@ def test_a_print_beginning_brings_progress_forward_once_and_never_fights_a_swipe
         listener(running)
     assert controller.settle()
     assert controller.state()["screen"] == "progress"
-    _swipe(one, -1)  # a person goes back to the knobs
+    _to(one, "knobs")  # a person goes back to the knobs
     controller.draw()
     controller.draw()
     assert controller.state()["screen"] == "knobs"  # not brought forward again
-    _swipe(one, +1)
-    _swipe(one, +1)
+    _to(one, "status")
     controller.draw()
     assert controller.state()["screen"] == "status"  # nor pulled off the screen they chose
-    _swipe(one, -1)
-    _swipe(one, -1)
+    _to(one, "knobs")
     _on(controller, PRINTER, _job("j2"))  # the next print is another job
     controller.draw()
     assert controller.state()["screen"] == "progress"
@@ -1003,8 +1040,8 @@ def test_a_job_that_ended_stays_on_progress_until_a_touch_of_it(bench):
 def test_a_job_ended_is_not_cleared_by_a_touch_on_another_screen(bench):
     controller, one, links = bench
     _on(controller, PRINTER, _job("j1", outcome="done", progress=1.0))
-    _tap(one)  # on the knobs: the result has not been seen
-    _swipe(one, +1)
+    _to(one, "knobs")  # on the knobs: the result has not been seen
+    _to(one, "progress")  # a tap on another screen's name, made on the knobs
     assert "done after" in one.strip["small"]
 
 
@@ -1066,11 +1103,13 @@ def test_a_screen_is_chosen_from_the_page_by_name_or_step_and_sends_nothing(benc
     wire = _wire(links)
     controller.show_screen("status")
     assert controller.state()["screen"] == "status" and one.strip["text"].startswith("printer_1 ·")
+    controller.show_screen("next")
+    assert controller.state()["screen"] == "bed"
     controller.show_screen("next")  # nothing after the last
-    assert controller.state()["screen"] == "status"
+    assert controller.state()["screen"] == "bed"
     controller.show_screen("previous")
-    assert controller.state()["screen"] == "progress"
-    with pytest.raises(ValueError, match="no screen 'map': the strip's are knobs, progress"):
+    assert controller.state()["screen"] == "status"
+    with pytest.raises(ValueError, match="no screen 'map': the strip's are bench, knobs, home"):
         controller.show_screen("map")
     _on(controller, PRINTER, _job("j1", outcome="done", progress=1.0))
     controller.show_screen("progress")
@@ -1093,3 +1132,182 @@ def test_a_screen_is_chosen_by_route_while_the_knobs_run(bench):
     bad = client.put("/firmware/decks/SIMDECK0/control", json={"screen": "map"})
     assert bad.status_code == 422 and "no screen 'map'" in bad.json()["detail"]
     deck_control.stop_all()
+
+
+# --- the knobs on Jog alone, key 2 as the screen's own, and what the keys draw -------------------
+
+
+def test_the_knobs_move_nothing_off_jog_but_a_routers_spindle_on_cut(bench):
+    """The knobs move a machine where the strip shows what they move: on Jog. A turn on any
+    other screen sends nothing and says where they do; a router's fourth turns its spindle
+    on Cut too, where a cut's speed is changed."""
+    controller, one, links = bench
+    _choose_router(one)
+    links.control.arm(ROUTER)
+    start = _router(links)
+    for screen in ("bench", "home", "progress", "status", "bed"):
+        _to(one, screen)
+        for knob in range(3):
+            _turn(one, knob, 2)
+        assert controller.sent == [] and _router(links) == start, screen
+        assert "the knobs move nothing on" in controller.said[0]
+    assert one.strip["art"]["footer"].startswith("the knobs move nothing on Table")
+    devices.printer_control(ROUTER, "M3 S12000")
+    controller._after(ROUTER)
+    _to(one, "progress")  # the router's Cut
+    _turn(one, 3, 1)
+    assert controller.sent == ["M3 S13000"]
+    _to(one, "status")
+    _turn(one, 3, 1)
+    assert controller.sent == ["M3 S13000"]  # nowhere else
+    _to(one, "knobs")
+    _turn(one, 0, 1)
+    assert controller.sent[-1] == "$J=G91 G21 X1 F1000"
+
+
+def test_home_held_homes_the_chosen_machine_through_the_machines_own_control(bench):
+    """HOME on the Home screen: a press too short to be meant says to hold it; held, it
+    sends the dialect's home through ``devices.printer_control``, so a disarmed machine is
+    refused as the page's ⌂ is."""
+    controller, one, links = bench
+    _to(one, "home")
+    assert one.keys[2]["text"] == "HOME" and one.keys[2]["small"] == "hold: G28"
+    _held(controller, 2, 100.0, 0.2)
+    assert controller.sent == [] and controller.said == (
+        "hold HOME a second to home printer_1",
+        "amber",
+    )
+    _held(controller, 2, 200.0, 1.0)  # disarmed: refused by the machine's own control
+    controller._homing.join(10)
+    assert controller.sent == [] and "disarmed" in controller.said[0]
+    links.control.arm(PRINTER)
+    _held(controller, 2, 300.0, 1.0)
+    controller._homing.join(10)
+    assert controller.sent == ["G28"] and controller.said == ("printer_1 homed", "green")
+    log = [e["text"] for e in links.log_for(PRINTER).since(0)["entries"] if e["kind"] == "tx"]
+    assert "G28" in log
+    _choose_router(one)
+    links.control.arm(ROUTER)
+    assert one.keys[2]["small"] == "hold: $H"
+    _held(controller, 2, 400.0, 1.0)
+    controller._homing.join(10)
+    assert controller.sent[-1] == "$H"
+
+
+def test_home_pressed_on_one_screen_and_let_go_on_another_does_nothing(bench):
+    controller, one, links = bench
+    links.control.arm(PRINTER)
+    _to(one, "home")
+    controller.handle(deck.DeckEvent(1, "key", 2, True, at=100.0))
+    _to(one, "knobs")
+    _to(one, "home")
+    controller.handle(deck.DeckEvent(2, "key", 2, False, at=102.0))
+    assert controller._homing is None and controller.sent == []
+
+
+def test_probe_held_begins_a_reading_of_the_bed_as_the_page_does_and_bed_draws_it(bench):
+    """PROBE on the Bed screen begins a reading through ``devices.start_leveling``, refused
+    while control is down as the page's Probe is; the reading kept is drawn on Bed."""
+    controller, one, links = bench
+    _to(one, "bed")
+    assert (one.keys[2]["text"], one.keys[2]["small"]) == ("PROBE", "hold: the bed")
+    _held(controller, 2, 100.0, 0.3)
+    assert devices.leveling_job(PRINTER) is None and "hold PROBE" in controller.said[0]
+    _held(controller, 2, 200.0, 1.0)
+    assert devices.leveling_job(PRINTER) is None and "disarmed" in controller.said[0]
+    links.control.arm(PRINTER)
+    _held(controller, 2, 300.0, 1.0)
+    job = devices.leveling_job(PRINTER)
+    assert job is not None and controller.said == ("probing printer_1's bed", "amber")
+    deadline = time.monotonic() + 30
+    while job.finished is None and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert job.error is None and job.record is not None
+    controller.draw()
+    art = one.strip["art"]["body"]
+    assert art["kind"] == "mesh" and art["mesh"] == job.record.mesh
+    assert art["lines"][0].startswith("range ") and one.strip["text"].startswith(
+        "printer_1 · range "
+    )
+
+
+def test_probe_is_refused_while_a_task_writes_to_the_port(bench, monkeypatch):
+    """As the route refuses a reading while an upload or a flash holds the port."""
+    from types import SimpleNamespace
+
+    from apothecary.firmware import tasks
+
+    controller, one, links = bench
+    links.control.arm(PRINTER)
+    busy = SimpleNamespace(active=SimpleNamespace(port=PRINTER, id="t1", title="an upload"))
+    monkeypatch.setattr(tasks, "get_task_runner", lambda: busy)
+    _to(one, "bed")
+    _held(controller, 2, 100.0, 1.0)
+    assert devices.leveling_job(PRINTER) is None
+    assert "task t1 (an upload) holds the port" in controller.said[0]
+
+
+def test_a_screens_number_key_is_pressed_for_nothing(bench):
+    controller, one, links = bench
+    links.control.arm(PRINTER)
+    for screen, title in (("progress", "PRINT"), ("status", "HOTEND"), ("bench", "BENCH")):
+        _to(one, screen)
+        assert one.keys[2]["text"] == title
+        _press(one, 2)
+        assert "shows a number: nothing to press" in controller.said[0]
+    assert controller.sent == [] and controller.step_mm == 1.0
+
+
+def test_the_machines_keys_and_the_temps_graph_are_drawn_from_anyones_polls(bench):
+    """The keys of both machines and the Temps graph read what polls left
+    (firmware/readings.py): the deck asks for nothing to draw them."""
+    from apothecary.firmware import readings
+    from apothecary.firmware.models import Heater, PrinterStatus
+
+    controller, one, links = bench
+    readings.reset()
+    now = datetime.now(timezone.utc)
+    for i in range(6):
+        devices.notify_status(
+            PrinterStatus(
+                port=PRINTER,
+                polled_at=now - timedelta(seconds=60 - 10 * i),
+                hotends=[Heater(actual=100 + 20 * i, target=215)],
+                bed=Heater(actual=40 + 3 * i, target=60),
+            )
+        )
+    controller.send = controller.poll = controller.jog = lambda *a: pytest.fail(
+        "a machine was asked"
+    )
+    _to(one, "status")
+    tile = one.keys[0]["art"]
+    assert (tile["value"], tile["small"]) == ("200°", "bed 55°") and tile["chosen"]
+    assert [p[1] for p in tile["spark"]["series"][0]["points"]] == [100, 120, 140, 160, 180, 200]
+    graph = one.strip["art"]["body"]
+    assert graph["kind"] == "graph" and [s["target"] for s in graph["series"]] == [215.0, 60.0]
+    assert len(graph["series"][0]["points"]) == 6
+    assert one.keys[2]["art"]["title"] == "HOTEND" and one.keys[2]["art"]["value"] == "200°"
+    links.control.arm(PRINTER)
+    controller.draw()
+    assert one.keys[0]["art"]["accent"] == "green" and one.keys[0]["art"]["small"].startswith(
+        "armed "
+    )
+    assert one.keys[1]["art"]["title"] == "ROUTER" and not one.keys[1]["art"]["chosen"]
+    readings.reset()
+
+
+def test_what_was_said_on_one_screen_is_not_said_under_the_next_but_a_refusal_is(bench):
+    """The footer says what the layout said a moment ago. Moving to another screen leaves
+    it behind, unless it was a refusal, which stands until something else is said."""
+    controller, one, links = bench
+    _to(one, "home")
+    _turn(one, 0, 1)
+    assert one.strip["art"]["footer"].startswith("the knobs move nothing on Home")
+    _to(one, "bench")
+    assert one.strip["art"]["footer"] == "the knobs move nothing here: Jog is where they do"
+    _to(one, "knobs")
+    _turn(one, 0, 1)  # disarmed: refused, in red
+    assert controller.said[1] == "red"
+    _to(one, "status")
+    assert one.strip["art"]["footer"] == controller.said[0]
+    assert one.strip["art"]["footer_colour"] == "red"

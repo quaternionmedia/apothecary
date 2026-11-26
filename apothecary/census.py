@@ -585,11 +585,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "deck-machine": (WIDGET, WHAT_IS_THERE, "a machine's name, a button that the knobs move it"),
     "deck-step": (WIDGET, WHAT_YOU_SEE, "a button that makes a knob's step so many millimetres"),
-    # The strip's screen, which only a swipe on the deck changed: a real deck's from here.
+    # The deck's screen, which a tap on its name along the strip changes: a real deck's
+    # from here too.
     "deck-screen-to": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a screen's name, a button that the deck's strip shows it, as a swipe along it does",
+        "a screen's name, a button that the deck shows it, as a tap on its name along the strip does",
     ),
     "deck-here": (
         WIDGET,

@@ -30,7 +30,7 @@ export const turn = (base, deck, on) => call(base, at(deck), { method: "POST", b
 export const choose = (base, deck, choice) => call(base, at(deck), { method: "PUT", body: JSON.stringify(choice) });
 
 // The screen the strip shows, and where it is in their order: "progress (2/3)".
-export const screenWords = (knobs) => `${knobs.screen} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length})`;
+export const screenWords = (knobs) => `${(knobs.screen_labels && knobs.screen_labels[knobs.screen]) || knobs.screen} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length})`;
 
 // The control the knobs' machine has left, as its strip says it.
 export const armedWords = (knobs) => (knobs.armed_s > 0
