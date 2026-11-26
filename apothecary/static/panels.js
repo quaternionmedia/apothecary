@@ -613,7 +613,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // with an optional `size` (per cent of its row or column). "world", or
     // { world: true, size }, is the world's window, tabless. A window the page has not
     // registered is left out, and a stack, row or column left empty goes with it.
-    const views = new Map([["default", { title: "Default", spec: null }]]);
+    // The page's own is listed as the ring's cell that lays it out is named.
+    const views = new Map([["default", { title: "Default", label: "Reset layout", spec: null }]]);
     const worldItem = () => ({ type: "component", componentType: WORLD, id: WORLD, title: "World", isClosable: false });
     function resolveView(spec, parent = "row") {
         const sized = (out, size) => { if (size) out[parent === "column" ? "height" : "width"] = size; return out; };
@@ -820,7 +821,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.type = "button";
             b.className = "window-item view-item";
             b.dataset.view = id;
-            b.textContent = v.title;
+            b.textContent = v.label || v.title;
             const missing = api.viewMissing(id);
             const offer = own ? own.offer(id) : { refused: missing ? `${v.title} lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ""}` : null };
             // Greyed where it cannot be laid out now, as every control the page greys is
@@ -1018,11 +1019,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         /* A view: a named arrangement of windows, the page's own ("default") or one a
          * page defines -- `layout` in rows, columns and stacks of window ids (see
          * resolveView), the window it cannot be laid out without (`requires`) and how a
-         * person opens that window (`hint`), said where the view is refused. A window a
-         * view leaves out is closed; one made for the moment that was open stays open,
-         * at its home. */
-        defineView(id, { title, layout: spec, requires = null, hint = null, listed = true }) { views.set(id, { title: title || id, spec, requires, hint, listed }); },
-        views() { return [...views].map(([id, v]) => ({ id, title: v.title, requires: v.requires, listed: v.listed })); },
+         * person opens that window (`hint`), said where the view is refused; `label` is
+         * its entry's words where a list names it otherwise than its title (the ring's
+         * cell's, "Part view"). A window a view leaves out is closed; one made for the
+         * moment that was open stays open, at its home. */
+        defineView(id, { title, label = null, layout: spec, requires = null, hint = null, listed = true }) { views.set(id, { title: title || id, label, spec, requires, hint, listed }); },
+        views() { return [...views].map(([id, v]) => ({ id, title: v.title, label: v.label || v.title, requires: v.requires, listed: v.listed })); },
         /* The window a view needs and the page has not got now ({ id, title, hint }), else null. */
         viewMissing(id) {
             const view = views.get(id);

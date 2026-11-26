@@ -60,7 +60,8 @@ export function defineJourneyViews(panels, journeys) {
 export function mountSystems(panels, systems, hooks = {}) {
     const out = {};
     for (const system of systems) {
-        panels.defineView(system.id, { title: system.title, layout: system.view, requires: system.main, hint: system.opened_by });
+        // Listed as its cell on the ring's Panels › Windows is named: "Part view".
+        panels.defineView(system.id, { title: system.title, label: system.cell, layout: system.view, requires: system.main, hint: system.opened_by });
         const hook = hooks[system.id];
         if (!hook) continue;
         const slot = hook.main ? document.createElement("div") : null;

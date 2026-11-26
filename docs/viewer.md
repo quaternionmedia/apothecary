@@ -748,7 +748,8 @@ ring's cells, and each a cell of the canvas ring's Panels -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
 at its place. The header's **⚙ View** lists the **views**, under their heading: windows laid out together for one
-kind of work, each also a cell of Panels › Windows.
+kind of work, each named as its cell of Panels › Windows is -- Reset layout, Part view,
+Machine view, Airgap view, Family view.
 
 Each group has a colour of its own, and a window wears its group's wherever it
 is shown: its tab tinted with it and a line of it under the tab, both fainter
@@ -799,11 +800,11 @@ which the page, the ring and the tests all read.
 
 | View | |
 |---|---|
-| Default | The page's own layout, as Reset layout puts it |
-| Part | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
-| Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
-| Airgap | The Airgap and each of its sections in a window, the world among them |
-| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
+| Reset layout | The page's own layout |
+| Part view | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
+| Machine view | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
+| Airgap view | The Airgap and each of its sections in a window, the world among them |
+| Family view | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
 
 A view needs its main window. The Machine view opens the Machine
 of the machine selected, or else stepped into, when none is open; with none to open

@@ -805,9 +805,10 @@ def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows
     expect(page.locator("#view-menu > summary")).to_have_text("⚙ View")
     body = page.locator(windows.VIEW_MENU)
     expect(body.locator(".view-menu-views .spawn-group")).to_have_text(["Views"])
-    # The systems' views: a journey's is the tour's to lay out, and is not listed.
+    # The systems' views, each named as its cell on Panels › Windows is: a journey's is
+    # the tour's to lay out, and is not listed.
     expect(body.locator(".view-item")).to_have_text(
-        ["Default", "Part", "Machine", "Airgap", "Family"]
+        ["Reset layout", "Part view", "Machine view", "Airgap view", "Family view"]
     )
     # The views first, then how the world is drawn; Settings is a window, not here.
     order = body.evaluate(

@@ -43,7 +43,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       Pinned (in Site's tabs) lists every pin as `📌 site › node ← identity`:
       note what each names, and take back any that stands on a node it should
       not. A pin's node says *not connected* in its Device section.
-- [ ] **Plan the router.** Select `cnc_router`, ⚙ View › Machine: its
+- [ ] **Plan the router.** Select `cnc_router`, ⚙ View › Machine view: its
       Machine opens not connected, its head saying so, its Cut card
       alone. Under *makes* choose `router_coupon`, **Toolpath**: the file is
       kept and chosen, listed with what it was written from; the preview

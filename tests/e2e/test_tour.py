@@ -311,9 +311,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     settled(page)
     story.shows(
         "A view laid out moves the windows, and not the box",
-        "The Default view laid out: every window goes where that view has it, and the "
-        "box is where it was, open on the stage it showed. The journey's stages wear "
-        "what was said of each.",
+        "⚙ View › Reset layout: every window goes where the page's own layout has it, "
+        "and the box is where it was, open on the stage it showed. The journey's stages "
+        "wear what was said of each.",
         shown=_words(box.locator(".tour-pop-name").inner_text()),
         blank=CHANGING,
     )

@@ -74,7 +74,7 @@ Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, th
 
 ## 6. A view laid out moves the windows, and not the box
 
-The Default view laid out: every window goes where that view has it, and the box is where it was, open on the stage it showed. The journey's stages wear what was said of each.
+⚙ View › Reset layout: every window goes where the page's own layout has it, and the box is where it was, open on the stage it showed. The journey's stages wear what was said of each.
 
 ![A view laid out moves the windows, and not the box](screenshots/34-06-a-view-laid-out-moves-the-windows-and-not-the-box.png)
 
