@@ -215,7 +215,11 @@ def test_a_window_chosen_moves_the_box_and_the_box_closed_leaves_the_journey(pag
     expect(box).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.journey") is None
     expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
-    expect(status(page)).to_contain_text("Left Print a part: its windows stay where they are")
+    # What happened, and where to go next.
+    expect(status(page)).to_contain_text(
+        "Left Print a part: its windows stay where they are. Tour takes it up again, "
+        "⚙ View › Reset layout puts the page's own back"
+    )
     assert windows.state(page, "machine-print")["shown"] is True
 
     # Opened again it enters nothing; ↻ takes the page to its stage, and Tour pressed

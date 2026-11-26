@@ -35,7 +35,8 @@ word on them, on any build, with how many of those were said of an earlier build
 so wait for a word again. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
 windows stay where they are, the address forgets the journey and its stage, and the
-status line says so. A journey that opened another site (Join a hose, in the universe)
+status line says so, and where to go next: Tour takes the journey up again, ⚙ View ›
+Reset layout puts the page's own layout back. A journey that opened another site (Join a hose, in the universe)
 is left on the site the page was on before the tour, opened again; a site a person
 has opened since is where the page stays. Folded, it leaves nothing. What a stage frames is framed in the
 room of the world the box leaves, the largest beside it or above or below it, and

@@ -133,10 +133,10 @@ make/see	works	Ada
 
 ## 12. The box closed leaves the journey
 
-The box's ✕, or Tour in the header pressed again: the journey is left. Its windows stay where they are, the address names no journey, and the status line says so. Tour opens the box again on the stage it showed, and the page is on no journey until ↻ or a stage takes it to one.
+The box's ✕, or Tour in the header pressed again: the journey is left. Its windows stay where they are, the address names no journey, and the status line says so, and where to go next. Tour opens the box again on the stage it showed, and the page is on no journey until ↻ or a stage takes it to one.
 
 ```
-Left Flash a board: its windows stay where they are
+Left Flash a board: its windows stay where they are. Tour takes it up again, ⚙ View › Reset layout puts the page's own back
 ```
 
 ## 13. An address that names a journey and a stage opens the box on it

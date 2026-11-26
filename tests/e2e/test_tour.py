@@ -449,8 +449,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "The box closed leaves the journey",
         "The box's ✕, or Tour in the header pressed again: the journey is left. Its "
         "windows stay where they are, the address names no journey, and the status "
-        "line says so. Tour opens the box again on the stage it showed, and the page "
-        "is on no journey until ↻ or a stage takes it to one.",
+        "line says so, and where to go next. Tour opens the box again on the stage it "
+        "showed, and the page is on no journey until ↻ or a stage takes it to one.",
         shown=_words(page.locator("#status").inner_text()),
     )
 

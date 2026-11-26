@@ -9919,13 +9919,15 @@
                 // page no longer on the journey's site was moved by a person, and stays.
                 const back = this.siteBeforeTour;
                 this.siteBeforeTour = null;
+                // Where to go next: the journey again, or the page's own layout.
+                const next = 'Tour takes it up again, ⚙ View › Reset layout puts the page\'s own back';
                 if (back && back !== this.siteName && this.siteName === journey.site && SITE_NAMES.includes(back)) {
                     this.setStatus(`Left ${journey.name}: opening ${back} again, where the page was before the tour`, 'success');
                     return this.chooseSite(back).then(() => {
-                        if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are`, 'success');
+                        if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are. ${next}`, 'success');
                     });
                 }
-                this.setStatus(`Left ${journey.name}: its windows stay where they are`, 'success');
+                this.setStatus(`Left ${journey.name}: its windows stay where they are. ${next}`, 'success');
             }
             // A window a person chose moves the Tour box to the step that owns it, and
             // moves nothing else. One chosen while the page is on its way to a stage is

@@ -906,7 +906,8 @@ the systems' views, and no journey's.
   remembers them and the step's brought forward. No one pressed anything then,
   so nothing is started on the way ([the tour](tour.md#opening-it)).
 - **The box closed leaves the journey** -- its ✕, or Tour again: the address
-  forgets it, the status line says so, and the windows stay where they are. The
+  forgets it, the windows stay where they are, and the status line says so and that
+  Tour takes it up again, Reset layout the page's own layout. The
   box folded to its head leaves nothing.
 
 - **Site**: its chips, one for each System, Kind and word beneath the level in view
