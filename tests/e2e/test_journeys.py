@@ -1,10 +1,9 @@
 """The journeys (apothecary/journeys.py) on the page, as a person goes through them.
 
-The Print view: the windows a part is made through on a machine laid out together from
-⊞ Windows, with printer_1's Machine open and the footpedal chosen -- Site with its own
-windows, Selected, Parameters, and the Machine sharing a stack with its Print window,
-Print in front, the Machine's sections open before it kept behind them. Greyed while
-no Machine is open and the piece chosen has no board.
+Print a part's view: the windows a part is made through on a machine laid out together by
+the tour, with printer_1's Machine open and the footpedal chosen -- Site with its own
+windows, Selected, Parameters, and the Machine sharing a stack with its Print window and
+the part's Feedback, Print in front -- listed in ⚙ View no more than any journey's.
 
 Print a part, its journey: chosen and stepped in the Tour box and nowhere else -- the
 header holds no rail of it and ⊞ Windows no entry -- each stage's windows brought
@@ -60,27 +59,6 @@ def no_page_errors(page: Page):
     assert errors == [], errors
 
 
-@pytest.mark.e2e
-def test_the_make_view_is_greyed_until_a_machine_is_there(page: Page, url: str):
-    """The footpedal chosen and no Machine open: the Print view says what it needs."""
-    open_garage(page, url, settle=False)
-    _select(page, "footpedal")
-    page.locator("#view-menu > summary").click()
-    entry = windows.view_entry(page, "make")
-    # Greyed as every control the page greys is: its look and "Disabled: <why>".
-    expect(entry).to_have_attribute("aria-disabled", "true")
-    expect(entry).to_have_attribute("title", re.compile(r"^Disabled: .*footpedal"))
-    expect(entry).to_have_css("opacity", "0.45")
-    # Pressed all the same, as a person can: aria-disabled alone, which Playwright's own
-    # wait for an enabled element counts as disabled.
-    entry.click(timeout=5000, force=True)
-    said = status(page)
-    expect(said).to_contain_text("Print view: ")
-    expect(said).to_contain_text("footpedal")
-    expect(said).to_have_class(re.compile(r"\berror\b"))
-    assert page.evaluate("() => window.fractalViewer.machine") is None
-
-
 def _machine_open_and_the_part_chosen(page: Page, url: str) -> None:
     """printer_1's Machine open, as its Device section opens it, then the footpedal chosen."""
     open_garage(page, url, settle=False)
@@ -118,33 +96,26 @@ def _choose_print_a_part(page: Page, url: str) -> None:
 
 
 @pytest.mark.e2e
-def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, url: str):
+def test_print_a_part_s_view_is_the_tour_s_and_lays_out_the_windows_its_stages_name(
+    page: Page, url: str
+):
+    """⚙ View lists no journey's view: Print a part chosen in the Tour box lays its windows
+    out -- Site with its own windows, Selected, Parameters, and the Machine sharing a stack
+    with its Print window and the part's Feedback, Print in front -- and no window its
+    stages do not name."""
     _machine_open_and_the_part_chosen(page, url)
     page.locator("#view-menu > summary").click()
-    entry = windows.view_entry(page, "make")
-    expect(entry).not_to_have_attribute("aria-disabled", "true")
-    expect(entry).to_have_text("Print")
-    entry.click(timeout=5000)
-    expect(page.locator(windows.VIEW_MENU)).to_be_hidden()
-    expect(status(page)).to_contain_text("The Print view: its windows laid out together")
+    expect(page.locator(f"{windows.VIEW_MENU} .view-item").first).to_be_visible()
+    expect(windows.view_entry(page, "make")).to_have_count(0)
+    page.keyboard.press("Escape")
 
-    # Print comes in front of the Machine's stack once its card has drawn.
-    page.wait_for_function(
-        "() => window.apothecaryPanels.state('machine-print').shown", timeout=10000
-    )
+    _choose_print_a_part(page, url)
     stacks = {pid: windows.state(page, pid)["stack"] for pid in ("site", "machine", "selected")}
     assert stacks["site"] == ["site", "problems", "pinned", "jobs", "scad"]
     assert stacks["selected"] == ["selected"]
     assert windows.state(page, "part-parameters")["stack"] == ["part-parameters"]
-    assert stacks["machine"][:6] == [
-        "machine",
-        "machine-print",
-        "part-feedback",
-        "pictures",
-        "bench",
-        "settings",
-    ]
-    assert windows.state(page, "machine")["shown"] is False
+    assert stacks["machine"][:3] == ["machine", "machine-print", "part-feedback"]
+    assert not {"pictures", "bench", "settings"} & set(stacks["machine"])
     assert windows.world_width(page) > page.viewport_size["width"] / 2
 
 
@@ -244,7 +215,11 @@ def test_a_window_chosen_moves_the_box_and_the_box_closed_leaves_the_journey(pag
     expect(box).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.journey") is None
     expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
-    expect(status(page)).to_contain_text("Left Print a part: its windows stay where they are")
+    # What happened, and where to go next.
+    expect(status(page)).to_contain_text(
+        "Left Print a part: its windows stay where they are. Tour takes it up again, "
+        "⚙ View › Reset layout puts the page's own back"
+    )
     assert windows.state(page, "machine-print")["shown"] is True
 
     # Opened again it enters nothing; ↻ takes the page to its stage, and Tour pressed

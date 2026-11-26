@@ -315,6 +315,10 @@ def test_a_problem_deep_in_the_tree_marks_every_piece_above_it(page, base_url: s
     expect(page.locator("#validity-indicator")).to_have_text("1 violation")
 
     page.locator("#validity-indicator").click()  # brings Problems in front
+    # What it brought, and what to do next.
+    expect(page.locator("#status")).to_have_text(
+        "Problems: 1 in garage's layout; a row selects its piece, at its level"
+    )
     page.locator("#problem-list li", has_text="left_post and right_post overlap").click()
     assert page.evaluate("() => window.fractalViewer.focusPath") == ["printer_1", "gantry_system"]
     selected = "printer_1.gantry_system.left_post"

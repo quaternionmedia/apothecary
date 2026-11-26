@@ -1682,13 +1682,13 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
-        ("Print view", "panel:view:make", 1),
-        # The Tour, after the views: its box over the page, then its buttons.
-        ("Tour", None, 7),
+        # The Tour, after the views: its box over the page, then its buttons. A
+        # journey's view has no cell: the tour lays it out.
+        ("Tour", None, 1),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
     assert address_of(root, "panel:view:family") == "493"
-    assert address_of(root, "panel:view:make") == "491"
+    assert "panel:view:make" not in [c.action for c in windows.children]
     tour = next(c for c in windows.children if c.label == "Tour")
     assert [(c.label, c.action, c.cell) for c in tour.children] == [
         ("Tour", "tour:toggle", 8),
@@ -1700,8 +1700,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Take me here", "tour:put", 1),
         ("Who", "tour:by", 7),
     ]
-    assert address_of(root, "tour:toggle") == "4978"
-    assert address_of(root, "tour:works") == "4972"
+    assert address_of(root, "tour:toggle") == "4918"
+    assert address_of(root, "tour:works") == "4912"
     assert carried_by("tour:off").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
@@ -1778,11 +1778,11 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
     """The header's ⚙ View menu is ring-backed by View, a cell of the canvas ring's
     own: View › Fit first, then Snap to grid, Detail (Full, Black box, Dot), Outlines,
-    Select walls, Settings, and after it Layers (a ring: the window first) and Depth (1
-    to 4 levels, then one less and one more), so no cell before them moves. At the root
-    and inside a piece alike the canvas ring holds eight or fewer, View is at 2, seated
-    before every cell that comes and goes, and Panels holds no View. The page carries
-    them all."""
+    Select walls, Depth (1 to 4 levels, then one less and one more), and Layers (a ring:
+    the window first) last, at 1. Settings is a window, Panels › Tools › Settings, and
+    View has no cell of it. At the root and inside a piece alike the canvas ring holds
+    eight or fewer, View is at 2, seated before every cell that comes and goes, and
+    Panels holds no View. The page carries them all."""
     from apothecary.menu import carried_by
 
     for targets, view_cell in (([], "2"), (["printer_1"], "2")):
@@ -1801,9 +1801,8 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             ("Detail", None, 2),
             ("Outlines", "view:outlines", 4),
             ("Select walls", "view:walls", 9),
-            ("Settings", "view:settings", 3),
+            ("Depth", None, 3),
             ("Layers", None, 1),
-            ("Depth", None, 7),
         ]
         assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
@@ -1814,11 +1813,12 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert address_of(root, "view:snap") == f"{view_cell}6"
         assert address_of(root, "view:detail:box") == f"{view_cell}26"
         assert address_of(root, "view:walls") == f"{view_cell}9"
-        assert address_of(root, "view:settings") == f"{view_cell}3"
+        assert "view:settings" not in [c.action for c in view.children]
+        assert address_of(root, "panel:settings") == "436"
         assert address_of(root, "view:layers") == f"{view_cell}1"
         assert address_of(root, "view:layers:window") == f"{view_cell}18"
-        assert address_of(root, "view:depth:2") == f"{view_cell}76"
-        assert [(c.label, c.action) for c in view.children[7].children] == [
+        assert address_of(root, "view:depth:2") == f"{view_cell}36"
+        assert [(c.label, c.action) for c in view.children[5].children] == [
             ("1 level", "view:depth:1"),
             ("2 levels", "view:depth:2"),
             ("3 levels", "view:depth:3"),
@@ -1834,7 +1834,6 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         "view:detail:dot",
         "view:outlines",
         "view:walls",
-        "view:settings",
         "view:layers",
         "view:depth:3",
         "view:depth:more",

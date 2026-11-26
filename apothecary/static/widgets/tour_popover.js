@@ -33,7 +33,7 @@ const MARKUP = `
   <ol class="tour-pop-stages"></ol>
   <p class="tour-pop-words"><span class="tour-pop-said"></span>
     <button type="button" class="tour-pop-put" data-do="put" aria-label="Take the page here" title="Take the page here again: opens and chooses what this stage needs, and enters it">↻</button>
-    <a class="tour-pop-page" target="_blank" rel="noopener" title="The walkthrough page that goes through this stage, in a tab">its page</a></p>
+    <a class="tour-pop-page" target="_blank" rel="noopener" title="The walkthrough page that goes through this stage, at the step it names first, in a tab">its page</a></p>
   <details class="tour-pop-more">
     <summary></summary>
     <ul class="tour-pop-did"></ul>
@@ -87,6 +87,9 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
 
     const here = () => state.stages[state.at];
     const journeyOf = (s) => state.journeys[s.of];
+    // Where a thing to try is: a step on its walkthrough page, its words and picture
+    // together under the page's bar, or a page whole.
+    const pageOf = (t) => `${base}/walkthrough/${t.page}${t.anchor ? `#${t.anchor}` : ''}`;
 
     function place() {
         const { x, y } = kept();
@@ -137,23 +140,20 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
         $('.tour-pop-put').disabled = state.busy;
         const page = $('.tour-pop-page');
         page.hidden = !at.tries.length;
-        if (at.tries.length) page.href = `${base}/walkthrough/${at.tries[0].page}`;
+        if (at.tries.length) page.href = pageOf(at.tries[0]);
         box.classList.toggle('busy', state.busy);
 
         // What the page did to get here, then what it said, or what the stage needs
         // first, apart from what was done; and what there is to try:
-        // each step's heading, a link to its picture where it has one, and each page
-        // that shows the same thing whole, a link to the page. Folded under one line,
-        // and open where the stage needs something first, which a person has to read.
+        // each step's heading, a link to the step on its page, and each page that shows
+        // the same thing whole, a link to the page. Folded under one line, and open
+        // where the stage needs something first, which a person has to read.
         const needs = state.did?.refused ? state.did.said : '';
         const done = state.did ? [...state.did.did, !needs && state.did.said].filter(Boolean) : [];
         $('.tour-pop-did').replaceChildren(...done.map((t) => el('li', { textContent: t })));
         $('.tour-pop-needs').textContent = needs;
         $('.tour-pop-tries').replaceChildren(...at.tries.map((t) => {
-            const text = t.heading;
-            const href = t.index === null ? `${base}/walkthrough/${t.page}` : t.picture && `${base}/walkthrough/${t.picture}`;
-            if (!href) return el('li', { textContent: text, title: t.words });
-            const a = el('a', { textContent: text, href, target: '_blank', rel: 'noopener', title: t.words });
+            const a = el('a', { textContent: t.heading, href: pageOf(t), target: '_blank', rel: 'noopener', title: t.words });
             return el('li', { className: t.index === null ? 'whole' : '' }, a);
         }));
         more.hidden = !done.length && !needs && !at.tries.length;
@@ -271,7 +271,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
             if (verb === 'works') return say('works');
             if (verb === 'off') return say('off');
             if (verb === 'by') return void who.focus();
-            if (verb === 'page') { const page = here().tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
+            if (verb === 'page') { const first = here().tries[0]; if (first) window.open(pageOf(first), '_blank', 'noopener'); }
         },
         // A window chosen in the page is another stage's: the box shows that stage, and
         // puts nothing on. While the page is on its way to a stage, it is kept until then.

@@ -78,17 +78,23 @@ Left to right, one row:
   every part.
 - **⚙ View**: how the page looks: the views, windows laid out together for one
   kind of work ([below](#the-windows)), then how the world is drawn
-  ([below](#how-the-world-is-drawn)), and Settings ([below](#settings)).
+  ([below](#how-the-world-is-drawn)).
 - **⊞ Windows**: see-through's switch, then every window by its group, ●
   open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
-  front.
+  front. [Settings](#settings) is one, under Tools.
+- **Tour** opens the tour's box over the page, pressed again closes it and leaves its
+  journey, the windows where they are ([the tour](tour.md)): the one place a journey is
+  chosen and stepped, each stage's windows laid out as the page is taken there ([below](#journeys)).
+  The ring's Panels › Windows › Tour holds it and its buttons.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
   its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Tools › Docs opens the same.
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does; its tooltip names
   the key and the modifier Settings gives the ring.
 - **The validity count**, "Layout valid" or the number of violations: a click
-  brings Problems, beside Site, in front.
+  brings Problems, beside Site, in front, and the status line says how many the
+  layout has and that a row selects its piece -- or, with none, that whether a part
+  is ready to make is its Readiness, under Part.
 
 Under `apothecary serve --simulated`, one quiet line above the header says its
 machines are simulated -- a printer, a router, an ESP32 and a lighting console, scripted
@@ -288,12 +294,12 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full, and so is a machine stepped into; Selected's Detail overrides it for one piece |
 | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
-| Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
-| Layers (the ring's View › Layers) | A ring of the site's layers ([below](#layers)): Window opens the Layers window, beside the world (the menu has no item of its own for it, and ⊞ Windows lists it), then each layer's own acts |
 | Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click, and One less and One more, the Layers window's stepper, which goes to eight |
+| Layers (the ring's View › Layers) | A ring of the site's layers ([below](#layers)): Window opens the Layers window, beside the world (the menu has no item of its own for it, and ⊞ Windows lists it), then each layer's own acts |
 
 None of the first four is remembered: a reload starts from the defaults.
-Settings, and the depth and the layers, are kept by this browser.
+The depth and the layers are kept by this browser, as [Settings](#settings) are, a
+window of its own.
 
 ### Layers
 
@@ -645,7 +651,7 @@ site, a target no longer in it or nothing at its level, Site with no site regist
 - **Panels** is one cell per group of windows ([below](#the-windows)), each a ring of
   its group's windows and their verbs: Site › Site, Problems, Pinned, Jobs, SCAD,
   Workspace ([working-space.md](working-space.md)), Lighting (a rig's, greyed on a site
-  without one, [lighting.md](lighting.md)) and Layers; Part › Selected and Motion;
+  without one, [lighting.md](lighting.md)) and Layers; Part › Selected, Motion and Badge;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
   word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
@@ -656,7 +662,8 @@ site, a target no longer in it or nothing at its level, Site with no site regist
   Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)) and
   Bed (Runs, Differences, Fixes and History, then Keep mount and Make these, on the
   printer whose Machine is open, [bed-shims.md](bed-shims.md#in-the-page)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view;
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Tour (the
+  [tour](tour.md#the-ring)'s box, then its buttons);
   Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
   slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
   Deck window, then the Stream Deck +'s knobs: On / off, Machine, Step, Here and Screen
@@ -747,7 +754,8 @@ ring's cells, and each a cell of the canvas ring's Panels -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
 at its place. The header's **⚙ View** lists the **views**, under their heading: windows laid out together for one
-kind of work, each also a cell of Panels › Windows.
+kind of work, each named as its cell of Panels › Windows is -- Reset layout, Part view,
+Machine view, Airgap view, Family view.
 
 Each group has a colour of its own, and a window wears its group's wherever it
 is shown: its tab tinted with it and a line of it under the tab, both fainter
@@ -798,20 +806,20 @@ which the page, the ring and the tests all read.
 
 | View | |
 |---|---|
-| Default | The page's own layout, as Reset layout puts it |
-| Part | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
-| Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
-| Airgap | The Airgap and each of its sections in a window, the world among them |
-| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
-| Print | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
+| Reset layout | The page's own layout |
+| Part view | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
+| Machine view | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
+| Airgap view | The Airgap and each of its sections in a window, the world among them |
+| Family view | The world; the Procedure tall beside it, the Workspace behind it; Members, Deliveries, Jobs with Site behind it, and Selected in the column: *Run a site*'s windows ([below](#journeys)) |
 
-A view needs its main window. The Machine view, and the Print view, open the Machine
+A view needs its main window. The Machine view opens the Machine
 of the machine selected, or else stepped into, when none is open; with none to open
-each is offered greyed, its tooltip saying why as every greyed control's does
+it is offered greyed, its tooltip saying why as every greyed control's does
 ("Disabled: <why>. ..."), and asked for, from ⚙ View or the ring, it says why and
 leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
-the printer's Machine.
-Laid out, either lands on the file the machine would run: the path of the file its
+the printer's Machine. A journey's windows are laid out by the [tour](tour.md), where a
+journey is chosen, and ⚙ View lists none of them ([below](#journeys)).
+Laid out, the Machine view lands on the file the machine would run: the path of the file its
 Print or Cut has chosen drawn in the world, all of it, and framed, the slider
 that goes through it beside it ([toolpath-preview.md](toolpath-preview.md#in-the-page));
 with no file of that machine's kept, the status line says how one comes to be.
@@ -879,10 +887,10 @@ what it made:
 | 5 | **Print** | the Print window, then Jobs | the Machine, Jobs |
 | 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure, or a dimension clicked on the part with Measure shown | the Feedback window |
 
-A journey's view lays its windows out when it is entered. *Print a part*'s is also
-listed in ⚙ View › Views and has a cell on the ring's Panels › Windows, which is
-full; the others' are laid out by the tour alone, which takes the page to each
-stage.
+A journey's view lays its windows out when it is entered: the windows its stages
+name, the first stage's in front and the next's a tab away. It is laid out by the tour
+alone, which takes the page to each stage; ⚙ View and the ring's Panels › Windows list
+the systems' views, and no journey's.
 
 - **A step chosen in the box enters it** -- its number, ‹ or ›, and ↻ for the
   step already on: its windows come in front of their stacks, the one it is
@@ -900,7 +908,8 @@ stage.
   remembers them and the step's brought forward. No one pressed anything then,
   so nothing is started on the way ([the tour](tour.md#opening-it)).
 - **The box closed leaves the journey** -- its ✕, or Tour again: the address
-  forgets it, the status line says so, and the windows stay where they are. The
+  forgets it, the windows stay where they are, and the status line says so and that
+  Tour takes it up again, Reset layout the page's own layout. The
   box folded to its head leaves nothing.
 
 - **Site**: its chips, one for each System, Kind and word beneath the level in view
@@ -1213,8 +1222,8 @@ has none. The routes are `/parts/{name}/draft/check`, `/draft/render` and
 ## Settings
 
 **Settings**, a tab beside Pictures, holds every shortcut and navigation
-setting of the page, and how its windows look, and is the reference for every binding. ⚙ View ›
-Settings and the canvas ring's View › Settings open it. Each row says its default under its name, and its ↺ puts it back;
+setting of the page, and how its windows look, and is the reference for every binding. It is
+a window of Tools: ⊞ Windows › Settings and the canvas ring's Panels › Tools › Settings open it. Each row says its default under its name, and its ↺ puts it back;
 **Reset all**, at the foot, puts every one back. A change applies at once,
 with no reload.
 

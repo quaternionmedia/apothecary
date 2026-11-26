@@ -22,8 +22,9 @@ hands the next what it made.
 The box has no words of its own. A stage's line is its step's in
 `apothecary/journeys.py`.
 Under it is what there is to try on the stage: the steps of the walkthrough that go
-through it, each a link to its picture, and the pages that show the same thing whole,
-at the command line (`shown_by`, in `apothecary/journeys.py`).
+through it, each a link to the step on its page -- its words and its picture together,
+under the bar that leads back to the docs and the viewer -- and the pages that show the
+same thing whole, at the command line (`shown_by`, in `apothecary/journeys.py`).
 
 ## Opening it
 
@@ -34,7 +35,8 @@ word on them, on any build, with how many of those were said of an earlier build
 so wait for a word again. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
 windows stay where they are, the address forgets the journey and its stage, and the
-status line says so. A journey that opened another site (Join a hose, in the universe)
+status line says so, and where to go next: Tour takes the journey up again, ⚙ View ›
+Reset layout puts the page's own layout back. A journey that opened another site (Join a hose, in the universe)
 is left on the site the page was on before the tour, opened again; a site a person
 has opened since is where the page stays. Folded, it leaves nothing. What a stage frames is framed in the
 room of the world the box leaves, the largest beside it or above or below it, and
@@ -60,8 +62,8 @@ word on the build the server runs.
 
 Going to a stage -- a journey chosen in the drop-down, a stage's number, ›, ‹, or a
 word said on the one before -- takes the page there, and ↻ beside the stage's words
-takes it there again. **its page**, beside ↻, is the first walkthrough page the stage
-names, in a tab. The page then does what a person would do to get there, each
+takes it there again. **its page**, beside ↻, is the walkthrough page the stage names
+first, in a tab, at the step it names. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
 - the site the journey stands in opened, where another is, as the banner's ▾ opens
@@ -188,9 +190,10 @@ said of each stage.
 ## The ring
 
 Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back,
-Works, Off (with what the box's field says), Next, Its page (the first walkthrough
-page the stage names, in a tab), Take me here, and Who, the field for the name. It is
-seated after the views, so no cell before it moves.
+Works, Off (with what the box's field says), Next, Its page (the walkthrough page the
+stage names first, at its step, in a tab), Take me here, and Who, the field for the name. It is
+seated after the views, the systems' alone: a journey's view is laid out by the box, and
+has no cell.
 
 ## What it does not do
 

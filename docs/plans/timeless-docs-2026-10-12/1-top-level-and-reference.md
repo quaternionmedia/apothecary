@@ -126,7 +126,7 @@ passages and one duplicate.
 | line(s) | quote | problem | home | rewrite or note |
 |---|---|---|---|---|
 | 195-204 | "A part's values are the top-level assignments in its SCAD … as OpenSCAD's customizer has them" | duplicate | reference → docs/parts-authoring.md | The grammar is told here, at parts-authoring 147-158 and again at 170-185. Keep the page's behaviour here; link the grammar. |
-| 241 | "What is typed in the SCAD is drawn once it reads, as before." | history | inline | "as before" reads as an earlier version. "…is drawn once it reads (see [The SCAD editor](#the-scad-editor))." |
+| 241 | "What is typed in the SCAD is drawn once it reads, as before." | history | inline | "as before" reads as an earlier version. "…is drawn once it reads (see [The SCAD editor](../../viewer.md#the-scad-editor))." |
 | 334-335 | "or, for a variant saved before its values were in its text, that it does not" | history | inline | "or, for a variant whose values are in its `.variant.json` and not its text, that a merge does not apply them until it is saved again." Checked `saved.py`'s `old` branch. |
 | 348-350 | "one saved before its values were written into its text has them written in when it is read" | history | inline | "a variant whose values are not in its text has them written in when it is read." |
 

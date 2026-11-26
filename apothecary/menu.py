@@ -36,8 +36,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .facets import KIND, KINDS, SYSTEM, SYSTEM_LAYER, facet_of, facets_of, kinds_and_systems
 from .facets import SYSTEMS as SITE_SYSTEMS
 from .hierarchy import Assembly, find_node_by_path
-from .journeys import JOURNEYS
-from .journeys import by_id as journey_by_id
 from .layer_colours import (
     BED_MESH,
     CATEGORY,
@@ -873,8 +871,8 @@ PANELS: Sequence[Tuple[str, str]] = (
     # their own under its cell (_bench).
     ("bench", "Bench"),
     # Settings: every shortcut and navigation setting, kept per browser, a tab
-    # beside Pictures registered at start. Its cell is View's (View › Settings),
-    # as ⚙ View › Settings opens it, not one of Panels'.
+    # beside Pictures registered at start, a window of Tools: its cell is Panels ›
+    # Tools › Settings, as ⊞ Windows lists it under Tools, and View has none.
     ("settings", "Settings"),
     # The Airgap: the airgap part as a field, torque and dynamics model, a tab
     # beside Pictures registered at start and shown when asked for; it follows the
@@ -943,14 +941,12 @@ PANEL_GROUPS = {
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
-# The views: each focused system's windows laid out together (systems.py), then each
-# journey's that has a cell (journeys.py: the ring is full, so the first's alone), a cell
-# of Panels › Windows after the layout's own two and an entry of the header's ⚙ View. The page defines each from the same entry; a view's
-# windows the page has not got are left out of it.
-VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
-    (journey.id, journey.cell) for journey in JOURNEYS if journey.cell
-)
-JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
+# The views: each focused system's windows laid out together (systems.py), a cell of
+# Panels › Windows after the layout's own two and an entry of the header's ⚙ View. The
+# page defines each from the same entry; a view's windows the page has not got are left
+# out of it. A journey's view is laid out by the tour going to its stages, where a
+# journey is chosen, and is listed in neither.
+VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # Panels is one cell per group of windows, each a ring of its group's windows and their
 # verbs: Site 8, Part 6, Pictures 2, Machine 4, then the layout's own Windows 9, Tools 3,
 # Family 1 and Airgap 7. These four come before Windows.
@@ -1053,7 +1049,7 @@ def _panels(rig: bool = False) -> Option:
                 Option(
                     id=f"panel:view:{vid}",
                     label=label,
-                    group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
+                    group=by_id(vid).group,
                     action=f"panel:view:{vid}",
                 )
                 for vid, label in VIEWS
@@ -1061,8 +1057,7 @@ def _panels(rig: bool = False) -> Option:
             _tour(),
         ],
     )
-    # Tools: the Bench and its verbs, Settings (View › Settings opens it too), the Deck
-    # with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of
+    # Tools: the Bench and its verbs, Settings, the Deck with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of
     # the browser's own, as the header's Docs opens them.
     tools = Option(
         id="panels:tools",
@@ -1121,14 +1116,13 @@ def _view(
     lets a click in the world pick a wall, which it otherwise passes through, for
     the page's session. Snap, Outlines and Select walls each turn what they name the
     other way, as their tick-boxes do, and the status line says which way it went;
-    the ring is not told how they stand. Settings opens the Settings panel --
-    the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
-    before it moves. Layers and Depth come after it, in the two cells left: Layers is
-    a ring of the layers of what lies beneath the level in view (``under``), each a ring
-    of its own acts (``_layers``), and Depth
+    the ring is not told how they stand. Depth and Layers come after them: Depth
     is how many levels below this one a click reaches and the world draws, one to four
-    by name and one more or less, as the Layers window's stepper (to eight). Select
-    walls is the wall layer's Selectable tick.
+    by name and one more or less, as the Layers window's stepper (to eight), and Layers
+    is a ring of the layers of what lies beneath the level in view (``under``), each a
+    ring of its own acts (``_layers``), seated last so it keeps cell 1. Select walls is
+    the wall layer's Selectable tick. Settings is a window, Panels › Tools › Settings,
+    and View has no cell of it.
     """
     return Option(
         id="view",
@@ -1147,9 +1141,6 @@ def _view(
             ),
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
-            Option(id="view:settings", label="Settings", action="view:settings"),
-            # After Settings, which keeps its cell: the two cells still free.
-            _layers(site, part_category, under),
             Option(
                 id="view:depth",
                 label="Depth",
@@ -1167,6 +1158,8 @@ def _view(
                     Option(id="view:depth:more", label="One more", action="view:depth:more"),
                 ],
             ),
+            # Last, so Layers keeps cell 1 (21).
+            _layers(site, part_category, under),
         ],
     )
 
@@ -1518,9 +1511,9 @@ def _tour() -> Option:
     """Panels › Windows › Tour: the tour's box over the page, then its buttons, which
     the page hands to it (widgets/tour_popover.js): Back and Next through the journeys'
     stages, Works and Off saying how the stage is (Off with what the box's field says
-    is off), Take me here, which takes the page to the stage, Its page, the first
-    walkthrough page the stage names, in a tab of its own, and Who, the field for the
-    name a word is kept under."""
+    is off), Take me here, which takes the page to the stage, Its page, the walkthrough
+    page the stage names first, at the step it names, in a tab of its own, and Who, the
+    field for the name a word is kept under."""
     return Option(
         id="panels:tour",
         label="Tour",

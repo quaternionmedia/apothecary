@@ -393,18 +393,19 @@ FAMILY = System(
             "milliseconds and the instance that took it",
         ),
     ),  # fmt: skip
-    # The Procedure tall beside the world; Members and Deliveries under it, where Jobs
-    # and Selected keep the column. A Machine that is open stays where it is: a step's
-    # door opens it.
+    # The Procedure tall beside the world, the Workspace behind it; Members and
+    # Deliveries in the column, then Jobs with Site behind it, and Selected. A Machine
+    # that is open stays where it is: a step's door opens it. Run a site lays out the
+    # same (journeys.py), so the view and the journey agree on what goes together.
     view={
         "row": [
             {"world": True, "size": 34},
-            {"stack": ["procedure"], "size": 30},
+            {"stack": ["procedure", "working"], "size": 30, "active": "procedure"},
             {
                 "column": [
                     {"stack": ["family-members"], "size": 20},
                     {"stack": ["family-deliveries"], "size": 26},
-                    {"stack": ["jobs", "working"], "size": 22, "active": "jobs"},
+                    {"stack": ["jobs", "site"], "size": 22, "active": "jobs"},
                     {"stack": ["selected"], "size": 32},
                 ],
                 "size": 36,

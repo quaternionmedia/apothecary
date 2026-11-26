@@ -95,6 +95,7 @@ def test_a_stage_carries_what_it_names_to_try():
     ]
     assert shape["tries"][0]["heading"] == "A size dragged is checked once the slider rests"
     assert shape["tries"][0]["picture"].startswith("screenshots/04-02-")
+    assert shape["tries"][0]["anchor"] == "2-a-size-dragged-is-checked-once-the-slider-rests"
 
 
 def test_every_stage_names_steps_and_pages_there_are():
@@ -103,6 +104,25 @@ def test_every_stage_names_steps_and_pages_there_are():
             tries = tour._tries(stage.shown_by, WALKTHROUGH_ROOT)
             assert len(tries) == len(stage.shown_by), (journey.id, stage.id)
             assert len(set(stage.shown_by)) == len(stage.shown_by), (journey.id, stage.id)
+
+
+def test_a_step_to_try_lands_on_its_heading_on_the_page_served():
+    """A step's link is its page at the step's own heading, as /walkthrough serves it,
+    so the step's words and picture are together under the page's bar, which leads back;
+    a page whole is the page, from its top."""
+    c = TestClient(app)
+    landed = {}
+    for journey in journeys.JOURNEYS:
+        for stage in journey.steps:
+            for t in tour._tries(stage.shown_by, WALKTHROUGH_ROOT):
+                if t["page"] not in landed:
+                    r = c.get(f"/walkthrough/{t['page']}")
+                    assert r.status_code == 200, t["page"]
+                    landed[t["page"]] = set(re.findall(r'\bid="([^"]+)"', r.text))
+                if t["index"] is None:
+                    assert t["anchor"] is None, t["page"]
+                    continue
+                assert t["anchor"] in landed[t["page"]], (stage.id, t["page"], t["anchor"])
 
 
 def test_a_page_a_stage_names_whole_is_a_link_to_the_page():

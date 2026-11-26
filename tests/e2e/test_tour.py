@@ -240,8 +240,15 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "Apply draws the variant, marked as not saved",
         ]
     )
+    # Each a link to the step on its page, its words and picture under the page's bar.
     expect(tries.first.locator("a")).to_have_attribute(
-        "href", re.compile(r"/walkthrough/screenshots/04-02-[a-z0-9-]+\.png$")
+        "href",
+        re.compile(
+            r"/walkthrough/04-designing-a-part\.md#2-a-size-dragged-is-checked-once-the-slider-rests$"
+        ),
+    )
+    expect(box.locator(".tour-pop-page")).to_have_attribute(
+        "href", tries.first.locator("a").get_attribute("href")
     )
     _off_the_buttons(page)
     settled(page)
@@ -251,8 +258,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "this browser keeps it. Named, the server keeps the word, and the box goes to "
         "Shape and takes the page there, Parameters in front. Folded under one line "
         "with what the page did is "
-        "what there is to try on this stage, each a link to a picture of it in the "
-        "walkthrough.",
+        "what there is to try on this stage, each a link to the step on its walkthrough "
+        "page, where its picture is.",
         shown="\n".join(tries.all_inner_texts()),
         blank=CHANGING,
     )
@@ -304,9 +311,9 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     settled(page)
     story.shows(
         "A view laid out moves the windows, and not the box",
-        "The Default view laid out: every window goes where that view has it, and the "
-        "box is where it was, open on the stage it showed. The journey's stages wear "
-        "what was said of each.",
+        "⚙ View › Reset layout: every window goes where the page's own layout has it, "
+        "and the box is where it was, open on the stage it showed. The journey's stages "
+        "wear what was said of each.",
         shown=_words(box.locator(".tour-pop-name").inner_text()),
         blank=CHANGING,
     )
@@ -442,8 +449,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "The box closed leaves the journey",
         "The box's ✕, or Tour in the header pressed again: the journey is left. Its "
         "windows stay where they are, the address names no journey, and the status "
-        "line says so. Tour opens the box again on the stage it showed, and the page "
-        "is on no journey until ↻ or a stage takes it to one.",
+        "line says so, and where to go next. Tour opens the box again on the stage it "
+        "showed, and the page is on no journey until ↻ or a stage takes it to one.",
         shown=_words(page.locator("#status").inner_text()),
     )
 

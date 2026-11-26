@@ -1,7 +1,9 @@
 """The documentation served by the viewer's server: /docs and /walkthrough."""
 
+import html
 import json
 import re
+from urllib.parse import unquote, urljoin, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -77,6 +79,45 @@ def test_every_page_renders_and_its_links_resolve():
             if not path.exists() and "generated/" not in rel:
                 missing.append(f"{url} -> {href}")
     assert not missing, "\n".join(missing)
+
+
+SERVED_HREF = re.compile(r'<a href="([^"]+)"')
+SERVED_ID = re.compile(r'\bid="([^"]+)"')
+
+
+def test_every_link_a_served_page_shows_lands_on_a_page_at_the_heading_it_names():
+    """Followed as a browser follows it, every link the README, the docs and the
+    walkthrough show answers here -- a page, a picture, a folder's pages -- and one that
+    names a heading lands on it: the anchor is the docs site's own, GitHub's. A link to
+    a file of the repository the server does not serve goes to the repository, so none
+    is a 404 here."""
+    c = TestClient(app)
+    seen: dict = {}
+
+    def get(path: str):
+        if path not in seen:
+            r = c.get(path, follow_redirects=True)
+            html_page = "html" in r.headers.get("content-type", "")
+            seen[path] = (r.status_code, set(SERVED_ID.findall(r.text)) if html_page else None)
+        return seen[path]
+
+    bad = []
+    for url in ["/README.md", "/walkthrough", *docs_site.pages()]:
+        status, _ids = get(url)
+        assert status == 200, url
+        r = c.get(url)
+        for href in SERVED_HREF.findall(r.text):
+            href = html.unescape(href)
+            target = urljoin(f"http://here{url}", href)
+            parts = urlparse(target)
+            if parts.netloc != "here" or parts.path == "/openapi.json":
+                continue  # another site's page, or the API's document
+            status, ids = get(unquote(parts.path))
+            if status != 200:
+                bad.append(f"{url} -> {href}: {status}")
+            elif parts.fragment and ids is not None and parts.fragment not in ids:
+                bad.append(f"{url} -> {href}: no such heading")
+    assert not bad, "\n".join(bad)
 
 
 ROOT_DOCS = ["README.md", "CONTRIBUTING.md", "AGENTS.md", "CHANGELOG.md"]

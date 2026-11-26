@@ -116,9 +116,8 @@ def _no_ring_after_a_moment(page: Page) -> None:
 
 
 def _settings(page: Page):
-    """The Settings panel, opened from ⚙ View › Settings."""
-    page.locator("#view-menu summary").click()
-    page.locator("#settings-open").click()
+    """The Settings panel, a window of Tools, opened from ⊞ Windows › Settings."""
+    windows.from_the_windows_menu(page, "settings")
     panel = page.locator(".panel[data-panel='settings']")
     expect(panel.locator(".settings-ui")).to_be_visible(timeout=5000)
     return panel

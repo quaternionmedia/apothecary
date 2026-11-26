@@ -43,7 +43,7 @@ Print a part › 1 Choose (the tour): a part, among the site's pieces
 
 ## 3. ✓ Works keeps the word and takes the page to the next stage, with what to try
 
-✓ Works is kept under a name: with none given the box asks for it, once, and this browser keeps it. Named, the server keeps the word, and the box goes to Shape and takes the page there, Parameters in front. Folded under one line with what the page did is what there is to try on this stage, each a link to a picture of it in the walkthrough.
+✓ Works is kept under a name: with none given the box asks for it, once, and this browser keeps it. Named, the server keeps the word, and the box goes to Shape and takes the page there, Parameters in front. Folded under one line with what the page did is what there is to try on this stage, each a link to the step on its walkthrough page, where its picture is.
 
 ![✓ Works keeps the word and takes the page to the next stage, with what to try](screenshots/34-03-works-keeps-the-word-and-takes-the-page-to-the-nex.png)
 
@@ -74,7 +74,7 @@ Print a part › 5 Print (the tour): control armed in the Machine, ▶ Print, th
 
 ## 6. A view laid out moves the windows, and not the box
 
-The Default view laid out: every window goes where that view has it, and the box is where it was, open on the stage it showed. The journey's stages wear what was said of each.
+⚙ View › Reset layout: every window goes where the page's own layout has it, and the box is where it was, open on the stage it showed. The journey's stages wear what was said of each.
 
 ![A view laid out moves the windows, and not the box](screenshots/34-06-a-view-laid-out-moves-the-windows-and-not-the-box.png)
 
@@ -133,10 +133,10 @@ make/see	works	Ada
 
 ## 12. The box closed leaves the journey
 
-The box's ✕, or Tour in the header pressed again: the journey is left. Its windows stay where they are, the address names no journey, and the status line says so. Tour opens the box again on the stage it showed, and the page is on no journey until ↻ or a stage takes it to one.
+The box's ✕, or Tour in the header pressed again: the journey is left. Its windows stay where they are, the address names no journey, and the status line says so, and where to go next. Tour opens the box again on the stage it showed, and the page is on no journey until ↻ or a stage takes it to one.
 
 ```
-Left Flash a board: its windows stay where they are
+Left Flash a board: its windows stay where they are. Tour takes it up again, ⚙ View › Reset layout puts the page's own back
 ```
 
 ## 13. An address that names a journey and a stage opens the box on it

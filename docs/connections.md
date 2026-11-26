@@ -227,7 +227,7 @@ it.
 | Checked here | Only the real things show |
 |---|---|
 | each end seats by the rule for a spigot and a socket | how tight it feels, and whether a 1.2 taper holds without a clamp |
-| the profile prints without support at a 2.0 wall | whether the printer draws a bore and an outside to size: that is the printer's, measured and fed back to its slices ([slicer.md](slicer.md#a-printers-correction-measured)) |
+| the profile prints without support at a 2.0 wall | whether the printer draws a bore and an outside to size: that is the printer's, measured and fed back to its slices ([slicer.md](slicer.md#a-printer-tuned-from-its-prints)) |
 | the render is the interfaces declared, to 0.05 (`apothecary parts verify`) | a hose's real bore and give, and a port's real bore: measured with calipers, at the mouth and 20 mm in |
 
 So a person measures each end before generating, ticks `measured`, prints the
