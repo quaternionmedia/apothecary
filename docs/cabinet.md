@@ -139,11 +139,13 @@ for a print that stopped, **stopped**, where, and the tries
 ([above](#a-print-that-stopped)); **measured**, a row for each
 of a print's dimensions, its designed size, a field, and its newest reading with how far
 it is from the design, within its tolerance or outside it (the tolerance and whose it is
-said after the rows), or one field of a cut's sizes, with **Keep** (Enter in a row keeps
-too); a dimension clicked on the part in the world, with Measure shown, marks its row and
-gives it the caret;
-**seen**, each fault none to bad, with **Keep look**; **note**, with **Keep note**; Take
-turn and Undo turn; the tuning's history; and what the drawer holds, an undone filing
+said after the rows), or one field of a cut's sizes; a dimension clicked on the part in
+the world, with Measure shown, marks its row and gives it the caret; **seen**, each fault
+none to bad; **note**; then one **Keep** (Enter in any of their fields keeps too), which
+files whichever of them is typed or chosen, each a filing of its own -- a turn, a look, a
+note -- with Take turn and Undo turn beside it, the status line naming the step after
+each: Take turn once a turn or a look is filed, a Slice in the printer's Print window
+once a turn is taken; the tuning's history; and what the drawer holds, an undone filing
 struck through, a measured filing's checks under it. Machine › Print and Cut print and
 cut: they measure nothing.
 

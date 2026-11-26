@@ -309,11 +309,11 @@ def test_a_disarm_that_failed_is_never_drawn_as_disarmed(page: Page, url: str):
 
 @pytest.mark.e2e
 def test_an_open_machine_hears_its_port_armed_and_let_go_from_elsewhere(page: Page, url: str):
-    """With auto-poll off, a port armed by another hand -- the deck, another browser --
+    """With polling off, a port armed by another hand -- the deck, another browser --
     arms the open Machine's own latch within the page's look at the armed ports: its
     pad out, its tick-box ticked. Let go from elsewhere, the pad goes."""
     pad = _machine(page, url)
-    page.locator("#auto").uncheck()
+    page.locator("#interval").select_option("0")
     expect(pad).to_be_hidden()
     with httpx.Client(base_url=url, timeout=15.0) as elsewhere:
         elsewhere.post(

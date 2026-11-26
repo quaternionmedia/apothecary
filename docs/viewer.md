@@ -573,7 +573,7 @@ The world follows each machine it draws by polls of its own, every two seconds
 (`apothecary/static/boards.js`), so its tool, its bed and its pieces move with no
 Machine open: only while the server holds the machine's link, so the world opens
 no port and a link released stays released, and never while a Machine is open on
-the port, whose own polls and auto-poll tick-box decide there.
+the port, whose own polls and its head's poll choice decide there.
 
 A projector aimed at a machine's bed draws in the same frame, on a page of its own for
 a second display: Camera › Projector on the machine's ring opens it ([The

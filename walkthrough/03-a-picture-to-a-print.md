@@ -93,7 +93,7 @@ printer_1's ring, Device › Control › Arm: the latch a print needs, its pad a
 Print disc_1.gcode on /dev/ttyFAKE1, making disc_1?
 163 lines will stream from here; the printer will heat and move.
 
-started disc_1.gcode on /dev/ttyFAKE1, making disc_1: Print from here follows it to its end, and Site's Jobs lists it
+started disc_1.gcode on /dev/ttyFAKE1, making disc_1: its Print window follows it to its end, and Site's Jobs lists it
 ```
 
 ## 9. The job ends, and says so where it is watched

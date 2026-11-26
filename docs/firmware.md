@@ -512,7 +512,8 @@ run against what it was heard saying (its `apothecary <name>: hello`
 banner), and what changed since it was flashed -- and **Flashing**. Both
 kinds have the board's **one log**, **Log**: a printer's comms log, with the
 one box that asks it for a report code (poll traffic hidden unless asked
-for), or a devkit's serial output. A section opens from ⊞ Windows or a
+for), or a devkit's serial output. It follows its end while it is scrolled to
+it; scrolled up, it stays where the reader is. A section opens from ⊞ Windows or a
 stack's +, by a verb that acts on it -- Poll opens Status, Query and Listen
 a devkit's Sketch and the Log, Flash its Flashing, a print's or a slice's
 verbs Print, the bed's Bed level -- by a link to the board (below), or with
@@ -560,7 +561,8 @@ Machine too.
 Every drawer of a board -- its badge in the world, its badge in Site's tree,
 Selected's line and its Machine -- reads one model of it
 (`apothecary/static/boards.js`), which polls a printer at the interval its
-Machine says while its Machine is open with auto-poll on, and every two seconds
+Machine's head says while its Machine is open -- **poll**, off or every 1 to 10 s, off
+meaning only when ⟳ Poll asks -- and every two seconds
 for the world while no Machine is open on it and the server holds its link, so a
 machine drawn in the world follows its board ([viewer.md](viewer.md#a-machines-frame)):
 one poller per board, whatever draws it. The model scans for boards when a site
@@ -691,7 +693,7 @@ is sent at once and is never held by a line in flight, while every other line wa
 turn behind the one in flight. An arm or a disarm that failed is drawn as the server says
 the latch is, asked again, and never as what was asked for; with no answer the label is
 marked *not confirmed*. An open Machine follows its port's latch whoever armed it or
-let it go, with auto-poll off too. Once the status its cards are drawn from is more
+let it go, with its polling off too. Once the status its cards are drawn from is more
 than a few seconds old, the State card says how old and the values dim. A Machine is
 its board's: its pinned board found on another port, it is opened again there.
 
@@ -832,13 +834,13 @@ probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
 (`G28`, `G29 V3`) and then reads; probed hot (`heat_c`, `soak_s`, `times`: Runs' Probe
 hot), the bed is heated first (`M190`), held, probed up to twice, a reading each, and
-turned off after (`M140 S0`), however the job ends. It is offered once the latch is armed, and runs as a job that
+turned off after (`M140 S0`), however the job ends. It is greyed, saying why, until the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
 tilt (a least-squares plane) and each corner against the mean, and as a
-relief over the printer's bed in the world. The corner buttons, offered with
-the probe once the latch is armed, move the nozzle to paper height at each
+relief over the printer's bed in the world. The corner buttons, greyed with
+the probe until the latch is armed, move the nozzle to paper height at each
 corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
 the `G29 W` points an `M503` prints. At verbosity 3 Marlin's probe says where
@@ -924,7 +926,11 @@ row beside it (the next slice's: the part's own, probe first, or home only;
 the ring's Print › Levelling steps it), the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
 preview and ▶ Print once a file is chosen, Pause and Abort while a print runs,
-and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
+and Resume while it is paused. The window's first line says the step a person is
+at and what is next: what to choose, Slice, ▶ Print -- and what it waits for, the
+latch in the Machine's head or the server's reason -- the print streaming and where
+its end goes. Under it, the printer's jobs, newest first; the row of one that made
+a piece opens that piece's drawer in Part › Feedback, as Site's Jobs does. **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and

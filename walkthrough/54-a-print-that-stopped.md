@@ -25,13 +25,13 @@ The print is cancelled once a line of its first layer is sent. Its end opens the
 
 ## 2. Tried again on a raft
 
-First layer, bad, is kept as a look and filed on the layer the print stopped on. Raft slices the piece again for printer_1 in its Print window, its adhesion row on a raft and its levelling the part's own, which bed_shims declares probe first; ▶ Send is a person's. Print is maximised here from its stack.
+First layer, bad, is kept as a look and filed on the layer the print stopped on. Raft slices the piece again for printer_1 in its Print window, its adhesion row on a raft and its levelling the part's own, which bed_shims declares probe first; ▶ Print is a person's. Print is maximised here from its stack.
 
 ![Tried again on a raft](screenshots/54-02-tried-again-on-a-raft.png)
 
 ## 3. A job's row opens its Machine and its drawer
 
-Site's Jobs lists the cancelled print. Its row selects printer_1 and opens its Machine, and opens the piece's drawer in Part › Feedback beside it: the job's own drawer, chosen among bed_shims's pieces.
+Site's Jobs lists the cancelled print. Its row selects printer_1 and opens its Machine, and opens the piece's drawer in Part › Feedback beside it: the job's own drawer, chosen among bed_shims's pieces. Its row in the Print window's own jobs opens the drawer too.
 
 ![A job's row opens its Machine and its drawer](screenshots/54-03-a-job-s-row-opens-its-machine-and-its-drawer.png)
 

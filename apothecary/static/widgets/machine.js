@@ -57,6 +57,10 @@
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
  * made says what it was sliced from and for which printer. What the piece made of it
  * measures and shows is said in its part's Feedback, not here (widgets/feedback.js).
+ * The window's first line says the step a person is at and what is next: what to
+ * choose, Slice, ▶ Print and why it waits, the job streaming and where its end goes.
+ * Its jobs are listed under it, newest first; a row of one that made a piece opens
+ * that piece's drawer in Part › Feedback (`openDrawer(job)`, the host's).
  * `host` is "world": the world's page, a window of its layout, one board and
  * everything inline in one column; /firmware/monitor opens the world's page with
  * this Machine.
@@ -105,8 +109,8 @@ const HEAD = `
     <span id="ident" class="kv">—</span>
     <span class="grow"></span>
     <span class="cluster">
-    <label class="auto printer-only gcode"><input type="checkbox" id="auto" checked> auto-poll
-        <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
+    <label class="auto printer-only gcode" title="How often the board is polled while its Machine is open; off, only when ⟳ Poll asks">poll
+        <select id="interval"><option value="0">off</option><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
     </label>
     <button type="button" id="poll" class="printer-only gcode">⟳ Poll</button>
     </span>
@@ -184,6 +188,7 @@ const CARDS = `
 <div class="cards">
     <div class="card wide printer-only gcode" id="print-card">
         <div class="k"><span id="print-title"></span></div>
+        <div class="s print-next" id="print-next"></div>
         <div class="row"><label for="print-part">makes</label>
             <select id="print-part"><option value="">— no part named —</option></select>
             <button type="button" id="print-slice">Slice</button>
@@ -218,7 +223,7 @@ const CARDS = `
             <span class="s" id="print-plan-said"></span>
         </div>
         <div class="row" id="print-verbs">
-            <button type="button" id="print-start" data-can="print.start" class="warm">▶ Send</button>
+            <button type="button" id="print-start" data-can="print.start" class="warm"></button>
             <button type="button" id="print-pause" data-can="print.pause">⏸ Pause</button>
             <button type="button" id="print-resume" data-can="print.resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel" data-can="print.cancel">⏏ Abort</button>
@@ -252,7 +257,6 @@ const LOG = `
         <button type="submit">send</button>
     </form>
     <label class="printer-only gcode"><input type="checkbox" id="show-polls"> poll traffic</label>
-    <label><input type="checkbox" id="follow" checked> follow</label>
     <button type="button" id="clear">clear</button>
     <button type="button" id="download" title="Download the log as text" aria-label="Download the log">⤓</button>
 </div>
@@ -303,7 +307,7 @@ const CONTROL = `
         </div>
         <div class="grp printer-only">
             <div class="k">SD print</div>
-            <div class="row"><button type="button" data-cmd="M24" title="Start the print on the SD card, or carry on a paused one (M24)">▶ Start / resume</button><button type="button" data-cmd="M25" title="Pause the print on the SD card where it is (M25)">⏸ Pause</button><button type="button" data-cmd="M524" data-twice="abort" title="Abandon the print on the card: pressed twice">⏏ Abort</button></div>
+            <div class="row"><button type="button" data-cmd="M24" title="Carry on the print on the SD card where it was paused, or start the one chosen on the printer (M24)">▶ Resume</button><button type="button" data-cmd="M25" title="Pause the print on the SD card where it is (M25)">⏸ Pause</button><button type="button" data-cmd="M524" data-twice="abort" title="Abandon the print on the card: pressed twice">⏏ Abort</button></div>
         </div>
         <div class="grp printer-only">
             <div class="k">Leveling</div>
@@ -416,7 +420,7 @@ const OLD_MS = 5000;
 // the markup, which carries none of its own.
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null, onFound = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null, onFound = null, openDrawer = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -556,12 +560,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // A jog's position carries no dialect of its own: the kind's is used.
     const toolPosition = (st) => toolPositionOf({ ...(st || {}), dialect: words().dialect });
+    // The one choice of how often to poll: off is 0, polled only when asked.
     const interval = () => Number($("interval").value) || 2000;
-    const isLive = () => (state.kind === "devkit" ? state.listening : $("auto").checked);
+    const isLive = () => (state.kind === "devkit" ? state.listening : Number($("interval").value) > 0);
     function watchNow() {
         if (state.port) model.watch(state.port, who, { kind: state.kind, interval: interval(), live: isLive() });
     }
-    // The poll-on-a-schedule tick-box and its interval (a devkit: listening or not):
+    // How often to poll, off among the choices (a devkit: listening or not):
     // the model's poller for this board, scheduled afresh from now.
     function schedule() {
         if (state.port) model.setWatch(state.port, who, { interval: interval(), live: isLive() });
@@ -579,7 +584,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // --- status ------------------------------------------------------------------------
     const pinRow = () => `${pin.how === "sketch" ? "bound by its sketch to" : "pinned at"} <b>${esc(pin.site)} › ${esc(pin.path)}</b>`;
     // How old the status the cards are drawn from is, said once it is old: a poll
-    // that failed leaves the last one drawn, and so does auto-poll switched off.
+    // that failed leaves the last one drawn, and so does polling switched off.
     // Counted each second while a G-code board's Machine is open.
     function renderAge() {
         const st = isGcode() ? state.status : null;
@@ -822,7 +827,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // M115s are not, so hiding poll traffic keeps them. Each entry drawn is one
     // element of the log, so new entries are appended and the ones the model
     // dropped off the front go with their elements; the whole log is redrawn only
-    // when the poll-traffic box changes, it is cleared, or the board changes.
+    // when the poll-traffic box changes, it is cleared, or the board changes. It follows
+    // its end while it is scrolled to it; scrolled up, it stays where the reader is.
     const LOG_EMPTY = '<span class="empty">nothing logged yet — poll or send a query</span>';
     function logRow(e) {
         e.drawn = $("show-polls").checked || !((e.kind === "tx" || e.kind === "rx") && e.origin === "poll");
@@ -840,7 +846,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
         draw(log);
         if (!log.firstElementChild) log.innerHTML = LOG_EMPTY;
-        if (atBottom && $("follow").checked) log.scrollTop = log.scrollHeight;
+        if (atBottom) log.scrollTop = log.scrollHeight;
     }
     function renderLog() {
         drawLog((log) => { log.innerHTML = state.entries.map(logRow).join(""); });
@@ -974,7 +980,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!port) {
             applyKind(); renderAll(); loadLevel(); loadPrintJobs();
             if (!planning()) { loadChoices(); loadPrintFiles(); }
-            if (planning()) { $("ident").textContent = `${machineAt.path}: not connected -- planned here; ${words().start} is its board's`; loadMissing(); }
+            if (planning()) { $("ident").textContent = `${machineAt.path}: not connected — its plan is made here, and ${words().start} is its board's once it is`; loadMissing(); }
             return;
         }
         // Watched at once as what it is known to be, so a verb carried the moment
@@ -993,7 +999,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
 
     // --- header controls ------------------------------------------------------------------
     // Each says what refused it, in the log and in the host's status bar.
-    $("auto").addEventListener("change", schedule);
     $("interval").addEventListener("change", schedule);
     $("poll").onclick = () => (state.port ? model.poll(state.port).catch((e) => refuse(`poll: ${e.message}`)) : Promise.resolve());
     $("reconnect").onclick = async () => {
@@ -1058,8 +1063,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("release").onclick = async () => {
         if (!state.port) return;
         if (state.kind === "devkit") { state.listening = false; schedule(); model.note(state.port, "stopped listening — Listen opens the port again"); renderDevkit(); return; }
-        $("auto").checked = false; schedule();
-        try { const r = await model.release(state.port); logLine("sys", r.released ? "link released — auto-poll off" : "no link was held"); applyControlState(null); }
+        $("interval").value = "0"; schedule();
+        try { const r = await model.release(state.port); logLine("sys", r.released ? "link released — polling off" : "no link was held"); applyControlState(null); }
         catch (e) { refuse("release failed: " + e.message); }
     };
     $("qform").addEventListener("submit", async (ev) => {
@@ -1125,7 +1130,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ttl = ctl.armed ? span(left) : "";
         $("ctl-ttl").textContent = ttl + (ctl.unknown ? " ?" : ""); $("ctl-ttl2").textContent = ttl;
         placePad();
-        renderLevelVerbs();
         renderCan();
         clearInterval(ctl.timer); ctl.timer = null;
         if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
@@ -1241,6 +1245,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         askStart();
         const c = localCan();
         for (const el of everywhere) applyCan(el, c);
+        // The Print window's first line reads the same answer: said again with it.
+        const next = $("print-next");
+        if (next) next.textContent = nextSaid();
     }
     function takeCan(c) {
         if (!c) return;
@@ -1423,14 +1430,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const a = [0x6f, 0xb3, 0xe8], c2 = [0xe8, 0xb0, 0x4a];
         return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
-    // The probe and the corners move the machine, so they are there once control is
-    // armed; Read mesh moves nothing and is a printer's whenever its Machine is.
-    function renderLevelVerbs() {
-        $("level-probe").hidden = !ctl.armed;
-        for (const btn of $("level-card").querySelectorAll("button[data-corner]")) btn.hidden = !ctl.armed;
-    }
+    // The probe and the corners move the machine: greyed while control is down, saying so,
+    // as every button that needs the latch is (renderCan); Read mesh moves nothing.
     function renderLevel() {
-        renderLevelVerbs();
         const rec = level.shown, w = words().level;
         if (!w) return;  // a devkit has no bed or table to map, and no words for one
         const meshEl = $("mesh"), statsEl = $("level-stats");
@@ -1502,7 +1504,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("level-job").textContent = levelStage(job);
             level.timer = setTimeout(watchLevelJob, 800);
             forgetRefusal();
-            return { said: hot ? `${state.port}'s bed heating to ${hot.heat} °C, held ${hot.soak} s, then probed twice: the Machine's Bed level follows it, and the bed is turned off after` : `${state.port}: ${levelStage(job)}` };
+            return { said: hot ? `${state.port}'s bed heating to ${hot.heat} °C, held ${hot.soak} s, then probed twice: Runs lists each reading as it is kept, and the bed is turned off after` : `${state.port}: ${levelStage(job)}` };
         } catch (e) { $("level-job").textContent = e.message; return no(`${words().level.card}: ` + e.message); }
     }
     // The bed temperature of the filament the Print window holds (the loaded one, else the
@@ -1826,16 +1828,45 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         renderPlan();
         renderFilament();
     }
+    // The step a person is at, in the window's first line: what is next, and where.
+    function nextSaid() {
+        const w = words(), job = prt.job, running = !!(job && job.running);
+        const part = $("print-part").value, file = prt.files.find((f) => f.id === $("print-pick").value);
+        if (!isGcode() || (!state.port && !planning())) return "";
+        if (running) return job.stage === "paused"
+            ? `The ${w.job} is paused: ▶ Resume feeds it again, ⏏ Abort ends it.`
+            : `The ${w.job} streams from here; its end opens its piece's drawer in Part › Feedback.`;
+        if (slc.running) return `Slicing ${part}: its G-code is chosen here when it ends, for ${w.start}.`;
+        if (file) {
+            const v = localCan()["print.start"];
+            if (v && !v.ok && v.kind === "armed") return `${w.start} waits for control: ⚙ Control in the Machine's head arms it.`;
+            if (v && !v.ok) return `${w.start} waits: ${v.why}.`;
+            return `${w.start} ${w.job}s ${file.name}${part ? `, making ${part}` : ""}, asking first.`;
+        }
+        if (part) return `${w.prepare} makes ${part}'s file for this ${state.kind}.`;
+        return `Choose what it makes under makes, then ${w.prepare}; or choose a file kept.`;
+    }
     // One job of the history: when it started and finished, its kind, the file it ran
-    // and the part it makes, how it ended (and why), and how far it got.
+    // and the part it makes, how it ended (and why), and how far it got. A job that made
+    // a piece opens its drawer, pressed.
     function jobRow(j) {
         const d = j.detail || {};
         const when = `${stamp(j.started_at)} – ${j.finished_at ? clock(j.finished_at) : "…"}`;
         const part = j.part ? ` → ${esc(j.part.path)}` : "";
         const lines = d.total != null ? ` · ${d.sent}/${d.total} lines` : "";
         const why = j.reason ? ` (${esc(j.reason)})` : "";
-        return `<div><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
+        const opens = j.part && openDrawer ? ` role="button" tabindex="0" title="Open the drawer of ${esc(j.part.path)}, the piece it made, in Part › Feedback"` : "";
+        return `<div class="job-row" data-job="${esc(j.id)}"${opens}><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
     }
+    // A job's row pressed, or Enter on it: its piece's drawer in Part › Feedback.
+    function onJobRow(ev) {
+        if ((ev.type === "keydown" && ev.key !== "Enter") || ev.target.closest("a")) return;
+        const row = ev.target.closest('.job-row[role="button"]');
+        const job = row && prt.jobs.find((j) => j.id === row.dataset.job);
+        if (job && openDrawer) openDrawer(job);
+    }
+    $("print-history").addEventListener("click", onJobRow);
+    $("print-history").addEventListener("keydown", onJobRow);
     // A kept file a slice made says what it was sliced from, and for which printer.
     // What a kept file came from: a slice's piece and printer, or a toolpath's part and router.
     const slicedFrom = (f) => {
@@ -2013,7 +2044,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const part = $("print-part").value;
         if (!state.port && !planning()) { refuse("slice: no printer chosen"); return false; }
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
-        if (slc.running) { refuse("slice: one is running; its log is in Print from here"); return false; }
+        if (slc.running) { refuse("slice: one is running; its log is in its Print window"); return false; }
         const status = await loadSlicer();
         if (!status.ok) { refuse(`slice: no slicer here (${status.why}); Panels › Tools › Bench › Install › OrcaSlicer installs it`); return false; }
         slc.running = true; renderPrint();
@@ -2033,7 +2064,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ending = sliceTasks().start(async () => task, "/slicer/tasks");
         const levelled = [levelling ? $("print-level") : null, adhesion ? $("print-adhesion") : null]
             .filter(Boolean).map((el) => `, ${el.selectedOptions[0].textContent.split(":")[0]}`).join("");
-        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in Print from here, and its G-code is chosen there when it ends`);
+        tell(`slicing ${part}${variant ? ", the variant drawn," : ""} for ${printerName()}${levelled}: its log is in its Print window, and its G-code is chosen there when it ends`);
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
@@ -2151,7 +2182,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // `levelling` and `adhesion`, when given, are chosen in the Print window's rows for this
     // slice and the ones after it ("" the part's own: what it declares, else the profile's).
     async function slicePart(path, variant = undefined, { levelling = undefined, adhesion = undefined } = {}) {
-        if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
+        if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print window can make` };
         if (levelling !== undefined) $("print-level").value = levelling || "";
         if (adhesion !== undefined) $("print-adhesion").value = adhesion || "";
         const before = refusals;
@@ -2210,7 +2241,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!confirm(`${w.verb} ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the ${state.kind} will ${w.can}.`)) return;
         try {
             prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
-            tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: ${w.title} follows it to its end, and Site's Jobs lists it`);
+            tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: its ${w.verb} window follows it to its end, and Site's Jobs lists it`);
             renderPrint();
             prt.timer = setTimeout(watchPrint, 800);
             forgetRefusal();

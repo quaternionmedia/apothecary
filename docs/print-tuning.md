@@ -315,9 +315,9 @@ cube read with calipers proposes nothing, but what it shows does.
 | `GET /slicer/filaments`, `POST /slicer/filaments/loaded` | The filament loaded and the choices; another loaded |
 
 In the page, the Feedback window's **seen** row, under **measured**, has a choice of
-none to bad for each fault and **Keep look**, which files the look in the piece's drawer;
-Part › View › Feedback › Measure on the ring files the look too, when a fault is chosen
-and nothing is read. The history beneath lists turns and looks in the order they were
+none to bad for each fault, and the window's one **Keep** files the look in the piece's
+drawer, with what is read and the note where they are typed; Part › View › Feedback ›
+Measure on the ring is that Keep. The history beneath lists turns and looks in the order they were
 kept, and each fault seen over the looks. The Print window's **filament** row loads the
 filament chosen; a note of the spool is the route's alone.
 

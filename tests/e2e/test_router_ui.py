@@ -259,7 +259,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         shown=_words(card.locator("#print-plan-said").inner_text()),
     )
 
-    # 5. Armed: the pad, the probe offered, and the work zeroed where the tool stands.
+    # 5. Armed: the pad, the probe going, and the work zeroed where the tool stands.
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     # A hold interrupts and goes with the latch down; a resume moves the machine again,
@@ -269,7 +269,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     expect(hold).to_have_attribute("data-can", "interrupt")
     expect(resume).to_have_attribute("data-can", "resume")
     expect(resume).to_be_enabled(timeout=WITHIN_A_POLL)
-    expect(machine.locator("#level-probe")).to_be_visible()
+    expect(machine.locator("#level-probe")).to_be_enabled()
     # The tool over where a stock's corner is touched off, from wherever it stood: the
     # cut's depth under it and the safe height over it, within the travel.
     at = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0).json()
@@ -291,8 +291,8 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     story.shows(
         "⚙ Control armed: the pad, Probe table offered, and the work zeroed",
         "⚙ Control arms the latch for five minutes of activity and opens the control pad, "
-        "a loud window beside the world. The Table map's Probe table is there now, since "
-        "it moves the machine. The tool jogged over the stock's corner, the pad's XYZ zero "
+        "a loud window beside the world. The Table map's Probe table goes now: it moves "
+        "the machine, so it was greyed until the latch was armed. The tool jogged over the stock's corner, the pad's XYZ zero "
         "here makes that the work zero, and the path drawn moves with it.",
         blank=CHANGING,
     )
@@ -512,7 +512,7 @@ def test_the_router_calibrated_by_its_face_from_makes_to_the_allowance_kept(
     # 4. Measure: the three sizes typed, as calipers read a tool cutting a little wide, and
     # kept: each checked against what was designed, filed in the drawer.
     field.fill("10.12 × 20.14 × 59.84")
-    feedback.locator("#feedback-measure-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(page.locator("#status")).to_contain_text(
         "router_emoji measured eye +0.12, mouth +0.14, face -0.16 mm against what was "
         "designed; scale -0.04%, the steps per millimetre's, not applied; tool_allowance "
@@ -1173,7 +1173,7 @@ def test_the_emoji_cut_and_measured_is_fed_back_into_the_router_s_toolpaths(page
     expect(said).to_have_text("of eye 10 × mouth 20 × face 60 mm designed", timeout=10000)
     expect(field).to_have_attribute("placeholder", "eye × mouth × face mm")
     field.fill("10.12 × 20.14 × 59.84")
-    feedback.locator("#feedback-measure-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(page.locator("#status")).to_contain_text(
         "scale -0.04%, the steps per millimetre's, not applied; "
         "tool_allowance +0.000 -> +0.136 mm: filed in router_emoji's drawer, and kept for "
@@ -1193,7 +1193,7 @@ def test_the_emoji_cut_and_measured_is_fed_back_into_the_router_s_toolpaths(page
     expect(piece.locator(f"option[value='file:{second}']")).to_have_count(1, timeout=10000)
     piece.select_option(f"file:{second}")
     field.fill("10.02")
-    feedback.locator("#feedback-measure-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(page.locator("#status")).to_contain_text(
         "tool_allowance +0.136 -> +0.156 mm: filed in router_emoji's drawer", timeout=10000
     )

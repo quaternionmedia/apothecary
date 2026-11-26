@@ -265,8 +265,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "breadcrumb": (LIST, WHAT_YOU_SEE, "the trail back to where you came from"),
     # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
     # One board, close up. The header: how often to poll, and the link itself.
-    "auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that polls on a schedule"),
-    "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll"),
+    "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll, off among its choices"),
     "poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the printer once"),
     "reconnect": (WIDGET, WHAT_YOU_SEE, "a button that reopens the serial link"),
     "identify": (WIDGET, WHAT_YOU_SEE, "a button that asks the board what it is"),
@@ -289,7 +288,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "q": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
     "qform:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
     "show-polls": (WIDGET, WHAT_YOU_SEE, "a tick-box that shows the poll traffic"),
-    "follow": (WIDGET, WHAT_YOU_SEE, "a tick-box that keeps the log scrolled to the end"),
     "clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
     "download": (WIDGET, NOTHING, "a button that downloads the log"),
     # The control pad, behind the latch. The buttons carry the G-code line
@@ -507,6 +505,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that keeps where the printer's nozzle stands, as its board says, as that "
         "screw or corner",
+    ),
+    # A window's step after it, at its foot: one button, written once, opening the window
+    # that step is in -- Differences from Runs, Fixes from Differences, Runs from Fixes.
+    "bed-next": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button at the foot of a bed window that opens the window of the step after it",
     ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
@@ -730,11 +735,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a field for what one feature of a printed piece reads, one in each row of its"
         " plan under measured",
     ),
-    "feedback-measure-keep": (
+    "feedback-keep": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that checks what was read against what was made and files it in the"
-        " piece's drawer: its printer's next turn of its tuning, or its router's allowance",
+        "a button that files whatever is typed or chosen in the piece's drawer, each its own"
+        " filing: what was read, checked against what was made -- its printer's next turn of"
+        " its tuning, or its router's allowance -- what the piece shows, its printer's next"
+        " look, and the note",
     ),
     "seen-read": (
         WIDGET,
@@ -742,18 +749,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a drop-down of how badly one fault shows on a printed piece, none to bad, one for"
         " each fault under seen",
     ),
-    "feedback-seen-keep": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that files what the piece shows in its drawer as its printer's next look,"
-        " which moves one setting",
-    ),
     "feedback-note": (WIDGET, WHAT_YOU_SEE, "a field for a note on the piece"),
-    "feedback-note-keep": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that files the note in the piece's drawer",
-    ),
     "feedback-tune-apply": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1154,25 +1150,21 @@ RING_BACKED: Dict[str, str] = {
     "print-level": "print:level",
     # Its first layer's hold: the Print cell's Adhesion steps it.
     "print-adhesion": "print:adhesion",
-    # A part's piece's Feedback › Measure files what is typed under measured, as Keep does,
-    # and takes a person to the field when nothing is typed; a fault chosen under seen and
-    # nothing read, it files the look, as Keep look does. Note files the note, or takes a
-    # person to its field; Take turn and Undo turn are the buttons'.
+    # A part's piece's Feedback › Measure is Keep: what is typed and chosen under measured,
+    # seen and note filed, or a person taken to the first field when nothing is. Note files
+    # the note alone, or takes a person to its field; Take turn and Undo turn are the buttons'.
     "feedback-measure": "feedback:measure",
     "measure-read": "feedback:measure",
-    "feedback-measure-keep": "feedback:measure",
+    "feedback-keep": "feedback:measure",
     "seen-read": "feedback:measure",
-    "feedback-seen-keep": "feedback:measure",
     "feedback-note": "feedback:note",
-    "feedback-note-keep": "feedback:note",
     "feedback-tune-apply": "feedback:tune-apply",
     "feedback-tune-undo": "feedback:tune-undo",
     # A print that stopped, tried again: Feedback › Try again's cells.
     "feedback-try-probe": "feedback:try-probe",
     "feedback-try-brim": "feedback:try-brim",
     "feedback-try-raft": "feedback:try-raft",
-    "feedback-note:keydown:keepNote": "feedback:note",
-    "feedback-measure-plan:keydown:keepOnEnter": "feedback:measure",
+    "feedback-card:keydown:keepOnEnter": "feedback:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
@@ -1284,6 +1276,8 @@ RING_BACKED: Dict[str, str] = {
     "bed-where-here": "bed:where",
     "bed-where-what": "bed:where",
     "fixes:click:onFixesClick": "bed:make",
+    # Each the cell of Panels › Machine › Bed that opens the window it names.
+    "bed-next": "panel:toggle:bed-differences",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1816,15 +1810,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "devPinManual:click:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board"),
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
-    "feedback-note:keydown:keepNote": (
+    "feedback-card:keydown:keepOnEnter": (
         WIDGET,
         WHAT_IS_THERE,
-        "filing the typed note in the piece's drawer, by Enter",
-    ),
-    "feedback-measure-plan:keydown:keepOnEnter": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "filing what is typed in a printed piece's dimensions' rows, by Enter in one",
+        "filing what is typed and chosen in a piece's drawer, by Enter in one of its fields",
     ),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
@@ -1864,6 +1853,18 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
+    # A row of the Print window's jobs, pressed or Enter on it: the drawer of the piece the
+    # job made, in Part › Feedback.
+    "print-history:click:onJobRow": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in the Print window, opening its piece's drawer in Part › Feedback",
+    ),
+    "print-history:keydown:onJobRow": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in the Print window with Enter, opening its piece's drawer",
+    ),
     # ---- the Bench --------------------------------------------------------
     "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
     "modulesEl:click:closest": (WIDGET, WHAT_IS_THERE, "a toolchain module's Install button"),
@@ -1887,7 +1888,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "choosing which kept file the buttons mean",
     ),
-    "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:query": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
     "show-polls:change:renderLog": (WIDGET, WHAT_YOU_SEE, "the poll-traffic tick-box"),
@@ -1932,7 +1932,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "fixes:click:onFixesClick": (
         WIDGET,
         WHAT_IS_THERE,
-        "Keep or Make these in Fixes, told which by its id",
+        "Keep mount, Make these or Here in Fixes, told which by its id",
+    ),
+    "body:click:onNext": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a bed window's step after it, the window it is in opened",
     ),
     # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
     # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the

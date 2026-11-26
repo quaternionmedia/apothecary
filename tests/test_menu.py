@@ -857,6 +857,31 @@ def test_the_control_ring_says_what_the_machine_s_windows_say():
     assert button("print-cancel") == "Abort"
     assert printer["control:sd-pause"] == pause["Print"] == "Pause"
     assert router["control:job-hold"] == pause["Cut"] == "Hold"
+    # The pad's SD print buttons are the same three acts, worded as the ring's cells.
+    for line, action in (
+        ("M24", "control:sd-resume"),
+        ("M25", "control:sd-pause"),
+        ("M524", "control:sd-abort"),
+    ):
+        said = re.search(rf'data-cmd="{line}"[^>]*>([^<]+)</button>', machine)[1]
+        assert re.sub(r"^\W+", "", said) == printer[action], (line, said)
+
+
+def test_the_bed_windows_buttons_say_what_their_ring_cells_say():
+    """Fixes' Keep mount, Make these and Here, and Runs' Probe hot, are worded as their
+    cells of Panels › Machine › Bed are (widgets/bed_shims.js)."""
+    from apothecary import menu
+
+    bed = (STATIC / "widgets" / "bed_shims.js").read_text(encoding="utf-8")
+    cells = _labels_by_action(menu._bed([]).children)
+    for action, name in (
+        ("bed:keep", "bed-keep"),
+        ("bed:make", "bed-make"),
+        ("bed:probe-hot", "bed-probe-hot"),
+        ("bed:where", "bed-where-here"),
+    ):
+        said = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', bed)[1]
+        assert re.sub(r"^\W+", "", said) == cells[action], (name, said)
 
 
 def test_a_machine_drawn_as_a_part_has_no_slice_and_its_ring_holds():

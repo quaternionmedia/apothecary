@@ -137,7 +137,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     expect(page.locator("#status")).to_contain_text(
         "bed_shims.gcode kept and chosen", timeout=60000
     )
-    # Control armed from printer_1's ring; ▶ Send, asked first; the print begins.
+    # Control armed from printer_1's ring; ▶ Print, asked first; the print begins.
     on_row(page, "printer_1", "Device", "Control", "Arm")
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.once("dialog", lambda d: d.accept())
@@ -200,7 +200,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
 
     # A fault seen, filed on the layer it stopped on.
     feedback.locator("select.seen-read[data-fault='first_layer']").select_option("3")
-    feedback.locator("#feedback-seen-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(feedback.locator("#feedback-filed")).to_contain_text("look", timeout=10000)
     whole = http.get(f"/cabinet/bed_shims/drawers/{drawer['id']}").json()
     (look,) = [f for f in whole["filed"] if f["kind"] == "look"]
@@ -233,7 +233,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "First layer, bad, is kept as a look and filed on the layer the print stopped on. "
         "Raft slices the piece again for printer_1 in its Print window, its adhesion row "
         "on a raft and its levelling the part's own, which bed_shims declares probe first; "
-        "▶ Send is a person's. Print is maximised here from its stack.",
+        "▶ Print is a person's. Print is maximised here from its stack.",
         blank=CHANGING,
     )
     _restored(page, stack)
@@ -243,6 +243,18 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     expect(page.locator("#control")).to_be_hidden(timeout=5000)
     badge = page.locator(".world-badge[data-path='printer_1']")
     expect(badge).not_to_contain_text("armed", timeout=10000)
+    windows.close(page, "part-feedback")
+    expect(windows.panel(page, "part-feedback")).to_be_hidden()
+    # Disarmed, the Print window's first line says what ▶ Print waits for, and where.
+    windows.show(page, "machine-print")
+    expect(machine.locator("#print-next")).to_have_text(
+        "▶ Print waits for control: ⚙ Control in the Machine's head arms it."
+    )
+    # The Print window's own row of the stopped print opens its drawer, as Site's does.
+    machine.locator(f"#print-history .job-row[data-job='{ended['job_id']}']").click()
+    expect(windows.panel(page, "part-feedback")).to_be_visible(timeout=10000)
+    expect(feedback.locator("#feedback-piece")).to_have_value(f"drawer:{drawer['id']}")
+    expect(page.locator("#status")).to_contain_text("bed_shims's cabinet in Part › Feedback")
     windows.close(page, "part-feedback")
     expect(windows.panel(page, "part-feedback")).to_be_hidden()
     windows.show(page, "jobs")
@@ -258,7 +270,8 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "A job's row opens its Machine and its drawer",
         "Site's Jobs lists the cancelled print. Its row selects printer_1 and opens its "
         "Machine, and opens the piece's drawer in Part › Feedback beside it: the job's own "
-        "drawer, chosen among bed_shims's pieces.",
+        "drawer, chosen among bed_shims's pieces. Its row in the Print window's own jobs "
+        "opens the drawer too.",
         blank=CHANGING,
     )
 

@@ -103,6 +103,11 @@
 #print-verbs { position: sticky; bottom: 0; z-index: 1; background: var(--panel); padding: 0.3rem 0; margin-bottom: -0.3rem; }
 #print-history a { color: var(--tx); margin-left: 0.4rem; }
 #print-history .cancelled, #print-history .failed { color: var(--warn); }
+/* A job that made a piece opens its drawer in Part › Feedback. */
+#print-history .job-row[role=button] { cursor: pointer; }
+#print-history .job-row[role=button]:hover, #print-history .job-row[role=button]:focus { color: var(--ink); }
+/* The step a person is at, first in the window. */
+#print-card .print-next { margin: 0.2rem 0 0.3rem; font-size: 0.76rem; color: var(--ink-2); }
 /* Slicing, in Print from here: the slice's task log while it runs, then what it used.
    Quiet: small, scrolled, one line a value, the part's own in bold. */
 #print-card .slice-box { margin: 0.2rem 0 0.3rem; font-size: 0.74rem; color: var(--ink-2); }

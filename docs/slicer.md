@@ -211,7 +211,7 @@ Slice is a step of the loop from a picture to a print
   on its first machine -- of any site, a printer whose board is connected first:
   its Machine opened, the part chosen under **makes** and sliced there, as the
   cells do ([the viewer](viewer.md#the-header)).
-- **In Print from here.** **makes** lists the site's pieces, then every part of
+- **In the Print window.** **makes** lists the site's pieces, then every part of
   the apothecary by its name. **Slice**, beside it once a part is chosen
   there, slices it for this printer -- the cell does the same. While it runs the card
   shows the slicer's log with **Cancel**; when it ends, the G-code it kept is

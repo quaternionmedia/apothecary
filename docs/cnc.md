@@ -219,7 +219,7 @@ recording of the garage's router.
 ## In the page
 
 A board identified as a router has a router's Machine: the same window and
-head as a printer's -- auto-poll, Poll (`?` and `$G`), Reconnect, `$I`,
+head as a printer's -- how often it polls, ⟳ Poll (`?` and `$G`), Reconnect, `$I`,
 Reboot, Release, ⚙ Control and ⏹ E-STOP, which is the soft reset -- and its
 own cards in Status: the state and the controller's word, the tool in the
 work zero and in machine coordinates, the spindle, the feed and the

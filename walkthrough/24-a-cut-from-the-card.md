@@ -45,7 +45,7 @@ Kept <moment>: router_coupon, router_coupon-cnc_router.nc
 
 ## 5. ⚙ Control armed: the pad, Probe table offered, and the work zeroed
 
-⚙ Control arms the latch for five minutes of activity and opens the control pad, a loud window beside the world. The Table map's Probe table is there now, since it moves the machine. The tool jogged over the stock's corner, the pad's XYZ zero here makes that the work zero, and the path drawn moves with it.
+⚙ Control arms the latch for five minutes of activity and opens the control pad, a loud window beside the world. The Table map's Probe table goes now: it moves the machine, so it was greyed until the latch was armed. The tool jogged over the stock's corner, the pad's XYZ zero here makes that the work zero, and the path drawn moves with it.
 
 ![⚙ Control armed: the pad, Probe table offered, and the work zeroed](screenshots/24-05-control-armed-the-pad-probe-table-offered-and-the-.png)
 
