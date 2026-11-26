@@ -63,7 +63,7 @@ from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import can, dialects, gcode, grbl, occupants, serial_monitor
+from . import can, dialects, gcode, grbl, occupants, readings, serial_monitor
 from .models import (
     PRINT_FILE_ID,
     USB_MAKE_RE,
@@ -176,6 +176,7 @@ def forget_port(port: str) -> None:
     running is left to fail on its own, its board gone; the records on disk are
     ``FirmwareState``'s, which reads them against the port list itself."""
     _LAST_STATUS.pop(port, None)
+    readings.forget(port)
     for held in (_PRINTS, _LEVELING):
         job = held.get(port)
         if job is not None and job.finished is not None:
@@ -1009,6 +1010,7 @@ def last_statuses() -> Dict[str, gcode.PrinterStatus]:
 
 def notify_status(status: gcode.PrinterStatus) -> gcode.PrinterStatus:
     _LAST_STATUS[status.port] = status
+    readings.record(status)  # what a graph of it draws (firmware/readings.py)
     for listener in STATUS_LISTENERS:
         status.synced.extend(listener(status) or [])
     surfaces.changed(MACHINE_STATUS, key=status.port, body=lambda: _as_shown(status))
