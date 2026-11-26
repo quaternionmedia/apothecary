@@ -12378,7 +12378,7 @@
         // The list, from the canvas ring: each row at this level is a piece the
         // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
         // the View menu, the cell View (its items, View's cells; its views, cells of
-        // Panels › Windows); the Windows menu, Panels › Windows; the Tour, its box and the Procedure's buttons, their cells;
+        // Panels › Windows); the Windows menu, Panels; the Tour, its box and the Procedure's buttons, their cells;
         // and the Bench's buttons, its verbs under Panels › Tools › Bench.
         const UNIVERSE_SITE = {{ universe | tojson }};
         let procedureWatched = null;
@@ -12389,9 +12389,10 @@
             if (viewer.layersWidget) viewer.layersWidget.refresh();
             const pairs = [];
             // A menu of the header is the ring its cell opens: ⚙ View is View (its views
-            // are cells of Panels › Windows), ⊞ Windows is Panels › Windows.
+            // are cells of Panels › Windows), ⊞ Windows is Panels, a cell per group of
+            // windows, as it lists every window by its group.
             pairs.push([viewer.viewMenuEl.querySelector('summary'), ['view']]);
-            pairs.push([viewer.windowsMenuEl.querySelector('summary'), ['panels', 'panel:windows']]);
+            pairs.push([viewer.windowsMenuEl.querySelector('summary'), ['panels']]);
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             // The crumb a step out goes to wears the ring's Step out, which the ring has
             // inside a site. Out of a site, the universe's crumb is Site › the universe, which

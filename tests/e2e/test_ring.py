@@ -1069,7 +1069,7 @@ def test_the_headers_menus_the_tour_and_the_procedure_wear_their_cells_addresses
             const ring = await window.apothecaryRing.resolve({ context: { pointing: 'canvas', targets: [] }, site: 'garage' });
             const at = window.apothecaryRing.addresses(ring);
             const of = (path) => window.apothecaryRing.addressOf(ring, path);
-            return { ...at, view: of(['view']), windows: of(['panels', 'panel:windows']), site: of(['Site']) };
+            return { ...at, view: of(['view']), windows: of(['panels']), site: of(['Site']) };
         }"""
     )
     windows.open_window(page, "procedure")
