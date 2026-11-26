@@ -15,7 +15,7 @@ from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.simulated import DEVKIT
 from apothecary.site_names import UNIVERSE
-from apothecary.systems import SYSTEMS
+from apothecary.systems import FAMILY, PART, SYSTEMS
 from apothecary.universe import create_universe_site
 from apothecary.viewer import render_fractal_viewer_page
 
@@ -113,6 +113,16 @@ def test_the_make_view_holds_the_window_set_a_part_is_made_through():
     assert column[-1]["active"] == "machine-print"
     stages = {w for s in by_id("make").steps for w in (*s.forward, *s.owns)}
     assert named - {"world"} <= stages
+
+
+def test_a_journey_through_one_system_lays_out_that_system_s_view():
+    """⚙ View's views and the journeys agree on what windows go together: Design a part
+    and Join a hose lay out the Part view, and Run a site the Family view, whose windows
+    are those its stages name."""
+    assert by_id("design").view == by_id("join").view == PART.view
+    assert by_id("run").view == FAMILY.view
+    stages = {w for s in by_id("run").steps for w in (*s.forward, *s.owns)}
+    assert _layout_windows(FAMILY.view) - {"world"} == stages
 
 
 def test_a_journey_s_view_is_laid_out_by_the_tour_and_listed_nowhere_else():

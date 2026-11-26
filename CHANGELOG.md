@@ -227,6 +227,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The Family view and *Run a site* lay out the same windows: the Procedure tall beside the world with the Workspace behind it, then Members, Deliveries, Jobs with Site, and Selected, where the view kept the Workspace with Jobs and had no Site, and the journey laid out Pinned, which none of its stages names. ([doc](docs/viewer.md#the-windows))
 - ⚙ View names each view as its cell on the ring's Panels › Windows is: Reset layout (it was Default, the same layout), Part view, Machine view, Airgap view, Family view. ([doc](docs/viewer.md#the-windows))
 - What to try on a stage of the tour, and its page, are links to the step on its walkthrough page, its words and picture together under the bar that leads back, where they were the bare picture in a tab and the top of the page. ([doc](docs/tour.md#what-it-takes-and-in-what-order))
 - The Print window's levelling and adhesion rows say what their first choice comes to for the part under makes on this printer: *the part's own: probe first*, *the printer's: home only* (`GET /slicer/first-layer`, [docs/slicer.md](docs/slicer.md)).

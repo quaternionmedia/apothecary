@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from .site_names import UNIVERSE
-from .systems import PART, Layout
+from .systems import FAMILY, PART, Layout
 
 
 @dataclass(frozen=True)
@@ -616,29 +616,16 @@ HANDS = Journey(
 # Run a site: brought up, then watched. The procedure, each step a member's of the
 # family and fired through the hub on GO; the members, each with its door; the hub's
 # audit of what it delivered; then the Workspace, the site as its evidence has it, and
-# one machine's hour of it. The Family system's view with the Workspace behind the
-# Procedure in the tall stack beside the world, and Site behind Jobs.
+# one machine's hour of it. The Family system's own view, as Design a part's is the
+# Part's: the Workspace behind the Procedure in the tall stack beside the world, and
+# Site behind Jobs.
 RUN = Journey(
     id="run",
     title="Run",
     group="Family",
     requires="procedure",
     opened_by="⊞ Windows › Procedure",
-    view={
-        "row": [
-            {"world": True, "size": 34},
-            {"stack": ["procedure", "working"], "size": 30, "active": "procedure"},
-            {
-                "column": [
-                    {"stack": ["family-members"], "size": 20},
-                    {"stack": ["family-deliveries"], "size": 26},
-                    {"stack": ["jobs", "site", "pinned"], "size": 22, "active": "jobs"},
-                    {"stack": ["selected"], "size": 32},
-                ],
-                "size": 36,
-            },
-        ]
-    },
+    view=FAMILY.view,
     name="Run a site",
     made_of=("bring-up", "watch"),
     steps=(
