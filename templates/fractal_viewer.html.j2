@@ -592,16 +592,15 @@
                                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stage-actions #apply-btn { flex-grow: 2; }
         #apply-btn { background: #4a9eff; color: #0b0d10; }
-        #revert-btn, #defaults-btn { background: #2a2f38; color: #d7dae0; }
+        #revert-btn { background: #2a2f38; color: #d7dae0; }
         /* Undo and Redo of the staged numbers, and the ghost, under the stage's actions. */
         .stage-more { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
         .stage-more button { padding: 2px 8px; border: 0; border-radius: 4px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; }
         .stage-more .ghost-label { margin-left: auto; color: #9cc4e8; display: flex; align-items: center; gap: 3px; cursor: pointer; }
         .stage-more .ghost-label input { accent-color: #9cc4e8; margin: 0; }
-        /* What this tab kept from before a reload, offered back. */
-        .kept-offer { margin-top: 6px; padding: 5px 7px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
-        .kept-offer[hidden] { display: none; }
-        .kept-offer button { padding: 1px 7px; border: 0; border-radius: 3px; background: #4a4326; color: #f0e6c0; cursor: pointer; font: inherit; }
+        /* What this tab kept from before a reload, put back: said until nothing differs from what is drawn. */
+        .kept-note { margin-top: 6px; padding: 5px 7px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
+        .kept-note[hidden] { display: none; }
         .ghost-said { font-size: 11px; color: #9cc4e8; margin: 0 0 4px; }
         .ghost-said[hidden] { display: none; }
         /* This tab's recent applies, each drawn again from the cache by a click. */
@@ -639,16 +638,13 @@
                                  border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
         .scad-code { height: 260px; border: 1px solid #2a2f38; border-radius: 4px; overflow: hidden; }
         .scad-code .cm-editor { height: 100%; }
-        /* The Part's SCAD window: the editor fills it, the code taking what the bar
+        /* The Part's SCAD editor window: the editor fills it, the code taking what the bar
            leaves. */
         .panel[data-panel="part-scad"] .panel-body-slot { display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .panel-body-slot > div, .panel[data-panel="part-scad"] [data-section="scad"],
         .panel[data-panel="part-scad"] .scad-slot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
-        .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
-                                  padding: 10px 14px; }
-        .scad-editor.fullscreen .scad-code { flex: 1; height: auto; min-height: 0; }
         .saved-row { padding: 4px 0; border-bottom: 1px solid #23272e; font-size: 11px; }
         .saved-row .saved-variant { background: none; border: 0; padding: 0; color: #4a9eff;
                                     cursor: pointer; font: inherit; font-weight: 600; }
@@ -2438,8 +2434,8 @@
                 // and out while the world has the keys; Backspace steps out.
                 window.addEventListener('keydown', (e) => this.onZoomKey(e));
                 // Escape: a menu folded, then a drag in progress put back, then the
-                // selection let go (the ring, a fullscreen editor and the picture chosen
-                // in Pictures take theirs first).
+                // selection let go (the ring, a maximised SCAD editor and the picture
+                // chosen in Pictures take theirs first).
                 window.addEventListener('keydown', (e) => this.onEscapeKey(e));
                 // Ctrl+S, while a part's editor is open, saves its variant from anywhere.
                 window.addEventListener('keydown', (e) => this.onSaveKey(e));
@@ -2813,7 +2809,7 @@
 
             // Escape, one rung at a time: the View menu folded; a drag in progress put back
             // where it began, nothing saved; then the selection let go. The ring, a
-            // fullscreen editor and the picture chosen in Pictures take theirs before it,
+            // maximised SCAD editor and the picture chosen in Pictures take theirs before it,
             // and a box typed in keeps its own.
             onEscapeKey(event) {
                 if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
@@ -3004,9 +3000,9 @@
                     // selected -- focusing alone leaves the panel unbuilt.
                     this.selectFocusedPart();
                     // A part with work this tab kept from before a reload: said, and its
-                    // editor offers it back.
+                    // editor puts it back as it opens.
                     const kept = this.keptHere();
-                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit offers back` : ''}`, 'success');
+                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit puts back` : ''}`, 'success');
                     // The scan shells out to arduino-cli (a second or two): asked
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
@@ -5378,8 +5374,9 @@
                             : `${ref} from the cache, nothing rendered`;
                         // Its own text with other values in it is its numbers applied, said so.
                         const numbers = this.partStages[target.key]?.tied && this.valuesOnly(target, body.sentScad);
-                        if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
-                        const keep = this.partStages[target.key]?.tied ? '; Part › Save keeps it in git' : '';
+                        // The next step named where it is: Save, beside the name, in the SCAD editor.
+                        if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Save in the SCAD editor keeps it in git`;
+                        const keep = this.partStages[target.key]?.tied ? '; Save in the SCAD editor keeps it in git' : '';
                         return variant ? `${how}: an applied variant, not saved${keep}` : `${how}: drawn as saved`;
                     },
                 };
@@ -5550,8 +5547,7 @@
                       <div id="stage-summary" class="clean">No staged changes</div>
                       <div class="stage-actions">
                         <button type="button" id="apply-btn" disabled title="Render what is staged and draw it in this tab (F6 or Ctrl+Enter in the SCAD editor)">Apply</button>
-                        <button type="button" id="revert-btn" title="Put what is staged back to what is drawn">Revert</button>
-                        ${target.part ? `<button type="button" id="defaults-btn" title="Stage the part's own values">Defaults</button>` : ''}
+                        <button type="button" id="revert-btn" title="Put what is staged back to what is drawn, a step of Undo">Revert</button>
                       </div>
                       <div class="stage-more">
                         <button type="button" id="undo-btn" disabled title="Undo the last change: a part's draft, its text and its controls both, a step back; a piece's or a camera's staged numbers (Ctrl+Z, outside a box being typed in)">↶ Undo</button>
@@ -5560,9 +5556,7 @@
                       </div>
                       <div id="part-build-note" class="build-note" hidden></div>
                       <div id="part-queue" class="queue-said" hidden></div>
-                      <div id="kept-offer" class="kept-offer" hidden><span class="kept-said"></span>
-                        <button type="button" id="kept-restore" title="Put back what this tab had before it was reloaded">Restore</button>
-                        <button type="button" id="kept-discard" title="Let it go: what is drawn stays">Discard</button></div>
+                      <div id="kept-note" class="kept-note" role="status" hidden></div>
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     </div>
@@ -5785,6 +5779,7 @@
                 if (busy !== !!this.stageBusy) { this.stageBusy = busy; this.placeStageBar(); }
                 this.markStagedControls(diff);
                 this.refreshUndoButtons(target);
+                this.showGoingBack(target, count);
                 this.showBuildNote(target);
                 // What this tab keeps of it, should it be reloaded.
                 this.keepWork(target);
@@ -5805,6 +5800,8 @@
                     return;
                 }
                 if (!count) {
+                    // What was put back from before a reload is let go of: nothing differs now.
+                    if (!this.textDiffersFromDrawn(target)) this.partEl('#kept-note')?.setAttribute('hidden', '');
                     summary.className = 'clean';
                     summary.textContent = 'No staged changes';
                     this.greyed(apply, 'nothing is staged against what is drawn: change a number first');
@@ -5897,9 +5894,11 @@
                     if (this.toSaved(target)) this.drawSaved(target);
                     else if (this.stagedValid) this.applyEditor(target);
                 };
-                this.partEl('#revert-btn').onclick = () => this.revertStaged(target);
-                const defaults = this.partEl('#defaults-btn');
-                if (defaults) defaults.onclick = () => this.stageDefaults(target);
+                // Revert, or Defaults once nothing is staged: what showGoingBack made it.
+                this.partEl('#revert-btn').onclick = (ev) => {
+                    if (ev.currentTarget.dataset.does === 'defaults') this.stageDefaults(target);
+                    else this.revertStaged(target);
+                };
                 const say = ({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error');
                 this.partEl('#undo-btn').onclick = () => say(this.undoStaged(target));
                 this.partEl('#redo-btn').onclick = () => say(this.redoStaged(target));
@@ -5908,8 +5907,6 @@
                     ghost.checked = this.ghostShown;
                     ghost.onchange = () => say(this.setGhost(ghost.checked));
                 }
-                this.partEl('#kept-restore').onclick = () => say(this.restoreKept(target));
-                this.partEl('#kept-discard').onclick = () => say(this.discardKept(target));
             }
 
             // One value staged by a control: a step of undo (a slider dragged through
@@ -5976,6 +5973,28 @@
                     if (name in stage.staged) wrap.setValue(stage.staged[name]);
                 }
                 this.refreshStage();
+            }
+
+            // The bar's one button that goes back, a step further each press: Revert while
+            // anything is staged against what is drawn; once nothing is, Defaults, where the
+            // part's own numbers are not what is staged; else greyed, saying why. Part ›
+            // Revert and Part › Defaults on the ring are its two steps.
+            showGoingBack(target, count) {
+                const button = this.partEl('#revert-btn');
+                if (!button) return;
+                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
+                const staged = count > 0 || this.textDiffersFromDrawn(target) || this.toSaved(target);
+                const own = stage?.tied ? !scad || scad.text === scad.own
+                    : !stage?.defaults || Object.entries(stage.defaults).every(([k, v]) => sameValue(stage.staged[k], v));
+                const defaults = !staged && Boolean(target.part) && !own;
+                button.dataset.does = defaults ? 'defaults' : 'revert';
+                button.textContent = defaults ? 'Defaults' : 'Revert';
+                const tip = defaults
+                    ? "Stage the part's own numbers -- its SCAD as saved -- a step of Undo; Apply then draws the saved part"
+                    : 'Put what is staged back to what is drawn, a step of Undo';
+                const why = staged || defaults ? null
+                    : target.part ? "nothing is staged, and the part's own numbers are what is drawn" : 'nothing is staged: its numbers are what is drawn';
+                setReason(button, why, tip);
             }
 
             refreshUndoButtons(target) {
@@ -6352,6 +6371,14 @@
                 this.invalidate?.();
             }
 
+            // Whether the SCAD in the editor is other than the SCAD drawn: typed and not yet
+            // rendered, or a tied part's values staged in it and not applied. SCAD only read
+            // (a part built by Python, a made piece) follows its numbers, and never differs.
+            textDiffersFromDrawn(target) {
+                const scad = this.scadStages[target?.key];
+                return Boolean(scad && scad.editable && scad.text !== null && scad.text !== (scad.drawnText ?? scad.own));
+            }
+
             // Whether a part is drawn from a variant this tab applied -- its numbers
             // moved, or its SCAD edited -- rather than as saved.
             drawnIsVariant(target) {
@@ -6492,7 +6519,8 @@
                     this.renderHistory(target);
                     this.showPresets(target, spec);
                     this.showJoin(target);
-                    this.offerKeptWork(target);
+                    stage.built = true;
+                    this.restoreKeptWork(target);
                     this.focusEditor();
                 } catch (err) {
                     console.error(err);
@@ -6544,7 +6572,8 @@
                 this.bindStageActions(target);
                 this.refreshStage();
                 this.renderHistory(target);
-                this.offerKeptWork(target);
+                stage.built = true;
+                this.restoreKeptWork(target);
                 this.focusEditor();
             }
 
@@ -6926,12 +6955,13 @@
                 if (this.scadEditor && this.scadTarget?.key === target.key) this.scadEditor.mark(messages ?? []);
             }
 
-            // ---- what a tab keeps, and offers back ----------------------------
+            // ---- what a tab keeps, and puts back ------------------------------
             //
             // A part's work -- numbers staged and not applied, its SCAD edited -- is kept
-            // in the tab's own storage as it changes, so a reload offers it back in the
-            // part's editor (Restore, Discard); a tab that keeps nothing offers nothing.
-            // Leaving with work not rendered, or SCAD not saved, asks first.
+            // in the tab's own storage as it changes, so after a reload the part's editor
+            // puts it back as it opens: staged, a step of Undo, and Revert lets it go. A
+            // tab that keeps nothing puts nothing back. Leaving with work not rendered, or
+            // SCAD not saved, asks first.
 
             readKeptWork() {
                 const kept = {};
@@ -6976,75 +7006,57 @@
             }
 
             // The editor of a target that had work kept before a reload, other than what it
-            // now shows: offered back, saying what it was.
-            offerKeptWork(target) {
-                const offer = this.partEl('#kept-offer');
-                if (!offer || this.partSection.dataset.target !== target.key) return;
+            // now shows: put back as it opens -- once its SCAD is in the editor, so the text
+            // goes back with the numbers -- and said, in the note under the bar and on the
+            // status line. What the address draws stays drawn until Apply.
+            restoreKeptWork(target) {
+                if (this.partSection?.dataset.target !== target.key) return;
                 const kept = this.keptWork[target.key];
-                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
-                if (!kept) {
-                    if (stage) stage.offerPending = false;
-                    offer.hidden = true;
-                    return;
-                }
-                const numbers = stage?.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => stage && k in stage.staged && !sameValue(stage.staged[k], v));
-                // Its SCAD not read yet: what was kept stays kept, and is asked about again once it is.
-                const waiting = Boolean(target.scadUrl && !scad);
-                const text = kept.scad && scad && kept.scad !== scad.text ? kept.scad : null;
+                const stage = this.partStages[target.key];
+                if (!kept) { if (stage) stage.offerPending = false; return; }
+                // Kept as it was, not overwritten, until it is put back: once its controls are
+                // built (a part whose SCAD is the one draft known to be so) and its SCAD is
+                // in the editor, whichever is last.
                 if (stage) stage.offerPending = true;
-                if (waiting && !numbers.length) return;
-                if (!numbers.length && text === null && !waiting) {
-                    delete this.keptWork[target.key];
-                    if (stage) stage.offerPending = false;
-                    offer.hidden = true;
-                    return;
-                }
-                // A tied part's text kept: the values in it that differ from what is shown.
-                const values = text !== null && stage?.tied
-                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
-                    : [];
-                const what = [
-                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
-                    numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
-                ].filter(Boolean).join(', and ');
-                offer.querySelector('.kept-said').textContent = `Kept in this tab from before it was reloaded: ${what}. Restore puts it back; Discard lets it go.`;
-                offer.hidden = false;
+                if (!stage?.built || (target.scadUrl && !(this.scadStages[target.key] && this.scadTarget?.key === target.key && this.scadEditor))) return;
+                const { ok, said } = this.restoreKept(target);
+                if (ok) this.setStatus(said, 'success');
             }
 
             restoreKept(target) {
                 const kept = this.keptWork[target.key];
                 const stage = this.partStages[target.key], scad = this.scadStages[target.key];
-                if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to restore` };
+                if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to put back` };
                 delete this.keptWork[target.key];
                 stage.offerPending = false;
-                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k]) => k in stage.staged);
+                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => k in stage.staged && !sameValue(stage.staged[k], v));
                 if (numbers.length) {
                     this.noteUndo(stage);
                     for (const [k, v] of numbers) stage.staged[k] = v;
                     this.showStaged(target);
                 }
-                let text = false;
-                if (kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor) {
+                const text = kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor ? kept.scad : null;
+                // A tied part's text: the values in it that differ from what is shown.
+                const values = text !== null && stage.tied
+                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
+                    : [];
+                if (text !== null) {
                     if (kept.from) scad.from = kept.from;
                     // A tied part's: put back staged, checked, and drawn by Apply, as a
                     // control's move is; else as typed: checked, and rendered once it reads.
-                    if (stage.tied) this.scadEditor.replaceText(kept.scad);
-                    else this.scadEditor.setText(kept.scad);
-                    text = true;
+                    if (stage.tied) this.scadEditor.replaceText(text);
+                    else this.scadEditor.setText(text);
                 }
-                this.partEl('#kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
-                const what = [text ? (stage.tied ? 'its edited SCAD, staged: checked, and Apply draws it' : 'its edited SCAD, checked and rendered once it reads') : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
-                return { ok: true, said: `${target.label}: restored from before the reload, ${what || 'nothing that differed'}` };
-            }
-
-            discardKept(target) {
-                delete this.keptWork[target.key];
-                const stage = this.partStages[target.key];
-                if (stage) stage.offerPending = false;
-                this.partEl('#kept-offer')?.setAttribute('hidden', '');
-                this.keepWork(target, { now: true });
-                return { ok: true, said: `${target.label}: what this tab kept from before the reload is let go; what is drawn stays` };
+                const what = [
+                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
+                    numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
+                ].filter(Boolean).join(', and ');
+                const note = this.partEl('#kept-note');
+                if (!what) { note?.setAttribute('hidden', ''); return { ok: false, said: `${target.label}: what was kept is what is drawn` }; }
+                const next = text !== null && !stage.tied ? 'checked, and drawn once it reads' : 'Apply draws it';
+                if (note) { note.textContent = `Put back from before the reload: ${what}. ${next[0].toUpperCase()}${next.slice(1)}; Revert lets it go.`; note.hidden = false; }
+                return { ok: true, said: `${target.label}: put back from before the reload, ${what}: ${next}, and Revert lets it go` };
             }
 
             // The parts of this site with work kept from before a reload.
@@ -7780,14 +7792,14 @@
 
             // ---- the SCAD editor ----------------------------------------
             //
-            // In the Part's SCAD window: the target's SCAD in CodeMirror
+            // In the Part's SCAD editor window: the target's SCAD in CodeMirror
             // (widgets/scad_editor.js), its file's name as the API gives it
             // (source_file), which OpenSCAD's messages name it by. A part's own SCAD
             // is edited; a part built by Python, and a made piece, are read. Typing is checked once it stops
             // (evaluated, not rendered: POST .../draft/check) and rendered soon after
             // a check that passes, as Apply renders, the draft beside the part. Save
-            // keeps it, and the numbers staged, as a variant in git. Fullscreen covers
-            // the page (Esc or its button puts it back). Each part's editor is kept while
+            // keeps it, and the numbers staged, as a variant in git. Fullscreen maximises
+            // its window (Esc in it puts it back). Each part's editor is kept while
             // another is selected -- its text, its undo, where it was scrolled -- and
             // OpenSCAD's keys work inside it: F5 checks and draws, F6 and Ctrl+Enter
             // apply, Ctrl+S saves a variant.
@@ -7831,7 +7843,7 @@
                     const handlers = {
                         onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
-                        onFullscreen: () => this.toggleScadFullscreen(),
+                        onEscape: () => this.scadWindowBack(),
                         onCheck: () => this.checkAndDraw(target),
                         onApply: () => this.applyKey(target),
                         onName: () => { scad.replacing = null; },
@@ -7864,18 +7876,16 @@
                     else if (scad.text === own) editor.say("The part's own SCAD: edit it here; it is checked once typing stops and rendered once it reads.");
                     else editor.say(scad.text === scad.savedText && scad.from ? `The variant ${scad.from}, as saved.` : 'Edited, not saved: Save keeps it in git.');
                     if (editable) await this.loadSavedVariants(target);
-                    this.offerKeptWork(target);
+                    this.restoreKeptWork(target);
                 } catch (err) {
                     console.error(err);
                     if (slot) slot.textContent = `Could not open the SCAD: ${err.message}`;
                 }
             }
 
-            // The editor let go of: back in Selected and not over the page, and out of the
-            // page, kept for when its part is edited again.
+            // The editor let go of: out of the page, kept for when its part is edited again.
             releaseScadEditor() {
                 if (!this.scadEditor) return;
-                if (this.scadEditor.isFullscreen()) this.scadEditor.fullscreen(false);
                 this.scadEditor.root.remove();
                 this.scadEditor = null;
                 this.scadTarget = null;
@@ -8196,8 +8206,12 @@
                 const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
                 editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed. ${merging}`, 'valid');
                 const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
+                // The next step: the header's ⚒ Make, which takes the variant drawn to the
+                // machine it names; else, with a printer pinned, the ring's Slice.
                 const printer = this.pinnedPrinter();
-                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD window says how to make it the part\'s source.';
+                const make = !this.makeHereEl.hidden && this.makeHereEl.dataset.on ? this.makeHereEl.textContent.trim() : null;
+                const next = make ? ` Next, ${make}, in the header, takes it there to be made.`
+                    : printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD editor says how to make it the part\'s source.';
                 const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed.${next}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
@@ -8258,17 +8272,29 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // Fullscreen: the editor over the whole page; again, or Esc, puts it back.
+            // Fullscreen: the SCAD editor's window maximised over the layout, as its stack's
+            // own button and a double-click on its tab do; again, or Esc in it, puts it back.
             toggleScadFullscreen() {
                 const editor = this.scadEditor;
                 if (!editor) return null;
-                const on = !editor.isFullscreen();
-                editor.fullscreen(on);
+                const on = !this.panels.isMaximised('part-scad');
+                if (on) this.systems.part.showSection('scad');
+                this.panels.maximise('part-scad', on);
+                editor.measure();
+                if (on) editor.focus();
                 return on;
             }
 
-            // The ring's Part › Save, Variants, Float and Fullscreen: the part's editor
-            // opened, its SCAD loaded, then what its buttons do.
+            // Esc in the SCAD editor: its window put back, when it is maximised. Whether it was.
+            scadWindowBack() {
+                if (!this.panels.isMaximised('part-scad')) return false;
+                this.panels.maximise('part-scad', false);
+                this.scadEditor?.measure();
+                return true;
+            }
+
+            // The ring's Part › Save, Variants and View › Fullscreen: the part's editor
+            // opened, its SCAD loaded, then what its buttons do, or its window maximised.
             async scadOn(path) {
                 const target = await this.editorOn(path);
                 if (!target || !target.scadUrl) return null;
@@ -8282,22 +8308,20 @@
                 return this.saveScad(target);
             }
 
-            // Part › View › SCAD: the part's SCAD window, beside the world, the editor in it.
+            // Part › View › SCAD editor: the part's SCAD editor, a window beside the world.
             async scadWindowOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD to show` };
                 this.systems.part.showSection('scad');
                 this.scadEditor?.measure();
-                return { ok: true, said: `${target.label}'s SCAD, in its window beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
+                return { ok: true, said: `${target.label}'s SCAD, in its SCAD editor beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
             }
 
             async fullscreenScadOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD editor` };
-                // Over the page from its window, which is open for it.
-                if (!this.scadEditor?.isFullscreen()) this.systems.part.showSection('scad');
                 const on = this.toggleScadFullscreen();
-                return { ok: true, said: on ? `${target.label}'s SCAD editor covers the page; Esc, its button or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
+                return { ok: true, said: on ? `${target.label}'s SCAD editor maximised over the windows; Esc in it, its window's restore or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
             }
 
             // Apply: the staged set goes to the target -- a part's STL rendered
@@ -11690,9 +11714,9 @@
         ];
         // The part editor's buttons, by the cell of Part each one is.
         const PART_VERBS = [
-            ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
+            ['#apply-btn', 'part:apply'], ['#revert-btn:not([data-does="defaults"])', 'part:revert'], ['#revert-btn[data-does="defaults"]', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
-            ['#scad-save', 'part:save'], ['#scad-fullscreen', 'part:fullscreen'], ['#join-btn', 'part:adapter'],
+            ['#scad-save', 'part:save'], ['#join-btn', 'part:adapter'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
         const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
@@ -12131,7 +12155,7 @@
                     viewer.revertStagedOn(path).then(answered);
                     return;
                 }
-                // Part › Save, Variants, Float and Fullscreen: what the SCAD editor's own do.
+                // Part › Save and Variants: what the SCAD editor's own do; Fullscreen, its window maximised.
                 if (action === 'part:save') {
                     viewer.saveScadOn(path).then(answered);
                     return;

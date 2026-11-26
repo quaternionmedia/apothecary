@@ -2215,7 +2215,7 @@ def test_a_part_whose_pieces_move_has_its_motion_under_view_after_fit():
     still = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     view = next(c for c in moving.options[-1].children if c.label == "View")
     assert [c.label for c in view.children] == [
-        "SCAD",
+        "SCAD editor",
         "Fullscreen",
         "Ghost",
         "Fit",
@@ -2307,11 +2307,11 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("View", "part:view"),
         ("History", "part:history"),
     ]
-    # A ring holds eight: SCAD and Fullscreen are under View, beside the ghost and Fit,
+    # A ring holds eight: the SCAD editor and Fullscreen are under View, beside the ghost and Fit,
     # and History holds Undo and Redo.
     view, history = part.children[5:7]
     assert [(c.label, c.action or c.id) for c in view.children] == [
-        ("SCAD", "part:scad"),
+        ("SCAD editor", "part:scad"),
         ("Fullscreen", "part:fullscreen"),
         ("Ghost", "part:ghost"),
         ("Fit", "part:fit"),
@@ -2335,7 +2335,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("Draw", "part:variant:draw:wider"),
         ("Rename", "part:variant:rename:wider"),
         ("Duplicate", "part:variant:duplicate:wider"),
-        ("History", "part:variant:history:wider"),
+        ("Saves", "part:variant:history:wider"),
         ("Compare", "part:variant:compare:wider"),
         ("Delete", "part:variant:delete:wider"),
     ]

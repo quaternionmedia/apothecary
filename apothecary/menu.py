@@ -728,7 +728,7 @@ VARIANT_VERBS = (
     ("draw", "Draw"),
     ("rename", "Rename"),
     ("duplicate", "Duplicate"),
-    ("history", "History"),
+    ("history", "Saves"),
     ("compare", "Compare"),
     ("delete", "Delete"),
 )
@@ -738,7 +738,7 @@ TRASH_VERBS = (("restore", "Restore"), ("forget", "Forget"))
 
 def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Option]:
     """Part › Variants: each saved variant a ring of what can be done to it -- Draw,
-    Rename, Duplicate, History, Compare, Delete (``part:variant:<verb>:<name>``) --
+    Rename, Duplicate, Saves, Compare, Delete (``part:variant:<verb>:<name>``) --
     and, when anything is deleted, Deleted last: the trash, each deleted variant a
     ring of Restore and Forget (``part:trash:<verb>:<name>``), and Empty
     (``part:trash:empty``), which empties it once confirmed. Nothing saved and
@@ -2336,13 +2336,13 @@ def _node_ring(
         if seen is not None and seen.editable:
             verbs.append(Option(id="part:save", label="Save", action="part:save"))
         # Two groups, so the ring holds eight at the most: View -- how the part
-        # and its editor are seen: its SCAD window, beside the world, or the editor
-        # over the whole page, the ghost of what was drawn before beside what is
+        # and its editor are seen: its SCAD editor, a window beside the world, or the
+        # editor over the whole page, the ghost of what was drawn before beside what is
         # drawn now, and the part framed with Selected kept open (f) -- and History,
         # the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
         view = []
         if seen is not None:
-            view.append(Option(id="part:scad", label="SCAD", action="part:scad"))
+            view.append(Option(id="part:scad", label="SCAD editor", action="part:scad"))
             view.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))

@@ -141,7 +141,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
-    "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
     # The staged numbers' undo and redo, and the ghost of what was drawn before:
     # Part › History and Part › View.
     "undo-btn": (
@@ -155,13 +154,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a tick-box that shows a ghost of what was drawn before the newest Apply",
     ),
-    # What a tab kept of a part's work before it was reloaded, offered back.
-    "kept-restore": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts back the work the tab kept from before a reload",
-    ),
-    "kept-discard": (WIDGET, WHAT_YOU_SEE, "a button that lets go of that kept work"),
     # One control per parameter (widgets/part_controls.js), written there as markup,
     # so the census counts them.
     "param-slider": (WIDGET, WHAT_YOU_SEE, "a slider that stages one of a part's numbers"),
@@ -221,11 +213,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # chosen from the list in the part's Variants window.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
-    "scad-fullscreen": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts the SCAD editor over the whole page, or back",
-    ),
     "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
     "made-piece": (
         LIST,
@@ -1220,12 +1207,10 @@ RING_BACKED: Dict[str, str] = {
     "probe": "device:probe",
     "ctl:change:arm": "control:arm",
     # the part editor's Defaults, Apply and Revert are Part's on its ring
-    "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
-    # the SCAD editor's Save and Fullscreen, and a saved variant chosen, are too
+    # the SCAD editor's Save, and a saved variant chosen, are too
     "scad-save": "part:save",
-    "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
     # a part's presets, Part › Presets' cells; ⇄ Adapter, Part › Adapter
     "part-preset": "part:preset",

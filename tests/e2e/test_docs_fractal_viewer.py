@@ -161,5 +161,5 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     expect(page.locator("#part-scad .cm-content")).to_be_visible(timeout=20000)
     docs.step(
         "Select a part leaf, and Panels › Windows › Part view: Selected, its parameters in "
-        "Parameters, and its SCAD in the SCAD window"
+        "Parameters, and its SCAD in the SCAD editor"
     )

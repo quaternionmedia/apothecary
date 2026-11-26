@@ -6,7 +6,7 @@ declared ones, a reload drawing what the tab had applied (its address keeps the
 variant), OpenSCAD's error shown by line and the refused size put back (Part › Revert),
 then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for nothing
 (Part › Defaults and Part › Apply), and round once more, the size typed in its box
-(Part › Apply, then the editor's Defaults and Apply); an earlier apply drawn again from
+(Part › Apply, then the bar's Defaults and Apply); an earlier apply drawn again from
 Recent applies; a size staged and not applied kept over a reload, in its text, and
 restored; then two tabs applying different values at once, each drawing its own. It
 writes walkthrough/04-designing-a-part.md and its pictures as it goes.
@@ -456,14 +456,18 @@ def _a_round(
 
 def _back_to_the_defaults(page: Page, from_the_ring: bool = False) -> str:
     """Defaults then Apply -- Part › Defaults and Part › Apply on the part's ring, or
-    the editor's buttons: the saved part again, and nothing rendered. The status line."""
+    the bar's buttons, its Revert reading Defaults once nothing is staged: the saved part
+    again, and nothing rendered. The status line."""
     if from_the_ring:
         _ring_on_the_part(page, "Part", "Defaults")
         expect(_status(page)).to_contain_text(
             "the part's own SCAD is back in its editor", timeout=10000
         )
     else:
-        page.locator("#defaults-btn").click()
+        going_back = page.locator("#revert-btn")
+        expect(going_back).to_have_text("Defaults")
+        going_back.click()
+        expect(going_back).to_have_text("Revert")
     expect(page.locator("#stage-summary")).to_contain_text("valid", timeout=10000)
     answer = _apply(page, from_the_ring)
     assert answer.ok and answer.json()["regenerated"] is False, answer.text()
@@ -608,8 +612,8 @@ def _drawn_again_from_the_history(page: Page, side: float) -> str:
 def _kept_over_a_reload(page: Page, staged: float, drawn: float) -> str:
     """A size staged and not applied, and the page reloaded: leaving asks first (the
     browser's question, answered by leaving), the status line names the part with
-    work kept -- its text, the size in it -- and its editor offers it back; Restore
-    stages it again. The offer's words."""
+    work kept -- its text, the size in it -- and its editor puts it back as it opens,
+    staged again and not drawn. The note's words."""
     _type_size(page, staged)
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
     asked = []
@@ -624,18 +628,16 @@ def _kept_over_a_reload(page: Page, staged: float, drawn: float) -> str:
     assert asked == ["beforeunload"], asked
     expect(_status(page)).to_contain_text(f"{PART} has work kept from before the reload")
     _edit(page)
-    offer = page.locator("#kept-offer")
-    expect(offer).to_be_visible(timeout=10000)
-    expect(offer).to_contain_text(f"its SCAD edited, size {staged:g}")
-    words = offer.locator(".kept-said").inner_text()
-    # Nothing is staged until it is restored: what is drawn is what the address names.
-    assert float(_size_box(page).input_value()) == pytest.approx(drawn, abs=0.05)
-    page.locator("#kept-restore").click()
-    expect(offer).to_be_hidden()
+    note = page.locator("#kept-note")
+    expect(note).to_be_visible(timeout=10000)
+    expect(note).to_contain_text(f"its SCAD edited, size {staged:g}")
+    words = note.inner_text()
+    # Staged again, its line and its control both; what is drawn is what the address names.
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
     expect(_size_box(page)).to_have_value(f"{staged:g}")
     assert _size_line(page).startswith(f"size = {staged:g};")
-    expect(_status(page)).to_contain_text("restored from before the reload")
+    committed = page.evaluate("() => window.fractalViewer.committedParams.size")
+    assert committed == pytest.approx(drawn, abs=0.05)
     return words
 
 
@@ -877,7 +879,8 @@ def test_designing_a_part_twice_round(
         f"A second size, {second:.2f} mm, typed a key at a time in the box beside the "
         "slider, which follows it; checked once, and applied from the part's ring, Part › "
         "Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the "
-        "editor's own Defaults and Apply: the saved part again, nothing rendered.",
+        "bar's Revert, which reads Defaults once nothing is staged, and Apply: the saved "
+        "part again, nothing rendered.",
         shown=back,
     )
 
@@ -908,12 +911,13 @@ def test_designing_a_part_twice_round(
         "A size staged and not applied is kept over a reload",
         "A size of 20 mm staged and not applied, and the page reloaded: the browser asks "
         "before leaving, the status line names the part with work kept -- its SCAD as "
-        "edited, the size in it -- and Part › Edit offers it back. Restore stages it "
-        "again, its line and its control both; Discard would let it go.",
+        "edited, the size in it -- and Part › Edit puts it back: staged again, its line "
+        "and its control both, not drawn. Revert lets it go.",
         shown=kept,
     )
     page.locator("#revert-btn").click()
     expect(page.locator("#stage-summary")).to_have_text("No staged changes", timeout=10000)
+    expect(page.locator("#kept-note")).to_be_hidden()
 
     # Two tabs, at once.
     _two_tabs(page, site, story)

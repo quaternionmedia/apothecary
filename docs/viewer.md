@@ -248,7 +248,7 @@ Page Down scroll, as the browser does.
 **Escape** does one thing a press, the first that applies: folds ⚙ View; puts a
 drag of the move arrows, or of a camera's turn ring or tilt arc, back where it
 began, nothing saved; then lets go of the selection. The ring, the SCAD editor's
-fullscreen and the picture chosen in Pictures take their Escape first, and a
+window maximised and the picture chosen in Pictures take their Escape first, and a
 box being typed in keeps its own.
 
 **Walls are drawn faded**, whatever is in front of them: anything whose
@@ -687,9 +687,9 @@ pieces it holds: a digit selects one), then what the piece is:
 - a piece made from a picture: **Picture** › Word, Drop (chosen twice);
 
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
-Defaults, Apply, Revert, Save, View › SCAD, Fullscreen, Ghost and Fit,
+Defaults, Apply, Revert, Save, View › SCAD editor, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
-Duplicate, History, Compare and Delete, and Variants › Deleted; after them,
+Duplicate, Saves, Compare and Delete, and Variants › Deleted; after them,
 where the ring has room, Presets › each preset and Adapter), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
@@ -799,7 +799,7 @@ which the page, the ring and the tests all read.
 
 | System | Main window | Sections |
 |---|---|---|
-| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), SCAD (beside the world) |
+| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert -- Defaults once nothing is staged -- Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), the SCAD editor (beside the world, maximised by Part › View › Fullscreen) |
 | Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Status, Cut, Table map (a router's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 | Family | The Procedure: the site's steps and GO | Members (each member, how it is reached, its door), Deliveries (the hub's audit, newest first) -- tabs beside the Procedure ([family.md](family.md#a-procedure)) |
@@ -807,7 +807,7 @@ which the page, the ring and the tests all read.
 | View | |
 |---|---|
 | Reset layout | The page's own layout |
-| Part view | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
+| Part view | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD editor over Site, Problems and SCAD |
 | Machine view | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap view | The Airgap and each of its sections in a window, the world among them |
 | Family view | The world; the Procedure tall beside it, the Workspace behind it; Members, Deliveries, Jobs with Site behind it, and Selected in the column: *Run a site*'s windows ([below](#journeys)) |
@@ -964,8 +964,9 @@ the systems' views, and no journey's.
   the ring's Panels › Machine › Control pad or disarming put it back in the
   Machine, and
   the world takes its room back.
-- **The Part's SCAD** (Part › View › SCAD) is a window of its own beside the
-  world, the code filling it.
+- **The Part's SCAD editor** (Part › View › SCAD editor) is a window of its
+  own beside the world, the code filling it: titled apart from Site's SCAD, the
+  site's generated OpenSCAD, which the Part view lays out beside it.
 
 A window the page makes for the moment -- a Machine and its sections, the pad --
 is left out of the layout this browser remembers. Every other window is kept in
@@ -1026,7 +1027,7 @@ Where this OpenSCAD cannot build the part at all (gridfinity on
 [2021.01](openscad.md#what-openscad-202101-cannot-do)), the
 editor says so as it opens and **Apply is off** from the start, saying why.
 
-The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
+The bar of what is staged -- Apply, Revert, Undo, Redo, Ghost --
 is Selected's, and Selected shows the piece's name, place and facts first.
 While the piece is being edited -- Part › Edit asked for its editor, or
 something is staged -- the bar stands pinned at the top of Selected, above its body, in its own space: in view however far the parameters
@@ -1046,11 +1047,13 @@ when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
 address carries `?variant=`, so a reload or the link draws it again. The
 focus stays where it was: in the box or the slider last moved, or in the SCAD
-editor. **Revert** puts the text drawn back; **Defaults** puts the part's
-own text back -- its defaults are its SCAD as saved -- and Apply, saying
-"Apply: the saved part", then draws the saved part. Each of these is an edit
-of the text, which Undo takes back, and each is also a cell of Part on the
-ring.
+editor. **Revert** is the one button that goes back, a step further each
+press: while anything is staged it puts the text drawn back; once nothing is,
+it reads **Defaults** and puts the part's own text back -- its defaults are
+its SCAD as saved -- and Apply, saying "Apply: the saved part", then draws the
+saved part; with the part's own drawn and nothing staged it is greyed, saying
+so. Each step is an edit of the text, which Undo takes back, and each is also a
+cell of Part on the ring, Part › Revert and Part › Defaults.
 
 **A failed render** -- any error OpenSCAD says, though it finished -- is drawn
 greyed where the part stands, as far as OpenSCAD built it, a red flag over it
@@ -1093,9 +1096,11 @@ open.
 **Work is kept, per tab.** A part's SCAD as edited -- its values with it -- and
 a made piece's or a camera's numbers staged and not applied are kept in the
 tab's own storage as they change; after a reload
-the status line says which parts have work kept, and each one's editor offers
-it back: **Restore** puts it back, **Discard** lets it go. A browser that keeps
-nothing for the page offers nothing. Leaving the page with numbers staged and
+the status line says which parts have work kept, and each one's editor **puts it
+back** as it opens: staged, its text and its controls both, a step of Undo, and
+said in a note under the bar until nothing differs from what is drawn. What the
+address draws stays drawn until Apply; **Revert** lets the work go. A browser that
+keeps nothing for the page puts nothing back. Leaving the page with numbers staged and
 not applied, or SCAD edited and not rendered or not saved, asks first. Each
 part keeps its editor -- the SCAD's text, its undo and where it was scrolled --
 while another part is selected.
@@ -1111,7 +1116,7 @@ whose numbers drive its model (a part built by Python; a part whose SCAD is
 the one draft offers none here yet) has a **Preset** drop-down above its
 controls in Parameters, and Part › Presets › each on its ring: one chosen stages its numbers over the part's
 defaults, a step of Undo, and Apply draws it. What calipers read is then typed
-over it; Defaults lets the preset go.
+over it; Defaults (the bar's Revert, once nothing is staged) lets the preset go.
 
 A part with one round end, a spigot or a socket (`dust_port`), has **⇄ Adapter**
 in Selected, and Part › Adapter on its ring. The first press keeps this end at
@@ -1135,7 +1140,7 @@ adapter stays drawn as its variant.
 
 ## The SCAD editor
 
-The part's SCAD is in an editor, in its SCAD window: the same draft as the
+The part's SCAD is in its **SCAD editor**, a window of its own: the same draft as the
 controls in Parameters, its values theirs. Typing in it is
 checked 300 ms after typing stops, the values in it: a line OpenSCAD
 refuses is marked where it is, with its message, and nothing is rendered until
@@ -1170,7 +1175,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   in), and that a merge brings its values with it -- or, for a variant whose
   values are in a `.variant.json` beside its SCAD and not in its text, that a
   merge does not apply them until it is saved again. The Variants window lists
-  it, and opens when it is closed.
+  it, and opens when it is closed; the status line names the next step, the
+  header's **⚒ Make**, which takes the variant drawn to the machine it names.
+  After an Apply that drew a variant not saved, it names Save in the SCAD editor.
   What would be a failed render is not saved. A part in a submodule
   (gridfinity) is saved as its **overlay**: the include of the upstream file
   and the values set after it, the submodule never touched; an edit of the
@@ -1190,9 +1197,10 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   variant whose values are in a `.variant.json` and not its text has them
   written in when it is read -- **Rename** and
   **Duplicate**, under the name typed in its row's box (the cell puts the
-  cursor there; Enter does it), **History** (each save, newest first, an
+  cursor there; Enter does it), **Saves** (each save, newest first, an
   earlier one restored by its **Restore** as a new save, the history keeping
-  what came between), **Compare** and **Delete**. Choosing a variant's name in
+  what came between -- named apart from the History window, this tab's applies,
+  and Part › History, Undo and Redo), **Compare** and **Delete**. Choosing a variant's name in
   the list draws it, as Draw does.
 - What was made of the part is in the same list: under each variant, folded,
   the pieces printed or cut of it, each with when, on what machine, how its job
@@ -1211,8 +1219,10 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   overlaid (blue and orange, seen through) or side by side, framed, with each
   one's measured size, every number that differs and what the SCAD changes.
   Close draws the part as it was.
-- **Part › View › SCAD** opens the SCAD window, beside the world; **Part ›
-  View › Fullscreen** gives the editor the page (Escape gives it back).
+- **Part › View › SCAD editor** opens the SCAD editor, beside the world; **Part ›
+  View › Fullscreen** maximises its window over the windows, as its stack's own
+  maximise and a double-click on its tab do, nothing laid over the page (Escape in
+  it, or the cell again, gives the windows back).
 
 A part built by Python geometry shows the SCAD its geometry generates, read
 only, and has no Save; a made piece shows its few lines, read only; a camera
@@ -1272,7 +1282,7 @@ defaults, and a change holds until the page is left.
 | `o` | Makes the windows see-through, the world showing through them, or solid again (Settings' See-through windows) |
 | `P` | Takes a picture, with a camera selected |
 | `?` | Shows or hides the hint bar |
-| Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's fullscreen it leaves it, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |
+| Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's window maximised it puts the windows back, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |
 | `f` | Frames the selected piece, as drawn, Selected and its editor kept open (Part › View › Fit); with nothing selected, the level |
 | Shift+F | Frames the level, whatever is selected (View › Fit) |
 | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undoes and redoes the part editor's staged numbers (Part › History) |
