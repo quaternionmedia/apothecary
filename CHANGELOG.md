@@ -227,6 +227,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The header's validity count, pressed, says on the status line how many problems the site's layout has and that a row selects its piece, or, with none, that whether a part is ready to make is its Readiness, under Part. ([doc](docs/viewer.md#the-header))
 - ⊞ Windows wears the address of the ring's Panels (⌗4), which holds what it lists, every window by its group, where it wore Panels › Windows' (⌗49), the views and the layout. ([doc](docs/viewer.md#the-ring))
 - The status line on leaving a journey says where to go next as well as what happened: Tour takes it up again, ⚙ View › Reset layout puts the page's own layout back. ([doc](docs/tour.md#opening-it))
 - The Family view and *Run a site* lay out the same windows: the Procedure tall beside the world with the Workspace behind it, then Members, Deliveries, Jobs with Site, and Selected, where the view kept the Workspace with Jobs and had no Site, and the journey laid out Pinned, which none of its stages names. ([doc](docs/viewer.md#the-windows))

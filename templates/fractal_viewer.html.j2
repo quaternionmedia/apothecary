@@ -8703,11 +8703,15 @@
             }
 
             // The header's count: Problems opened and in front (the world alone ended),
-            // scrolled to its top.
+            // scrolled to its top, and the status line saying what it holds and what next.
             openProblems() {
                 this.panels.open('problems');
                 const slot = this.problemListEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
+                const n = this.violations.length;
+                this.setStatus(n
+                    ? `Problems: ${n} in ${this.siteName}'s layout; a row selects its piece, at its level`
+                    : `Problems: none in ${this.siteName}'s layout; whether a part is ready to make is its Readiness, under Part`, 'success');
             }
 
             // Pinned in front: mounted the first time, listed again each time after,

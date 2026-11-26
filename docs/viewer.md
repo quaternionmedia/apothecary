@@ -92,7 +92,9 @@ Left to right, one row:
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does; its tooltip names
   the key and the modifier Settings gives the ring.
 - **The validity count**, "Layout valid" or the number of violations: a click
-  brings Problems, beside Site, in front.
+  brings Problems, beside Site, in front, and the status line says how many the
+  layout has and that a row selects its piece -- or, with none, that whether a part
+  is ready to make is its Readiness, under Part.
 
 Under `apothecary serve --simulated`, one quiet line above the header says its
 machines are simulated -- a printer, a router, an ESP32 and a lighting console, scripted
