@@ -36,6 +36,8 @@ DECK_ID = "SIMDECK"
 # moves and under the strip; the strip's own picture carries it too, drawn by the server
 # where no word can be blanked, so the picture is left out whole: its words are under it.
 TIME_LEFT_SHOWN = ((DECK, TIME_LEFT), f"{DECK} .deck-strip-tap")
+# Where no control is armed the strip carries no clock, and its picture is shown whole.
+NO_CLOCK = ((DECK, TIME_LEFT),)
 ROUTER = "/dev/ttyFAKE3"
 CONTROLLER = "cnc_router.frame_system.controller"
 MAINBOARD = "printer_1.frame_system.mainboard"
@@ -156,9 +158,10 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
             "**The printer.** The same turns jog it as `G91`, `G1 .. F3000`, `G90`, and its "
             "fourth knob extrudes within the bound the firmware guide names; "
             "tests/test_firmware_deck_control.py holds both.",
-            "**The strip's picture.** The server draws the time an armed control has left "
-            "into it, which differs on every run, so it is greyed in the pictures; the "
-            "window writes its words under it, the time blanked there as everywhere.",
+            "**The strip's picture, armed.** The server draws the time an armed control has "
+            "left into it, which differs on every run, so after the first step it is greyed "
+            "in the pictures; the window writes its words under it, the time blanked there "
+            "as everywhere.",
         ],
         page=page,
     )
@@ -180,10 +183,13 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "The deck's layout, drawn by the server, with the router chosen",
-        "The top row's keys choose the machine and cycle the step; the bottom row holds the "
-        "stops, one per machine and a bright red STOP ALL last, nearest the knobs. The strip "
-        "says which machine, its position and that its control is disarmed.",
-        blank=TIME_LEFT_SHOWN,
+        "The top row's first two keys choose the machine, each a tile of what it is doing, "
+        "the chosen one framed; the third is the screen's own, STEP on Jog, cycling the "
+        "step. The bottom row holds the stops, one per machine and a bright red STOP ALL "
+        "last, nearest the knobs. The strip names the deck's six screens along its top, "
+        "Jog lit, and over each knob what it moves and where the tool is; under them, that "
+        "its control is disarmed.",
+        blank=NO_CLOCK,
     )
 
     # 2. Disarmed: a turn moves nothing and the strip says why.
@@ -451,10 +457,10 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     rings.on_world(page, "Panels", "Tools", "Deck", "Screen", "Status")
     shown = knobs.locator(".deck-screen-to[aria-pressed='true']")
     expect(shown).to_have_text("Status", timeout=10000)
-    expect(knobs.locator(".deck-screen")).to_contain_text("strip screen: Status (3/3)")
-    _until(lambda: (_drawn(url)["strip_drawn"]["small"] or "").endswith("· 3/3"), "Status drawn")
+    expect(knobs.locator(".deck-screen")).to_contain_text("screen: Status (5/6)")
+    _until(lambda: (_drawn(url)["strip_drawn"]["small"] or "").endswith("· 5/6"), "Status drawn")
     knobs.locator(".deck-screen-to[data-screen='knobs']").click()
-    expect(shown).to_have_text("Knobs", timeout=10000)
+    expect(shown).to_have_text("Jog", timeout=10000)
     assert _control(url)["screen"] == "knobs"
     assert (_control(url)["sent"], _router(url)["position"]) == sent
 

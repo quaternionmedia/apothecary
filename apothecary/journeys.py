@@ -564,7 +564,8 @@ BOARD = Journey(
 
 
 # Drive a machine: the Stream Deck +, drawn by the server, whose knobs jog the
-# machine chosen on it once that machine's control is armed.
+# machine chosen on it once that machine's control is armed, and whose screens show what
+# each machine is doing.
 HANDS = Journey(
     id="hands",
     title="Drive",
@@ -612,6 +613,19 @@ HANDS = Journey(
                 "27-the-deck-jogging-the-machines.md#2",
                 "27-the-deck-jogging-the-machines.md#3",
                 "27-the-deck-jogging-the-machines.md#5",
+            ),
+        ),
+        Step(
+            "screens",
+            "Screens",
+            "its six screens, named along its strip: a tap on a name shows one, a knob pressed "
+            "the next; Temps draws the printer's heaters, the Bench both machines",
+            forward=("deck",),
+            shown_by=(
+                "41-the-deck-while-a-print-streams.md#1",
+                "41-the-deck-while-a-print-streams.md#3",
+                "41-the-deck-while-a-print-streams.md#4",
+                "41-the-deck-while-a-print-streams.md#5",
             ),
         ),
     ),

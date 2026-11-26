@@ -1519,7 +1519,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine", None, 2),
         ("Step", None, 4),
         ("Here", "deck:here", 9),
-        # The strip's screen, as a swipe along it changes it.
+        # The deck's screen, as a tap on its name along the strip changes it.
         ("Screen", None, 3),
     ]
     assert address_of(root, "deck:knobs") == "4326"
@@ -1528,11 +1528,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert address_of(root, "deck:step:10") == "43242"
     screen = next(c for c in deck.children if c.label == "Screen")
     assert [(c.label, c.action, c.cell) for c in screen.children] == [
-        ("Knobs", "deck:screen:knobs", 8),
+        ("Jog", "deck:screen:knobs", 8),
         ("Progress", "deck:screen:progress", 6),
         ("Status", "deck:screen:status", 2),
         ("Back", "deck:screen:previous", 4),
         ("Next", "deck:screen:next", 9),
+        # The three screens that came after them, in the cells left.
+        ("Bench", "deck:screen:bench", 3),
+        ("Home", "deck:screen:home", 1),
+        ("Bed", "deck:screen:bed", 7),
     ]
     assert address_of(root, "deck:screen:status") == "43232"
     for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):

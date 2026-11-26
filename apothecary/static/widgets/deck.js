@@ -28,8 +28,9 @@ import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
 // The controls the deck's answer greys (firmware/can.py deck_can), each by its route.
-// What the ring's Deck › Screen calls each screen of the strip (apothecary/menu.py SCREEN_CELLS).
-const SCREEN_LABEL = { knobs: "Knobs", progress: "Progress", status: "Status", previous: "Back", next: "Next" };
+// What the ring's Deck › Screen calls each screen (apothecary/menu.py SCREEN_CELLS); the
+// knobs' state names them as the chosen machine does (`screen_labels`), as the strip's tabs do.
+const SCREEN_LABEL = { bench: "Bench", knobs: "Jog", home: "Home", progress: "Progress", status: "Status", bed: "Bed", previous: "Back", next: "Next" };
 const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "inject"];
 
 const MARKUP = `
@@ -69,7 +70,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     $(".deck-keys").innerHTML = Array.from({ length: KEYS }, (_, i) =>
         `<button type="button" class="deck-key" data-key="${i}" data-can="inject" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
-    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" data-can="inject" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden draggable="false"><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
+    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" data-can="inject" title="The touch strip: tapped where it is pressed, which shows the screen named there; dragged a quarter of its length or more it is a swipe, which walks the screens"><img alt="" hidden draggable="false"><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
     $(".deck-knobs").innerHTML = Array.from({ length: KNOBS }, (_, i) =>
         `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" data-can="inject" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" data-can="inject" title="Knob ${i} pressed and released">●</button></div>`).join("");
 
@@ -135,11 +136,12 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (!on) { draw(`<div class="row">${run}<span class="meta">knobs off</span></div>`); return; }
         const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" data-can="knobs.machine" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it">${esc(m)}</button>`).join("");
         const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it">${mm}</button>`).join("");
-        const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck's strip shows its ${esc(s)} screen, as a swipe along it does; nothing is sent to a machine">${esc(SCREEN_LABEL[s] || s)}</button>`).join("");
+        const named = (s) => (knobs.screen_labels && knobs.screen_labels[s]) || SCREEN_LABEL[s] || s;
+        const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck shows its ${esc(named(s))} screen, as a tap on its name along the strip does; nothing is sent to a machine">${esc(named(s))}</button>`).join("");
         draw(`<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
             + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.held ? `held · ${knobs.held}` : knobs.said)}</div>`
             + `<div class="row"><span class="meta">strip</span>${screens}</div>`
-            + `<div class="meta deck-screen">strip screen: ${esc(SCREEN_LABEL[knobs.screen] || knobs.screen)} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a swipe along the strip walks ${knobs.screens.map((n) => esc(SCREEN_LABEL[n] || n)).join(", ")}</div>`);
+            + `<div class="meta deck-screen">screen: ${esc(named(knobs.screen))} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a tap on a name along the strip shows it, a knob pressed the next, a swipe walks ${knobs.screens.map((n) => esc(named(n))).join(", ")}</div>`);
         // Running, the one button stops them, and is answered as a stop.
         box.querySelector(".deck-run").dataset.can = "knobs.stop";
     }
@@ -152,11 +154,14 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         return Object.fromEntries(VERBS.map((verb) => [verb, { ok: false, kind: "offline", why }]));
     }
 
-    // The strip's two lines as the server drew them, as text under its picture.
+    // The strip's two lines as the server drew them, as text under its picture, and the
+    // line under its screen where it says more: what the layout said last, a refusal.
     function renderStripWords() {
         const sd = deck && drawn ? drawn.strip_drawn : null;
+        const foot = sd && sd.art && sd.art.footer && sd.art.footer !== sd.small ? sd.art.footer : null;
         $(".deck-strip-said").innerHTML = sd
             ? `<div class="deck-strip-text">${esc(sd.text)}</div>${sd.small ? `<div class="deck-strip-small">${esc(sd.small)}</div>` : ""}`
+                + (foot ? `<div class="deck-strip-small deck-strip-foot">${esc(foot)}</div>` : "")
             : "";
     }
 
@@ -169,7 +174,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}${drawn && drawn.mended ? ` · lost and found ${drawn.mended}×` : ""}`;
         const keys = (drawn && drawn.keys_drawn) || {};
         // An image is fetched again when what was drawn on it changes, whoever drew it.
-        const stamp = (d) => (d ? encodeURIComponent([d.text, d.small, d.colour].join("|")) : "");
+        const stamp = (d) => (d ? encodeURIComponent(d.v || [d.text, d.small, d.colour].join("|")) : "");
         const at = `${base}/firmware/decks/${encodeURIComponent(deck.id)}`;
         root.querySelectorAll(".deck-key").forEach((b, i) => picture(b, `${at}/keys/${i}/image?v=${stamp(keys[i])}`, !!keys[i]));
         picture($(".deck-strip-tap"), `${at}/strip/image?v=${stamp(drawn && drawn.strip_drawn)}`, !!(drawn && drawn.strip_drawn));

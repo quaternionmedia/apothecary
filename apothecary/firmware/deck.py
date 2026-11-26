@@ -7,8 +7,10 @@ and four knobs under that. This module is the one place apothecary speaks to it:
   the Stream Deck +'s product id ``0x0084`` (``python-elgato-streamdeck``'s
   ``ProductIDs.py``). Nothing is opened to make the list.
 - **Drawing** is Pillow: a label on a colour, 120 by 120 pixels a key and 800 by
-  100 the strip, as JPEG, the form the device takes. What was sent is kept
-  (``Deck.keys``, ``Deck.strip``), since a deck cannot be asked what it shows.
+  100 the strip, as JPEG, the form the device takes; or, given an ``art``, what
+  ``firmware/deck_draw.py`` draws from it -- a machine's tile, the strip's panels, a
+  graph, a bar, a bed's mesh. What was sent is kept (``Deck.keys``, ``Deck.strip``),
+  its words and its art with it, since a deck cannot be asked what it shows.
 - **Hearing** is the deck's reports read as ``DeckEvent``s: a key pressed or
   released, a knob turned by so many steps or pressed, the strip tapped, held or
   dragged. Each is kept in a short log with a sequence number and handed to the
@@ -31,6 +33,7 @@ controller started), never by listing; one open stays open until released.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import re
@@ -172,8 +175,25 @@ def render(
     return out.getvalue()
 
 
-def render_key(text: str, colour: Optional[str] = None, small: Optional[str] = None) -> bytes:
-    return render(KEY_SIZE, text, colour, small)
+def render_art(size, art: dict) -> bytes:
+    """What ``art`` says, drawn by ``firmware/deck_draw.py`` as a JPEG of ``size``: a
+    key's tile (``kind: "tile"``), else the strip's screen."""
+    from . import deck_draw
+
+    img = (
+        deck_draw.draw_tile(size, art)
+        if art.get("kind") == "tile"
+        else deck_draw.draw_strip(size, art)
+    )
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=90)
+    return out.getvalue()
+
+
+def render_key(
+    text: str, colour: Optional[str] = None, small: Optional[str] = None, art: Optional[dict] = None
+) -> bytes:
+    return render_art(KEY_SIZE, art) if art else render(KEY_SIZE, text, colour, small)
 
 
 def render_strip(
@@ -181,8 +201,14 @@ def render_strip(
     colour: Optional[str] = None,
     small: Optional[str] = None,
     bar: Optional[float] = None,
+    art: Optional[dict] = None,
 ) -> bytes:
-    return render(STRIP_SIZE, text, colour, small, bar)
+    return render_art(STRIP_SIZE, art) if art else render(STRIP_SIZE, text, colour, small, bar)
+
+
+def _digest(jpeg: bytes) -> str:
+    """A short name for an image: the Deck window fetches a picture again when it changes."""
+    return hashlib.sha1(jpeg).hexdigest()[:10]
 
 
 # --- links: the deck itself, simulated or real --------------------------------------
@@ -326,16 +352,30 @@ class Deck:
 
     # drawing
     def set_key(
-        self, index: int, text: str, colour: Optional[str] = None, small: Optional[str] = None
+        self,
+        index: int,
+        text: str,
+        colour: Optional[str] = None,
+        small: Optional[str] = None,
+        art: Optional[dict] = None,
     ) -> bytes:
+        """Key ``index`` drawn: ``text`` and ``small`` on ``colour``, or ``art`` drawn
+        (``firmware/deck_draw.py``), its words kept beside it either way."""
         if not 0 <= index < self.info.keys:
             raise ValueError(
                 f"no key {index}: a {self.info.model} has keys 0 to {self.info.keys - 1}"
             )
-        jpeg = render_key(text, colour, small)
+        jpeg = render_key(text, colour, small, art)
         self._send(lambda link: link.set_key(index, jpeg))
         with self._lock:
-            self.keys[index] = {"text": text, "small": small, "colour": colour, "jpeg": jpeg}
+            self.keys[index] = {
+                "text": text,
+                "small": small,
+                "colour": colour,
+                "art": art,
+                "v": _digest(jpeg),
+                "jpeg": jpeg,
+            }
         return jpeg
 
     def set_strip(
@@ -344,11 +384,20 @@ class Deck:
         colour: Optional[str] = None,
         small: Optional[str] = None,
         bar: Optional[float] = None,
+        art: Optional[dict] = None,
     ) -> bytes:
-        jpeg = render_strip(text, colour, small, bar)
+        jpeg = render_strip(text, colour, small, bar, art)
         self._send(lambda link: link.set_strip(jpeg))
         with self._lock:
-            self.strip = {"text": text, "small": small, "colour": colour, "bar": bar, "jpeg": jpeg}
+            self.strip = {
+                "text": text,
+                "small": small,
+                "colour": colour,
+                "bar": bar,
+                "art": art,
+                "v": _digest(jpeg),
+                "jpeg": jpeg,
+            }
         return jpeg
 
     def set_brightness(self, percent: int) -> None:

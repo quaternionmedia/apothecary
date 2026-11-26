@@ -660,7 +660,7 @@ site, a target no longer in it or nothing at its level, Site with no site regist
   Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
   slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
   Deck window, then the Stream Deck +'s knobs: On / off, Machine, Step, Here and Screen
-  -- Knobs, Progress, Status, Back and Next, the screen its strip shows --
+  -- Jog, Progress, Status, Back and Next, then Bench, Home and Bed, the screen the deck shows --
   [stream-deck.md](stream-deck.md)) and Docs (the documentation in a new tab, as the
   header's Docs); Family › Procedure (the window, GO and Start over), Members and
   Deliveries ([family.md](family.md)); and Airgap › Airgap (show it), Play, Sweep, To

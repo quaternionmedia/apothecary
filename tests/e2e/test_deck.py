@@ -242,8 +242,8 @@ def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
 def test_the_decks_knobs_wear_the_rings_addresses_and_its_words(page: Page, url: str):
     """The Deck window's knobs controls are the cells of Panels › Tools › Deck: the ring
     writes each one's address after its tip, as it does on a Machine's buttons, where the
-    window once spelled the path out; and the strip's screens are called as the ring calls
-    them."""
+    window once spelled the path out; and the deck's screens are called as the deck's own
+    tabs along its strip call them."""
     open_garage(page, url)
     select(page, "stream_deck")
     page.locator("#selected-body .deck-open").click()
@@ -256,8 +256,10 @@ def test_the_decks_knobs_wear_the_rings_addresses_and_its_words(page: Page, url:
     step = deck.locator(".deck-step").first
     expect(step).to_have_attribute("title", re.compile(r"cycles it · ⌗\d+$"), timeout=10000)
     assert "Panels" not in (step.get_attribute("title") or "")
-    expect(deck.locator(".deck-screen-to").first).to_have_text("Knobs")
-    expect(deck.locator(".deck-screen")).to_contain_text("Knobs (1/3)")
+    expect(deck.locator(".deck-screen-to")).to_have_text(
+        ["Bench", "Jog", "Home", "Print", "Temps", "Bed"], timeout=10000
+    )
+    expect(deck.locator(".deck-screen")).to_contain_text("Jog (2/6)")
 
 
 @pytest.mark.e2e
