@@ -300,13 +300,22 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     at = {"site": "garage", "printer": "printer_1"}
     kept = http.get("/slicer/first-layer", params={"part": "bed_shims", **at}).json()["offset"]
     assert kept["value"] == -0.05 and kept["kept"] is not None, kept
-    before = {s["file_id"] for s in http.get("/slicer/slices").json()}
+
+    # The scripted slicer writes no z_offset into its G-code, so this slice's bytes are the
+    # raft's and its file the one kept already (devices.save_print_file): its record, made
+    # again, is the newest of bed_shims's.
+    def shims_newest():
+        made = [s for s in http.get("/slicer/slices").json() if s["made"]["name"] == "bed_shims"]
+        return max(made, key=lambda s: s["at"])
+
+    before = shims_newest()["at"]
     machine.locator("#print-slice").click()
     expect(page.locator("#status")).to_contain_text(
         "bed_shims.gcode kept and chosen", timeout=60000
     )
-    newest = [s for s in http.get("/slicer/slices").json() if s["file_id"] not in before]
-    z = {s["name"]: s for s in newest[0]["settings"]}["z_offset"]
+    newest = shims_newest()
+    assert newest["at"] > before, (newest["at"], before)
+    z = {s["name"]: s for s in newest["settings"]}["z_offset"]
     assert (z["value"], z["origin"]) == ("-0.05", "measured"), z
     assert "first-layer-offset: garage's printer_1, kept" in z["source"], z
     stack = _maximised(page, "machine-print", "#print-offset-row")
