@@ -2336,7 +2336,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("Draw", "part:variant:draw:wider"),
         ("Rename", "part:variant:rename:wider"),
         ("Duplicate", "part:variant:duplicate:wider"),
-        ("History", "part:variant:history:wider"),
+        ("Saves", "part:variant:history:wider"),
         ("Compare", "part:variant:compare:wider"),
         ("Delete", "part:variant:delete:wider"),
     ]

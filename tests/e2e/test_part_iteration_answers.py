@@ -428,7 +428,7 @@ def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
     expect(_status(page)).to_contain_text("two is called three now", timeout=15000)
     expect(_row(page, "three")).to_be_visible()
 
-    _ring(page, PART, "Part", "Variants", "one", "History")
+    _ring(page, PART, "Part", "Variants", "one", "Saves")
     expect(_status(page)).to_contain_text("one's 1 save", timeout=15000)
     expect(_row(page, "one").locator(".history-row")).to_have_count(1)
 

@@ -186,7 +186,7 @@ function mergeSaid(v) {
  * was saved and with what numbers, whether HEAD holds it, what making it the
  * part's source takes and, folded, what it changes; and its ⋯, which unfolds what
  * can be done to it: renamed or duplicated under the name typed beside them, its
- * history (each earlier save restorable), compared with what is drawn, deleted to
+ * saves (each earlier one restorable), compared with what is drawn, deleted to
  * the trash. A part in a submodule's variant is an overlay of its upstream SCAD,
  * and says so. */
 export function variantChoices(list, { chosen = null } = {}) {
@@ -199,12 +199,12 @@ export function variantChoices(list, { chosen = null } = {}) {
         const changes = v.diff !== null && v.diff !== undefined
             ? `<details class="variant-diff"><summary>what it changes</summary><pre>${v.diff ? esc(v.diff) : "nothing: its SCAD is the part's own"}</pre></details>`
             : "";
-        const manage = `<button type="button" class="variant-more" title="Rename, duplicate, its history, compare with what is drawn, delete">⋯</button>`
+        const manage = `<button type="button" class="variant-more" title="Rename, duplicate, its saves, compare with what is drawn, delete">⋯</button>`
             + `<div class="variant-manage" hidden>`
             + `<input type="text" class="variant-to" maxlength="64" spellcheck="false" placeholder="a new name" aria-label="A new name for ${esc(v.name)}">`
             + `<button type="button" class="variant-rename" title="Rename ${esc(v.name)} to the name beside it">Rename</button>`
             + `<button type="button" class="variant-duplicate" title="A copy of ${esc(v.name)} under the name beside it">Duplicate</button>`
-            + `<button type="button" class="variant-history" title="Each save of ${esc(v.name)}, newest first; an earlier one can be restored">History</button>`
+            + `<button type="button" class="variant-history" title="Each save of ${esc(v.name)}, newest first; an earlier one can be restored">Saves</button>`
             + `<button type="button" class="variant-compare" title="${esc(v.name)} beside what is drawn: overlaid or side by side, with what differs">Compare</button>`
             + `<button type="button" class="variant-delete" title="Move ${esc(v.name)} to the trash: Deleted, below, restores it">Delete</button>`
             + `<div class="variant-history-list"></div></div>`;

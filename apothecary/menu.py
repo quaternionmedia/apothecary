@@ -730,7 +730,7 @@ VARIANT_VERBS = (
     ("draw", "Draw"),
     ("rename", "Rename"),
     ("duplicate", "Duplicate"),
-    ("history", "History"),
+    ("history", "Saves"),
     ("compare", "Compare"),
     ("delete", "Delete"),
 )
@@ -740,7 +740,7 @@ TRASH_VERBS = (("restore", "Restore"), ("forget", "Forget"))
 
 def _variants_group(names: Sequence[str], deleted: Sequence[str]) -> Optional[Option]:
     """Part › Variants: each saved variant a ring of what can be done to it -- Draw,
-    Rename, Duplicate, History, Compare, Delete (``part:variant:<verb>:<name>``) --
+    Rename, Duplicate, Saves, Compare, Delete (``part:variant:<verb>:<name>``) --
     and, when anything is deleted, Deleted last: the trash, each deleted variant a
     ring of Restore and Forget (``part:trash:<verb>:<name>``), and Empty
     (``part:trash:empty``), which empties it once confirmed. Nothing saved and

@@ -682,7 +682,7 @@ pieces it holds: a digit selects one), then what the piece is:
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
 Defaults, Apply, Revert, Save, View › SCAD editor, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
-Duplicate, History, Compare and Delete, and Variants › Deleted; after them,
+Duplicate, Saves, Compare and Delete, and Variants › Deleted; after them,
 where the ring has room, Presets › each preset and Adapter), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
@@ -1188,9 +1188,10 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   variant whose values are in a `.variant.json` and not its text has them
   written in when it is read -- **Rename** and
   **Duplicate**, under the name typed in its row's box (the cell puts the
-  cursor there; Enter does it), **History** (each save, newest first, an
+  cursor there; Enter does it), **Saves** (each save, newest first, an
   earlier one restored by its **Restore** as a new save, the history keeping
-  what came between), **Compare** and **Delete**. Choosing a variant's name in
+  what came between -- named apart from the History window, this tab's applies,
+  and Part › History, Undo and Redo), **Compare** and **Delete**. Choosing a variant's name in
   the list draws it, as Draw does.
 - What was made of the part is in the same list: under each variant, folded,
   the pieces printed or cut of it, each with when, on what machine, how its job
