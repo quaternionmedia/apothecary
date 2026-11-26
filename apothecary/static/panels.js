@@ -979,6 +979,18 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             return isWorldAlone();
         },
         isWorldAlone,
+        /* A window's stack maximised over the layout, the window in front in it, as its
+         * stack's own button and a double-click on its tab do; or put back. Whether it is
+         * maximised now. */
+        maximise(id, on = true) {
+            const ci = item(id);
+            const stack = ci?.parentItem;
+            if (!stack) return false;
+            if (on) stack.setActiveComponentItem(ci, false);
+            if (!!on !== !!stack.isMaximised) stack.toggleMaximise();
+            return !!stack.isMaximised;
+        },
+        isMaximised(id) { return !!item(id)?.parentItem?.isMaximised; },
         isOpen(id) { return !!item(id); },
         /* In the layout, its tab in front, and not behind the world alone. */
         isShown(id) {

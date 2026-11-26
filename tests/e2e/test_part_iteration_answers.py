@@ -290,7 +290,7 @@ def test_the_variants_window_alone_lists_the_saved_variants(
     page: Page, url, cube_as_it_was, variants_cleared
 ):
     """A part's saved variants are listed in its Variants window and nowhere else: the
-    SCAD editor holds the editor, its name box, Save and Fullscreen. Closed, the Variants
+    SCAD editor holds the editor, its name box and Save. Closed, the Variants
     window opens for a ring's cell and for a Save; a variant is renamed there from its
     ring, deleted from its ⋯ and restored from the Deleted fold."""
     errors = []
@@ -301,7 +301,7 @@ def test_the_variants_window_alone_lists_the_saved_variants(
     _edit(page)
     scad = windows.panel(page, "part-scad")
     expect(scad.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
-    for control in ("#scad-name", "#scad-save", "#scad-fullscreen"):
+    for control in ("#scad-name", "#scad-save"):
         expect(scad.locator(control)).to_be_visible()
     for listed in (".scad-saved", ".saved-row", ".saved-variant", ".variant-trash"):
         expect(scad.locator(listed)).to_have_count(0)

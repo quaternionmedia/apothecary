@@ -219,11 +219,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # chosen from the list in the part's Variants window.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
-    "scad-fullscreen": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts the SCAD editor over the whole page, or back",
-    ),
     "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
     "made-piece": (
         LIST,
@@ -1224,9 +1219,8 @@ RING_BACKED: Dict[str, str] = {
     "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
-    # the SCAD editor's Save and Fullscreen, and a saved variant chosen, are too
+    # the SCAD editor's Save, and a saved variant chosen, are too
     "scad-save": "part:save",
-    "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
     # a part's presets, Part › Presets' cells; ⇄ Adapter, Part › Adapter
     "part-preset": "part:preset",

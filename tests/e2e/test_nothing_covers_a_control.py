@@ -131,13 +131,15 @@ def test_nothing_covers_a_control_of_the_part_editor(
     maximise.click()
     expect(page.locator(".lm_maximised")).to_have_count(0)
 
-    # The SCAD editor (Part › View › SCAD editor), then the editor over the whole page.
+    # The SCAD editor (Part › View › SCAD editor), then its window maximised
+    # (Part › View › Fullscreen); Esc in it puts it back.
     _ring(page, "Part", "View", "SCAD editor")
     scad = ".panel[data-panel='part-scad']"
     expect(page.locator(scad)).to_be_visible()
     assert _nothing_covered(page, scad, f"the SCAD editor at {width}") > 3
-    page.locator("#scad-fullscreen").click()
-    expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
-    assert _nothing_covered(page, ".scad-editor.fullscreen", f"fullscreen at {width}") > 3
+    _ring(page, "Part", "View", "Fullscreen")
+    expect(page.locator(".lm_maximised", has=page.locator(scad))).to_be_visible()
+    assert _nothing_covered(page, scad, f"the SCAD editor maximised at {width}") > 3
+    page.locator(".scad-editor .cm-content").focus()
     page.keyboard.press("Escape")
-    expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)
+    expect(page.locator(".lm_maximised")).to_have_count(0)

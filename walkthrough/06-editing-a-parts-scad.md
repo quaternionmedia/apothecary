@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-A part's SCAD edited in the page: the part laid out by the Part view, its SCAD in a window beside the world, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor made fullscreen; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
+A part's SCAD edited in the page: the part laid out by the Part view, its SCAD in a window beside the world, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor's window maximised; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, with the OpenSCAD every test server runs and a temporary cache of variants. A variant is saved into a clone of the checkout the server was given, never the checkout's own refs, which the run checks are as it found them. It needs no network, and refuses one.
 
@@ -41,7 +41,7 @@ calibration_cube regenerated from its edited SCAD: an applied variant, not saved
 
 ## 4. Part › Save keeps it as a variant in git
 
-calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed in the part's Variants, its tab pressed to bring it in front of Parameters, with what it changes against the part's SCAD and that HEAD does not hold it. Fullscreen is the next step.
+calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed in the part's Variants, its tab pressed to bring it in front of Parameters, with what it changes against the part's SCAD and that HEAD does not hold it. Its window maximised is the next step.
 
 ![Part › Save keeps it as a variant in git](screenshots/06-04-part-save-keeps-it-as-a-variant-in-git.png)
 
@@ -49,11 +49,11 @@ calibration_cube's ring, Part › Save: the edited SCAD, its values in it, commi
 calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Its SCAD editor says how to make it the part's source. (⌗39)
 ```
 
-## 5. Fullscreen covers the page
+## 5. Fullscreen maximises the SCAD editor
 
-Its Fullscreen button: the editor over the whole page, the code as tall as it can be. Esc, the same button or Part › View › Fullscreen puts it back.
+Part › View › Fullscreen: the SCAD editor's window maximised over the windows, as its stack's own button or a double-click on its tab would, the code as tall as it can be. Esc in it, the window's restore or the same cell puts it back.
 
-![Fullscreen covers the page](screenshots/06-05-fullscreen-covers-the-page.png)
+![Fullscreen maximises the SCAD editor](screenshots/06-05-fullscreen-maximises-the-scad-editor.png)
 
 ## 6. Round two: a name, a change and Save
 

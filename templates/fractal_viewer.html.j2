@@ -647,9 +647,6 @@
         .panel[data-panel="part-scad"] .scad-slot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
-        .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
-                                  padding: 10px 14px; }
-        .scad-editor.fullscreen .scad-code { flex: 1; height: auto; min-height: 0; }
         .saved-row { padding: 4px 0; border-bottom: 1px solid #23272e; font-size: 11px; }
         .saved-row .saved-variant { background: none; border: 0; padding: 0; color: #4a9eff;
                                     cursor: pointer; font: inherit; font-weight: 600; }
@@ -2441,8 +2438,8 @@
                 // and out while the world has the keys; Backspace steps out.
                 window.addEventListener('keydown', (e) => this.onZoomKey(e));
                 // Escape: a menu folded, then a drag in progress put back, then the
-                // selection let go (the ring, a fullscreen editor and the picture chosen
-                // in Pictures take theirs first).
+                // selection let go (the ring, a maximised SCAD editor and the picture
+                // chosen in Pictures take theirs first).
                 window.addEventListener('keydown', (e) => this.onEscapeKey(e));
                 // Ctrl+S, while a part's editor is open, saves its variant from anywhere.
                 window.addEventListener('keydown', (e) => this.onSaveKey(e));
@@ -2818,7 +2815,7 @@
 
             // Escape, one rung at a time: the View menu folded; a drag in progress put back
             // where it began, nothing saved; then the selection let go. The ring, a
-            // fullscreen editor and the picture chosen in Pictures take theirs before it,
+            // maximised SCAD editor and the picture chosen in Pictures take theirs before it,
             // and a box typed in keeps its own.
             onEscapeKey(event) {
                 if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
@@ -7791,8 +7788,8 @@
             // is edited; a part built by Python, and a made piece, are read. Typing is checked once it stops
             // (evaluated, not rendered: POST .../draft/check) and rendered soon after
             // a check that passes, as Apply renders, the draft beside the part. Save
-            // keeps it, and the numbers staged, as a variant in git. Fullscreen covers
-            // the page (Esc or its button puts it back). Each part's editor is kept while
+            // keeps it, and the numbers staged, as a variant in git. Fullscreen maximises
+            // its window (Esc in it puts it back). Each part's editor is kept while
             // another is selected -- its text, its undo, where it was scrolled -- and
             // OpenSCAD's keys work inside it: F5 checks and draws, F6 and Ctrl+Enter
             // apply, Ctrl+S saves a variant.
@@ -7836,7 +7833,7 @@
                     const handlers = {
                         onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
-                        onFullscreen: () => this.toggleScadFullscreen(),
+                        onEscape: () => this.scadWindowBack(),
                         onCheck: () => this.checkAndDraw(target),
                         onApply: () => this.applyKey(target),
                         onName: () => { scad.replacing = null; },
@@ -7876,11 +7873,9 @@
                 }
             }
 
-            // The editor let go of: back in Selected and not over the page, and out of the
-            // page, kept for when its part is edited again.
+            // The editor let go of: out of the page, kept for when its part is edited again.
             releaseScadEditor() {
                 if (!this.scadEditor) return;
-                if (this.scadEditor.isFullscreen()) this.scadEditor.fullscreen(false);
                 this.scadEditor.root.remove();
                 this.scadEditor = null;
                 this.scadTarget = null;
@@ -8263,17 +8258,29 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // Fullscreen: the editor over the whole page; again, or Esc, puts it back.
+            // Fullscreen: the SCAD editor's window maximised over the layout, as its stack's
+            // own button and a double-click on its tab do; again, or Esc in it, puts it back.
             toggleScadFullscreen() {
                 const editor = this.scadEditor;
                 if (!editor) return null;
-                const on = !editor.isFullscreen();
-                editor.fullscreen(on);
+                const on = !this.panels.isMaximised('part-scad');
+                if (on) this.systems.part.showSection('scad');
+                this.panels.maximise('part-scad', on);
+                editor.measure();
+                if (on) editor.focus();
                 return on;
             }
 
-            // The ring's Part › Save, Variants, Float and Fullscreen: the part's editor
-            // opened, its SCAD loaded, then what its buttons do.
+            // Esc in the SCAD editor: its window put back, when it is maximised. Whether it was.
+            scadWindowBack() {
+                if (!this.panels.isMaximised('part-scad')) return false;
+                this.panels.maximise('part-scad', false);
+                this.scadEditor?.measure();
+                return true;
+            }
+
+            // The ring's Part › Save, Variants and View › Fullscreen: the part's editor
+            // opened, its SCAD loaded, then what its buttons do, or its window maximised.
             async scadOn(path) {
                 const target = await this.editorOn(path);
                 if (!target || !target.scadUrl) return null;
@@ -8299,10 +8306,8 @@
             async fullscreenScadOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD editor` };
-                // Over the page from its window, which is open for it.
-                if (!this.scadEditor?.isFullscreen()) this.systems.part.showSection('scad');
                 const on = this.toggleScadFullscreen();
-                return { ok: true, said: on ? `${target.label}'s SCAD editor covers the page; Esc, its button or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
+                return { ok: true, said: on ? `${target.label}'s SCAD editor maximised over the windows; Esc in it, its window's restore or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
             }
 
             // Apply: the staged set goes to the target -- a part's STL rendered
@@ -11691,7 +11696,7 @@
         const PART_VERBS = [
             ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
-            ['#scad-save', 'part:save'], ['#scad-fullscreen', 'part:fullscreen'], ['#join-btn', 'part:adapter'],
+            ['#scad-save', 'part:save'], ['#join-btn', 'part:adapter'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
         const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
@@ -12130,7 +12135,7 @@
                     viewer.revertStagedOn(path).then(answered);
                     return;
                 }
-                // Part › Save, Variants, Float and Fullscreen: what the SCAD editor's own do.
+                // Part › Save and Variants: what the SCAD editor's own do; Fullscreen, its window maximised.
                 if (action === 'part:save') {
                     viewer.saveScadOn(path).then(answered);
                     return;

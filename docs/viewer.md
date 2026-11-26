@@ -242,7 +242,7 @@ Page Down scroll, as the browser does.
 **Escape** does one thing a press, the first that applies: folds ⚙ View; puts a
 drag of the move arrows, or of a camera's turn ring or tilt arc, back where it
 began, nothing saved; then lets go of the selection. The ring, the SCAD editor's
-fullscreen and the picture chosen in Pictures take their Escape first, and a
+window maximised and the picture chosen in Pictures take their Escape first, and a
 box being typed in keeps its own.
 
 **Walls are drawn faded**, whatever is in front of them: anything whose
@@ -791,7 +791,7 @@ which the page, the ring and the tests all read.
 
 | System | Main window | Sections |
 |---|---|---|
-| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), SCAD (beside the world) |
+| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), the SCAD editor (beside the world, maximised by Part › View › Fullscreen) |
 | Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Status, Cut, Table map (a router's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 | Family | The Procedure: the site's steps and GO | Members (each member, how it is reached, its door), Deliveries (the hub's audit, newest first) -- tabs beside the Procedure ([family.md](family.md#a-procedure)) |
@@ -1206,7 +1206,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   one's measured size, every number that differs and what the SCAD changes.
   Close draws the part as it was.
 - **Part › View › SCAD editor** opens the SCAD editor, beside the world; **Part ›
-  View › Fullscreen** gives the editor the page (Escape gives it back).
+  View › Fullscreen** maximises its window over the windows, as its stack's own
+  maximise and a double-click on its tab do, nothing laid over the page (Escape in
+  it, or the cell again, gives the windows back).
 
 A part built by Python geometry shows the SCAD its geometry generates, read
 only, and has no Save; a made piece shows its few lines, read only; a camera
@@ -1266,7 +1268,7 @@ defaults, and a change holds until the page is left.
 | `o` | Makes the windows see-through, the world showing through them, or solid again (Settings' See-through windows) |
 | `P` | Takes a picture, with a camera selected |
 | `?` | Shows or hides the hint bar |
-| Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's fullscreen it leaves it, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |
+| Escape | One thing a press: folds ⚙ View; puts a drag back where it began, nothing saved; lets go of the selection. In the ring it closes the ring, in the SCAD editor's window maximised it puts the windows back, in Pictures it lets go of the picture chosen, in a Settings field it lets go of the field |
 | `f` | Frames the selected piece, as drawn, Selected and its editor kept open (Part › View › Fit); with nothing selected, the level |
 | Shift+F | Frames the level, whatever is selected (View › Fit) |
 | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undoes and redoes the part editor's staged numbers (Part › History) |

@@ -13,7 +13,9 @@
  * The editor does not talk to the server. The page does: it is told when the
  * text changes (onChange), and what to do for each of the bar's buttons. The
  * bar holds the check's words (what OpenSCAD said, and what is next), the name a
- * Save keeps the variant under, Save and Fullscreen. A part whose SCAD is not its
+ * Save keeps the variant under, and Save. Made big, the editor is its window
+ * maximised, the page's (panels.js): Escape in it asks the page to put the window
+ * back (onEscape, true when it did). A part whose SCAD is not its
  * own source (its geometry is Python, or a made piece's few lines) is read-only,
  * and has no name and no Save. The part's variants saved in git are listed in its
  * Variants window, the page's, drawn by the markup functions below.
@@ -36,11 +38,11 @@
  *
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
  *   options: { text, readOnly, editable, name, onChange(text, { staged }), onSave(),
- *              onFullscreen(), onCheck(), onApply(), onName(name), shownAs }
+ *              onEscape(), onCheck(), onApply(), onName(name), shownAs }
  *   editor:  { root, text(), setText(text), writeValues(values, { join }),
  *              replaceText(text), undo(), redo(), canUndo(), canRedo(),
  *              mark(messages), say(words, kind), name(), setName(name),
- *              suggest(name), fullscreen(on), isFullscreen(), focus(),
+ *              suggest(name), focus(),
  *              measure(), rebind(callbacks), destroy() }
  * variantChoices(list, { chosen }), historyRows(name, commits) and trashRows(list)
  * are the markup of a part's saved variants, a variant's saves and its deleted
@@ -58,7 +60,6 @@ const MARKUP = `
         <span class="scad-spacer"></span>
         <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -. Empty, the name greyed in it; a name already saved is asked about first">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
         <button type="button" id="scad-save" title="Save: this SCAD, its values in it, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Ctrl+S in the editor; Part › Save)">Save</button>
-        <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › View › Fullscreen)">Fullscreen</button>
     </div>
     <div class="scad-code"></div>
 </div>`;
@@ -283,25 +284,22 @@ export async function mountScadEditor(slot, options = {}) {
     const { text = "", readOnly = false, editable = !readOnly, name = "", shownAs = null } = options;
     // What the page is told, through one object it can point elsewhere (rebind).
     const on = {};
-    for (const key of ["onChange", "onSave", "onFullscreen", "onCheck", "onApply", "onName"]) on[key] = options[key];
+    for (const key of ["onChange", "onSave", "onEscape", "onCheck", "onApply", "onName"]) on[key] = options[key];
     slot.innerHTML = MARKUP;
     const root = slot.querySelector(".scad-editor");
     const said = root.querySelector(".scad-said");
     const nameBox = root.querySelector("#scad-name");
     const saveBtn = root.querySelector("#scad-save");
-    const fullBtn = root.querySelector("#scad-fullscreen");
     nameBox.value = name;
     for (const el of [nameBox.parentElement, saveBtn]) el.hidden = !editable;
     saveBtn.onclick = () => on.onSave && on.onSave();
-    fullBtn.onclick = () => on.onFullscreen && on.onFullscreen();
     nameBox.oninput = () => on.onName && on.onName(nameBox.value);
-    // Escape, with the editor over the page, puts it back: the editor holds the
-    // focus while it is there (its root takes it when nothing in it does).
+    // Escape, with the editor's window maximised, puts the window back: the page
+    // says whether it was.
     root.onkeydown = (ev) => {
-        if (ev.key === "Escape" && root.classList.contains("fullscreen")) {
+        if (ev.key === "Escape" && on.onEscape && on.onEscape()) {
             ev.preventDefault();
             ev.stopPropagation();
-            if (on.onFullscreen) on.onFullscreen();
         }
     };
 
@@ -419,13 +417,6 @@ export async function mountScadEditor(slot, options = {}) {
         name: () => nameBox.value.trim(),
         setName(next) { nameBox.value = next; },
         suggest(next) { nameBox.placeholder = next || ""; },
-        fullscreen(on) {
-            root.classList.toggle("fullscreen", on);
-            fullBtn.textContent = on ? "Exit fullscreen" : "Fullscreen";
-            if (on) root.focus();
-            editorView.requestMeasure();
-        },
-        isFullscreen: () => root.classList.contains("fullscreen"),
         focus() { editorView.focus(); },
         measure() { editorView.requestMeasure(); },
         rebind(callbacks) { Object.assign(on, callbacks); },

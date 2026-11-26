@@ -4,8 +4,8 @@ Parameters, its SCAD editor beside the world -- its SCAD edited there, an assert
 fails checked once typing stops and marked on its line with nothing rendered, then a
 real change rendered soon after its check passes and drawn as an applied variant, taller
 than its envelope and said so; saved from the ring (Part › Save) as a variant in git and
-listed in the part's Variants window, with what it changes; the editor made fullscreen
-(its own button, then Esc). Round two in the SCAD editor: a name typed, another change,
+listed in the part's Variants window, with what it changes; the editor's window
+maximised (Part › View › Fullscreen, then Esc). Round two in the SCAD editor: a name typed, another change,
 saved with Ctrl+S; then the first variant drawn from the ring (Part › Variants › its
 name › Draw). Round three: the name box letting go of the variant once the
 text moves on and taking it back on Ctrl+Z, Save asking before it replaces a variant, F5
@@ -18,7 +18,7 @@ The server is this module's own, with this machine's OpenSCAD and a variant cach
 of its own; it saves variants into a clone of the checkout (tests/e2e/conftest.py),
 never this checkout's refs, which the run checks are as they were. Opening the part
 draws its own STL, which a fresh clone does not have, so ``parts/calibration_cube/``
-is put back as it was found. Pictures of the editor in its window and fullscreen at
+is put back as it was found. Pictures of the editor in its window and maximised at
 both widths the page is laid out for, each checked to overlap nothing it must not, are
 written under pytest's temp folder (``scad-loop-shots``).
 """
@@ -80,8 +80,8 @@ OPACITY_THROUGH = """(selector) => {
 }"""
 
 
-# The boxes the editor is checked against, in its window or fullscreen, in the page's
-# pixels: its window's and the world's.
+# The boxes the editor is checked against, in its window or maximised, in the page's
+# pixels: its window's, the stack maximised, the windows' layout and the world's.
 LAYOUT = """() => {
     const box = (el) => {
         if (!el || el.hidden) return null;
@@ -94,7 +94,9 @@ LAYOUT = """() => {
     return {
         window: box(document.querySelector(".panel[data-panel='part-scad']")),
         editor: box(document.querySelector('.scad-editor')),
-        buttons: ['#scad-save', '#scad-fullscreen', '#scad-name'].map((s) => box(document.querySelector(s))),
+        maximised: box(document.querySelector('.lm_maximised')),
+        layout: box(document.querySelector('.lm_goldenlayout')),
+        buttons: ['#scad-save', '#scad-name'].map((s) => box(document.querySelector(s))),
         world: box(v.canvas),
         viewport: { r: innerWidth, b: innerHeight },
     };
@@ -267,7 +269,7 @@ def _saved(page: Page, name: str) -> None:
 
 
 def _laid_out(page: Page, width: int, shots, how: str) -> None:
-    """At ``width``, the editor ``how`` it stands -- in its window, or fullscreen --
+    """At ``width``, the editor ``how`` it stands -- in its window, or maximised --
     overlaps nothing it must not, its buttons in view; and a picture of it."""
     layout = page.evaluate(LAYOUT)
     view = {"l": 0, "t": 0, **layout["viewport"]}
@@ -280,7 +282,12 @@ def _laid_out(page: Page, width: int, shots, how: str) -> None:
         for button in layout["buttons"]:
             assert _inside(button, window), (width, button, window)
     else:
-        assert _inside(view, layout["editor"], slack=1), (width, layout["editor"])
+        # Its stack maximised over the whole of the windows' layout, the editor in it.
+        assert layout["maximised"], (width, layout)
+        assert _inside(layout["layout"], layout["maximised"], slack=1), (width, layout)
+        assert _inside(layout["editor"], layout["maximised"]), (width, layout)
+        for button in layout["buttons"]:
+            assert _inside(button, layout["maximised"]), (width, button, layout["maximised"])
     page.screenshot(path=str(shots / f"{how}-{width}.png"))
 
 
@@ -314,7 +321,7 @@ def test_editing_a_parts_scad_twice_round(
             "in a window beside the world, a failing line checked once typing stops and "
             "marked where it is, a change rendered soon after its check passes and drawn as "
             "an applied variant, kept as a variant in git and listed with what it changes, "
-            "the editor made fullscreen; then round again, and the first variant drawn "
+            "the editor's window maximised; then round again, and the first variant drawn "
             "once more; then the name a save keeps, "
             "OpenSCAD's own keys, a draft kept over a reload "
             "and the editor's undo kept while another part is edited. Every step is the "
@@ -439,7 +446,7 @@ def test_editing_a_parts_scad_twice_round(
         "Nothing in the checkout changes; a merge would bring it, its values with it, and "
         "merging is yours to do. It is listed in the part's Variants, its tab pressed to "
         "bring it in front of Parameters, with what it changes against the part's SCAD and "
-        "that HEAD does not hold it. Fullscreen is the next step.",
+        "that HEAD does not hold it. Its window maximised is the next step.",
         shown=_said_on_the_page(page),
         blank=BLANK,
     )
@@ -447,25 +454,30 @@ def test_editing_a_parts_scad_twice_round(
     # In its window, at both widths, clear of the world and nothing overlapping.
     _at_both_widths(page, shots, "window")
 
-    # Fullscreen, from its own button; Esc puts it back.
-    page.locator("#scad-fullscreen").click()
-    expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
-    # It covers the page whole, and nothing of the page shows through it.
-    assert page.evaluate(OPACITY_THROUGH, ".scad-editor.fullscreen") == 1
+    # Its window maximised, from the ring (Part › View › Fullscreen); Esc puts it back.
+    scad = ".panel[data-panel='part-scad']"
+    _ring(page, "Part", "View", "Fullscreen")
+    expect(page.locator(".lm_maximised", has=page.locator(scad))).to_be_visible()
+    # It covers the windows whole, and nothing of the page shows through it.
+    assert page.evaluate(OPACITY_THROUGH, ".lm_maximised .scad-editor") == 1
     for width, height in WIDTHS:
         page.set_viewport_size({"width": width, "height": height})
         settled(page)
-        _laid_out(page, width, shots, "fullscreen")
+        page.evaluate("() => window.fractalViewer.scadEditor.measure()")
+        settled(page)
+        _laid_out(page, width, shots, "maximised")
     page.set_viewport_size({"width": WIDTHS[0][0], "height": WIDTHS[0][1]})
     settled(page)
     story.shows(
-        "Fullscreen covers the page",
-        "Its Fullscreen button: the editor over the whole page, the code as tall as it "
-        "can be. Esc, the same button or Part › View › Fullscreen puts it back.",
+        "Fullscreen maximises the SCAD editor",
+        "Part › View › Fullscreen: the SCAD editor's window maximised over the windows, as "
+        "its stack's own button or a double-click on its tab would, the code as tall as it "
+        "can be. Esc in it, the window's restore or the same cell puts it back.",
         blank=BLANK,
     )
+    _into_code(page)
     page.keyboard.press("Escape")
-    expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)
+    expect(page.locator(".lm_maximised")).to_have_count(0)
     expect(windows.panel(page, "part-scad")).to_be_visible()
 
     # Round two, in the SCAD editor: a name typed, a bigger top, Ctrl+S in the editor.
