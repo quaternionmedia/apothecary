@@ -810,7 +810,7 @@ which the page, the ring and the tests all read.
 | Part view | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
 | Machine view | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap view | The Airgap and each of its sections in a window, the world among them |
-| Family view | The world; the Procedure tall beside it, the Workspace behind it; Members, Deliveries, Jobs with Site behind it, and Selected in the column: *Run a site*'s windows ([below](#journeys)) |
+| Family view | The world; the Procedure tall beside it, alone, so a Machine a step's door opens does not stand over it; Members, Deliveries, Jobs with the Workspace and Site behind it, and Selected in the column: *Run a site*'s windows ([below](#journeys)) |
 
 A view needs its main window. The Machine view opens the Machine
 of the machine selected, or else stepped into, when none is open; with none to open

@@ -617,8 +617,7 @@ HANDS = Journey(
 # family and fired through the hub on GO; the members, each with its door; the hub's
 # audit of what it delivered; then the Workspace, the site as its evidence has it, and
 # one machine's hour of it. The Family system's own view, as Design a part's is the
-# Part's: the Workspace behind the Procedure in the tall stack beside the world, and
-# Site behind Jobs.
+# Part's: the Procedure tall beside the world, and the Workspace and Site behind Jobs.
 RUN = Journey(
     id="run",
     title="Run",
