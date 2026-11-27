@@ -1043,7 +1043,8 @@ def _panels(rig: bool = False) -> Option:
         # The layout itself: the world alone (its window maximised) and every window
         # back, as the tilde key does; the page's own layout again, whatever was dragged,
         # split or closed; each view; and the Tour, after the views, so no cell before it
-        # moves: its box over the page and its verbs.
+        # moves: its box over the page and its verbs; then the Tour docked, a window
+        # under the world, or floating over the page again, its box's ⇲ and ⇱.
         children=[
             Option(id="panel:world", label="World alone", action="panel:world:toggle"),
             Option(id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"),
@@ -1057,6 +1058,7 @@ def _panels(rig: bool = False) -> Option:
                 for vid, label in VIEWS
             ),
             _tour(),
+            Option(id="tour:dock", label="Dock tour", action="tour:dock"),
         ],
     )
     # Tools: the Bench and its verbs, Settings, the Deck with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of

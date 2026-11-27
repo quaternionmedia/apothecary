@@ -1,5 +1,5 @@
 /* The tour (widgets/tour_popover.js): the journeys' stages in a box above the windows,
- * which no view or journey lays out or covers. */
+ * which no view or journey lays out or covers; docked, a window of the layout. */
 .tour-pop { position: fixed; inset: auto; margin: 0; width: 22rem; max-width: calc(100vw - 1rem); padding: 0; border: 1px solid #4a9eff; border-radius: 8px; background: #16191d; color: #ddd; font-size: 13px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
 .tour-pop-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; background: #1d2732; border-radius: 8px 8px 0 0; cursor: grab; user-select: none; touch-action: none; }
 .tour-pop-head:active { cursor: grabbing; }
@@ -8,8 +8,8 @@
 .tour-pop button { cursor: pointer; padding: 0.2rem 0.5rem; font-size: 12px; background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; }
 .tour-pop button:hover { background: #484848; }
 .tour-pop-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.4rem 0.5rem 0.5rem; }
-.tour-pop.folded .tour-pop-body { display: none; }
-.tour-pop.folded .tour-pop-head { border-radius: 8px; }
+.tour-pop.folded:not(.docked) .tour-pop-body { display: none; }
+.tour-pop.folded:not(.docked) .tour-pop-head { border-radius: 8px; }
 .tour-pop-stages { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0; padding: 0; list-style: none; }
 .tour-pop-stages button { padding: 0.15rem 0.4rem; }
 .tour-pop-stages button[aria-current="step"] { background: #2e6b4a; color: #fff; border-color: #2e6b4a; }
@@ -40,3 +40,20 @@
 .tour-pop a { color: #4a9eff; }
 .tour-pop [hidden] { display: none; }
 .tour-pop-tries li.whole { list-style: square; }
+/* Docked (its ⇲), the box is the body of a window under the world: no frame of its own,
+ * as wide as the window; wide enough, the journey and its stages on the left and the
+ * stage's words and buttons on the right. */
+.tour-pop.docked { position: static; width: auto; max-width: none; box-sizing: border-box; border: 0; border-radius: 0; box-shadow: none; container-type: inline-size; }
+.tour-pop.docked .tour-pop-head { border-radius: 0; cursor: default; }
+.panel[data-panel="tour"] .panel-body-slot { padding: 0; }
+@container (min-width: 40rem) {
+    .tour-pop.docked .tour-pop-body { display: grid; grid-template-columns: minmax(14rem, 2fr) 3fr; grid-auto-flow: row dense; align-content: start; gap: 0.35rem 0.9rem; }
+    .tour-pop.docked .tour-pop-journeys { grid-column: 1; grid-row: 1; }
+    .tour-pop.docked .tour-pop-stages { grid-column: 1; grid-row: 2 / span 5; align-content: flex-start; }
+    .tour-pop.docked .tour-pop-body > :not(.tour-pop-journeys, .tour-pop-stages) { grid-column: 2; }
+    /* A window under the world is low: the stage's words, then its buttons, then the rest. */
+    .tour-pop.docked .tour-pop-row { order: 1; }
+    .tour-pop.docked .tour-pop-feedback { order: 2; }
+    .tour-pop.docked .tour-pop-who { order: 3; }
+    .tour-pop.docked .tour-pop-more { order: 4; }
+}

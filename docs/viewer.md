@@ -662,8 +662,9 @@ site, a target no longer in it or nothing at its level, Site with no site regist
   Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)) and
   Bed (Runs, Differences, Fixes and History, then Keep mount and Make these, on the
   printer whose Machine is open, [bed-shims.md](bed-shims.md#in-the-page)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Tour (the
-  [tour](tour.md#the-ring)'s box, then its buttons);
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view, Tour (the
+  [tour](tour.md#the-ring)'s box, then its buttons) and Dock tour (the box docked
+  under the world, or floating again);
   Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
   slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
   Deck window, then the Stream Deck +'s knobs: On / off, Machine, Step, Here and Screen
@@ -777,7 +778,10 @@ world (Layers, Loops, Models, Marks, the Deck, the armed pad) shares one stack
 there with the others: the first takes its room from the world's, never leaving
 the world too narrow to see a machine in, and the next are tabs of it; where the
 world has no room to give, it is a tab next to the world instead, never over
-the Machine. The Machine's window is never laid out lower than its head and its
+the Machine. The Tour docked is a window under the world, in the world's own
+column, its room from the world's height; the windows beside the world stand
+beside that column, and the Tour closed or floated, the world is alone in its row
+again. The Machine's window is never laid out lower than its head and its
 state, and its head -- the latch and ⏹ E-STOP -- stays at its top as it scrolls.
 A window with nothing to show
 gives its room away: its tab is dimmed, a window with something to show in its
@@ -974,9 +978,11 @@ it: one opened from ⊞ Windows -- Models, Marks, the Workspace, the Deck, Loops
 open again after a reload, where it was, and the world as wide as it was
 ([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 
-The **Tour** (Tour in the header, or Panels › Windows › Tour) is not a window: it is
-a box over the page that takes the journeys a stage at a time, takes the page to
-each stage, and keeps a person's word on it ([the tour](tour.md)).
+The **Tour** (Tour in the header, or Panels › Windows › Tour) is a box over the page
+that takes the journeys a stage at a time, takes the page to each stage, and keeps a
+person's word on it ([the tour](tour.md)). Docked (its ⇲, or Panels › Windows › Dock
+tour), it is a window under the world, made for the moment: a view keeps it there, and
+the remembered layout leaves it out ([docked](tour.md#docked)).
 
 ## The part editor
 

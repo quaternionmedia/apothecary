@@ -1698,12 +1698,13 @@
                 // Its windows: the page's own, laid out as the page lays them (PAGE_LAYOUT),
                 // those of its own it leaves closed until a person opens one, and every
                 // focused system's (apothecary/systems.py); a board's Machine and its
-                // sections, the armed pad and a rig's Lighting are made for the moment.
+                // sections, the armed pad, a rig's Lighting and the Tour docked are made
+                // for the moment.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
                     known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'bed-runs', 'bed-differences', 'bed-fixes', 'bed-history', 'motion', 'badge', ...knownWindows(SYSTEMS)],
-                    transient: ['control', 'lighting', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
+                    transient: ['control', 'lighting', 'tour', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
@@ -2301,9 +2302,23 @@
                 // in a box over the page, opened from the header or the ring. It is where a
                 // journey is chosen and stepped, so the box closed is the journey left: one
                 // closed while the page was on its way to a stage leaves it on arriving.
+                // Docked, the box is the Tour window, under the world (panels.js's
+                // "under"), made for the moment: a view laid out keeps it open there.
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
+                    dock: {
+                        show: (box) => {
+                            this.panels.register('tour', {
+                                title: 'Tour', body: box, home: 'under',
+                                hint: 'The tour, docked under the world: its ⇱ floats it over the page again, its ✕ closes it and leaves its journey',
+                                onClose: () => this.tourPop.windowClosed(),
+                            });
+                            this.panels.open('tour');
+                        },
+                        hide: () => this.panels.unregister('tour'),
+                        isShown: () => this.panels.isOpen('tour'),
+                    },
                     // What a stage framed is framed again once the box shows what the
                     // stage said, which can make it taller over the world.
                     settled: () => {
@@ -2722,11 +2737,11 @@
             }
             // The room of the world's window the Tour box leaves: the largest of the room
             // beside it and above or below it, as fractions of the window from its top
-            // left ({ x, y, w, h }); the whole window where the box is closed or lies
-            // elsewhere.
+            // left ({ x, y, w, h }); the whole window where the box is closed, docked
+            // (a window of its own), or lies elsewhere.
             freeOfTheBox() {
                 const whole = { x: 0, y: 0, w: 1, h: 1 }, v = this.viewRect();
-                const el = this.tourPop?.isOpen() ? document.getElementById('tour-pop') : null;
+                const el = this.tourPop?.isOpen() && !this.tourPop.isDocked() ? document.getElementById('tour-pop') : null;
                 if (!el || !v.width || !v.height) return whole;
                 const box = el.getBoundingClientRect(), gap = 8;
                 const l = Math.max(v.left, box.left), r = Math.min(v.left + v.width, box.right);
@@ -9806,7 +9821,7 @@
                 if (entered) {
                     await new Promise((go) => requestAnimationFrame(() => requestAnimationFrame(go)));
                     this.onResize();
-                    if (this.tourPop?.isOpen() && !this.tourPop.isFolded()) {
+                    if (this.tourPop?.isOpen() && !this.tourPop.isDocked() && !this.tourPop.isFolded()) {
                         const free = this.freeOfTheBox();
                         if (free.w * free.h < 0.5) { this.tourPop.fold(true); did.push('the box folded to its head, the world beside it being narrow: its title unfolds it'); }
                     }
@@ -12457,7 +12472,7 @@
         // The header's Tour and the tour box's controls, by the cell each one is
         // (Panels › Windows › Tour, widgets/tour_popover.js).
         const TOUR_VERBS = [
-            ['#tour-pop-open', 'tour:toggle'], ['.tour-pop-close', 'tour:toggle'], ['.tour-pop-back', 'tour:back'],
+            ['#tour-pop-open', 'tour:toggle'], ['.tour-pop-close', 'tour:toggle'], ['.tour-pop-dock', 'tour:dock'], ['.tour-pop-back', 'tour:back'],
             ['.tour-pop-works', 'tour:works'], ['.tour-pop-off', 'tour:off'], ['.tour-pop-next', 'tour:next'],
             ['.tour-pop-page', 'tour:page'], ['.tour-pop-put', 'tour:put'], ['.tour-pop-by', 'tour:by'],
         ];

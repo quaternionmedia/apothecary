@@ -5,7 +5,8 @@ The page is served from ``apothecary/static`` by the browser's own routing: no s
 no world, no site, no three.js -- GoldenLayout, the two modules and windows made up for
 each test. Every behaviour the viewer builds on is held here, case by case:
 
-- where a window opens when it is not in the layout (its home);
+- where a window opens when it is not in the layout (its home), and one docked under
+  the world;
 - views: what they lay out, what they need, what they leave;
 - what a browser remembers of the layout, and what it forgets;
 - a window's life: its body filled when first shown, told when shown again and
@@ -491,6 +492,94 @@ def test_with_the_world_alone_on_the_root_a_window_opens_beside_it(wm: Page, rel
     _js(wm, "() => P.open('sel')")
     assert _where(wm, "sel")["parent"] in ("row", "column")
     assert _where(wm, "world")["parent"] == "row"
+
+
+
+# --- a window docked under the world ---------------------------------------------------
+
+
+def _world_column(page: Page) -> dict:
+    """The world's stack's parent, its kind and its size in its own parent, and the
+    world's own size in it."""
+    return _js(
+        page,
+        """() => { const ws = H.item('world').parentItem, col = ws.parent;
+            return { kind: col.type, size: col.size, world: ws.size,
+                     at: col.parent?.contentItems?.indexOf(col) ?? null }; }""",
+    )
+
+
+def _under_the_world_with_room_from_its_height(page):
+    _js(page, "() => { H.reg('x', { home: 'under', open: false }); P.open('x'); }")
+    x, world = _where(page, "x"), _world_column(page)
+    # A stack of its own right under the world, in the world's own column, which stands
+    # in the row as wide as the world did; the world's height given UNDER per cent.
+    assert x["parent"] == "column" and x["stack"] == ["x"] and x["front"] == "x"
+    assert x["children"] == [["world"], ["x"]] and x["at"] == 1
+    assert world["kind"] == "column" and world["size"] == pytest.approx(70, abs=0.5)
+    assert world["world"] == pytest.approx(74, abs=0.5)
+    # Closed, the world is alone in its row again, as wide as it was.
+    _js(page, "() => P.close('x')")
+    page.wait_for_function("() => H.where('world').parent === 'row'")
+    assert _js(page, "() => H.size('world')") == pytest.approx(70, abs=0.5)
+
+
+def _a_second_window_under_the_world_is_a_tab_of_the_first(page):
+    _js(page, "() => { for (const id of ['x', 'y']) H.reg(id, { home: 'under', open: false }); }")
+    _js(page, "() => { P.open('x'); P.open('y'); }")
+    y = _where(page, "y")
+    assert y["stack"] == ["x", "y"] and y["front"] == "y" and y["children"] == [["world"], ["x", "y"]]
+
+
+def _beside_the_world_beside_what_is_docked_under_it(page):
+    # A window beside the world stands beside the world's column, not in it, its room
+    # from the column's; closed, the column has it back.
+    page.set_viewport_size({"width": 2000, "height": 800})
+    _mount(page)
+    _js(page, "() => { H.reg('x', { home: 'under', open: false }); P.open('x'); }")
+    _js(page, "() => { H.reg('y', { home: 'beside', open: false }); P.open('y'); }")
+    y, world = _where(page, "y"), _world_column(page)
+    assert y["parent"] == "row" and y["at"] == world["at"] + 1
+    assert world["kind"] == "column" and world["size"] == pytest.approx(42, abs=0.5)
+    assert _where(page, "x")["children"] == [["world"], ["x"]]
+    _js(page, "() => P.close('y')")
+    page.wait_for_function("() => Math.abs(H.item('world').parentItem.parent.size - 70) < 0.5")
+
+
+def _a_column_window_never_opens_under_the_world(page):
+    # Every window of the column closed, a window whose home is the column opens beside
+    # the world and what is docked under it, not in the world's own column.
+    _js(page, "() => { for (const id of ['a', 'b', 'sel', 't1', 't2']) P.close(id); }")
+    _js(page, "() => { H.reg('x', { home: 'under', open: false }); P.open('x'); }")
+    _js(page, "() => { H.reg('z', { home: 'column', open: false }); P.open('z'); }")
+    assert _where(page, "z")["parent"] == "row"
+    assert _where(page, "x")["children"] == [["world"], ["x"]]
+
+
+def _kept_under_the_world_as_a_view_is_laid_out(page):
+    # Made for the moment, open as a view is laid out: under the world again.
+    _mount(page, transient=["x"])
+    _js(page, "() => { H.reg('x', { home: 'under', open: false }); P.open('x'); }")
+    _js(page, "() => P.applyView('default')")
+    x = _where(page, "x")
+    assert x["children"] == [["world"], ["x"]] and x["front"] == "x"
+    assert _world_column(page)["size"] == pytest.approx(70, abs=0.5)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    "case",
+    [
+        _under_the_world_with_room_from_its_height,
+        _a_second_window_under_the_world_is_a_tab_of_the_first,
+        _beside_the_world_beside_what_is_docked_under_it,
+        _a_column_window_never_opens_under_the_world,
+        _kept_under_the_world_as_a_view_is_laid_out,
+    ],
+    ids=lambda f: f.__name__.strip("_"),
+)
+def test_a_window_docked_under_the_world(wm: Page, case):
+    case(wm)
 
 
 # --- views ----------------------------------------------------------------------

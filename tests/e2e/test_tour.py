@@ -7,7 +7,9 @@ them once, and takes the page to the next stage, with what there is to try there
 box; the ring's Panels › Windows › Tour cells do what its buttons do; a reload opens it
 where it was, and starts no job on the way; a machine whose board is not connected is taken as the site plans it; a stage
 that needs what only a person brings is entered, the box saying what it needs; and the
-server gives back every word kept. Walkthrough page 34 is what it writes.
+server gives back every word kept. Docked, the box is a window under the world, kept
+there by a view and a reload, floated again by the ring, and its window's ✕ leaves the
+journey. Walkthrough page 34 is what it writes.
 
 Runs against a server of its own, with the simulated printer pinned to printer_1's
 mainboard, the router's controller not pinned, and the scripted OrcaSlicer its slicer;
@@ -468,6 +470,78 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
         "as a reload takes it, so no job is started on the way and the windows stand "
         "as this browser has them.",
         shown=_words(title.inner_text()),
+    )
+
+    # 14. ⇲ in its head: the box docked, a window of its own under the world.
+    dock = box.locator(".tour-pop-dock")
+    expect(dock).to_have_attribute("aria-label", "Dock")
+    dock.click()
+    docked = page.locator(".panel[data-panel='tour']").locator(BOX)
+    expect(docked).to_be_visible()
+    expect(dock).to_have_attribute("aria-label", "Float")
+    assert page.evaluate("() => !document.querySelector('#tour-pop').hasAttribute('popover')")
+    assert windows.state(page, "tour")["shown"] is True
+    expect(title).to_have_text("Print a part · 2. Shape")
+    world, tour = page.locator(windows.WORLD).bounding_box(), docked.bounding_box()
+    assert tour["y"] >= world["y"] + world["height"] - 2
+    assert abs(tour["x"] - world["x"]) <= 12 and tour["width"] >= world["width"] - 24
+    _off_the_buttons(page)
+    settled(page)
+    story.shows(
+        "⇲ docks the box as a window under the world",
+        "⇲ in the box's head: the box is a window of the page's, Tour, under the world "
+        "and as wide as it, so it covers nothing; the world gives it a quarter of its "
+        "height. Wide, it lays the journey and its stages on the left and the stage's "
+        "words and buttons on the right. Its tab is dragged anywhere a window goes; ⇱, "
+        "where ⇲ was, floats it over the page again.",
+        shown=_words(title.inner_text()),
+        blank=CHANGING,
+    )
+
+    # 15. Docked, it stays docked: a view laid out and a reload keep it under the world.
+    page.evaluate("() => window.fractalViewer.openView('default')")
+    expect(page.locator("#status")).to_contain_text("The page's own layout again")
+    expect(docked).to_be_visible()
+    assert windows.state(page, "tour")["shown"] is True
+    page.reload()
+    expect(docked).to_be_visible(timeout=30000)
+    expect(title).to_have_text("Print a part · 2. Shape")
+    _taken_to(page, "shape")
+    expect(docked).to_be_visible()
+    world, tour = page.locator(windows.WORLD).bounding_box(), docked.bounding_box()
+    assert tour["y"] >= world["y"] + world["height"] - 2
+    story.says(
+        "Docked, a view laid out and a reload keep it under the world",
+        "Reset layout, or a journey entered, lays every other window out as its view "
+        "has it, and the Tour stays under the world, on the stage it showed. Reloaded, "
+        "the page is taken to that stage again and the box is docked where it was: "
+        "this browser keeps that it is docked.",
+        shown=_words(title.inner_text()),
+    )
+
+    # 16. The ring's Panels › Windows › Dock tour floats it again; docked again, its
+    # window's ✕ closes the tour and leaves the journey.
+    open_from_key(page)
+    press(page, "Panels", "Windows", "Dock tour")
+    expect(box).to_be_visible()
+    assert page.evaluate("() => document.querySelector('#tour-pop').matches(':popover-open')")
+    assert windows.state(page, "tour") is None
+    expect(dock).to_have_attribute("aria-label", "Dock")
+    dock.click()
+    expect(docked).to_be_visible()
+    windows.close(page, "tour")
+    expect(box).to_be_hidden()
+    assert page.evaluate("() => window.fractalViewer.journey") is None
+    expect(page.locator("#status")).to_contain_text(
+        "Left Print a part: its windows stay where they are"
+    )
+    story.says(
+        "Dock tour on the ring floats it again, and its window's ✕ leaves the journey",
+        "The canvas ring's Panels › Windows › Dock tour is ⇲ and ⇱: it floats the box "
+        "over the page again, where it was left, its window gone and the world as tall "
+        "as it was. Docked again, the Tour window's own ✕ is the box's: the tour "
+        "closes and the journey is left, its windows where they are.",
+        shown=_words(page.locator("#status").inner_text()),
     )
 
 

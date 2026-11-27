@@ -1,8 +1,8 @@
 # The tour
 
-The page's journeys, a stage at a time, in a box over the page: the way a person finds
-their way through the app, and the way they say how each part of it is. The box is the
-one place a journey is chosen and stepped.
+The page's journeys, a stage at a time, in a box over the page, or docked as a window
+under the world: the way a person finds their way through the app, and the way they say
+how each part of it is. The box is the one place a journey is chosen and stepped.
 [Walkthrough 34](../walkthrough/34-the-tour.md) goes through the box, and
 [walkthrough 39](../walkthrough/39-the-chain-a-stage-at-a-time.md) through every stage
 it takes the page to.
@@ -57,6 +57,21 @@ forward, and nothing started.
 
 Opened in a browser that has not taken it before, it starts at the first stage with no
 word on the build the server runs.
+
+## Docked
+
+**⇲** in the box's head, or the ring's **Panels › Windows › Dock tour**, docks it: the
+box is a window of the page's layout, **Tour**, under the world and as wide as it, its
+room a quarter of the world's height at most, so it covers nothing of the world. Wide,
+it lays the journey and its stages on the left and the stage's words and buttons on the
+right. Its tab is dragged, split beside another window or maximised as any window's is.
+It is made for the moment, so a view or a journey laid out keeps it open under the world
+rather than closing it, and the layout this browser remembers leaves it out; that it is
+docked is the box's own, kept with where it stands (`apothecary.tour`), so a reload
+docks it again. Docked, it is not folded, and a stage frames the world's whole window.
+Its window's ✕ is the box's: the tour closes and the journey is left. **⇱**, where ⇲
+was, or Dock tour again, floats it over the page again where it was left, and the world
+has its height back.
 
 ## A stage, and the page taken there
 
@@ -193,7 +208,8 @@ Panels › Windows › Tour is the box, then its buttons: Tour (open or closed),
 Works, Off (with what the box's field says), Next, Its page (the walkthrough page the
 stage names first, at its step, in a tab), Take me here, and Who, the field for the name. It is
 seated after the views, the systems' alone: a journey's view is laid out by the box, and
-has no cell.
+has no cell. Panels › Windows › Dock tour, after it, is the box's ⇲ and ⇱: docked under
+the world, or floating over the page again; closed, it opens the box where it says.
 
 ## What it does not do
 
@@ -204,7 +220,7 @@ has no cell.
 - It does not bring about a state only a fault brings: a router in alarm, a board not
   heard for ten minutes. Those are at their stage as steps to read.
 - It does not arm, start, send or make anything.
-- The box stands over the world: what a stage frames is kept clear of it, and the rest
-  of the world under it is seen once the box is dragged or folded.
+- Floating, the box stands over the world: what a stage frames is kept clear of it, and
+  the rest of the world under it is seen once the box is dragged, folded or docked.
 - Nothing leaves the machine: the feedback is under the state folder, and the server
   answers this machine only.

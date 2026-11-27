@@ -147,6 +147,32 @@ Left Flash a board: its windows stay where they are. Tour takes it up again, ⚙
 Print a part · 2. Shape
 ```
 
+## 14. ⇲ docks the box as a window under the world
+
+⇲ in the box's head: the box is a window of the page's, Tour, under the world and as wide as it, so it covers nothing; the world gives it a quarter of its height. Wide, it lays the journey and its stages on the left and the stage's words and buttons on the right. Its tab is dragged anywhere a window goes; ⇱, where ⇲ was, floats it over the page again.
+
+![⇲ docks the box as a window under the world](screenshots/34-14-docks-the-box-as-a-window-under-the-world.png)
+
+```
+Print a part · 2. Shape
+```
+
+## 15. Docked, a view laid out and a reload keep it under the world
+
+Reset layout, or a journey entered, lays every other window out as its view has it, and the Tour stays under the world, on the stage it showed. Reloaded, the page is taken to that stage again and the box is docked where it was: this browser keeps that it is docked.
+
+```
+Print a part · 2. Shape
+```
+
+## 16. Dock tour on the ring floats it again, and its window's ✕ leaves the journey
+
+The canvas ring's Panels › Windows › Dock tour is ⇲ and ⇱: it floats the box over the page again, where it was left, its window gone and the world as tall as it was. Docked again, the Tour window's own ✕ is the box's: the tour closes and the journey is left, its windows where they are.
+
+```
+Left Print a part: its windows stay where they are. Tour takes it up again, ⚙ View › Reset layout puts the page's own back
+```
+
 ## What this page does not show
 
 - **A stage armed or started.** Print's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.

@@ -924,7 +924,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # Next, the page taken to a stage, and a person's word on the stage (Off with what
     # its field says), under the name its other field holds. The header's Tour opens
     # it. All but the journeys' drop-down and the field for what is off are cells of
-    # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too.
+    # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too. Its ⇲
+    # docks it as a window under the world, and ⇱ floats it again: Panels › Windows ›
+    # Dock tour.
     "tour-pop-open": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -934,6 +936,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "a button that closes the tour's box and leaves its journey",
+    ),
+    "tour-pop-dock": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that docks the tour's box as a window under the world, or floats it over"
+        " the page again",
     ),
     "tour-pop-journeys": (
         WIDGET,
@@ -994,6 +1002,7 @@ RING_BACKED: Dict[str, str] = {
     # The Tour's box and its buttons are the cells of Panels › Windows › Tour
     "tour-pop-open": "tour:toggle",
     "tour-pop-close": "tour:toggle",
+    "tour-pop-dock": "tour:dock",
     "tour-pop-back": "tour:back",
     "tour-pop-put": "tour:put",
     "tour-pop-works": "tour:works",
@@ -1741,7 +1750,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a double-click on the tour's box's head: folded to it, or unfolded",
     ),
-    "window:resize:isOpen": (
+    "window:resize:floating": (
         AUTOMATIC,
         WHAT_YOU_SEE,
         "the window resized: the tour's box kept whole on the page",

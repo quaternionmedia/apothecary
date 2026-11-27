@@ -1717,8 +1717,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
         # The Tour, after the views: its box over the page, then its buttons. A
-        # journey's view has no cell: the tour lays it out.
+        # journey's view has no cell: the tour lays it out. Then the Tour docked as a
+        # window under the world, or floating again.
         ("Tour", None, 1),
+        ("Dock tour", "tour:dock", 7),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
     assert address_of(root, "panel:view:family") == "493"
@@ -1737,6 +1739,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert address_of(root, "tour:toggle") == "4918"
     assert address_of(root, "tour:works") == "4912"
     assert carried_by("tour:off").name == "VIEWER"
+    assert carried_by("tour:dock").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"
@@ -1799,8 +1802,9 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     by_systems = re.findall(r"^ {20}([\w-]+): \{\n {24}main:", page, re.M)
     assert by_systems == ["airgap"]
     registered += [by_id(sid).main for sid in by_systems]
-    # An armed printer's control pad is Panels › Machine › Control pad's, not a toggle.
-    made = ("control",)
+    # An armed printer's control pad is Panels › Machine › Control pad's, not a toggle;
+    # the Tour docked is Panels › Windows › Tour's and Dock tour's.
+    made = ("control", "tour")
     assert all(pid in registered for pid in made)
     registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
