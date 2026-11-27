@@ -88,13 +88,15 @@ def open_on_world(page: Page, at: tuple[int, int] = (40, 40)) -> None:
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
 
 
-def open_from_key(page: Page) -> None:
-    """The canvas ring from its key, `m`, with nothing selected and the focus on no box."""
+def open_from_key(page: Page, key: str = "m") -> None:
+    """The canvas ring from its key, `m` (or ``key``, as Playwright names a press: the
+    canvas ring's own Shift+M, or a key Settings gave the ring), with nothing selected and
+    the focus on no box."""
     page.evaluate(
         "() => { document.activeElement && document.activeElement.blur(); "
         "const v = window.fractalViewer; v.selectedName = null; v.renderSelectedPanel(); }"
     )
-    page.keyboard.press("m")
+    page.keyboard.press(key)
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
 
 
@@ -143,3 +145,22 @@ def greyed(page: Page) -> dict:
         "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge.disabled')]"
         ".map((w) => [w.dataset.cell, (w.querySelector('title') || {}).textContent || '']))"
     )
+
+
+def query(page: Page) -> str:
+    """What is typed in the open ring, as written under it ("" for no query)."""
+    shown = page.locator("#ring-overlay .query")
+    return (shown.text_content() or "").removeprefix("⌕ ") if shown.count() else ""
+
+
+def results(page: Page) -> list:
+    """The query's results written under the ring, each as it reads: its path, then the
+    keys that reach it."""
+    return page.locator("#ring-overlay .found").all_text_contents()
+
+
+def result_on(page: Page) -> str:
+    """The result Enter presses, as it reads under the ring: the one Tab is on, else the
+    first; "" with no query."""
+    lit = page.locator("#ring-overlay .found.hot")
+    return lit.text_content() or "" if lit.count() else ""

@@ -481,6 +481,202 @@ def nearest(occupied: Iterable[int], from_cell: Optional[int], direction: str) -
     return best[2] if best is not None else from_cell
 
 
+# --- Typing in an open ring --------------------------------------------------------
+#
+# rad's ``DRAFT-typing-in-an-open-ring-finds-an-item``: letters typed while a ring is
+# open search its whole tree; a result shows the keys that reach it; Tab completes and
+# Enter presses the address. ``static/ring.js`` runs the same rules in the page, and
+# rad's own vectors (``tests/conformance/rad/vectors.json``, its ``search`` suite) hold
+# both.
+
+SEARCH_SEP = " › "
+# A run of letters and digits, or any other character that is not a space, on its own.
+_TOKEN = re.compile(r"[^\W_]+|[^\w\s]|_")
+# Keys pressed on their own to change another: no key of the query's nor the ring's.
+SEARCH_MODIFIERS = frozenset(
+    {
+        "Shift",
+        "Control",
+        "Alt",
+        "AltGraph",
+        "Meta",
+        "OS",
+        "CapsLock",
+        "Dead",
+        "Unidentified",
+        "Process",
+    }
+)
+
+
+def tokens(text: str) -> List[str]:
+    """A query's or a path's tokens, lower-cased: ``Jog › Y-`` is ``jog › y -``."""
+    return _TOKEN.findall((text or "").lower())
+
+
+class Found(BaseModel):
+    """One result of a search: an option, its path from the root and the cells that reach
+    it; or one of the page's own keys (``shortcut``, as keys.js names it), which has no
+    address. ``keys`` is what a person presses from a closed ring, when the host has said
+    the key that opens it: ``m 8 2``."""
+
+    id: str
+    label: str
+    path: str
+    address: Optional[str] = None
+    action: Optional[str] = None
+    enabled: bool = True
+    why: Optional[str] = None
+    has_children: bool = False
+    own: bool = False
+    shortcut: Optional[str] = None
+    keys: Optional[str] = None
+
+
+class Shortcut(BaseModel):
+    """One of the page's keys, as the page names it (``Shift+f``, keys.js), and what it does."""
+
+    key: str
+    does: str
+    label: Optional[str] = None  # as a person reads the key ("Shift+F"), when the page says
+
+
+def _holds(want: Sequence[str], have: Sequence[str]) -> bool:
+    return all(any(token.startswith(w) for token in have) for w in want)
+
+
+def search(ring: Ring, query: str) -> List[Found]:
+    """Every option of ``ring``'s tree the query matches, in rad's order.
+
+    An option matches when every token of the query starts a token of its path (its
+    labels from the root, joined by ``SEARCH_SEP``). The order: those whose own label
+    holds the query, then those that needed their path; fewer keys first; then the
+    tree's order, an option before its children. A submenu is found as a leaf is, and a
+    greyed one with its reason.
+    """
+    want = tokens(query)
+    if not want:
+        return []
+    found: List[Tuple[Tuple[bool, int, int], Found]] = []
+
+    def walk(options: Sequence[Option], labels: List[str], address: str) -> None:
+        for option in options:
+            path = [*labels, option.label]
+            keys = address + str(option.cell)
+            at = len(seen)
+            seen.append(option.id)
+            if _holds(want, tokens(SEARCH_SEP.join(path))):
+                own = _holds(want, tokens(option.label))
+                result = Found(
+                    id=option.id,
+                    label=option.label,
+                    path=SEARCH_SEP.join(path),
+                    address=keys,
+                    action=option.action,
+                    enabled=option.enabled,
+                    why=option.why,
+                    has_children=option.children is not None,
+                    own=own,
+                )
+                found.append(((not own, len(keys), at), result))
+            if option.children:
+                walk(option.children, path, keys)
+
+    seen: List[str] = []
+    walk(ring.options, [], "")
+    return [result for _, result in sorted(found, key=lambda pair: pair[0])]
+
+
+def search_keys(
+    ring: Ring, query: str, opener: Optional[str] = None, shortcuts: Sequence[Shortcut] = ()
+) -> List[Found]:
+    """``search``, each result with the keys that reach it from a closed ring -- the
+    ``opener`` that opens this ring, then its address, a space between each -- and the
+    page's own ``shortcuts`` the query matches after them, each its own key."""
+    results = [
+        r.model_copy(update={"keys": " ".join([*([opener] if opener else []), *r.address])})
+        for r in search(ring, query)
+    ]
+    want = tokens(query)
+    for shortcut in shortcuts if want else ():
+        if _holds(want, tokens(shortcut.does)):
+            results.append(
+                Found(
+                    id=f"key:{shortcut.key}",
+                    label=shortcut.does,
+                    path=shortcut.does,
+                    own=True,
+                    shortcut=shortcut.key,
+                    keys=shortcut.label or shortcut.key,
+                )
+            )
+    return results
+
+
+class Query(NamedTuple):
+    """A query being typed in an open ring: the text typed, and the result Tab is on."""
+
+    typed: str = ""
+    pick: Optional[int] = None
+
+
+class Typed(NamedTuple):
+    """One key read by the query: the query after it, as shown; whether the key was the
+    ring's, let go by (``passed``); and the result Enter chose, if it chose."""
+
+    query: Query
+    text: str
+    passed: bool
+    chosen: Optional[Found]
+
+
+def query_text(ring: Ring, query: Query) -> str:
+    """The query as shown: the text typed, or the path of the result Tab is on."""
+    if query.pick is None:
+        return query.typed
+    results = search(ring, query.typed)
+    return results[query.pick % len(results)].path if results else query.typed
+
+
+def type_query(ring: Ring, query: Query, key: str) -> Typed:
+    """One key pressed in an open ring, read by the query.
+
+    A key that prints one character -- not a digit, not a space -- begins or extends it;
+    once begun, Space extends it, Backspace takes its last character, Escape lets it
+    go, Tab completes to each result in turn and Enter chooses the one Tab is on, or the
+    first. Every other key, and each of those with no query, is the ring's: ``passed``.
+    A key held with Ctrl, Alt or Meta arrives named with it (``Ctrl+b``) and is the
+    ring's; a modifier pressed alone changes nothing.
+    """
+    shown = query_text(ring, query)
+
+    def out(after: Query, chosen: Optional[Found] = None, passed: bool = False) -> Typed:
+        return Typed(after, query_text(ring, after), passed, chosen)
+
+    if key in SEARCH_MODIFIERS:
+        return out(query, passed=True)
+    if len(key) == 1 and key != " " and key not in "0123456789":
+        return out(Query(shown + key))
+    if not shown:
+        return out(Query(), passed=True)
+    if key == " ":
+        return out(Query(shown + " "))
+    if key == "Backspace":
+        return out(Query(shown[:-1]))
+    if key == "Escape":
+        return out(Query())
+    if key in ("Tab", "Enter"):
+        results = search(ring, query.typed)
+        if not results:
+            return out(query)
+        if key == "Tab":
+            return out(
+                Query(query.typed, 0 if query.pick is None else (query.pick + 1) % len(results))
+            )
+        return out(Query(), chosen=results[(query.pick or 0) % len(results)])
+    return out(Query(), passed=True)
+
+
 def shorten(text: str, most: int = LONGEST_LABEL) -> str:
     """Make a label fit, without trailing it off -- in ``most`` characters, a
     label's twelve unless a part of one is being made.

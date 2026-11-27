@@ -89,6 +89,7 @@ AREAS = {
             "test_windows_over_a_reload.py",
             "test_focused_systems.py",
             "test_ring.py",
+            "test_ring_search.py",
             "test_site_panel.py",
             "test_nothing_covers_a_control.py",
             "test_less_on_screen.py",

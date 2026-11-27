@@ -35,15 +35,18 @@ from ..menu import (
     Carries,
     Context,
     Device,
+    Found,
     Intent,
     PartSeen,
     PictureContext,
     Pointing,
     Ring,
     RingTooFull,
+    Shortcut,
     Verdict,
     carried_by,
     resolve,
+    search_keys,
 )
 from . import lighting
 
@@ -65,6 +68,16 @@ class ResolveRequest(BaseModel):
     # acts: the open Machine's port's answer for its heater loops, the deck's for the
     # knobs (apothecary/menu.py resolve). Told nothing, nothing there is greyed.
     can: Optional[Dict[str, Verdict]] = None
+
+
+class SearchRequest(ResolveRequest):
+    """A ring to resolve, and a query typed in it (rad's *typing in an open ring finds an
+    item*). ``opener`` is the key that opens this ring, as keys.js names it (``m``,
+    ``Shift+m``); ``shortcuts`` are the page's own keys, searched after the ring's options."""
+
+    query: str
+    opener: Optional[str] = None
+    shortcuts: List[Shortcut] = []
 
 
 class Chosen(BaseModel):
@@ -239,6 +252,15 @@ def resolve_ring(request: ResolveRequest) -> Ring:
         # A ring that cannot be built is a design problem, and the answer says so
         # rather than handing back a shorter ring that hides what it dropped.
         raise HTTPException(status_code=409, detail=str(too_many)) from None
+
+
+@router.post("/search", response_model=List[Found])
+def search_ring(request: SearchRequest) -> List[Found]:
+    """The ring ``/menu/resolve`` answers for the same request, searched: every option the
+    query matches, in rad's order, with its address and the keys that reach it, then the
+    page's own keys it matches. Changes nothing, as resolving changes nothing."""
+    ring = resolve_ring(request)
+    return search_keys(ring, request.query, request.opener, request.shortcuts)
 
 
 def _needs_site(chosen: Chosen) -> str:

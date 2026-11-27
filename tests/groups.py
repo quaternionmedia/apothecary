@@ -431,6 +431,7 @@ GROUPS = {
             "test_projector_page.py",
             "test_readiness.py",
             "test_ring_js.py",
+            "test_ring_search.py",
             "test_stays_local.py",
             "test_group_colours.py",
             "test_facets.py",

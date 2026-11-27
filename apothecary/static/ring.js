@@ -28,6 +28,10 @@
  * same digits onto the buttons it already has, so the numbering is visible
  * where the control is.
  *
+ * Letters typed while the ring is open search its whole tree (rad's "typing in an open
+ * ring finds an item"): the results are written under the ring with the keys that reach
+ * each, Tab completes, and Enter presses the result's digits as a hand would.
+ *
  * Plain ES module, no build step; it imports keys.js, how a key is named and when a
  * shortcut may act, and can.js, how an address is told from a button's own tip. The
  * pure parts (angle to
@@ -36,7 +40,7 @@
  * window.apothecaryRing.
  */
 
-import { comboOf, matches, mayAct, typing } from "./keys.js";
+import { comboOf, matches, mayAct, pressCombo, typing } from "./keys.js";
 import { ADDRESS_AT_END } from "./can.js";
 import { viaRing } from "./format.js";
 
@@ -154,6 +158,110 @@ export function addressOf(ring, target) {
     return digits;
 }
 
+// ---------------------------------------------------------------------------
+// Typing in an open ring (rad's DRAFT-typing-in-an-open-ring-finds-an-item)
+// ---------------------------------------------------------------------------
+//
+// Letters typed while the ring is open search its whole tree. A result shows the keys
+// that reach it -- the key that opened this ring, then its address -- and the page's own
+// keys are found after the ring's options, each its own key. Tab completes the query to
+// each result in turn; Enter presses the address from the root, as a hand would. The
+// rules are menu.py's search and type_query, and rad's vectors hold both
+// (tests/conformance/rad/vectors.json, its `search` suite).
+
+export const SEARCH_SEP = " › ";
+// Keys pressed on their own to change another: no key of the query's nor the ring's.
+const SEARCH_MODIFIERS = new Set(["Shift", "Control", "Alt", "AltGraph", "Meta", "OS", "CapsLock", "Dead", "Unidentified", "Process"]);
+
+/* A query's or a path's tokens, lower-cased: each run of letters and digits, and each
+ * other character that is not a space on its own. "Jog › Y-" is jog › y -. */
+export function tokens(text) {
+    return String(text ?? "").toLowerCase().match(/[\p{L}\p{N}]+|[^\p{L}\p{N}\s]/gu) ?? [];
+}
+const holds = (want, have) => want.every((w) => have.some((t) => t.startsWith(w)));
+
+/* Every option of the ring's tree the query matches, in rad's order: own label before
+ * path, fewer keys, then the tree's order (an option before its children). Each result:
+ * { id, label, path, address, action, enabled, why, hasChildren, own }. */
+export function search(ring, query) {
+    const want = tokens(query);
+    if (!want.length || !ring) return [];
+    const found = [];
+    let order = 0;
+    const walk = (options, labels, address) => {
+        for (const option of withCells(options)) {
+            const path = [...labels, option.label];
+            const digits = address + option.cell;
+            const at = order++;
+            if (holds(want, tokens(path.join(SEARCH_SEP)))) {
+                found.push({
+                    id: option.id, label: option.label, path: path.join(SEARCH_SEP), address: digits,
+                    action: option.action ?? null, enabled: option.enabled !== false, why: option.why ?? null,
+                    hasChildren: !!option.children, own: holds(want, tokens(option.label)), at,
+                });
+            }
+            if (option.children) walk(option.children, path, digits);
+        }
+    };
+    walk(ring.options, [], "");
+    found.sort((a, b) => (b.own - a.own) || (a.address.length - b.address.length) || (a.at - b.at));
+    return found.map(({ at, ...result }) => result);
+}
+
+/* The page's own keys a query matches, after the ring's options: each { key, does, label }
+ * (keys.js's name, what it does, and the key as a person reads it) found by what it does. */
+export function searchShortcuts(shortcuts, query) {
+    const want = tokens(query);
+    if (!want.length) return [];
+    return (shortcuts || []).filter((s) => holds(want, tokens(s.does))).map((s) => ({
+        id: `key:${s.key}`, label: s.does, path: s.does, address: null, action: null,
+        enabled: true, why: null, hasChildren: false, own: true, shortcut: s.key, keyLabel: s.label || s.key,
+    }));
+}
+
+/* What a query finds: the ring's options, then the page's keys. */
+export function found(ring, query, shortcuts = []) {
+    return [...search(ring, query), ...searchShortcuts(shortcuts, query)];
+}
+
+/* The keys a result is reached by from a closed ring: the key that opens this ring
+ * (`opener`, as a person reads it), then the address; a page key, itself. */
+export function keysOf(result, opener = null) {
+    if (result.shortcut) return result.keyLabel || result.shortcut;
+    return [...(opener ? [opener] : []), ...String(result.address)].join(" ");
+}
+
+/* The query as shown: the text typed, or the path of the result Tab is on. */
+export function queryText(ring, state, shortcuts = []) {
+    if (state.pick == null) return state.typed;
+    const results = found(ring, state.typed, shortcuts);
+    return results.length ? results[state.pick % results.length].path : state.typed;
+}
+
+/* One key pressed in the open ring, read by the query: { state, text, passed, chosen }.
+ * `state` is { typed, pick }; `passed`, that the key is the ring's and the query let it
+ * go by; `chosen`, the result Enter chose. A key held with Ctrl, Alt or Meta arrives
+ * named with it ("Ctrl+b") and is the ring's; a modifier alone changes nothing. */
+export function typeQuery(ring, state, key, shortcuts = []) {
+    const st = { typed: state?.typed ?? "", pick: state?.pick ?? null };
+    const shown = queryText(ring, st, shortcuts);
+    const out = (next, chosen = null, passed = false) => ({ state: next, text: queryText(ring, next, shortcuts), passed, chosen });
+    const none = { typed: "", pick: null };
+    if (SEARCH_MODIFIERS.has(key)) return out(st, null, true);
+    if ([...key].length === 1 && key !== " " && !/^[0-9]$/.test(key)) return out({ typed: shown + key, pick: null });
+    if (!shown) return out(none, null, true);
+    if (key === " ") return out({ typed: `${shown} `, pick: null });
+    if (key === "Backspace") return out({ typed: [...shown].slice(0, -1).join(""), pick: null });
+    if (key === "Escape") return out(none);
+    if (key === "Tab" || key === "Enter") {
+        const results = found(ring, st.typed, shortcuts);
+        if (!results.length) return out(st);
+        if (key === "Tab") return out({ typed: st.typed, pick: st.pick == null ? 0 : (st.pick + 1) % results.length });
+        return out(none, results[(st.pick ?? 0) % results.length]);
+    }
+    return out(none, null, true);
+}
+
 /* Write the address onto the page's own controls, where they already are.
  * `pairs` is [[element, action], ...]: an action, or a path of ids down to a cell
  * that opens a ring (a menu the control opens is that ring). One not on the ring takes
@@ -243,6 +351,11 @@ export const STYLE = `
 .apothecary-ring .title { font-size: 10px; fill: #9aa89a; text-anchor: middle; }
 .apothecary-ring .address { font-size: 10px; fill: #ffcc66; text-anchor: middle; }
 .apothecary-ring .why { font-size: 11px; fill: #ffd9a0; text-anchor: middle; paint-order: stroke; stroke: #0f120f; stroke-width: 3px; stroke-linejoin: round; }
+.apothecary-ring .query, .apothecary-ring .found { text-anchor: middle; paint-order: stroke; stroke: #0f120f; stroke-width: 3px; stroke-linejoin: round; }
+.apothecary-ring .query { font-size: 12px; fill: #ffcc66; }
+.apothecary-ring .found { font-size: 11px; fill: #b8c4b8; }
+.apothecary-ring .found.hot { fill: #e8f0e8; font-weight: 600; }
+.apothecary-ring .found .keys { fill: #ffcc66; }
 `;
 
 function ensureStyle() {
@@ -311,7 +424,7 @@ function hubLines(title, address) {
  * lit, `armed` one asked to be chosen again; a lit wedge that cannot be chosen has its
  * reason written under the ring, or over it when `below` is false (no room under it on
  * the screen). */
-export function ringMarkup({ ring, highlight = null, armed: armedCell = null, address = "", below = true }) {
+export function ringMarkup({ ring, highlight = null, armed: armedCell = null, address = "", below = true, query = null }) {
     const { r0, r1 } = GEOMETRY;
     const byCell = {};
     for (const option of ring.options) byCell[option.cell] = option;
@@ -378,6 +491,7 @@ export function ringMarkup({ ring, highlight = null, armed: armedCell = null, ad
     // The lit wedge's reason, in words under the ring (over it near the screen's foot):
     // what a title cannot show a finger.
     const lit = highlight != null ? refusalOf(byCell[highlight]) : null;
+    const whyCount = lit ? whyLines(lit).length : 0;
     if (lit) {
         const lines = whyLines(lit);
         const y = below ? r1 + WHY_GAP_PX : -(r1 + WHY_GAP_PX) - (lines.length - 1) * WHY_LINE_PX;
@@ -387,7 +501,48 @@ export function ringMarkup({ ring, highlight = null, armed: armedCell = null, ad
             + `</text>`
         );
     }
+    if (query && query.text) parts.push(queryMarkup(query, below, whyCount));
     return parts.join("");
+}
+
+// How many of a query's results are written under the ring.
+export const RESULTS_SHOWN = 5;
+const FOUND_LINE_PX = 15;
+
+/* Which of `count` results are written, as [first, end): the first RESULTS_SHOWN, and
+ * once Tab is past them the ones that end at the result it is on, so that one is shown. */
+export function shownResults(count, pick = null) {
+    const on = count && pick != null ? pick % count : 0;
+    const first = Math.min(Math.max(0, on - RESULTS_SHOWN + 1), Math.max(0, count - RESULTS_SHOWN));
+    return [first, Math.min(count, first + RESULTS_SHOWN)];
+}
+
+/* The query typed in the ring and its first results, each with the keys that reach it,
+ * under the ring (over it near the screen's foot), past a lit wedge's reason. Listed,
+ * never seated: the wedges are what they are without a query. The result Tab is on, or
+ * the first, is the one Enter presses; a greyed one is drawn off, its reason said when
+ * it is pressed, as its wedge's is. */
+function queryMarkup({ text, results, pick }, below, whyCount) {
+    const { r1 } = GEOMETRY;
+    const lines = 1 + Math.max(1, Math.min(results.length, RESULTS_SHOWN));
+    const gap = WHY_GAP_PX + (whyCount ? whyCount * WHY_LINE_PX + 6 : 0);
+    const top = below ? r1 + gap : -(r1 + gap) - (lines - 1) * FOUND_LINE_PX;
+    const on = results.length ? (pick ?? 0) % results.length : -1;
+    const out = [`<text class="query" x="0" y="${top.toFixed(1)}">⌕ ${esc(text)}</text>`];
+    if (!results.length) out.push(`<text class="found off" x="0" y="${(top + FOUND_LINE_PX).toFixed(1)}">nothing found</text>`);
+    const [first, end] = shownResults(results.length, pick);
+    results.slice(first, end).forEach((r, at) => {
+        const i = first + at;
+        const cls = ["found"];
+        if (i === on) cls.push("hot");
+        if (!r.enabled) cls.push("off");
+        out.push(
+            `<text class="${cls.join(" ")}" data-found="${esc(r.id)}" x="0" y="${(top + FOUND_LINE_PX * (at + 1)).toFixed(1)}">`
+            + `${esc(r.path)}  <tspan class="keys">${esc(r.keys)}</tspan>`
+            + `</text>`
+        );
+    });
+    return out.join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -413,13 +568,13 @@ export function close() {
  * the ring was told about refusals ({ device } or { can }, or a promise of it): asked
  * whenever the page applies a new answer while the ring is open (regreyAll).
  */
-export async function openRing({ base = "", context, site, device, picture, sketch, can, again = null, at = null, into = null, onIntent, onRefused, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, sketch, can, again = null, at = null, into = null, opener = null, shortcuts = [], onIntent, onRefused, onSearched, onClose }) {
     close();
     const [toldPicture, toldCan] = await Promise.all([picture, can]);
     const ring = await resolveRing({ base, context, site, device, picture: toldPicture, sketch, can: toldCan });
     if (current) current.close(false); // somebody opened another while we fetched
     const told = { base, context, site, device, picture: toldPicture, sketch, can: toldCan };
-    const instance = new RingInstance({ ring, told, again, at, onIntent, onRefused, onClose });
+    const instance = new RingInstance({ ring, told, again, at, opener, shortcuts, onIntent, onRefused, onSearched, onClose });
     current = instance;
     instance.mount();
     if (into) instance.enter(into);
@@ -442,7 +597,7 @@ export function regreyAll() {
 }
 
 class RingInstance {
-    constructor({ ring, told, again, at, onIntent, onRefused, onClose }) {
+    constructor({ ring, told, again, at, opener = null, shortcuts = [], onIntent, onRefused, onSearched = null, onClose }) {
         this.root = ring;
         this.told = told;
         this.again = again;
@@ -455,6 +610,14 @@ class RingInstance {
         this.onIntent = onIntent;
         this.onRefused = onRefused;
         this.onClose = onClose;
+        this.onSearched = onSearched;
+        // Typing in the ring: the query, the key that opened this ring (as a person reads
+        // it) and the page's own keys, found after the ring's options; `searched` is the
+        // keys of the result Enter pressed, until the ring closes, at its address.
+        this.query = { typed: "", pick: null };
+        this.opener = opener;
+        this.shortcuts = shortcuts || [];
+        this.searched = null;
         this.stack = [{ ring, digit: "" }]; // the rings entered so far, top last
         this.address = "";
         this.highlight = null;
@@ -509,7 +672,7 @@ class RingInstance {
     draw() {
         // A lit wedge's reason goes under the ring, or over it where the screen ends first.
         const below = this.cy + GEOMETRY.r1 + WHY_GAP_PX + 3 * WHY_LINE_PX <= window.innerHeight;
-        this.svg.innerHTML = ringMarkup({ ring: this.ring, highlight: this.highlight, armed: this.armed, address: this.address, below });
+        this.svg.innerHTML = ringMarkup({ ring: this.ring, highlight: this.highlight, armed: this.armed, address: this.address, below, query: this.queryView() });
         this.keepOnScreen();
         if (this.highlight != null) this.el.setAttribute("aria-activedescendant", `ring-cell-${this.highlight}`);
         else this.el.removeAttribute("aria-activedescendant");
@@ -543,6 +706,62 @@ class RingInstance {
             const along = inside(r.left, r.right, w);
             if (along) for (const line of why.querySelectorAll("tspan")) line.setAttribute("x", along.toFixed(1));
         }
+    }
+
+    /* The query as drawn: its text, and what it finds with the keys that reach each. */
+    queryView() {
+        if (!this.query.typed) return null;
+        const results = found(this.root, this.query.typed, this.shortcuts).map((r) => ({ ...r, keys: keysOf(r, this.opener) }));
+        return { text: queryText(this.root, this.query, this.shortcuts), results, pick: this.query.pick };
+    }
+
+    /* A key read by the query first: true when it took the key. One it lets go by is the
+     * ring's, as it was, and a query let go is taken off the ring. */
+    readQuery(key, e) {
+        const had = this.query.typed;
+        const read = typeQuery(this.root, this.query, key, this.shortcuts);
+        this.query = read.state;
+        if (read.passed) {
+            if (had) this.draw();
+            return false;
+        }
+        e.preventDefault();
+        if (read.chosen) this.choose(read.chosen);
+        else this.draw();
+        return true;
+    }
+
+    /* Enter on a result: its address pressed from the root, one cell at a time, as a hand
+     * would -- a submenu entered and the ring left open there, a leaf chosen, a greyed one
+     * refused, one asked twice asking; a page key pressed as that key, the ring closed
+     * first. The keys that would have done it are said after (onSearched, and the intent's
+     * `searched`). */
+    choose(result) {
+        const keys = keysOf(result, this.opener);
+        if (result.shortcut) {
+            this.close(false);
+            // The page presses it, so it can tell what the key said from what was said before.
+            const press = () => pressCombo(result.shortcut);
+            if (this.onSearched) this.onSearched({ label: result.label, keys, shortcut: result.shortcut, press });
+            else press();
+            return;
+        }
+        this.searched = { keys, address: result.address };
+        while (this.stack.length > 1) this.back();
+        this.highlight = null;
+        const digits = String(result.address);
+        for (let i = 0; i < digits.length; i++) {
+            if (this.done) return;
+            const depth = this.stack.length;
+            this.commit(Number(digits[i]));
+            // A ring on the way that would not open (greyed, its reason now under the ring):
+            // the walk stops there, as a hand would, rather than press the rest elsewhere.
+            if (!this.done && i < digits.length - 1 && this.stack.length === depth) break;
+        }
+        if (this.done) return;
+        this.draw();
+        // Still open: a ring entered, a cell asking to be chosen again, a greyed one refused.
+        if (result.hasChildren && this.onSearched) this.onSearched({ label: result.label, keys, entered: true });
     }
 
     setHighlight(cell) {
@@ -579,6 +798,10 @@ class RingInstance {
         // Nothing else on the page sees a key while the ring is up: the viewer
         // steps out on Backspace, and here Backspace is the hub.
         e.stopImmediatePropagation();
+        // The query reads the key first; a key held with Ctrl, Alt or Meta reaches it named
+        // with them, and is never the query's.
+        const held = e.ctrlKey || e.altKey || e.metaKey;
+        if (!e.isComposing && this.readQuery(held ? comboOf(e) || e.key : e.key, e)) return;
         const key = e.key;
         if (/^[1-9]$/.test(key)) {
             e.preventDefault();
@@ -643,6 +866,8 @@ class RingInstance {
             action: option.action,
             option_id: option.id,
             address: this.address,
+            // Chosen by a search, at the address it pressed: the keys that would have done it.
+            searched: this.searched && this.searched.address === this.address ? this.searched.keys : null,
             context: this.context,
             label: option.label,
             confirmed: !!option.twice, // asked twice, in the ring itself
@@ -800,8 +1025,15 @@ const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
  * applies (can.js's `apothecary:can`) and each board's news (`apothecary:board`) greys
  * it again from that (RingInstance.regrey).
  */
-export function installRing({ base = "", whatFor, onIntent, onRefused, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl" }) {
+export function installRing({ base = "", whatFor, onIntent, onRefused, onSearched, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl", shortcuts = () => [], keyLabel = (combo) => combo }) {
     const bound = { key, canvasKey, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
+    /* The key that opens the ring a spec opens, as a person reads it: the one it was opened
+     * by, else Shift+M's for the canvas ring and m's for a piece's (opening one on a piece
+     * selects it); none for a ring no key opens alone (a Machine's, by the pointer). */
+    const openerOf = (spec) => {
+        const how = spec.opener ?? (spec.context.pointing === "canvas" ? "canvas" : spec.context.pointing === "node" ? "key" : null);
+        return how === "canvas" ? keyLabel(bound.canvasKey) : how === "key" ? keyLabel(bound.key) : null;
+    };
     const open = async (spec, at) => {
         if (!spec) return null;
         try {
@@ -816,8 +1048,11 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
                 again: spec.again ?? null,
                 at: at ?? spec.at ?? null,
                 into: spec.into ?? null,
+                opener: openerOf(spec),
+                shortcuts: typeof shortcuts === "function" ? shortcuts() : shortcuts,
                 onIntent,
                 onRefused,
+                onSearched,
                 onClose: spec.onClose,
             });
             if (onResolved) onResolved(instance.root, spec);
@@ -828,7 +1063,9 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
         }
     };
     const middle = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-    const fromKeyboard = () => open(whatFor(null), middle());
+    // A spec opened by a key says which, so its results' keys start from that key.
+    const byKey = (spec, how) => (spec ? { ...spec, opener: how } : null);
+    const fromKeyboard = () => open(byKey(whatFor(null), "key"), middle());
 
     window.addEventListener("apothecary:can", regreyAll);
     window.addEventListener("apothecary:board", regreyAll);
@@ -838,7 +1075,7 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
         const canvas = matches(e, bound.canvasKey);
         if (!canvas && !matches(e, bound.key)) return;
         e.preventDefault();
-        open(whatFor(null, { canvas }), middle());
+        open(byKey(whatFor(null, { canvas }), canvas ? "canvas" : "key"), middle());
     });
 
     // The ring's press: the right button held with the modifier (or, on macOS, Ctrl
@@ -931,6 +1168,11 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
         angleToIndex,
         cellAtAngle,
         annotate,
+        search,
+        found,
+        keysOf,
+        typeQuery,
+        shownResults,
         regrey: regreyAll,
         resolve: (spec) => resolveRing({ base, ...spec }),
         current: () => current,

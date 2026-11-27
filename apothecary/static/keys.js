@@ -117,6 +117,26 @@ export function matches(e, combo) {
     return !!code && codeComboOf(e) === code;
 }
 
+/* A shortcut pressed as a person presses it: a key down and up, named `combo` as above,
+ * at the focus, so the page's own keys hear it and judge it as they judge any press
+ * (mayAct). The ring's search presses a page key chosen from it this way. */
+export function pressCombo(combo, target = (typeof document !== "undefined" && (document.activeElement || document.body)) || null) {
+    if (!combo || !target) return false;
+    const code = codeOfCombo(combo);
+    const parts = combo.split("+");
+    const key = combo.endsWith("++") ? "+" : parts.pop();
+    const mods = new Set(code ? code.split("+").slice(0, -1) : parts);
+    const shift = mods.has("Shift");
+    const printed = key === "Space" ? " " : LETTER.test(key) && shift ? key.toUpperCase() : key;
+    const init = {
+        key: printed, code: code ? code.split("+").pop() : "", bubbles: true, cancelable: true, composed: true,
+        ctrlKey: mods.has("Ctrl"), altKey: mods.has("Alt"), shiftKey: shift, metaKey: mods.has("Meta"),
+    };
+    target.dispatchEvent(new KeyboardEvent("keydown", init));
+    target.dispatchEvent(new KeyboardEvent("keyup", init));
+    return true;
+}
+
 /* The world's own keys: whether Page Up and Page Down step a level now. `world` is
  * the canvas; `lastPressInWorld` whether the last press landed in the world. */
 export function worldHasKeys(world, lastPressInWorld) {

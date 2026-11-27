@@ -611,6 +611,21 @@ pressed together jump to the corner between them, Enter or Space chooses the
 highlighted cell, Backspace backs out, Escape closes. A click on a cell
 chooses it, on the hub backs out, and far outside the ring closes it.
 
+**Typing in the ring searches it** (rad's *typing in an open ring finds an item*). A
+letter typed while the ring is open begins a query, written under the ring with its first
+results: every option of the ring's tree, wherever the ring stands, whose path has a word
+beginning with each word typed (`bed o` finds Heat › Bed on), then the page's own
+[keys](#keys) by what they do. Each result shows the keys that reach it from a closed
+ring: `m 2 8` is m, then 2, then 8; a page key, itself. An option whose own label holds
+the query comes first, then the ones fewer keys away, then the ring's own order. Tab
+completes the query to the first result, again to the next and round; Enter presses the
+one it is on, from the top, as its digits would be pressed: a ring is entered and left
+open, an option is chosen, a greyed one refused, one asked twice asks; a page key is
+pressed once the ring has closed. The status line then says, after what was done, `next
+time, m 2 8`. Once a query is begun, Space and Backspace are its own and Escape lets it
+go; a digit, an arrow or a click is still the ring's and lets the query go, so a query
+has no digits, and the digits a result shows can be pressed while it is shown.
+
 **Addresses hold still.** The cells a ring always has come first and keep one
 address wherever it is opened; the cells that come and go with where it is
 opened are seated after them.
@@ -1269,6 +1284,7 @@ defaults, and a change holds until the page is left.
 | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undoes and redoes the part editor's staged numbers (Part › History) |
 | Ctrl+S | Saves the variant, anywhere, while a part's editor is open (Part › Save) |
 | In the ring: 1-9, arrows, Enter, Space, Backspace | As [above](#the-ring) |
+| In the ring: letters, then Tab, Enter | A search of the ring and the page's keys, each result with its keys; Tab completes, Enter presses the result's keys, as [above](#the-ring) |
 | In the SCAD editor: F5, F6, Ctrl+Enter | As [above](#the-scad-editor) |
 
 One check decides for every key: none acts while you are typing in a box, a
