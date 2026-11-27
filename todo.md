@@ -305,6 +305,25 @@ Decided, not started. Each waits on what its line names.
   convention. The review cycle's merge queue waits on it (*Next round*).
 - Are the questions `photo gather --ask` ranks first the ones worth a minute?
   Only a person with a real folder of photographs can check.
+- The page's names and places, each left as it stands until decided:
+  - Move the views from ⚙ View into ⊞ Windows, so ⚙ View is the ring's View and
+    ⊞ Windows its Panels? And rename the ring's Panels to Windows (about 300
+    lines in 94 files)?
+  - Which Layers entry stays: View › Layers › Window, or Panels › Site › Layers?
+  - Repository files the server does not serve (a doc's link to a source file):
+    link to GitHub, or serve them?
+  - The ring's *Send file* and *Query* where the buttons say ▶ Print and M115,
+    `$I` or Identify: which is renamed to the other?
+  - A printer's Bed level card lists what Runs lists: move the list to Runs, and
+    keep the card for a router's table map?
+  - Pause and Abort stand on the control pad's SD row and in the Print window:
+    keep both?
+  - Grey Probe hot in Runs with the Machine's reason, as the Machine's own Probe
+    bed is?
+  - Merge a part's History into Variants? Fold Ghost into Compare?
+  - The Badge's ⚒ Print and ⚒ Cut beside the header's ⚒ Make: keep both, or
+    only Cut?
+  - Download SCAD into the SCAD editor's bar?
 
 ## For governance/qm (file there)
 
