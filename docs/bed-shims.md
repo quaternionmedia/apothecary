@@ -60,10 +60,16 @@ Machine › Bed (`widgets/bed_shims.js`). Everything in them is the server's ans
 
 | Window | What it shows |
 |---|---|
-| **Runs** | The readings of the printer's pinned board, newest first: each a small heatmap of its grid, the back row on top as the bed lies, blue low and amber high; its bed temperature, marked *heated* or *cold*; its range and its note. A run chosen is drawn over the bed in the world, on the Bed mesh layer. Above them, **▤ Probe hot** (Panels › Machine › Bed › Probe hot): the bed heated to the temperature typed, the Print window's filament's filled in, held the seconds typed (90 unless typed), then homed and probed twice, a reading each noted *heated … C, soaked … s, 1 of 2* and *2 of 2*, and turned off after, however it ends. It is the Machine's own probe (`POST /firmware/printers/level` with `heat_c`, `soak_s` and `times`), so control must be armed and the Machine's Bed level follows it |
+| **Runs** | The readings of the printer's pinned board, newest first: each a small heatmap of its grid, the back row on top as the bed lies, blue low and amber high; its bed temperature, marked *heated* or *cold*; its range and its note. A run chosen is drawn over the bed in the world, on the Bed mesh layer. Above them, **▤ Probe hot** (Panels › Machine › Bed › Probe hot): the bed heated to the temperature typed, the Print window's filament's filled in, held the seconds typed (90 unless typed), then homed and probed twice, a reading each noted *heated … C, soaked … s, 1 of 2* and *2 of 2*, and turned off after, however it ends. It is the Machine's own probe (`POST /firmware/printers/level` with `heat_c`, `soak_s` and `times`), so control must be armed, and Runs lists each reading as it is kept |
 | **Differences** | The newest heated pair's second run less its first, the repeatability floor; the newest pair less the pair before it, what was done between them; and what the plane leaves, the bow, set against the bound for a stored mesh. Each a heatmap of the difference, blue below none and amber above |
-| **Fixes** | The bed from above, the probed grid dashed, each screw where the profile puts it with its shim, *none* at the highest and *skipped* where a layer or the floor leaves it out; each corner in words. The shims are drawn at their screws in the world, on the Bed mesh layer, as wide as the mount's ring and stretched as the relief is: drawn again with each reading drawn, so both stand at one stretch, the one the Bed mesh layer's note says. Fixes also stands them on `bed_shims`, the piece on the printer's bed, as soon as it has them: its Parameters show their thicknesses and labels, and the piece drawn is them, not the part's defaults. Under them, what each shim fits: the screw hole and the ring, each marked *default* until it is kept. **⇩ Keep from Parameters** (Panels › Machine › Bed › Keep mount) keeps the hole and the ring Parameters holds for `bed_shims` as the printer's (`PUT /bed/{site}/{printer}/mount`). **⚒ Make these** (Panels › Machine › Bed › Make these) stands the shims on `bed_shims` if they are not standing yet and slices the piece as drawn, at the shims' thicknesses and the mount kept, with no brim (each shim's slot opens its hole to its rim, which a brim would fill) and no skirt (one that lifts is dragged into a shim), for the printer in its Print window, where Print a part goes on. It chooses the Print window's levelling *probe first*, which `bed_shims` also declares, so a slice of it from anywhere probes first: the shims are printed on the bed they are to level, so the mesh is on for their print (docs/slicer.md) |
+| **Fixes** | The bed from above, the probed grid dashed, the plate where its corners are kept, each screw where it is kept or the profile puts it with its shim, *none* at the highest and *skipped* where a layer or the floor leaves it out; each corner in words. The shims are drawn at their screws in the world, on the Bed mesh layer, as wide as the mount's ring and stretched as the relief is: drawn again with each reading drawn, so both stand at one stretch, the one the Bed mesh layer's note says. Fixes also stands them on `bed_shims`, the piece on the printer's bed, as soon as it has them: its Parameters show their thicknesses and labels, and the piece drawn is them, not the part's defaults. Under them, what each shim fits: the screw hole and the ring, each marked *default* until it is kept. **⇩ Keep mount** (Panels › Machine › Bed › Keep mount) keeps the hole and the ring Parameters holds for `bed_shims` as the printer's (`PUT /bed/{site}/{printer}/mount`). Then where the nozzle stands over each screw and the plate's corners, each the printer's kept or marked *profile*, and **⌖ Here** beside the place chosen, which keeps it where the nozzle stands now ([Where the screws are](#where-the-screws-are)). **⚒ Make these** (Panels › Machine › Bed › Make these) stands the shims on `bed_shims` if they are not standing yet and slices the piece as drawn, at the shims' thicknesses and the mount kept, with no brim (each shim's slot opens its hole to its rim, which a brim would fill) and no skirt (one that lifts is dragged into a shim), for the printer in its Print window, where Print a part goes on. It chooses the Print window's levelling *probe first*, which `bed_shims` also declares, so a slice of it from anywhere probes first: the shims are printed on the bed they are to level, so the mesh is on for their print (docs/slicer.md) |
 | **History** | Each reading's range, oldest on the left, heated filled and cold hollow, a read of the stored mesh ringed, with the profile's bound drawn as a line |
+
+Each window ends on the step after it, with a button opening the window that step is
+in, as Panels › Machine › Bed opens it: Runs, once it holds a heated pair, *Differences ›*;
+Differences *Fixes ›*, for the shims the pair calls for; Fixes, under ⚒ Make these,
+*Runs ›*, where the pair after the shims is probed once they are printed and fitted. A
+window short of what it reads -- no heated pair yet -- names Runs and its Probe hot.
 
 The newest pair and the pair before it are told by their order: heated probes taken
 two at a time, newest first. A probe taken cold, or heated beside a cold one, is in
@@ -130,8 +136,30 @@ Another printer says its own, three screws or five, and gets as many shims.
 printer_1's are where `parts/ender3/ender3.scad` draws the bed's mounts, the
 frame model's figure, which its `source` says, and are not measured on the
 machine. A screw placed a distance off along X moves its shim by that distance
-times the tilt along X, and the same along Y. A measured position goes in the
-profile in place of the model's, with where it was measured.
+times the tilt along X, and the same along Y.
+
+Each is measured on the machine where its nozzle stands over it, and kept per
+machine in the state folder's `bed/positions.json` under `site/printer`, in
+place of the profile's. In Fixes: **Home all** in the printer's Machine, jog the
+nozzle over a screw's head with its Control pad, choose that screw beside
+**⌖ Here** (Panels › Machine › Bed › Here) and press it. Here asks the board
+pinned at the printer where its nozzle is (`M114`) and keeps that as the screw
+(`PUT /bed/{site}/{printer}/where/{name}` with `{"here": true}`; `{"x", "y"}`
+keeps a place typed). It is refused until the board has homed X and Y since it
+started, since before that its position measures nothing, and while the board is
+not connected. The choice moves on to the next screw once one is kept. Fixes
+marks each screw still the profile's *profile*, and says where the screws come
+from; the shims are taken at the kept ones from then on.
+
+The plate's two corners are kept the same way, the nozzle over the plate's
+front-left corner and then its back-right (`plate_front_left`,
+`plate_back_right`): where the plate lies under the nozzle's 0, 0, and its width
+and depth, which Fixes says and draws the bed by. Both kept, the rectangle between
+them is the printer's print area: every slice made for it after takes it as
+OrcaSlicer's `printable_area`, origin measured, and is arranged at the plate's middle
+rather than at the middle of the profile's figure (`apothecary/slicer/print_area.py`;
+two corners kept less than 50 mm apart, or the wrong way round, are no plate, and the
+profile's area stays).
 
 ## Where the grid lies
 

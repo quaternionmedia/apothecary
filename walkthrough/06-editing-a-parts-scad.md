@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-A part's SCAD edited in the page: the part laid out by the Part view, its SCAD in a window beside the world, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor made fullscreen; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
+A part's SCAD edited in the page: the part laid out by the Part view, its SCAD in a window beside the world, a failing line checked once typing stops and marked where it is, a change rendered soon after its check passes and drawn as an applied variant, kept as a variant in git and listed with what it changes, the editor's window maximised; then round again, and the first variant drawn once more; then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload and the editor's undo kept while another part is edited. Every step is the page's own: a cell of a ring, a key or a button, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, with the OpenSCAD every test server runs and a temporary cache of variants. A variant is saved into a clone of the checkout the server was given, never the checkout's own refs, which the run checks are as it found them. It needs no network, and refuses one.
 
@@ -36,33 +36,33 @@ The line replaced with a smaller cube on top. Checked once typing stops, and 300
 ![A change that reads is rendered soon after its check](screenshots/06-03-a-change-that-reads-is-rendered-soon-after-its-che.png)
 
 ```
-calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git
+calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Save in the SCAD editor keeps it in git
 ```
 
 ## 4. Part › Save keeps it as a variant in git
 
-calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed in the part's Variants, its tab pressed to bring it in front of Parameters, with what it changes against the part's SCAD and that HEAD does not hold it. Fullscreen is the next step.
+calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed in the part's Variants, its tab pressed to bring it in front of Parameters, with what it changes against the part's SCAD and that HEAD does not hold it. Its window maximised is the next step.
 
 ![Part › Save keeps it as a variant in git](screenshots/06-04-part-save-keeps-it-as-a-variant-in-git.png)
 
 ```
-calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Its SCAD window says how to make it the part's source. (⌗39)
+calibration_cube saved as the variant variant-1, a commit on refs/apothecary/variants/calibration_cube/variant-1; nothing in the checkout changed. Next, ⚒ Make calibration_cube on ender3, in the header, takes it there to be made. (⌗39)
 ```
 
-## 5. Fullscreen covers the page
+## 5. Fullscreen maximises the SCAD editor
 
-Its Fullscreen button: the editor over the whole page, the code as tall as it can be. Esc, the same button or Part › View › Fullscreen puts it back.
+Part › View › Fullscreen: the SCAD editor's window maximised over the windows, as its stack's own button or a double-click on its tab would, the code as tall as it can be. Esc in it, the window's restore or the same cell puts it back.
 
-![Fullscreen covers the page](screenshots/06-05-fullscreen-covers-the-page.png)
+![Fullscreen maximises the SCAD editor](screenshots/06-05-fullscreen-maximises-the-scad-editor.png)
 
 ## 6. Round two: a name, a change and Save
 
-In the SCAD window: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed in Variants, still in front of Parameters, newest first, the list following each Save. Drawing the first again is the next step.
+In the SCAD editor: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed in Variants, still in front of Parameters, newest first, the list following each Save. Drawing the first again is the next step.
 
 ![Round two: a name, a change and Save](screenshots/06-06-round-two-a-name-a-change-and-save.png)
 
 ```
-calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. Its SCAD window says how to make it the part's source.
+calibration_cube saved as the variant taller, a commit on refs/apothecary/variants/calibration_cube/taller; nothing in the checkout changed. Next, ⚒ Make calibration_cube on ender3, in the header, takes it there to be made.
 ```
 
 ## 7. Part › Variants draws the first again
@@ -90,22 +90,22 @@ The last line made a small cube 12 mm under the part, and F5 in the editor, Open
 ![F5 checks and draws at once, and a part under the floor is flagged](screenshots/06-10-f5-checks-and-draws-at-once-and-a-part-under-the-f.png)
 
 ```
-calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git
+calibration_cube regenerated from its edited SCAD: an applied variant, not saved; Save in the SCAD editor keeps it in git
 ```
 
-## 11. A draft is kept over a reload, and offered back
+## 11. A draft is kept over a reload, and put back
 
-A line that does not read typed at the end, and the page reloaded: the browser asks before leaving, the status line names the part with work kept in this tab, and Part › Edit draws what the address names and offers the draft back. Restore is the next step.
+A line that does not read typed at the end, and the page reloaded: the browser asks before leaving, the status line names the part with work kept in this tab, and Part › Edit draws what the address names and puts the draft back in the editor, the note under the bar saying so; Revert would let it go.
 
-![A draft is kept over a reload, and offered back](screenshots/06-11-a-draft-is-kept-over-a-reload-and-offered-back.png)
+![A draft is kept over a reload, and put back](screenshots/06-11-a-draft-is-kept-over-a-reload-and-put-back.png)
 
 ```
-Kept in this tab from before it was reloaded: its SCAD edited from short-top. Restore puts it back; Discard lets it go.
+Put back from before the reload: its SCAD edited from short-top. Apply draws it; Revert lets it go.
 ```
 
-## 12. Restore puts the draft back, and the editor keeps its undo while another part is edited
+## 12. The draft put back is checked, and the editor keeps its undo while another part is edited
 
-Restore: the draft back in the editor, checked, its refusal marked. Then v_slot's editor, and calibration_cube's again: its text as it was left, and Ctrl+Z undoes the restore, as it would have before v_slot was opened.
+The draft back in the editor, checked, its refusal marked. Then v_slot's editor, and calibration_cube's again: its text as it was left, and Ctrl+Z undoes putting it back, as it would have before v_slot was opened.
 
 ## What this page does not show
 

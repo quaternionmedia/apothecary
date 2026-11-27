@@ -289,7 +289,7 @@ def test_a_printer_s_machine_polls_it_within_a_bound(page: Page, printer_url: st
     machine = windows.machine(page)
     expect(machine.locator("#poll")).to_be_visible(timeout=15000)
     expect(machine.locator("#poll")).to_have_text("⟳ Poll")  # identified: a printer's Machine
-    machine.locator("#auto").uncheck()
+    machine.locator("#interval").select_option("0")
     machine.locator("#poll").click()
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=5000)
     expect(machine.locator("#c-hot")).to_contain_text("/210°")  # the simulator wobbles ±0.3°
@@ -436,10 +436,10 @@ def test_focused_monitor_page(page: Page, fresh_url: str):
     page.locator("#reset").click()
     expect(page.locator("#log .boot", has_text="start")).to_be_visible(timeout=8000)
 
-    # Release drops the link and stops auto-poll: no poll is left scheduled to reopen it.
+    # Release drops the link and stops polling: no poll is left scheduled to reopen it.
     page.locator("#release").click()
     expect(page.locator("#c-board")).to_contain_text("not held", timeout=5000)
-    assert not page.locator("#auto").is_checked()
+    expect(page.locator("#interval")).to_have_value("0")
     assert page.evaluate(f"() => {MONITOR}.timer") is None
     n1 = page.locator("#log .sys").count()
     page.clock.fast_forward(3 * POLL_MS)
@@ -649,7 +649,7 @@ def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, print
     _identify(printer_url)
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
-    page.locator("#auto").uncheck()  # only the poll this test sends
+    page.locator("#interval").select_option("0")  # only the poll this test sends
 
     # The poll's answer is read at once (disarmed) and handed to the page only once
     # the arm has answered: inside the page, so the arm is not held up.
@@ -1012,9 +1012,12 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     expect(page.locator("#level-history .pick.on")).to_contain_text("read")
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
-    # Disarmed, the probe is not offered, and one asked for all the same is refused
+    # Disarmed, the probe is greyed, saying why, and one asked for all the same is refused
     # before it reaches the board.
-    expect(page.locator("#level-probe")).to_be_hidden()
+    expect(page.locator("#level-probe")).to_be_disabled()
+    expect(page.locator("#level-probe")).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first")
+    )
     page.evaluate("() => window.apothecaryMachine.level.start(true)")
     expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
@@ -1023,7 +1026,7 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     # held for the duration, and the record appears when it is done.
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    expect(page.locator("#level-probe")).to_be_visible()
+    expect(page.locator("#level-probe")).to_be_enabled()
     page.once("dialog", lambda d: d.accept())
     page.locator("#level-probe").click()
     expect(page.locator("#level-job")).to_contain_text("…", timeout=5000)
@@ -1396,9 +1399,8 @@ def test_site_lists_the_sites_jobs_and_a_row_opens_its_machine(page: Page, print
         machine = page.locator(".panel[data-panel='machine']")
         expect(machine).to_be_visible(timeout=10000)
         expect(windows.tab(page, "machine")).to_have_attribute("title", "printer_1 · /dev/ttyFAKE1")
-        expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
-            "printer_1"
-        )
+        # A machine's name is a field, which renames it (renames.py).
+        expect(page.locator("#selected-body #name-input")).to_have_value("printer_1")
         # It ends: the row says how, and running is no longer said.
         ended = _until_it_ends(printer_url, cancel=True)
         assert ended["stage"] == "cancelled"
@@ -1567,9 +1569,7 @@ def test_a_reading_lies_on_the_bed_and_the_badge_selects_its_printer(page: Page,
     expect(contents.filter(has_text="workbench")).to_be_visible(timeout=10000)
     page.evaluate(FRAMES, 2)
     badge.click()
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text(
-        "printer_1", timeout=5000
-    )
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1", timeout=5000)
     # Unpinned, the badge and the marks go.
     page.request.delete(f"{printer_url}/sites/garage/nodes/{BOARD}/device")
     page.evaluate("() => window.fractalViewer.rescanDevices()")

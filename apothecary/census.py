@@ -132,13 +132,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # the views panels.js lists there as it opens.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
-    "settings-open": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "an item of the View menu that opens the Settings panel",
-    ),
     "zoom-in-btn": (WIDGET, WHAT_YOU_SEE, "a button that goes into the chosen piece"),
     "status-select": (WIDGET, WHAT_IS_THERE, "a drop-down for the state of a piece"),
+    "name-input": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a box for a machine's name, which renames it and moves what is kept under it",
+    ),
     "pos-x": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, across"),
     "pos-y": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, along"),
     "pos-z": (WIDGET, WHAT_IS_THERE, "a box for typing where a piece is, up"),
@@ -146,7 +146,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # The staged numbers of a piece: changed on the sliders, then kept or not.
     "apply-btn": (WIDGET, WHAT_IS_THERE, "a button that rebuilds a piece with its staged numbers"),
     "revert-btn": (WIDGET, WHAT_YOU_SEE, "a button that puts the staged numbers back"),
-    "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
     # The staged numbers' undo and redo, and the ghost of what was drawn before:
     # Part › History and Part › View.
     "undo-btn": (
@@ -160,13 +159,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a tick-box that shows a ghost of what was drawn before the newest Apply",
     ),
-    # What a tab kept of a part's work before it was reloaded, offered back.
-    "kept-restore": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts back the work the tab kept from before a reload",
-    ),
-    "kept-discard": (WIDGET, WHAT_YOU_SEE, "a button that lets go of that kept work"),
     # One control per parameter (widgets/part_controls.js), written there as markup,
     # so the census counts them.
     "param-slider": (WIDGET, WHAT_YOU_SEE, "a slider that stages one of a part's numbers"),
@@ -226,11 +218,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # chosen from the list in the part's Variants window.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
-    "scad-fullscreen": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts the SCAD editor over the whole page, or back",
-    ),
     "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
     "made-piece": (
         LIST,
@@ -283,8 +270,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "breadcrumb": (LIST, WHAT_YOU_SEE, "the trail back to where you came from"),
     # ---- a board's Machine, apothecary/static/widgets/machine.js ------------
     # One board, close up. The header: how often to poll, and the link itself.
-    "auto": (WIDGET, WHAT_YOU_SEE, "a tick-box that polls on a schedule"),
-    "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll"),
+    "interval": (WIDGET, WHAT_YOU_SEE, "a drop-down for how often to poll, off among its choices"),
     "poll": (WIDGET, WHAT_YOU_SEE, "a button that polls the printer once"),
     "reconnect": (WIDGET, WHAT_YOU_SEE, "a button that reopens the serial link"),
     "identify": (WIDGET, WHAT_YOU_SEE, "a button that asks the board what it is"),
@@ -307,7 +293,6 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "q": (WIDGET, WHAT_YOU_SEE, "a box for the report code to ask for"),
     "qform:submit": (WIDGET, WHAT_YOU_SEE, "the button that asks for the report"),
     "show-polls": (WIDGET, WHAT_YOU_SEE, "a tick-box that shows the poll traffic"),
-    "follow": (WIDGET, WHAT_YOU_SEE, "a tick-box that keeps the log scrolled to the end"),
     "clear": (WIDGET, WHAT_YOU_SEE, "a button that empties the log"),
     "download": (WIDGET, NOTHING, "a button that downloads the log"),
     # The control pad, behind the latch. The buttons carry the G-code line
@@ -513,6 +498,26 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that heats the bed, holds it, probes it twice and turns it off after",
     ),
+    # Fixes' Here: where the nozzle stands kept as a screw or a corner of the plate, the
+    # place chosen beside it; the cell Panels › Machine › Bed › Here (RING_BACKED).
+    "bed-where-what": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a choice of the place Here keeps: a levelling screw or a corner of the plate",
+    ),
+    "bed-where-here": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps where the printer's nozzle stands, as its board says, as that "
+        "screw or corner",
+    ),
+    # A window's step after it, at its foot: one button, written once, opening the window
+    # that step is in -- Differences from Runs, Fixes from Differences, Runs from Fixes.
+    "bed-next": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button at the foot of a bed window that opens the window of the step after it",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -585,11 +590,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "deck-machine": (WIDGET, WHAT_IS_THERE, "a machine's name, a button that the knobs move it"),
     "deck-step": (WIDGET, WHAT_YOU_SEE, "a button that makes a knob's step so many millimetres"),
-    # The strip's screen, which only a swipe on the deck changed: a real deck's from here.
+    # The deck's screen, which a tap on its name along the strip changes: a real deck's
+    # from here too.
     "deck-screen-to": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a screen's name, a button that the deck's strip shows it, as a swipe along it does",
+        "a screen's name, a button that the deck shows it, as a tap on its name along the strip does",
     ),
     "deck-here": (
         WIDGET,
@@ -695,6 +701,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a drop-down of how the next slice levels the bed at its start: the part's own,"
         " probe first, or home only",
     ),
+    "print-offset": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a drop-down of the printer's first-layer offset, the nozzle lower or higher than"
+        " its probe puts it, which keeps the one chosen: its next slices are made with it",
+    ),
     "print-filament": (
         WIDGET,
         WHAT_IS_THERE,
@@ -735,11 +747,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a field for what one feature of a printed piece reads, one in each row of its"
         " plan under measured",
     ),
-    "feedback-measure-keep": (
+    "feedback-keep": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that checks what was read against what was made and files it in the"
-        " piece's drawer: its printer's next turn of its tuning, or its router's allowance",
+        "a button that files whatever is typed or chosen in the piece's drawer, each its own"
+        " filing: what was read, checked against what was made -- its printer's next turn of"
+        " its tuning, or its router's allowance -- what the piece shows, its printer's next"
+        " look, and the note",
     ),
     "seen-read": (
         WIDGET,
@@ -747,18 +761,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a drop-down of how badly one fault shows on a printed piece, none to bad, one for"
         " each fault under seen",
     ),
-    "feedback-seen-keep": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that files what the piece shows in its drawer as its printer's next look,"
-        " which moves one setting",
-    ),
     "feedback-note": (WIDGET, WHAT_YOU_SEE, "a field for a note on the piece"),
-    "feedback-note-keep": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that files the note in the piece's drawer",
-    ),
     "feedback-tune-apply": (
         WIDGET,
         WHAT_IS_THERE,
@@ -921,7 +924,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # Next, the page taken to a stage, and a person's word on the stage (Off with what
     # its field says), under the name its other field holds. The header's Tour opens
     # it. All but the journeys' drop-down and the field for what is off are cells of
-    # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too.
+    # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too. Its ⇲
+    # docks it as a window under the world, and ⇱ floats it again: Panels › Windows ›
+    # Dock tour.
     "tour-pop-open": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -931,6 +936,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "a button that closes the tour's box and leaves its journey",
+    ),
+    "tour-pop-dock": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that docks the tour's box as a window under the world, or floats it over"
+        " the page again",
     ),
     "tour-pop-journeys": (
         WIDGET,
@@ -955,7 +966,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "tour-pop-page": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a link to the first walkthrough page the stage names",
+        "a link to the walkthrough page the stage names first, at the step it names",
     ),
     # ---- the Workspace, apothecary/static/widgets/working_space.js ---------
     # Its first line's buttons take the step it names; a printer's hour has a row
@@ -991,6 +1002,7 @@ RING_BACKED: Dict[str, str] = {
     # The Tour's box and its buttons are the cells of Panels › Windows › Tour
     "tour-pop-open": "tour:toggle",
     "tour-pop-close": "tour:toggle",
+    "tour-pop-dock": "tour:dock",
     "tour-pop-back": "tour:back",
     "tour-pop-put": "tour:put",
     "tour-pop-works": "tour:works",
@@ -1070,6 +1082,8 @@ RING_BACKED: Dict[str, str] = {
     "ctl": "control:arm",
     "ctl-disarm": "control:disarm",
     "ctl-pop": "panel:pad",
+    # A machine's Name in Selected: Panels › Machine › Rename takes a person to it.
+    "name-input": "machine:rename",
     "estop": "control:estop",
     "pad-estop": "control:estop",
     "cmd:M104 S{h-hot}": "control:hotend-on",
@@ -1159,25 +1173,23 @@ RING_BACKED: Dict[str, str] = {
     "print-level": "print:level",
     # Its first layer's hold: the Print cell's Adhesion steps it.
     "print-adhesion": "print:adhesion",
-    # A part's piece's Feedback › Measure files what is typed under measured, as Keep does,
-    # and takes a person to the field when nothing is typed; a fault chosen under seen and
-    # nothing read, it files the look, as Keep look does. Note files the note, or takes a
-    # person to its field; Take turn and Undo turn are the buttons'.
+    # The printer's first-layer offset: the Print cell's First layer steps it and keeps it.
+    "print-offset": "print:offset",
+    # A part's piece's Feedback › Measure is Keep: what is typed and chosen under measured,
+    # seen and note filed, or a person taken to the first field when nothing is. Note files
+    # the note alone, or takes a person to its field; Take turn and Undo turn are the buttons'.
     "feedback-measure": "feedback:measure",
     "measure-read": "feedback:measure",
-    "feedback-measure-keep": "feedback:measure",
+    "feedback-keep": "feedback:measure",
     "seen-read": "feedback:measure",
-    "feedback-seen-keep": "feedback:measure",
     "feedback-note": "feedback:note",
-    "feedback-note-keep": "feedback:note",
     "feedback-tune-apply": "feedback:tune-apply",
     "feedback-tune-undo": "feedback:tune-undo",
     # A print that stopped, tried again: Feedback › Try again's cells.
     "feedback-try-probe": "feedback:try-probe",
     "feedback-try-brim": "feedback:try-brim",
     "feedback-try-raft": "feedback:try-raft",
-    "feedback-note:keydown:keepNote": "feedback:note",
-    "feedback-measure-plan:keydown:keepOnEnter": "feedback:measure",
+    "feedback-card:keydown:keepOnEnter": "feedback:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
@@ -1201,9 +1213,6 @@ RING_BACKED: Dict[str, str] = {
     "detail-mode": "view:detail:full",
     "overlay-toggle": "view:outlines",
     "walls-toggle": "view:walls",
-    # ⚙ View › Settings is the canvas ring's View › Settings: the Settings panel shown.
-    "settings-open": "view:settings",
-    "settingsOpenBtn:click:openSettings": "view:settings",
     "snapToggle:change:setTranslationSnap": "view:snap",
     "detailModeEl:change:clear": "view:detail:full",
     "overlayToggle:change:renderFocus": "view:outlines",
@@ -1215,12 +1224,10 @@ RING_BACKED: Dict[str, str] = {
     "probe": "device:probe",
     "ctl:change:arm": "control:arm",
     # the part editor's Defaults, Apply and Revert are Part's on its ring
-    "defaults-btn": "part:defaults",
     "apply-btn": "part:apply",
     "revert-btn": "part:revert",
-    # the SCAD editor's Save and Fullscreen, and a saved variant chosen, are too
+    # the SCAD editor's Save, and a saved variant chosen, are too
     "scad-save": "part:save",
-    "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
     # a part's presets, Part › Presets' cells; ⇄ Adapter, Part › Adapter
     "part-preset": "part:preset",
@@ -1290,7 +1297,12 @@ RING_BACKED: Dict[str, str] = {
     "bed-probe-hot": "bed:probe-hot",
     "bed-hot-c": "bed:probe-hot",
     "bed-soak": "bed:probe-hot",
+    # Fixes' Here: the cell Panels › Machine › Bed › Here, the place it keeps the one chosen.
+    "bed-where-here": "bed:where",
+    "bed-where-what": "bed:where",
     "fixes:click:onFixesClick": "bed:make",
+    # Each the cell of Panels › Machine › Bed that opens the window it names.
+    "bed-next": "panel:toggle:bed-differences",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1380,6 +1392,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "changing the plate's thickness keeps it for the machine's board",
     ),
+    # the Print window's first layer row, left without a choice: drawn again as kept
+    "print-offset:blur:renderOffset": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "leaving the first layer drop-down draws it again as the offset kept",
+    ),
     "c-needs:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1439,11 +1457,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the tick-box that lets a click pick walls, for the session",
     ),
-    "settingsOpenBtn:click:openSettings": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "⚙ View › Settings, showing the Settings panel with its tab in front",
-    ),
     # The View menu folds away when a press lands anywhere else, as a menu does.
     "document:pointerdown:foldViewMenu": (
         WIDGET,
@@ -1452,6 +1465,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "posAxis:change:recomputeWorldBounds": (WIDGET, WHAT_IS_THERE, "typing a position"),
     "statusSelect:change:submitStatus": (WIDGET, WHAT_IS_THERE, "choosing a state"),
+    "nameInput:change:renameMachine": (WIDGET, WHAT_IS_THERE, "typing a machine's new name"),
     "zoomInLink:click:stepIn": (WIDGET, WHAT_YOU_SEE, "the step-in button on the chosen piece"),
     # done to the scene itself
     "canvas:dblclick:onDoubleClick": (GESTURE, WHAT_YOU_SEE, "double-tapping to step in"),
@@ -1736,7 +1750,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a double-click on the tour's box's head: folded to it, or unfolded",
     ),
-    "window:resize:isOpen": (
+    "window:resize:floating": (
         AUTOMATIC,
         WHAT_YOU_SEE,
         "the window resized: the tour's box kept whole on the page",
@@ -1828,15 +1842,10 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "devPinManual:click:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board"),
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
-    "feedback-note:keydown:keepNote": (
+    "feedback-card:keydown:keepOnEnter": (
         WIDGET,
         WHAT_IS_THERE,
-        "filing the typed note in the piece's drawer, by Enter",
-    ),
-    "feedback-measure-plan:keydown:keepOnEnter": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "filing what is typed in a printed piece's dimensions' rows, by Enter in one",
+        "filing what is typed and chosen in a piece's drawer, by Enter in one of its fields",
     ),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
@@ -1876,6 +1885,18 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "picking an earlier bed reading to look at",
     ),
     "level-card:click:closest": (WIDGET, WHAT_IS_THERE, "a corner button, moving the nozzle there"),
+    # A row of the Print window's jobs, pressed or Enter on it: the drawer of the piece the
+    # job made, in Part › Feedback.
+    "print-history:click:onJobRow": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in the Print window, opening its piece's drawer in Part › Feedback",
+    ),
+    "print-history:keydown:onJobRow": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a job's row in the Print window with Enter, opening its piece's drawer",
+    ),
     # ---- the Bench --------------------------------------------------------
     "coresEl:click:closest": (WIDGET, WHAT_IS_THERE, "a core's Install button"),
     "modulesEl:click:closest": (WIDGET, WHAT_IS_THERE, "a toolchain module's Install button"),
@@ -1899,7 +1920,6 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "choosing which kept file the buttons mean",
     ),
-    "auto:change:schedule": (WIDGET, WHAT_YOU_SEE, "the poll-on-a-schedule tick-box"),
     "interval:change:schedule": (WIDGET, WHAT_YOU_SEE, "choosing how often to poll"),
     "qform:submit:query": (WIDGET, WHAT_YOU_SEE, "asking the printer for a report"),
     "show-polls:change:renderLog": (WIDGET, WHAT_YOU_SEE, "the poll-traffic tick-box"),
@@ -1944,7 +1964,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "fixes:click:onFixesClick": (
         WIDGET,
         WHAT_IS_THERE,
-        "Keep or Make these in Fixes, told which by its id",
+        "Keep mount, Make these or Here in Fixes, told which by its id",
+    ),
+    "body:click:onNext": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a bed window's step after it, the window it is in opened",
     ),
     # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
     # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the

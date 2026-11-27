@@ -30,6 +30,14 @@
  * next to the world instead -- the tallest, where a column stands there, that holds no
  * window with a least height.
  *
+ * Under the world there is one stack too: a window whose home is "under" is a stack of
+ * its own under the world, the world's own column, its room taken from the world's
+ * height (UNDER per cent at most, half the world's at most), or a tab of the stack
+ * under it that holds one already. The world and what is docked under it stand in its
+ * row as the world alone did: a window beside the world stands beside that column, and
+ * the last window under the world closed, the world is alone in its row again, as wide
+ * as the column was.
+ *
  * A window may have a least height (`least`, pixels, its stack's tabs included): where
  * it stands in a column, its stack is given that much as the window opens or a view is
  * laid out, from the stacks beside it, while they keep the height of their tabs.
@@ -63,13 +71,13 @@
  * when the page gives fillMenu its own (`seeThrough`).
  */
 
-import { GoldenLayout, LayoutConfig } from "golden-layout";
+import { GoldenLayout, ItemType, LayoutConfig, ResolvedItemConfig } from "golden-layout";
 import { setReason } from "./can.js";
 import { mayAct, takes } from "./keys.js";
 
 const TILDE_KEYS = new Set(["`", "~"]);
 const WORLD = "world";
-const HOMES = new Set(["column", "tabs", "beside"]);
+const HOMES = new Set(["column", "tabs", "beside", "under"]);
 // A window opened beside the world takes this share of the world's row (per cent) at
 // most, and half the world's at most.
 const BESIDE = 28;
@@ -79,6 +87,9 @@ const WORLD_LEAST = 400;
 // The least room a stack beside the world is opened with (pixels); with less to spare,
 // the window is a tab next to the world.
 const BESIDE_LEAST = 280;
+// A window docked under the world takes this share of the world's height (per cent)
+// at most, and half the world's at most.
+const UNDER = 26;
 // How low a stack goes, its tabs and a sliver: the height a minimised one is given.
 const LOWEST = 40;
 
@@ -336,6 +347,29 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     tabsForDrops();
     layout.on("stateChanged", tabsForDrops);
     const isWorldAlone = () => !!worldStack()?.isMaximised;
+    // Where the world stands in its row: its stack, or the column it stands in with
+    // nothing but windows docked under it (home "under").
+    const docked = (c) => c.isStack && c.contentItems.every((ci) => records.get(ci.id)?.home === "under");
+    function worldSpot() {
+        const ws = worldStack(), col = ws?.parent;
+        return col?.isColumn && col.contentItems.every((c) => c === ws || docked(c)) ? col : ws;
+    }
+    // The column the world stands in, made for it where it stands in a row: what a
+    // window docked under it is added to. GoldenLayout does the same for a window
+    // dropped on the world's foot, and folds the column back into the world's stack
+    // once the world is alone in it.
+    function columnForTheWorld() {
+        rowForTheWorld();
+        const ws = worldStack();
+        if (!ws) return null;
+        if (ws.parent?.isColumn) return ws.parent;
+        const row = ws.parent;
+        const column = layout.createContentItem(ResolvedItemConfig.createDefault(ItemType.column), ws);
+        row.replaceChild(ws, column);
+        column.addChild(ws, 0, true);
+        ws.size = 100;
+        return column;
+    }
 
     // A window added to a stack of tabs (at `index`, else after its last), in front only
     // when `front`.
@@ -347,7 +381,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // The stack of windows beside the world: one in the world's row holding a window
     // whose home is "beside" (not `except`), the nearest the world where there are two.
     function besideStack(except) {
-        const ws = worldStack(), row = ws?.parent;
+        const ws = worldSpot(), row = ws?.parent;
         if (!row?.isRow) return null;
         const at = row.contentItems.indexOf(ws);
         const beside = (c) => c !== ws && c.isStack && c.contentItems.some((ci) => ci.id !== except && records.get(ci.id)?.home === "beside");
@@ -360,7 +394,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // stack of the column standing there, the first of two as tall -- never one holding
     // a window that must stay in view (a least height), while there is another.
     function nextToTheWorld() {
-        const ws = worldStack(), row = ws?.parent;
+        const ws = worldSpot(), row = ws?.parent;
         if (!row?.isRow) return null;
         const at = row.contentItems.indexOf(ws);
         const next = row.contentItems[at + 1] || row.contentItems[at - 1];
@@ -396,8 +430,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             return;
         }
         // A component's stack is its parentItem; a stack's row or column, its parent.
+        if (home === "under" && placeUnder(r, config, front)) return;
         rowForTheWorld();
-        const ws = worldStack();
+        // The world's stack, or the column it shares with what is docked under it.
+        const ws = worldSpot();
         const besideWorld = ws && ws.parent;
         if (home === "beside" && besideWorld) {
             // The one stack beside the world, where there is one: a tab of it.
@@ -438,9 +474,11 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             return;
         }
         const near = r.after ? item(r.after)?.parentItem : null;
-        const column = (near?.parent?.type === "column" ? near.parent : null)
+        // Never the world's own column, where windows are docked under it.
+        const under = worldSpot() !== worldStack() ? worldSpot() : null;
+        const column = (near?.parent?.type === "column" && near.parent !== under ? near.parent : null)
             || [...records.values()].map((o) => item(o.id)).filter(Boolean)
-                .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column");
+                .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column" && p !== under);
         if (column && column.contentItems.length >= columnStacks) {
             // The column full: a tab beside the window it follows, else at its foot --
             // never over a window that must stay in view (a least height): a stack of its
@@ -458,13 +496,33 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         }
         besideWorld.addItem({ type: "stack", content: [config] }, besideWorld.contentItems.indexOf(ws) + 1);
     }
+    // A window docked under the world: a tab of the stack docked there, where one is,
+    // else a stack of its own right under the world, its room taken from the world's
+    // height and every other window in the world's column keeping its own.
+    function placeUnder(r, config, front) {
+        const column = columnForTheWorld();
+        const ws = worldStack();
+        if (!column || !ws) return false;
+        const shared = column.contentItems.find((c) => c !== ws && c.isStack && c.contentItems.some((ci) => ci.id !== r.id && records.get(ci.id)?.home === "under"));
+        if (shared) { addTab(shared, config, front); return true; }
+        const sizes = new Map(column.contentItems.map((c) => [c, c.size]));
+        const room = Math.min(UNDER, sizes.get(ws) / 2);
+        const at = column.contentItems.indexOf(ws) + 1;
+        column.addItem({ type: "stack", content: [config] }, at);
+        const added = column.contentItems[at];
+        for (const [c, size] of sizes) c.size = c === ws ? size - room : size;
+        added.size = room;
+        column.updateSize(false);
+        return true;
+    }
 
     // With every window but the world closed, GoldenLayout lays the world's stack on the
     // layout's root, where nothing can stand beside it. Before a window opens there, the
     // layout is laid out again with the world in a row, every window kept, as reset()
     // lays the page's own out.
     function rowForTheWorld() {
-        const ws = worldStack();
+        // The world's stack, or its column with what is docked under it, on the root.
+        const ws = worldSpot();
         if (!ws || ws.parent?.isRow || ws.parent?.isColumn) return;
         const config = LayoutConfig.fromResolved(layout.saveLayout());
         config.root = { type: "row", content: [config.root] };
@@ -476,18 +534,25 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
 
     // A window beside the world closed, its stack with it: its room goes back to the
     // world, and the windows on the world's other side keep theirs -- so a window
-    // opened beside the world and closed again leaves the layout as it found it.
+    // opened beside the world and closed again leaves the layout as it found it. So
+    // does one docked under the world, in the world's own column; the world and what
+    // is docked under it take back the room of one beside them.
     // GoldenLayout takes the stack away after this, in the same task.
     function giveBackRoom(ci) {
-        const stack = ci?.parentItem, ws = worldStack(), row = ws?.parent;
-        if (!stack || !row || stack === ws || stack.parent !== row || stack.contentItems.length !== 1) return;
-        const sizes = new Map(row.contentItems.filter((c) => c !== stack).map((c) => [c, c.size]));
-        sizes.set(ws, sizes.get(ws) + stack.size);
-        queueMicrotask(() => {
-            if (row.contentItems.includes(stack) || !row.contentItems.includes(ws)) return;
-            for (const [c, size] of sizes) if (row.contentItems.includes(c)) c.size = size;
-            row.updateSize(false);
-        });
+        const stack = ci?.parentItem;
+        if (!stack || stack.contentItems.length !== 1) return;
+        for (const ws of new Set([worldStack(), worldSpot()])) {
+            const row = ws?.parent;
+            if (!row || stack === ws || stack.parent !== row) continue;
+            const sizes = new Map(row.contentItems.filter((c) => c !== stack).map((c) => [c, c.size]));
+            sizes.set(ws, sizes.get(ws) + stack.size);
+            queueMicrotask(() => {
+                if (row.contentItems.includes(stack) || !row.contentItems.includes(ws)) return;
+                for (const [c, size] of sizes) if (row.contentItems.includes(c)) c.size = size;
+                row.updateSize(false);
+            });
+            return;
+        }
     }
 
     // ---- a window with nothing to show ------------------------------------------------
@@ -613,7 +678,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // with an optional `size` (per cent of its row or column). "world", or
     // { world: true, size }, is the world's window, tabless. A window the page has not
     // registered is left out, and a stack, row or column left empty goes with it.
-    const views = new Map([["default", { title: "Default", spec: null }]]);
+    // The page's own is listed as the ring's cell that lays it out is named.
+    const views = new Map([["default", { title: "Default", label: "Reset layout", spec: null }]]);
     const worldItem = () => ({ type: "component", componentType: WORLD, id: WORLD, title: "World", isClosable: false });
     function resolveView(spec, parent = "row") {
         const sized = (out, size) => { if (size) out[parent === "column" ? "height" : "width"] = size; return out; };
@@ -820,7 +886,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.type = "button";
             b.className = "window-item view-item";
             b.dataset.view = id;
-            b.textContent = v.title;
+            b.textContent = v.label || v.title;
             const missing = api.viewMissing(id);
             const offer = own ? own.offer(id) : { refused: missing ? `${v.title} lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ""}` : null };
             // Greyed where it cannot be laid out now, as every control the page greys is
@@ -979,6 +1045,18 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             return isWorldAlone();
         },
         isWorldAlone,
+        /* A window's stack maximised over the layout, the window in front in it, as its
+         * stack's own button and a double-click on its tab do; or put back. Whether it is
+         * maximised now. */
+        maximise(id, on = true) {
+            const ci = item(id);
+            const stack = ci?.parentItem;
+            if (!stack) return false;
+            if (on) stack.setActiveComponentItem(ci, false);
+            if (!!on !== !!stack.isMaximised) stack.toggleMaximise();
+            return !!stack.isMaximised;
+        },
+        isMaximised(id) { return !!item(id)?.parentItem?.isMaximised; },
         isOpen(id) { return !!item(id); },
         /* In the layout, its tab in front, and not behind the world alone. */
         isShown(id) {
@@ -1018,11 +1096,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         /* A view: a named arrangement of windows, the page's own ("default") or one a
          * page defines -- `layout` in rows, columns and stacks of window ids (see
          * resolveView), the window it cannot be laid out without (`requires`) and how a
-         * person opens that window (`hint`), said where the view is refused. A window a
-         * view leaves out is closed; one made for the moment that was open stays open,
-         * at its home. */
-        defineView(id, { title, layout: spec, requires = null, hint = null, listed = true }) { views.set(id, { title: title || id, spec, requires, hint, listed }); },
-        views() { return [...views].map(([id, v]) => ({ id, title: v.title, requires: v.requires, listed: v.listed })); },
+         * person opens that window (`hint`), said where the view is refused; `label` is
+         * its entry's words where a list names it otherwise than its title (the ring's
+         * cell's, "Part view"). A window a view leaves out is closed; one made for the
+         * moment that was open stays open, at its home. */
+        defineView(id, { title, label = null, layout: spec, requires = null, hint = null, listed = true }) { views.set(id, { title: title || id, label, spec, requires, hint, listed }); },
+        views() { return [...views].map(([id, v]) => ({ id, title: v.title, label: v.label || v.title, requires: v.requires, listed: v.listed })); },
         /* The window a view needs and the page has not got now ({ id, title, hint }), else null. */
         viewMissing(id) {
             const view = views.get(id);

@@ -55,6 +55,10 @@ and the task carries the slice's answer once it ends:
   every filament it can load (the slicer's profiles of its vendor that fit its
   machine); ``POST /slicer/filaments/loaded`` ``{site, printer, filament, note}``:
   another loaded, its next slices made with it (slicer/filaments.py).
+- ``POST /slicer/first-layer/offset`` ``{site, printer, offset, note}``: the printer's
+  first-layer offset kept, mm, negative lower: its next slices are made with it, as
+  OrcaSlicer's ``z_offset`` (slicer/first_layer_offset.py). ``GET /slicer/first-layer``
+  says the one kept, as ``offset``.
 - ``GET /slicer/tuning/schema``, ``POST /slicer/tuning/validate``: ``print/tuning/1``'s
   JSON Schema, and a document read back.
 
@@ -75,7 +79,7 @@ from .. import cabinet
 from .. import print_faults as pf
 from ..firmware.models import Port
 from ..firmware.tasks import Running, TaskBusy, TaskRunner
-from . import compose, filaments, service, tuning
+from . import compose, filaments, first_layer_offset, service, tuning
 from .models import SliceRecord, SlicerStatus
 from .modules import NotInstalled, SlicerError, chosen_id, get_module, modules, reset_modules
 from .profiles import printers
@@ -174,6 +178,13 @@ class FilamentRequest(BaseModel):
     printer: str = Field(..., pattern=NODE_PATH)
     filament: str = Field(..., min_length=1, max_length=200)
     note: str = Field("", max_length=200)  # the spool: its brand, its colour
+
+
+class OffsetRequest(BaseModel):
+    site: str = Field(..., pattern=SITE_NAME)
+    printer: str = Field(..., pattern=NODE_PATH)
+    offset: float  # mm, negative lower: first_layer_offset.keep bounds it
+    note: str = Field("", max_length=first_layer_offset.NOTE_MOST)  # what the square showed
 
 
 class Piece(BaseModel):
@@ -284,9 +295,23 @@ def slicer_first_layer(
     variant: Optional[str] = Query(None, pattern=VARIANT_KEY),
 ):
     """How a slice of ``part`` for the printer named as a slice names it levels and
-    holds with neither asked: the part's own, else the printer's (service.first_layer)."""
+    holds with neither asked: the part's own, else the printer's (service.first_layer);
+    and the first-layer offset its slices take (``offset``, first_layer_offset.answer)."""
     target, at = service.resolve(part, port=port, site=site, printer=printer, variant=variant)
-    return service.first_layer(target, at.profile)
+    return service.first_layer(target, at.profile) | {
+        "offset": first_layer_offset.answer(at.profile, at.at.site, at.at.path)
+    }
+
+
+@router.post("/first-layer/offset")
+def slicer_first_layer_offset(body: OffsetRequest):
+    """The printer's first-layer offset kept: its next slices are made with it."""
+    profile = _printer_profile(body.site, body.printer)
+    try:
+        first_layer_offset.keep(profile, body.site, body.printer, body.offset, body.note)
+    except first_layer_offset.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return first_layer_offset.answer(profile, body.site, body.printer)
 
 
 @router.get("/tasks")

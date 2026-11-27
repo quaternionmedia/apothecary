@@ -1,7 +1,9 @@
 """A print that stopped on its first layer, in the page: its piece's drawer opened by
 itself in Part › Feedback where it stopped, a fault filed on that layer, the piece tried
-again on a raft, and Site's Jobs opening the Machine and the drawer together
-(apothecary/static/widgets/feedback.js, apothecary/cabinet.py; docs/cabinet.md).
+again on a raft, Site's Jobs opening the Machine and the drawer together, and the
+printer's first layer kept lower in its Print window and the piece sliced with it
+(apothecary/static/widgets/feedback.js, apothecary/cabinet.py; docs/cabinet.md,
+docs/slicer.md).
 
 Runs against ``apothecary serve --simulated``, started as a person starts it, with the
 scripted OrcaSlicer its slicer, each move of its file followed by a dwell so the print
@@ -110,8 +112,11 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
             "A print of bed_shims on printer_1 cancelled on its first layer, as a person "
             "cancels a first layer that will not hold: its piece's drawer opened by itself in "
             "Part › Feedback, saying the layer it stopped on, a fault filed there, the piece "
-            "tried again on a raft, and Site's Jobs opening the Machine and the drawer "
-            "together. [docs/cabinet.md](../docs/cabinet.md) is the reference."
+            "tried again on a raft, Site's Jobs opening the Machine and the drawer "
+            "together, and the printer's first layer kept 0.05 mm lower and the piece "
+            "sliced with it. [docs/cabinet.md](../docs/cabinet.md) and "
+            "[docs/slicer.md](../docs/slicer.md#a-printers-first-layer-offset) are the "
+            "reference."
         ),
         runtime=(
             "It drives a real browser against `apothecary serve --simulated`, started as a "
@@ -121,9 +126,10 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
             "is sent."
         ),
         does_not_show=[
-            "**Why a first layer does not hold.** A level bed, the mesh on and the first "
-            "layer's height are the bench's; the page says where the print stopped and "
-            "offers what to slice again with.",
+            "**Why a first layer does not hold.** A level bed, a clean one, and which way "
+            "the nozzle's height is off are the bench's, read on a one-layer square "
+            "(`first_layer_square`); the page says where the print stopped, offers what "
+            "to slice again with, and keeps the height chosen.",
             "**What changes on every run.** Moments are blanked in the pictures.",
         ],
         browser_suite_only=True,
@@ -137,7 +143,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     expect(page.locator("#status")).to_contain_text(
         "bed_shims.gcode kept and chosen", timeout=60000
     )
-    # Control armed from printer_1's ring; ▶ Send, asked first; the print begins.
+    # Control armed from printer_1's ring; ▶ Print, asked first; the print begins.
     on_row(page, "printer_1", "Device", "Control", "Arm")
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     page.once("dialog", lambda d: d.accept())
@@ -200,7 +206,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
 
     # A fault seen, filed on the layer it stopped on.
     feedback.locator("select.seen-read[data-fault='first_layer']").select_option("3")
-    feedback.locator("#feedback-seen-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(feedback.locator("#feedback-filed")).to_contain_text("look", timeout=10000)
     whole = http.get(f"/cabinet/bed_shims/drawers/{drawer['id']}").json()
     (look,) = [f for f in whole["filed"] if f["kind"] == "look"]
@@ -225,7 +231,11 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     expect(machine.locator("#print-level option:checked")).to_have_text(
         "the part's own: probe first"
     )
-    assert settings["start"]["value"] == ["home", "probe-each-print"], settings["start"]
+    assert settings["start"]["value"] == [
+        "home",
+        "first-layer-offset",
+        "probe-each-print",
+    ], settings["start"]
     stack = _maximised(page, "machine-print", "#print-adhesion-row")
     settled(page)
     story.shows(
@@ -233,7 +243,7 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "First layer, bad, is kept as a look and filed on the layer the print stopped on. "
         "Raft slices the piece again for printer_1 in its Print window, its adhesion row "
         "on a raft and its levelling the part's own, which bed_shims declares probe first; "
-        "▶ Send is a person's. Print is maximised here from its stack.",
+        "▶ Print is a person's. Print is maximised here from its stack.",
         blank=CHANGING,
     )
     _restored(page, stack)
@@ -243,6 +253,18 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
     expect(page.locator("#control")).to_be_hidden(timeout=5000)
     badge = page.locator(".world-badge[data-path='printer_1']")
     expect(badge).not_to_contain_text("armed", timeout=10000)
+    windows.close(page, "part-feedback")
+    expect(windows.panel(page, "part-feedback")).to_be_hidden()
+    # Disarmed, the Print window's first line says what ▶ Print waits for, and where.
+    windows.show(page, "machine-print")
+    expect(machine.locator("#print-next")).to_have_text(
+        "▶ Print waits for control: ⚙ Control in the Machine's head arms it."
+    )
+    # The Print window's own row of the stopped print opens its drawer, as Site's does.
+    machine.locator(f"#print-history .job-row[data-job='{ended['job_id']}']").click()
+    expect(windows.panel(page, "part-feedback")).to_be_visible(timeout=10000)
+    expect(feedback.locator("#feedback-piece")).to_have_value(f"drawer:{drawer['id']}")
+    expect(page.locator("#status")).to_contain_text("bed_shims's cabinet in Part › Feedback")
     windows.close(page, "part-feedback")
     expect(windows.panel(page, "part-feedback")).to_be_hidden()
     windows.show(page, "jobs")
@@ -258,9 +280,57 @@ def test_a_print_that_stopped_is_told_where_and_tried_again(page: Page, simulate
         "A job's row opens its Machine and its drawer",
         "Site's Jobs lists the cancelled print. Its row selects printer_1 and opens its "
         "Machine, and opens the piece's drawer in Part › Feedback beside it: the job's own "
-        "drawer, chosen among bed_shims's pieces.",
+        "drawer, chosen among bed_shims's pieces. Its row in the Print window's own jobs "
+        "opens the drawer too.",
         blank=CHANGING,
     )
+
+    # The first layer lower: printer_1's first-layer offset, none kept yet, stepped 0.05 mm
+    # lower in its Print window's first layer row, kept as it is chosen; the piece sliced
+    # again takes it as its z_offset.
+    offset = machine.locator("#print-offset")
+    expect(offset).to_be_visible(timeout=10000)
+    expect(offset).to_have_value("0")
+    expect(machine.locator("#print-offset-said")).to_have_text("none kept yet")
+    offset.select_option("-0.05")
+    expect(page.locator("#status")).to_contain_text(
+        "printer_1's first layer: the nozzle 0.05 mm lower; its next slices are made with it"
+    )
+    expect(machine.locator("#print-offset-said")).to_contain_text(re.compile(r"^kept \d{4}-"))
+    at = {"site": "garage", "printer": "printer_1"}
+    kept = http.get("/slicer/first-layer", params={"part": "bed_shims", **at}).json()["offset"]
+    assert kept["value"] == -0.05 and kept["kept"] is not None, kept
+
+    # The scripted slicer writes no z_offset into its G-code, so this slice's bytes are the
+    # raft's and its file the one kept already (devices.save_print_file): its record, made
+    # again, is the newest of bed_shims's.
+    def shims_newest():
+        made = [s for s in http.get("/slicer/slices").json() if s["made"]["name"] == "bed_shims"]
+        return max(made, key=lambda s: s["at"])
+
+    before = shims_newest()["at"]
+    machine.locator("#print-slice").click()
+    expect(page.locator("#status")).to_contain_text(
+        "bed_shims.gcode kept and chosen", timeout=60000
+    )
+    newest = shims_newest()
+    assert newest["at"] > before, (newest["at"], before)
+    z = {s["name"]: s for s in newest["settings"]}["z_offset"]
+    assert (z["value"], z["origin"]) == ("-0.05", "measured"), z
+    assert "first-layer-offset: garage's printer_1, kept" in z["source"], z
+    stack = _maximised(page, "machine-print", "#print-offset-row")
+    settled(page)
+    story.shows(
+        "The first layer kept lower",
+        "A first layer that did not hold, its lines round and apart, is a nozzle too high "
+        "over the bed. The Print window's first layer row keeps printer_1's first-layer "
+        "offset 0.05 mm lower, as it is chosen, and Slice makes the piece again with it: "
+        "every slice made for printer_1 after takes it as its z_offset, on top of the "
+        "probe's own offset. A one-layer square, first_layer_square, says which way to go. "
+        "Print is maximised here from its stack.",
+        blank=CHANGING + (("#print-offset-said", MOMENT),),
+    )
+    _restored(page, stack)
 
     # Nothing left armed, and no real port touched.
     assert http.get("/firmware/printers/armed").json() == {"armed": {}}

@@ -76,6 +76,11 @@ class NotAMount(ShimError):
     the printer's or its readings'."""
 
 
+class NotAPosition(ShimError):
+    """A place on the bed that is not one of the printer's screws or its plate's corners,
+    or no place said: the person's, not the printer's."""
+
+
 @dataclass(frozen=True)
 class Screw:
     """A levelling screw: its name, the label its shim carries, and where the nozzle
@@ -753,7 +758,7 @@ def for_printer(
     """The shims for ``printer`` in ``site`` from the readings of its pinned board named
     by ``reading_ids``, else its newest heated pair (``heated_pair``)."""
     profile = printer_profile(site, printer)
-    bed = bed_screws(profile)
+    bed = bed_screws_for(site, printer, profile)
     board = pinned_board(site, printer)
     found = readings(board)
     if reading_ids:
@@ -800,6 +805,100 @@ def run_json(run: Run) -> dict:
         "heated": run.heated,
         "note": run.note,
     }
+
+
+PLATE_CORNERS = ("front_left", "back_right")
+"""The plate's corners kept, each where the nozzle stood over it: its extent in the
+nozzle's coordinates, so where the plate lies under the nozzle's 0, 0 and how big it is."""
+
+
+def positions_file() -> Path:
+    """Where each machine's screws and plate corners are kept, each where its nozzle stood
+    over it: the state folder's ``bed/positions.json``, a machine's ``site/printer`` its
+    key. Machine state: never committed."""
+    return state_dir() / "bed" / "positions.json"
+
+
+def positions(site: str, printer: str) -> dict:
+    """What is kept for ``printer``: ``screws`` by name and ``plate`` by corner, each
+    ``{x, y, at}``; empty where nothing is."""
+    try:
+        held = json.loads(positions_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    mine = held.get(f"{site}/{printer}") if isinstance(held, dict) else None
+    return mine if isinstance(mine, dict) else {}
+
+
+def bed_screws_for(site: str, printer: str, profile) -> BedScrews:
+    """``printer``'s screws: each kept for it where its nozzle stood over the screw, else
+    where its profile says; the source says which."""
+    bed = bed_screws(profile)
+    kept = positions(site, printer).get("screws") or {}
+    if not kept:
+        return bed
+    screws = tuple(
+        Screw(s.name, s.label, float(kept[s.name]["x"]), float(kept[s.name]["y"]))
+        if s.name in kept
+        else s
+        for s in bed.screws
+    )
+    labels = [s.label for s in bed.screws if s.name in kept]
+    where = f"kept for {printer} where its nozzle stood over each (bed/positions.json)"
+    source = (
+        where
+        if len(labels) == len(bed.screws)
+        else f"{', '.join(labels)} {where}; the rest {bed.source}"
+    )
+    return BedScrews(screws=screws, source=source)
+
+
+def keep_position(site: str, printer: str, what: str, x: float, y: float) -> dict:
+    """Keep where ``printer``'s nozzle stands over ``what``: one of its screws by name
+    (``front_left``), or a corner of its plate (``plate_front_left``,
+    ``plate_back_right``). NotAPosition says why not."""
+    bed = bed_screws(printer_profile(site, printer))
+    names = [s.name for s in bed.screws]
+    corners = [f"plate_{c}" for c in PLATE_CORNERS]
+    if what not in names and what not in corners:
+        raise NotAPosition(
+            f"{printer}'s screws are {', '.join(names)}, and its plate's corners "
+            f"{' and '.join(corners)}: not {what!r}"
+        )
+    if not all(math.isfinite(v) and -50 <= v <= 1000 for v in (x, y)):
+        raise NotAPosition(f"a place on the bed is -50 to 1000 mm on each axis, not {x}, {y}")
+    try:
+        held = json.loads(positions_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        held = {}
+    held = held if isinstance(held, dict) else {}
+    mine = dict(held.get(f"{site}/{printer}") or {})
+    group, key = ("plate", what[len("plate_") :]) if what in corners else ("screws", what)
+    now = dict(mine.get(group) or {})
+    at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now[key] = {"x": round(float(x), 2), "y": round(float(y), 2), "at": at}
+    mine[group] = now
+    held[f"{site}/{printer}"] = mine
+    write_whole(positions_file(), json.dumps(held, indent=2) + "\n")
+    label = next((s.label for s in bed.screws if s.name == what), None)
+    said = (
+        f"{label} kept at X {x:.2f}, Y {y:.2f}"
+        if label
+        else f"the plate's {key.replace('_', '-')} corner kept at X {x:.2f}, Y {y:.2f}"
+    )
+    return {"what": what, "x": round(float(x), 2), "y": round(float(y), 2), "at": at, "said": said}
+
+
+def plate_json(plate: Mapping) -> Optional[dict]:
+    """The plate as kept: each corner, and its width and depth once both are."""
+    if not plate:
+        return None
+    out: dict = {c: plate.get(c) for c in PLATE_CORNERS}
+    fl, br = plate.get("front_left"), plate.get("back_right")
+    if fl and br:
+        out["width"] = round(br["x"] - fl["x"], 2)
+        out["depth"] = round(br["y"] - fl["y"], 2)
+    return out
 
 
 def mount_json(found: Mount) -> dict:
@@ -879,7 +978,8 @@ def story(site: str, printer: str) -> dict:
     heated pair (else the newest probe); that pair's newer less its older, the floor; the
     newest pair less the pair before it, what was done between them; and the bow."""
     profile = printer_profile(site, printer)
-    bed = bed_screws(profile)
+    bed = bed_screws_for(site, printer, profile)
+    kept = positions(site, printer)
     board = pinned_board(site, printer)
     found = readings(board)
     pairs = heated_pairs(found)
@@ -931,6 +1031,17 @@ def story(site: str, printer: str) -> dict:
         "differences": differences,
         "bound": range_bound(profile),
         "volume": list(volume.value[:2]) if volume is not None else None,
-        "screws": [{"name": s.name, "label": s.label, "x": s.x, "y": s.y} for s in bed.screws],
+        "screws": [
+            {
+                "name": s.name,
+                "label": s.label,
+                "x": s.x,
+                "y": s.y,
+                "kept": (kept.get("screws") or {}).get(s.name, {}).get("at"),
+            }
+            for s in bed.screws
+        ],
+        "screws_from": bed.source,
+        "plate": plate_json(kept.get("plate") or {}),
         "mount": mount_json(mount(site, printer)),
     }

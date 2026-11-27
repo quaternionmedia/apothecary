@@ -17,8 +17,6 @@ from fastapi import APIRouter
 from .. import docs_site
 from ..projects.parts.skeleton import ROOT
 
-REPOSITORY = "https://github.com/quaternionmedia/apothecary"
-
 router = APIRouter()
 
 HREF = re.compile(r'<a href="([^"#?]*)([#?][^"]*)?">')
@@ -37,9 +35,7 @@ def _target(path: str) -> str:
             return f"/{first}/{rest}"
         if docs_site.is_generated(root / rest):  # made here, not committed: kept, and marked
             return f"/{first}/{rest}"
-    if (ROOT / clean).is_dir():
-        return f"{REPOSITORY}/tree/main/{clean}"
-    return f"{REPOSITORY}/blob/main/{clean}"
+    return docs_site.in_the_repository(clean)
 
 
 def rewrite_links(body: str) -> str:

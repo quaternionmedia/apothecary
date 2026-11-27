@@ -125,9 +125,9 @@ Generic PLA.
   top under half a layer is not proposed, since the slice would put every top where it
   was.
 - **The first layer is said, not applied.** printer_1's profile holds `z_offset` at 0
-  because the board applies the probe's offset when `G28` homes Z, and a measured
-  first-layer offset is the start piece `first-layer-offset`, a stub
-  ([the slicer](slicer.md#what-a-slice-is-composed-from)). `initial_layer_print_height`
+  because the board applies the probe's offset when `G28` homes Z, and the
+  first-layer offset its slices take is the one kept in its Print window from
+  one-layer squares ([the slicer](slicer.md#a-printers-first-layer-offset)). `initial_layer_print_height`
   is not the first layer's term: it sets how thick the first layer is sliced, and every
   top above stands on it as sliced; a turn records it, because a height's quantization
   depends on it.
@@ -315,9 +315,9 @@ cube read with calipers proposes nothing, but what it shows does.
 | `GET /slicer/filaments`, `POST /slicer/filaments/loaded` | The filament loaded and the choices; another loaded |
 
 In the page, the Feedback window's **seen** row, under **measured**, has a choice of
-none to bad for each fault and **Keep look**, which files the look in the piece's drawer;
-Part › View › Feedback › Measure on the ring files the look too, when a fault is chosen
-and nothing is read. The history beneath lists turns and looks in the order they were
+none to bad for each fault, and the window's one **Keep** files the look in the piece's
+drawer, with what is read and the note where they are typed; Part › View › Feedback ›
+Measure on the ring is that Keep. The history beneath lists turns and looks in the order they were
 kept, and each fault seen over the looks. The Print window's **filament** row loads the
 filament chosen; a note of the spool is the route's alone.
 

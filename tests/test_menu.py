@@ -796,6 +796,7 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "print:plan",
         "print:level",
         "print:adhesion",
+        "print:offset",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",
@@ -857,6 +858,31 @@ def test_the_control_ring_says_what_the_machine_s_windows_say():
     assert button("print-cancel") == "Abort"
     assert printer["control:sd-pause"] == pause["Print"] == "Pause"
     assert router["control:job-hold"] == pause["Cut"] == "Hold"
+    # The pad's SD print buttons are the same three acts, worded as the ring's cells.
+    for line, action in (
+        ("M24", "control:sd-resume"),
+        ("M25", "control:sd-pause"),
+        ("M524", "control:sd-abort"),
+    ):
+        said = re.search(rf'data-cmd="{line}"[^>]*>([^<]+)</button>', machine)[1]
+        assert re.sub(r"^\W+", "", said) == printer[action], (line, said)
+
+
+def test_the_bed_windows_buttons_say_what_their_ring_cells_say():
+    """Fixes' Keep mount, Make these and Here, and Runs' Probe hot, are worded as their
+    cells of Panels › Machine › Bed are (widgets/bed_shims.js)."""
+    from apothecary import menu
+
+    bed = (STATIC / "widgets" / "bed_shims.js").read_text(encoding="utf-8")
+    cells = _labels_by_action(menu._bed([]).children)
+    for action, name in (
+        ("bed:keep", "bed-keep"),
+        ("bed:make", "bed-make"),
+        ("bed:probe-hot", "bed-probe-hot"),
+        ("bed:where", "bed-where-here"),
+    ):
+        said = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', bed)[1]
+        assert re.sub(r"^\W+", "", said) == cells[action], (name, said)
 
 
 def test_a_machine_drawn_as_a_part_has_no_slice_and_its_ring_holds():
@@ -1508,9 +1534,13 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Loops", None, 2),
         # Its bed's readings and the shims that level it.
         ("Bed", None, 4),
+        # Its name, typed in Selected.
+        ("Rename", "machine:rename", 9),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
+    assert address_of(root, "machine:rename") == "449"
+    assert carried_by("machine:rename").name == "VIEWER"
     # The Deck, a tool: its window, then the Stream Deck +'s knobs and the strip's screen.
     deck = next(c for c in tools.children if c.label == "Deck")
     assert [(c.label, c.action, c.cell) for c in deck.children] == [
@@ -1519,7 +1549,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine", None, 2),
         ("Step", None, 4),
         ("Here", "deck:here", 9),
-        # The strip's screen, as a swipe along it changes it.
+        # The deck's screen, as a tap on its name along the strip changes it.
         ("Screen", None, 3),
     ]
     assert address_of(root, "deck:knobs") == "4326"
@@ -1528,11 +1558,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert address_of(root, "deck:step:10") == "43242"
     screen = next(c for c in deck.children if c.label == "Screen")
     assert [(c.label, c.action, c.cell) for c in screen.children] == [
-        ("Knobs", "deck:screen:knobs", 8),
+        ("Jog", "deck:screen:knobs", 8),
         ("Progress", "deck:screen:progress", 6),
         ("Status", "deck:screen:status", 2),
         ("Back", "deck:screen:previous", 4),
         ("Next", "deck:screen:next", 9),
+        # The three screens that came after them, in the cells left.
+        ("Bench", "deck:screen:bench", 3),
+        ("Home", "deck:screen:home", 1),
+        ("Bed", "deck:screen:bed", 7),
     ]
     assert address_of(root, "deck:screen:status") == "43232"
     for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
@@ -1553,7 +1587,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ]
     assert address_of(root, "panel:loops") == "4428"
     # Bed: the four windows of the printer's bed, then Fixes' Keep and Make these, then
-    # Runs' Probe hot, seated after them so none of theirs moves.
+    # Runs' Probe hot, then Fixes' Here, each seated after the last so none moves.
     bed = next(c for c in machine.children if c.label == "Bed")
     assert [(c.label, c.action) for c in bed.children] == [
         ("Runs", "panel:toggle:bed-runs"),
@@ -1563,6 +1597,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Keep mount", "bed:keep"),
         ("Make these", "bed:make"),
         ("Probe hot", "bed:probe-hot"),
+        ("Here", "bed:where"),
     ]
     assert [c.cell for c in bed.children[:6]] == [8, 6, 2, 4, 9, 3]
     assert address_of(root, "panel:bed-runs") == "4448"
@@ -1570,6 +1605,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("bed:keep").name == carried_by("bed:make").name == "VIEWER"
     assert carried_by("bed:probe-hot").name == "VIEWER"
     assert address_of(root, "bed:probe-hot") == "4441"
+    assert carried_by("bed:where").name == "VIEWER"
+    assert address_of(root, "bed:where") == "4447"
     assert address_of(root, "loops:start") == "4422"
     assert address_of(root, "loops:loop:bed") == "44236"
     assert address_of(root, "loops:kind:perturbation") == "44212"
@@ -1679,13 +1716,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
-        ("Print view", "panel:view:make", 1),
-        # The Tour, after the views: its box over the page, then its buttons.
-        ("Tour", None, 7),
+        # The Tour, after the views: its box over the page, then its buttons. A
+        # journey's view has no cell: the tour lays it out. Then the Tour docked as a
+        # window under the world, or floating again.
+        ("Tour", None, 1),
+        ("Dock tour", "tour:dock", 7),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
     assert address_of(root, "panel:view:family") == "493"
-    assert address_of(root, "panel:view:make") == "491"
+    assert "panel:view:make" not in [c.action for c in windows.children]
     tour = next(c for c in windows.children if c.label == "Tour")
     assert [(c.label, c.action, c.cell) for c in tour.children] == [
         ("Tour", "tour:toggle", 8),
@@ -1697,9 +1736,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Take me here", "tour:put", 1),
         ("Who", "tour:by", 7),
     ]
-    assert address_of(root, "tour:toggle") == "4978"
-    assert address_of(root, "tour:works") == "4972"
+    assert address_of(root, "tour:toggle") == "4918"
+    assert address_of(root, "tour:works") == "4912"
     assert carried_by("tour:off").name == "VIEWER"
+    assert carried_by("tour:dock").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"
@@ -1762,8 +1802,9 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     by_systems = re.findall(r"^ {20}([\w-]+): \{\n {24}main:", page, re.M)
     assert by_systems == ["airgap"]
     registered += [by_id(sid).main for sid in by_systems]
-    # An armed printer's control pad is Panels › Machine › Control pad's, not a toggle.
-    made = ("control",)
+    # An armed printer's control pad is Panels › Machine › Control pad's, not a toggle;
+    # the Tour docked is Panels › Windows › Tour's and Dock tour's.
+    made = ("control", "tour")
     assert all(pid in registered for pid in made)
     registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
@@ -1775,11 +1816,11 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
     """The header's ⚙ View menu is ring-backed by View, a cell of the canvas ring's
     own: View › Fit first, then Snap to grid, Detail (Full, Black box, Dot), Outlines,
-    Select walls, Settings, and after it Layers (a ring: the window first) and Depth (1
-    to 4 levels, then one less and one more), so no cell before them moves. At the root
-    and inside a piece alike the canvas ring holds eight or fewer, View is at 2, seated
-    before every cell that comes and goes, and Panels holds no View. The page carries
-    them all."""
+    Select walls, Depth (1 to 4 levels, then one less and one more), and Layers (a ring:
+    the window first) last, at 1. Settings is a window, Panels › Tools › Settings, and
+    View has no cell of it. At the root and inside a piece alike the canvas ring holds
+    eight or fewer, View is at 2, seated before every cell that comes and goes, and
+    Panels holds no View. The page carries them all."""
     from apothecary.menu import carried_by
 
     for targets, view_cell in (([], "2"), (["printer_1"], "2")):
@@ -1798,9 +1839,8 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             ("Detail", None, 2),
             ("Outlines", "view:outlines", 4),
             ("Select walls", "view:walls", 9),
-            ("Settings", "view:settings", 3),
+            ("Depth", None, 3),
             ("Layers", None, 1),
-            ("Depth", None, 7),
         ]
         assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
@@ -1811,11 +1851,12 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert address_of(root, "view:snap") == f"{view_cell}6"
         assert address_of(root, "view:detail:box") == f"{view_cell}26"
         assert address_of(root, "view:walls") == f"{view_cell}9"
-        assert address_of(root, "view:settings") == f"{view_cell}3"
+        assert "view:settings" not in [c.action for c in view.children]
+        assert address_of(root, "panel:settings") == "436"
         assert address_of(root, "view:layers") == f"{view_cell}1"
         assert address_of(root, "view:layers:window") == f"{view_cell}18"
-        assert address_of(root, "view:depth:2") == f"{view_cell}76"
-        assert [(c.label, c.action) for c in view.children[7].children] == [
+        assert address_of(root, "view:depth:2") == f"{view_cell}36"
+        assert [(c.label, c.action) for c in view.children[5].children] == [
             ("1 level", "view:depth:1"),
             ("2 levels", "view:depth:2"),
             ("3 levels", "view:depth:3"),
@@ -1831,7 +1872,6 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         "view:detail:dot",
         "view:outlines",
         "view:walls",
-        "view:settings",
         "view:layers",
         "view:depth:3",
         "view:depth:more",
@@ -2213,7 +2253,7 @@ def test_a_part_whose_pieces_move_has_its_motion_under_view_after_fit():
     still = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
     view = next(c for c in moving.options[-1].children if c.label == "View")
     assert [c.label for c in view.children] == [
-        "SCAD",
+        "SCAD editor",
         "Fullscreen",
         "Ghost",
         "Fit",
@@ -2305,11 +2345,11 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("View", "part:view"),
         ("History", "part:history"),
     ]
-    # A ring holds eight: SCAD and Fullscreen are under View, beside the ghost and Fit,
+    # A ring holds eight: the SCAD editor and Fullscreen are under View, beside the ghost and Fit,
     # and History holds Undo and Redo.
     view, history = part.children[5:7]
     assert [(c.label, c.action or c.id) for c in view.children] == [
-        ("SCAD", "part:scad"),
+        ("SCAD editor", "part:scad"),
         ("Fullscreen", "part:fullscreen"),
         ("Ghost", "part:ghost"),
         ("Fit", "part:fit"),
@@ -2333,7 +2373,7 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
         ("Draw", "part:variant:draw:wider"),
         ("Rename", "part:variant:rename:wider"),
         ("Duplicate", "part:variant:duplicate:wider"),
-        ("History", "part:variant:history:wider"),
+        ("Saves", "part:variant:history:wider"),
         ("Compare", "part:variant:compare:wider"),
         ("Delete", "part:variant:delete:wider"),
     ]

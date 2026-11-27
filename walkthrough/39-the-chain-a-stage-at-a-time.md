@@ -125,6 +125,8 @@ Hands on what was made to move. The stream_deck piece is chosen and the Deck win
     Drive a machine › 1 Deck (the tour): the Stream Deck + as the server draws it: its keys, its strip, and what it heard
 2 Knobs: printer_1's Machine opened
     Drive a machine › 2 Knobs (the tour): its knobs jog the machine chosen on it, once armed: the printer's Machine beside it
+3 Screens: stream_deck chosen
+    Drive a machine › 3 Screens (the tour): its six screens, named along its strip: a tap on a name shows one, a knob pressed the next; Temps draws the printer's heaters, the Bench both machines
 ```
 
 ## 7. Run a site: its procedure, the family's members, the hub's audit, then its Workspace
@@ -181,7 +183,7 @@ A printer's bed is levelled on its mounts. printer_1's Machine is opened; Heat a
 3 Compare: nothing more to do
     Level a bed › 3 Compare (the tour): the second run less the first in Differences: the floor a shim must clear, and the bow, which no shim fixes
 4 Measure: bed_shims chosen
-    Level a bed › 4 Measure (the tour): what a shim fits, measured at the bench and typed in bed_shims' Parameters: the bed screw chosen, M3 or M4, the hole typed over where it needs another; a mount's outer diameter where it meets the bed, read with calipers, as the ring; then Keep mount in Fixes keeps both as printer_1's
+    Level a bed › 4 Measure (the tour): what a shim fits, measured at the bench and typed in bed_shims' Parameters: the bed screw chosen, M3 or M4, the hole typed over where it needs another; a mount's outer diameter where it meets the bed, read with calipers, as the ring; then Keep mount in Fixes keeps both as printer_1's. Where each screw is: Home all in printer_1's Machine, jog the nozzle over the screw, and Here in Fixes keeps it
 5 Shims: printer_1 framed in the world, as f does
     Level a bed › 5 Shims (the tour): each corner's shim in Fixes, drawn at its screw in the world as wide as the mount: the highest none, one under a layer or under the floor skipped
 6 Print: nothing more to do

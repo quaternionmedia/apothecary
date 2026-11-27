@@ -15,8 +15,13 @@
   and every serial port plugged in now.
 - ``PUT /sites/{name}/machines/{path}/plan``: keep the part it will make and the kept
   file of its kind that makes it. ``DELETE`` lets the plan go.
+- ``PUT /sites/{name}/machines/{path}/name`` ``{name}``: the machine renamed, its path
+  with it, and every record kept under its old path moved to the new one
+  (``apothecary/machine_names.py``); 409 while the bench is at work, 422 for a name that is
+  no node's or that a node beside it has.
 
-Plain ``def``: each reads the site and the state folder; none touches a port.
+Plain ``def``: each reads the site and the state folder (the name writes there too);
+none touches a port.
 """
 
 from __future__ import annotations
@@ -26,13 +31,17 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .. import jobs, machine_plans, sites
+from .. import jobs, machine_names, machine_plans, sites
 from ..firmware.bindings import walk_paths
 from ..hierarchy import find_node_by_path
 
 router = APIRouter(prefix="/sites", tags=["machines"])
 
 NODE_PATH = r"^[A-Za-z0-9_][A-Za-z0-9_.\-]*$"
+
+
+class NameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
 
 
 class PlanRequest(BaseModel):
@@ -135,6 +144,18 @@ def keep_plan(name: str, path: str, body: PlanRequest):
 def let_plan_go(name: str, path: str):
     _machine(name, path)
     return {"cleared": machine_plans.clear(name, path)}
+
+
+@router.put("/{name}/machines/{path}/name")
+def rename_machine(name: str, path: str, body: NameRequest):
+    """The machine at ``path`` called ``body.name``: its new path, and what was moved."""
+    site, _, _ = _machine(name, path)
+    try:
+        return machine_names.rename(name, site, path, body.name)
+    except machine_names.Busy as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except machine_names.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{name}/machines/{path}/missing")

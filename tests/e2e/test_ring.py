@@ -491,7 +491,8 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     expect(page.locator("#ring-overlay")).to_have_count(0)
     intent = _intents(page)[-1]
     assert intent["action"] == "select:printer_1" and intent["address"] == address
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
+    # A machine's name is a field, which renames it (renames.py).
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1")
     # The row it chose wears that address, from the canvas ring.
     expect(page.locator("#contents-list .contents-item[data-path='printer_1']")).to_have_attribute(
         "data-address", address, timeout=5000
@@ -518,7 +519,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     up_cell = next(c for c, label in wedges.items() if label == "Parent")
     page.keyboard.press(up_cell)
     assert _intents(page)[-1]["action"] == "select:printer_1"
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_contain_text("printer_1")
+    expect(page.locator("#selected-body #name-input")).to_have_value("printer_1")
 
     # Stepped in, the canvas ring's Pieces are the level's two pieces and Step out, seated
     # after every cell the canvas ring always has, steps out.
@@ -696,7 +697,7 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
 
 @pytest.mark.e2e
 def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_url: str):
-    """Panels › Windows holds the views, World alone, Reset layout and the Tour; Reset
+    """Panels › Windows holds the views, World alone, Reset layout, the Tour and Dock tour; Reset
     layout lays the page's own layout out again and says so. What a person moved, and what a reset
     does with it, are the window manager's (tests/e2e/test_window_manager.py)."""
     world = _open_panels(page, ring_url)
@@ -706,9 +707,8 @@ def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_ur
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
     assert sorted(_wedges(page).values()) == [
-        "Airgap view", "Family view", "Machine view", "Part view", "Print view", "Reset layout",
-        "Tour",
-        "World alone",
+        "Airgap view", "Dock tour", "Family view", "Machine view", "Part view", "Reset layout",
+        "Tour", "World alone",
     ]  # fmt: skip
     page.keyboard.press(
         next(cell for cell, label in _wedges(page).items() if label == "Reset layout")
@@ -768,11 +768,11 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
 
 
 @pytest.mark.e2e
-def test_on_a_short_page_the_view_menu_ends_at_the_page_and_scrolls_to_settings(
+def test_on_a_short_page_the_view_menu_ends_at_the_page_and_scrolls_to_its_last_row(
     page: Page, ring_url: str
 ):
     """A page shorter than ⚙ View's list: the menu ends at the page's foot and scrolls
-    by itself, so Settings, its last row, is reached and pressed."""
+    by itself, so Select walls, its last row, is reached and pressed."""
     _open_panels(page, ring_url)
     page.set_viewport_size({"width": 1280, "height": 260})
     page.locator("#view-menu > summary").click()
@@ -784,13 +784,12 @@ def test_on_a_short_page_the_view_menu_ends_at_the_page_and_scrolls_to_settings(
     )
     assert box["bottom"] <= box["page"], box
     assert box["held"] > box["shown"], box
-    settings = body.locator("#settings-open")
-    settings.scroll_into_view_if_needed()
-    rect = settings.bounding_box()
+    walls = body.locator("label:has(#walls-toggle)")
+    walls.scroll_into_view_if_needed()
+    rect = walls.bounding_box()
     assert rect["y"] + rect["height"] <= box["page"], (rect, box)
-    settings.click()
-    expect(body).to_be_hidden()
-    assert windows.state(page, "settings")["shown"] is True
+    walls.click()
+    expect(body.locator("#walls-toggle")).to_be_checked()
 
 
 @pytest.mark.e2e
@@ -807,16 +806,19 @@ def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows
     expect(page.locator("#view-menu > summary")).to_have_text("⚙ View")
     body = page.locator(windows.VIEW_MENU)
     expect(body.locator(".view-menu-views .spawn-group")).to_have_text(["Views"])
+    # The systems' views, each named as its cell on Panels › Windows is: a journey's is
+    # the tour's to lay out, and is not listed.
     expect(body.locator(".view-item")).to_have_text(
-        ["Default", "Part", "Machine", "Airgap", "Family", "Print"]
+        ["Reset layout", "Part view", "Machine view", "Airgap view", "Family view"]
     )
-    # The views first, then how the world is drawn, and Settings.
+    # The views first, then how the world is drawn; Settings is a window, not here.
     order = body.evaluate(
         """(el) => { const at = (s) => el.querySelector(s).getBoundingClientRect().top;
-            return [at('.view-item[data-view=default]'), at('.view-item[data-view=make]'),
-                at('#snap-toggle'), at('#settings-open')]; }"""
+            return [at('.view-item[data-view=default]'), at('.view-item[data-view=family]'),
+                at('#snap-toggle'), at('#walls-toggle')]; }"""
     )
     assert order == sorted(order) and len(set(order)) == 4, order
+    expect(body.locator("#settings-open")).to_have_count(0)
     # No Machine open and nothing selected: the Machine view is greyed, as every control
     # the page greys is, and says why; the Part view is not.
     machine = windows.view_entry(page, "machine")
@@ -829,7 +831,7 @@ def test_the_view_menu_lists_the_views_and_a_view_pressed_there_lays_its_windows
     page.keyboard.press("ArrowDown")
     assert page.evaluate("() => document.activeElement.dataset.view") == "part"
     page.keyboard.press("End")
-    assert page.evaluate("() => document.activeElement.dataset.view") == "make"
+    assert page.evaluate("() => document.activeElement.dataset.view") == "family"
     page.keyboard.press("Home")
     page.keyboard.press("ArrowDown")
     page.keyboard.press("Enter")
@@ -1058,7 +1060,7 @@ def test_the_headers_menus_the_tour_and_the_procedure_wear_their_cells_addresses
     page: Page, ring_url: str
 ):
     """Each control a cell of the ring also is wears that cell's address, once: the
-    header's ⚙ View, ⊞ Windows, Settings and Tour, the universe's crumb out of a site, the
+    header's ⚙ View, ⊞ Windows and Tour, the universe's crumb out of a site, the
     site's crumb and its ▾ at the site's own level (the ring's Site), the tour box's
     buttons, the Procedure's GO and Start over, and the Stream Deck +'s Open Deck (its
     ring's Deck)."""
@@ -1068,14 +1070,13 @@ def test_the_headers_menus_the_tour_and_the_procedure_wear_their_cells_addresses
             const ring = await window.apothecaryRing.resolve({ context: { pointing: 'canvas', targets: [] }, site: 'garage' });
             const at = window.apothecaryRing.addresses(ring);
             const of = (path) => window.apothecaryRing.addressOf(ring, path);
-            return { ...at, view: of(['view']), windows: of(['panels', 'panel:windows']), site: of(['Site']) };
+            return { ...at, view: of(['view']), windows: of(['panels']), site: of(['Site']) };
         }"""
     )
     windows.open_window(page, "procedure")
     for selector, address in (
         ("#view-menu > summary", canvas["view"]),
         ("#windows-menu > summary", canvas["windows"]),
-        ("#settings-open", canvas["view:settings"]),
         ("#tour-pop-open", canvas["tour:toggle"]),
         (".tour-pop-next", canvas["tour:next"]),
         ("#universe-crumb", canvas["site:apothecary"]),

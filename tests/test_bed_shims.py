@@ -521,6 +521,103 @@ def test_the_routes_answer_the_story_and_keep_a_mount(tmp_path, monkeypatch):
     assert client.put("/bed/garage/printer_1/mount", json={"screw": "M5"}).status_code == 422
 
 
+def test_screws_kept_where_the_nozzle_stood_over_them_are_where_the_shims_are_taken(
+    tmp_path, monkeypatch
+):
+    """printer_1's profile places its screws by the frame model; one kept where its nozzle
+    stood over it replaces the profile's, the rest stay the profile's and are said to, and
+    the shims are taken at them. The plate's two corners give its size."""
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    _four(tmp_path / "state")
+    before = bs.story("garage", "printer_1")
+    assert all(s["kept"] is None for s in before["screws"]) and before["plate"] is None
+    said = bs.keep_position("garage", "printer_1", "front_right", 280.0, 18.5)
+    assert said["said"] == "FR kept at X 280.00, Y 18.50"
+    told = bs.story("garage", "printer_1")
+    fr = next(s for s in told["screws"] if s["label"] == "FR")
+    assert (fr["x"], fr["y"]) == (280.0, 18.5) and fr["kept"] == said["at"]
+    assert told["screws_from"].startswith("FR kept for printer_1 where its nozzle stood")
+    assert "the rest parts/ender3/slicer.json" in told["screws_from"]
+    shim = next(s for s in told["shims"]["shims"] if s["label"] == "FR")
+    assert (shim["x"], shim["y"]) == (280.0, 18.5)
+    assert told["shims"]["screws_from"] == told["screws_from"]
+    for name, x, y in (
+        ("front_left", 22.0, 18.5),
+        ("back_right", 280.0, 282.0),
+        ("back_left", 22, 282),
+    ):
+        bs.keep_position("garage", "printer_1", name, x, y)
+    assert bs.story("garage", "printer_1")["screws_from"] == (
+        "kept for printer_1 where its nozzle stood over each (bed/positions.json)"
+    )
+    bs.keep_position("garage", "printer_1", "plate_front_left", -8.0, -5.5)
+    assert bs.story("garage", "printer_1")["plate"] == {
+        "front_left": {"x": -8.0, "y": -5.5, "at": bs.positions("garage", "printer_1")["plate"]["front_left"]["at"]},
+        "back_right": None,
+    }  # fmt: skip
+    said = bs.keep_position("garage", "printer_1", "plate_back_right", 302.0, 304.5)
+    assert said["said"] == "the plate's back-right corner kept at X 302.00, Y 304.50"
+    plate = bs.story("garage", "printer_1")["plate"]
+    assert (plate["width"], plate["depth"]) == (310.0, 310.0)
+
+
+@pytest.mark.parametrize(
+    "what, x, y, match",
+    [
+        ("middle", 1.0, 1.0, "printer_1.s screws are front_left, front_right, back_right, back_left"),
+        ("plate_middle", 1.0, 1.0, "plate_front_left and plate_back_right"),
+        ("front_left", 2000.0, 1.0, "-50 to 1000 mm"),
+        ("front_left", float("nan"), 1.0, "-50 to 1000 mm"),
+    ],
+)
+def test_a_place_that_is_no_screw_or_corner_is_refused_and_nothing_kept(
+    tmp_path, monkeypatch, what, x, y, match
+):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    _four(tmp_path / "state")
+    with pytest.raises(bs.NotAPosition, match=match):
+        bs.keep_position("garage", "printer_1", what, x, y)
+    assert bs.positions("garage", "printer_1") == {}
+
+
+def test_the_route_keeps_a_place_given_or_where_the_board_says_its_nozzle_is(tmp_path, monkeypatch):
+    """Given x and y, kept as given. Here asks the board pinned at the printer: refused
+    while it is not connected and until it has homed X and Y since it started."""
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+    from apothecary.firmware import devices
+
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    _four(tmp_path / "state")
+    client = TestClient(app)
+    r = client.put("/bed/garage/printer_1/where/back_left", json={"x": 21.5, "y": 281})
+    assert r.status_code == 200 and r.json()["said"] == "BL kept at X 21.50, Y 281.00"
+    assert client.put("/bed/garage/printer_1/where/back_left", json={}).status_code == 422
+    assert (
+        client.put("/bed/garage/printer_1/where/middle", json={"x": 1, "y": 1}).status_code == 422
+    )
+    monkeypatch.setattr(devices, "port_of_board", lambda identity: None)
+    r = client.put("/bed/garage/printer_1/where/front_left", json={"here": True})
+    assert r.status_code == 409 and "A106ZTEU, is not connected" in r.json()["detail"]
+    asked = []
+    monkeypatch.setattr(
+        devices, "port_of_board", lambda identity: asked.append(identity) or "/dev/ttyUSB0"
+    )
+    at = {"x": 23.0, "y": 19.5, "z": 5.0, "e": 0.0, "homed": []}
+    monkeypatch.setattr(devices, "nozzle_at", lambda port: dict(at))
+    r = client.put("/bed/garage/printer_1/where/front_left", json={"here": True})
+    assert r.status_code == 409 and "has not homed X and Y" in r.json()["detail"]
+    assert asked == ["A106ZTEU"]
+    at["homed"] = ["X", "Y", "Z"]
+    r = client.put("/bed/garage/printer_1/where/front_left", json={"here": True})
+    assert r.status_code == 200 and r.json()["said"] == "FL kept at X 23.00, Y 19.50"
+    told = client.get("/bed/garage/printer_1").json()
+    assert [(s["label"], s["x"], s["y"]) for s in told["screws"] if s["kept"]] == [
+        ("FL", 23.0, 19.5), ("BL", 21.5, 281.0)
+    ]  # fmt: skip
+
+
 # ---- what a person reads of the shims printed -------------------------------------------
 
 MADE = {"thicknesses": [0.3, 0.8], "labels": "FL BR", "screw": "M3", "outer_d": 11.8}

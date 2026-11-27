@@ -12,6 +12,11 @@
 // over the world, so it is kept small: its head names the stage, what the page did and
 // what to try are folded under one line, and what it says is only what is not so yet.
 //
+// Docked (its ⇲, kept by this browser), it is a window of the page's layout instead,
+// the page's `dock`: under the world, covering nothing, dragged, split or maximised as
+// any window is, and kept open as a journey lays out its windows. Its ⇱ floats it over
+// the page again where it was left. Its window's ✕ is its own: the tour closed.
+//
 // `stage(journey, stageId, { reload })` is the page's: it resolves to `{ did: [...], said,
 // refused }`. `reload` is true where no one pressed anything -- a reload found the box
 // open, or the address named a stage -- and the page then starts nothing: a slice, a toolpath or shapes found are a
@@ -26,6 +31,7 @@ const MARKUP = `
 <header class="tour-pop-head" title="Drag to move; double-click to fold to this bar, or unfold">
   <span class="tour-pop-title"></span>
   <span class="tour-pop-name"></span>
+  <button type="button" class="tour-pop-dock" data-do="dock"></button>
   <button type="button" class="tour-pop-close" data-do="close" title="Close the tour and leave its journey: the windows stay where they are">✕</button>
 </header>
 <div class="tour-pop-body">
@@ -33,7 +39,7 @@ const MARKUP = `
   <ol class="tour-pop-stages"></ol>
   <p class="tour-pop-words"><span class="tour-pop-said"></span>
     <button type="button" class="tour-pop-put" data-do="put" aria-label="Take the page here" title="Take the page here again: opens and chooses what this stage needs, and enters it">↻</button>
-    <a class="tour-pop-page" target="_blank" rel="noopener" title="The walkthrough page that goes through this stage, in a tab">its page</a></p>
+    <a class="tour-pop-page" target="_blank" rel="noopener" title="The walkthrough page that goes through this stage, at the step it names first, in a tab">its page</a></p>
   <details class="tour-pop-more">
     <summary></summary>
     <ul class="tour-pop-did"></ul>
@@ -63,7 +69,10 @@ const el = (tag, props = {}, ...kids) => {
     return node;
 };
 
-export function mountTourPopover({ base = '', stage, onShown = () => {}, settled = () => {} }) {
+// `dock`, the page's, where it has a window for the box: `show(box)` lays the box out in
+// that window and brings it in front, `hide()` takes the window away, and `isShown()`
+// says whether it is in the layout. Without one the box only floats.
+export function mountTourPopover({ base = '', stage, onShown = () => {}, settled = () => {}, dock = null }) {
     const box = el('div', { className: 'tour-pop', id: 'tour-pop' });
     box.setAttribute('popover', 'manual');
     box.setAttribute('role', 'dialog');
@@ -71,8 +80,12 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
     box.innerHTML = MARKUP;
     document.body.append(box);
     const $ = (sel) => box.querySelector(sel);
-    // Every stage in the journeys' order, each knowing its journey.
-    const state = { journeys: [], stages: [], at: 0, busy: false, did: null, after: null };
+    // Every stage in the journeys' order, each knowing its journey. `docked` is where
+    // the box is shown: in the page's window, else over the page; `moving` is true while
+    // the box goes from one to the other, which closes nothing.
+    const state = { journeys: [], stages: [], at: 0, busy: false, did: null, after: null, docked: Boolean(dock && kept().docked), moving: false };
+    const dockButton = $('.tour-pop-dock');
+    dockButton.hidden = !dock;
 
     // What the page did and what to try, folded or open as a person left it.
     const more = $('.tour-pop-more');
@@ -87,8 +100,46 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
 
     const here = () => state.stages[state.at];
     const journeyOf = (s) => state.journeys[s.of];
+    // Where a thing to try is: a step on its walkthrough page, its words and picture
+    // together under the page's bar, or a page whole.
+    const pageOf = (t) => `${base}/walkthrough/${t.page}${t.anchor ? `#${t.anchor}` : ''}`;
+
+    // Floating, the box is shown over the page; docked, in the page's window, laid out
+    // as the window is wide (tour_popover.css).
+    const floating = () => box.matches(':popover-open');
+    function float() {
+        if (box.parentElement !== document.body) document.body.append(box);
+        box.classList.remove('docked');
+        if (!box.hasAttribute('popover')) box.setAttribute('popover', 'manual');
+        if (!floating()) box.showPopover();
+        place();
+    }
+    function docked() {
+        if (floating()) box.hidePopover();
+        box.removeAttribute('popover');
+        box.classList.add('docked');
+        dock.show(box);
+    }
+    // The page's window taken away, the box going over the page or closed: nothing
+    // closes the tour on the way.
+    function undock() {
+        state.moving = true;
+        try { if (dock?.isShown()) dock.hide(); } finally { state.moving = false; }
+    }
+    function sayDock() {
+        dockButton.textContent = state.docked ? '⇱' : '⇲';
+        dockButton.setAttribute('aria-label', state.docked ? 'Float' : 'Dock');
+        dockButton.title = state.docked
+            ? 'Float the tour over the page again, where it was left'
+            : 'Dock the tour as a window under the world: it covers nothing, is dragged anywhere as any window is, and stays open as a journey lays out its windows';
+        $('.tour-pop-head').title = state.docked
+            ? 'The tour, docked: its window is dragged by its tab'
+            : 'Drag to move; double-click to fold to this bar, or unfold';
+    }
+    sayDock();
 
     function place() {
+        if (!floating()) return;
         const { x, y } = kept();
         const w = box.offsetWidth || 352, h = box.offsetHeight || 200;
         const left = Math.min(Math.max(4, x ?? 16), window.innerWidth - w - 4);
@@ -137,23 +188,20 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
         $('.tour-pop-put').disabled = state.busy;
         const page = $('.tour-pop-page');
         page.hidden = !at.tries.length;
-        if (at.tries.length) page.href = `${base}/walkthrough/${at.tries[0].page}`;
+        if (at.tries.length) page.href = pageOf(at.tries[0]);
         box.classList.toggle('busy', state.busy);
 
         // What the page did to get here, then what it said, or what the stage needs
         // first, apart from what was done; and what there is to try:
-        // each step's heading, a link to its picture where it has one, and each page
-        // that shows the same thing whole, a link to the page. Folded under one line,
-        // and open where the stage needs something first, which a person has to read.
+        // each step's heading, a link to the step on its page, and each page that shows
+        // the same thing whole, a link to the page. Folded under one line, and open
+        // where the stage needs something first, which a person has to read.
         const needs = state.did?.refused ? state.did.said : '';
         const done = state.did ? [...state.did.did, !needs && state.did.said].filter(Boolean) : [];
         $('.tour-pop-did').replaceChildren(...done.map((t) => el('li', { textContent: t })));
         $('.tour-pop-needs').textContent = needs;
         $('.tour-pop-tries').replaceChildren(...at.tries.map((t) => {
-            const text = t.heading;
-            const href = t.index === null ? `${base}/walkthrough/${t.page}` : t.picture && `${base}/walkthrough/${t.picture}`;
-            if (!href) return el('li', { textContent: text, title: t.words });
-            const a = el('a', { textContent: text, href, target: '_blank', rel: 'noopener', title: t.words });
+            const a = el('a', { textContent: t.heading, href: pageOf(t), target: '_blank', rel: 'noopener', title: t.words });
             return el('li', { className: t.index === null ? 'whole' : '' }, a);
         }));
         more.hidden = !done.length && !needs && !at.tries.length;
@@ -168,7 +216,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
             : '';
         setReason($('.tour-pop-back'), state.at === 0 ? 'this is the journey\'s first stage' : null, 'The stage before');
         setReason($('.tour-pop-next'), state.at >= state.stages.length - 1 ? 'this is the journey\'s last stage' : null, 'The next stage');
-        if (box.matches(':popover-open')) place();
+        if (floating()) place();
     }
 
     async function read() {
@@ -233,7 +281,8 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
     // names a journey's stage opens the box on it the same way (`openOn`).
     let opening = Promise.resolve();
     const api = {
-        isOpen: () => box.matches(':popover-open'),
+        isOpen: () => (state.docked ? Boolean(dock?.isShown()) : floating()),
+        isDocked: () => state.docked,
         open() { return (opening = api.opened()); },
         restage: async () => { await opening; if (api.isOpen()) await put({ reload: true }); },
         async openOn(journeyId, stageId) {
@@ -252,26 +301,57 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
             const first = state.stages.findIndex((s) => !now(s));
             state.at = was >= 0 ? was : Math.max(0, first);
             box.classList.toggle('folded', Boolean(kept().folded));
-            box.showPopover();
-            render(); place();
+            if (state.docked) docked(); else float();
+            render();
             keep({ open: true });
             onShown(true);
         },
-        close() { box.hidePopover(); keep({ open: false }); onShown(false); },
+        close() {
+            if (floating()) box.hidePopover();
+            undock();
+            keep({ open: false });
+            onShown(false);
+        },
+        // Docked (`on`) or floating over the page, kept by this browser; open, the box
+        // goes there now, at the stage it shows.
+        dock(on = !state.docked) {
+            if (!dock || Boolean(on) === state.docked) return state.docked;
+            const open = api.isOpen();
+            state.docked = Boolean(on);
+            keep({ docked: state.docked });
+            sayDock();
+            if (open) {
+                if (state.docked) docked();
+                else { undock(); float(); }
+                render();
+                settled();
+            }
+            return state.docked;
+        },
+        // Its window closed by its own ✕: the tour closed, its journey left.
+        windowClosed() {
+            if (state.moving) return;
+            keep({ open: false });
+            onShown(false);
+        },
         toggle() { return api.isOpen() ? api.close() : api.open(); },
         // What the box's buttons do, for the ring's Panels › Windows › Tour cells.
         async act(verb) {
             if (verb === 'toggle') return api.toggle();
+            // Closed, Dock opens the tour where it says: docked, or floating again.
+            if (verb === 'dock' && !api.isOpen()) { api.dock(); return api.open(); }
             if (!api.isOpen()) await api.open();
             if (verb === 'close') return api.close();
-            if (verb === 'fold') { box.classList.toggle('folded'); keep({ folded: box.classList.contains('folded') }); return; }
+            if (verb === 'dock') return void api.dock();
+            // Docked, its window folds nothing: it is dragged, split and maximised instead.
+            if (verb === 'fold') { if (state.docked) return; box.classList.toggle('folded'); keep({ folded: box.classList.contains('folded') }); place(); return; }
             if (verb === 'put') return put();
             if (verb === 'back') return go(state.at - 1);
             if (verb === 'next') return go(state.at + 1);
             if (verb === 'works') return say('works');
             if (verb === 'off') return say('off');
             if (verb === 'by') return void who.focus();
-            if (verb === 'page') { const page = here().tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
+            if (verb === 'page') { const first = here().tries[0]; if (first) window.open(pageOf(first), '_blank', 'noopener'); }
         },
         // A window chosen in the page is another stage's: the box shows that stage, and
         // puts nothing on. While the page is on its way to a stage, it is kept until then.
@@ -282,9 +362,9 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
             if (at >= 0 && at !== state.at) { state.at = at; state.did = null; keep({ stage: here().id }); render(); }
         },
         wasOpen: () => Boolean(kept().open),
-        isFolded: () => box.classList.contains('folded'),
+        isFolded: () => !state.docked && box.classList.contains('folded'),
         // Folded to its head (`on`) or not, kept as a person's double-click keeps it.
-        fold(on) { box.classList.toggle('folded', on); keep({ folded: on }); place(); },
+        fold(on) { if (state.docked) return; box.classList.toggle('folded', on); keep({ folded: on }); place(); },
     };
 
     box.addEventListener('click', (e) => {
@@ -303,7 +383,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
     // Dragged by its head, kept where it was left.
     const head = $('.tour-pop-head');
     head.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || state.docked) return;
         const dx = e.clientX - box.offsetLeft, dy = e.clientY - box.offsetTop;
         head.setPointerCapture(e.pointerId);
         const move = (m) => { keep({ x: m.clientX - dx, y: m.clientY - dy }); place(); };
@@ -314,6 +394,6 @@ export function mountTourPopover({ base = '', stage, onShown = () => {}, settled
     head.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) api.act('fold'); });
     const noteField = $('.tour-pop-note');
     noteField.addEventListener('keydown', (e) => { if (e.key === 'Enter') api.act('off'); });
-    window.addEventListener('resize', () => { if (api.isOpen()) place(); });
+    window.addEventListener('resize', () => { if (floating()) place(); });
     return api;
 }

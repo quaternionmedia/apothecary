@@ -20,17 +20,18 @@
  *
  * Under the piece chosen: a print's features to read, a row each as the piece's dimensions
  * name them (GET /cabinet/{part}/dimensions, its slice's plan or its box), each with its
- * designed size and its newest reading checked against it, with Keep (or Enter in a row)
- * -- its printer's next turn of its tuning -- and Take turn
- * and Undo turn for that printer, the filament and process the piece used; each fault seen,
- * none to bad, with Keep look -- the printer's next look; a cut's sizes in one field, with
- * Keep -- the router's tool allowance; a note, with Keep note; and what the drawer holds,
- * in the order it was filed, an undone filing struck through. Nothing here sends anything
- * to a machine.
+ * designed size and its newest reading checked against it -- its printer's next turn of
+ * its tuning; each fault seen, none to bad -- the printer's next look; a cut's sizes in one
+ * field -- the router's tool allowance; and a note. One Keep (or Enter in any of their
+ * fields) files whichever of them is typed or chosen, each a filing of its own; Take turn
+ * and Undo turn beside it, for the printer, the filament and process the piece used. Then
+ * what the drawer holds, in the order it was filed, an undone filing struck through.
+ * Nothing here sends anything to a machine.
  *
  * mountFeedback(root, { base, say, retry }) -> handle
  *   show(part, { drawer, job })   this part's cabinet, the drawer named (or that job's) chosen
- *   verb(action)                   feedback:measure, feedback:note, feedback:tune-apply,
+ *   verb(action)                   feedback:measure (Keep), feedback:note (the note alone),
+ *                                  feedback:tune-apply,
  *                                  feedback:tune-undo, feedback:try-probe, feedback:try-brim,
  *                                  feedback:try-raft: { said } or { refused }
  *   pick(name)                     the row of the dimension `name` of the piece chosen marked
@@ -58,6 +59,8 @@ export const VERBS = [
     "feedback:measure", "feedback:note", "feedback:tune-apply", "feedback:tune-undo",
     "feedback:try-probe", "feedback:try-brim", "feedback:try-raft",
 ];
+// The one Keep: whatever is typed or chosen in the drawer's fields, each filed.
+const KEEP_TIP = "File what is typed and chosen above in the piece's drawer, each a filing of its own: what was read, checked against what was made -- its printer's next turn of its tuning, said and not applied, or its router's tool allowance; what the piece shows, its printer's next look; the note. Nothing is sent to the machine";
 // What a print that stopped offers to try, each slicing the piece again with it chosen.
 const tryTip = (how) => `Slice this piece again for its printer with ${words(TRIES[how].choice)}. Nothing is sent`;
 // How a print that did not finish ended (cabinet.STOPPED).
@@ -94,21 +97,21 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             <button type="button" id="feedback-try-raft" title="${tryTip("raft")}">Raft</button>
         </div>
         <div class="row" id="feedback-measure-row" hidden><label for="feedback-measure">measured</label>
-            <input id="feedback-measure" size="16" spellcheck="false" title="What the piece this toolpath cut measures, in millimetres, each feature it names in order, any left out as -">
-            <button type="button" id="feedback-measure-keep" title="Check what was read against what was made and file it: a printer's next turn of its tuning, said and not applied; a router's tool allowance. Nothing is sent to the machine">Keep</button>
-            <button type="button" id="feedback-tune-apply" title="Take the last turn's changes into the next slices of the printer that made this piece">Take turn</button>
-            <button type="button" id="feedback-tune-undo" title="Drop the last turn, and what it applied">Undo turn</button>
+            <input id="feedback-measure" size="16" spellcheck="false" title="What the piece this toolpath cut measures, in millimetres, each feature it names in order, any left out as -; Enter keeps">
             <span class="s" id="feedback-measure-said"></span>
         </div>
         <div class="row" id="feedback-measure-plan" hidden></div>
-        <div class="row" id="feedback-seen-row" hidden><label for="feedback-seen-keep">seen</label>
+        <div class="row" id="feedback-seen-row" hidden><label>seen</label>
             <span id="feedback-seen-faults" class="seen-faults"></span>
-            <button type="button" id="feedback-seen-keep" title="File what the piece shows as its printer's next look: the one setting's change it implies is said, and Take turn takes it into the next slices. Nothing is sent to the machine">Keep look</button>
             <span class="s" id="feedback-seen-said"></span>
         </div>
         <div class="row" id="feedback-note-row" hidden><label for="feedback-note">note</label>
-            <input id="feedback-note" size="28" maxlength="2000" spellcheck="true" placeholder="what the piece is like" title="A note on the piece, filed in its drawer: it changes no machine's settings">
-            <button type="button" id="feedback-note-keep" title="File the note in the piece's drawer">Keep note</button>
+            <input id="feedback-note" size="28" maxlength="2000" spellcheck="true" placeholder="what the piece is like" title="A note on the piece, filed in its drawer: it changes no machine's settings; Enter keeps">
+        </div>
+        <div class="row" id="feedback-keep-row" hidden>
+            <button type="button" id="feedback-keep" title="${KEEP_TIP}">Keep</button>
+            <button type="button" id="feedback-tune-apply" title="Take the last turn's changes into the next slices of the printer that made this piece">Take turn</button>
+            <button type="button" id="feedback-tune-undo" title="Drop the last turn, and what it applied">Undo turn</button>
         </div>
         <div class="row s" id="feedback-tune-history" hidden></div>
         <ol id="feedback-filed" class="feedback-filed" hidden></ol>
@@ -233,6 +236,7 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         const shown = !!(p && r);
         $("feedback-measure-row").hidden = !shown;
         $("feedback-note-row").hidden = !shown;
+        $("feedback-keep-row").hidden = !shown;
         renderMade(st.whole);
         renderStopped(shown && printed() ? st.whole : null);
         renderMeasure(shown ? r : null);
@@ -405,9 +409,6 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         }
         return { readings: out };
     }
-    const typedSomething = () => printed()
-        ? [...$("feedback-measure-plan").querySelectorAll("input.measure-read")].some((f) => f.value.trim())
-        : !!$("feedback-measure").value.trim();
     const seenSomething = () => printed()
         && [...$("feedback-seen-faults").querySelectorAll("select.seen-read")].some((el) => el.value !== "0");
     const noPiece = (what) => refuse(`${what}: ${st.part ? `choose a piece of ${st.part}` : "choose a part: a piece's ring, Part › View › Feedback"}`);
@@ -421,43 +422,74 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         await load();
         return answer;
     }
-    async function keepMeasured() {
+    // What is typed under measured, as a filing's body: null where nothing is, { bad } where
+    // what is typed is not sizes.
+    function measuredBody() {
         const r = record();
-        if (!r) return noPiece("measure");
         if (!printed()) {
+            if (!$("feedback-measure").value.trim()) return null;
             const names = (r.features || []).map((f) => f.name);
             const sizes = measuredSizes($("feedback-measure").value, names.length);
-            if (!sizes) return refuse(`measure: type what the piece measures, ${names.join(" × ")} in mm (- for one not measured)`);
-            const answer = await filed("measured", { readings: Object.fromEntries(names.map((n, i) => [n, sizes[i]])) }, "measure");
-            if (answer.refused) return answer;
-            $("feedback-measure").value = "";
-            return tell(`${answer.said}: filed in ${st.part}'s drawer, and kept for ${answer.allowance.router}, whose next toolpaths take it`);
+            if (!sizes) return { bad: `type what the piece measures, ${names.join(" × ")} in mm (- for one not measured)` };
+            return { readings: Object.fromEntries(names.map((n, i) => [n, sizes[i]])) };
         }
         const read = planReads();
-        if (read.bad) return refuse(`measure: ${read.bad} is not sizes in mm, a space apart`);
-        if (!Object.keys(read.readings).length) return refuse(`measure: read one of ${dims().map((f) => f.name).join(", ")}, in mm`);
-        const answer = await filed("measured", { readings: read.readings }, "measure");
-        if (answer.refused) return answer;
-        for (const field of $("feedback-measure-plan").querySelectorAll("input.measure-read")) field.value = "";
-        // A reading of a piece the printer's last turn already reads is a check alone.
-        return tell(`${answer.turn ?? "a check"} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`);
+        if (read.bad) return { bad: `${read.bad} is not sizes in mm, a space apart` };
+        return Object.keys(read.readings).length ? { readings: read.readings } : null;
     }
-    async function keepSeen() {
-        if (!record() || !printed()) return noPiece("seen");
-        const choices = [...$("feedback-seen-faults").querySelectorAll("select.seen-read")].map((el) => [el.dataset.fault, el.value]);
-        const answer = await filed("seen", { seen: tuning.seenOf(choices) }, "seen");
-        if (answer.refused) return answer;
-        for (const el of $("feedback-seen-faults").querySelectorAll("select.seen-read")) el.value = "0";
-        return tell(`${answer.look} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`);
-    }
-    async function keepNote() {
-        if (!record()) return noPiece("note");
-        const note = $("feedback-note").value.trim();
-        if (!note) { $("feedback-note").focus(); return tell(`type a note on the piece, then Keep note`); }
-        const answer = await filed("note", { note }, "note");
-        if (answer.refused) return answer;
-        $("feedback-note").value = "";
-        return tell(`Noted in ${st.part}'s drawer ${answer.id}`);
+    const seenBody = () => (seenSomething()
+        ? { seen: tuning.seenOf([...$("feedback-seen-faults").querySelectorAll("select.seen-read")].map((el) => [el.dataset.fault, el.value])) }
+        : null);
+    const noteBody = () => { const note = $("feedback-note").value.trim(); return note ? { note } : null; };
+    // Keep: whatever is typed or chosen, each filed in the piece's drawer, read before the
+    // first is filed (filing a loose file opens its drawer, and its rows are drawn anew).
+    // With nothing typed or chosen, the first field is given the caret.
+    async function keep({ only = null } = {}) {
+        const r = record();
+        if (!r) return noPiece(only === "note" ? "note" : "Keep");
+        const print = printed();
+        const measured = only === "note" ? null : measuredBody();
+        const seen = only === "note" ? null : seenBody();
+        const note = noteBody();
+        if (measured && measured.bad) return refuse(`Keep: ${measured.bad}`);
+        if (!measured && !seen && !note) {
+            if (only === "note") { $("feedback-note").focus(); return tell("type a note on the piece, then Keep"); }
+            const first = print ? $("feedback-measure-plan").querySelector("input.measure-read") : $("feedback-measure");
+            if (first) first.focus();
+            const names = print ? dims().map((f) => f.name) : (r.features || []).map((f) => f.name);
+            return tell(print
+                ? `read the piece: ${names.join(", ")}, each in mm in its row; or choose what it shows under seen, or type a note; then Keep`
+                : `type what the piece measures, ${names.join(" × ")} in mm, or a note; then Keep`);
+        }
+        const said = [];
+        let turned = null;  // the printer a turn or a look was filed for
+        if (measured) {
+            const answer = await filed("measured", measured, "Keep");
+            if (answer.refused) return answer;
+            if (print) for (const field of $("feedback-measure-plan").querySelectorAll("input.measure-read")) field.value = "";
+            else $("feedback-measure").value = "";
+            // A reading of a piece the printer's last turn already reads is a check alone.
+            said.push(print
+                ? `${answer.turn ?? "a check"} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`
+                : `${answer.said}: filed in ${st.part}'s drawer, and kept for ${answer.allowance.router}, whose next toolpaths take it`);
+            if (print && answer.turn) turned = answer.machine.path;
+        }
+        if (seen) {
+            const answer = await filed("seen", seen, "Keep");
+            if (answer.refused) return answer;
+            for (const el of $("feedback-seen-faults").querySelectorAll("select.seen-read")) el.value = "0";
+            said.push(`${answer.look} filed in ${st.part}'s drawer, for ${answer.machine.path}: ${answer.said}`);
+            turned = answer.machine.path;
+        }
+        if (note) {
+            const answer = await filed("note", note, "Keep");
+            if (answer.refused) return answer;
+            $("feedback-note").value = "";
+            said.push(`noted in ${st.part}'s drawer ${answer.id}`);
+        }
+        // Take turn named where it would go: a turn that proposes no change is not taken.
+        if (turned && st.whole && tuning.canApply(st.whole.tuning).ok) said.push(`Take turn takes it into ${turned}'s next slices`);
+        return tell(said.join("; "));
     }
     async function tune(verb) {
         const said = verb === "apply" ? "Take turn" : "Undo turn";
@@ -473,22 +505,8 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         await load();
         const where = answer.machine.path;
         return tell(verb === "apply"
-            ? `Taken for ${where}'s next slices: ${answer.applied.map((c) => `${c.setting} ${tuning.settingText(c.after, c.unit)}`).join(", ")}`
+            ? `Taken for ${where}'s next slices: ${answer.applied.map((c) => `${c.setting} ${tuning.settingText(c.after, c.unit)}`).join(", ")}; Slice in ${where}'s Print window makes the next print with it`
             : `${answer.undone} undone: ${where}'s next slices take what the turns before it applied`);
-    }
-    // Feedback › Measure: what is read filed, as Keep does; a fault chosen under seen and
-    // nothing read, the look filed, as Keep look does; with neither, the first field.
-    function measureVerb() {
-        if (typedSomething()) return keepMeasured();
-        if (seenSomething()) return keepSeen();
-        const r = record();
-        if (!r) return noPiece("measure");
-        const first = printed() ? $("feedback-measure-plan").querySelector("input.measure-read") : $("feedback-measure");
-        if (first) first.focus();
-        const names = printed() ? dims().map((f) => f.name) : (r.features || []).map((f) => f.name);
-        return tell(printed()
-            ? `read the piece: ${names.join(", ")}, each in mm in its row, then Keep`
-            : `type what the piece measures, ${names.join(" × ")} in mm, then Keep`);
     }
 
     // A dimension of the piece chosen picked, as a click on it in the world does: its row
@@ -507,16 +525,13 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         return tell(`${name}, ${f.words}: designed ${mmText(f.designed)}${was}. Type what calipers read of ${st.part}'s piece in its row under measured, then Enter`);
     }
 
-    // Enter in a dimension's row keeps what is typed in the rows, as Keep does.
+    // Enter in a field of the drawer keeps what is typed and chosen, as Keep does.
     function keepOnEnter(ev) {
-        if (ev.key === "Enter" && ev.target.matches("input.measure-read")) { ev.preventDefault(); keepMeasured(); }
+        if (ev.key === "Enter" && ev.target.matches("input")) { ev.preventDefault(); keep(); }
     }
-    $("feedback-measure-plan").addEventListener("keydown", keepOnEnter);
+    $("feedback-card").addEventListener("keydown", keepOnEnter);
     $("feedback-piece").onchange = () => choose($("feedback-piece").value || null);
-    $("feedback-measure-keep").onclick = () => keepMeasured();
-    $("feedback-seen-keep").onclick = () => keepSeen();
-    $("feedback-note-keep").onclick = () => keepNote();
-    $("feedback-note").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); keepNote(); } });
+    $("feedback-keep").onclick = () => keep();
     $("feedback-try-probe").onclick = () => tryAgain("probe");
     $("feedback-try-brim").onclick = () => tryAgain("brim");
     $("feedback-try-raft").onclick = () => tryAgain("raft");
@@ -537,8 +552,8 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
             return piece();
         },
         async verb(action) {
-            if (action === "feedback:measure") return measureVerb();
-            if (action === "feedback:note") return keepNote();
+            if (action === "feedback:measure") return keep();
+            if (action === "feedback:note") return keep({ only: "note" });
             if (action === "feedback:tune-apply") return tune("apply");
             if (action === "feedback:tune-undo") return tune("undo");
             if (action === "feedback:try-probe") return tryAgain("probe");
@@ -552,8 +567,8 @@ export function mountFeedback(root, { base = "", say = null, retry = null } = {}
         dimensions: () => st.dims,
         redraw: () => load(),
         pairs() {
-            const out = [[$("feedback-measure-keep"), "feedback:measure"], [$("feedback-measure"), "feedback:measure"],
-                [$("feedback-seen-keep"), "feedback:measure"], [$("feedback-note"), "feedback:note"], [$("feedback-note-keep"), "feedback:note"],
+            const out = [[$("feedback-keep"), "feedback:measure"], [$("feedback-measure"), "feedback:measure"],
+                [$("feedback-note"), "feedback:note"],
                 [$("feedback-tune-apply"), "feedback:tune-apply"], [$("feedback-tune-undo"), "feedback:tune-undo"],
                 [$("feedback-try-probe"), "feedback:try-probe"], [$("feedback-try-brim"), "feedback:try-brim"],
                 [$("feedback-try-raft"), "feedback:try-raft"]];

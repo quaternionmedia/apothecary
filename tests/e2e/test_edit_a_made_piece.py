@@ -122,7 +122,7 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
     expect(page.locator("#part-checklist")).to_have_count(0)
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
     # Its few lines of SCAD, read-only, in the editor where a part's SCAD is edited: the
-    # SCAD window, from ⊞ Windows.
+    # SCAD editor, from ⊞ Windows.
     windows.from_the_windows_menu(page, "part-scad")
     expect(page.locator("#part-scad .cm-content")).to_contain_text("cylinder", timeout=10000)
 

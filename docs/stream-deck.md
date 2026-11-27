@@ -49,8 +49,14 @@ of `apothecary/stays_local.py`.
 - **Drawn.** A key is 120 by 120 pixels and the strip 800 by 100, each a JPEG, as the
   device takes them: a line of text on a colour (`black`, `grey`, `blue`, `green`,
   `amber`, `red` or `#rrggbb`) with an optional smaller line under it, drawn with
-  Pillow. A deck cannot be asked what it shows, so what was sent is kept, and
-  `GET /firmware/decks/{id}/keys/{n}/image` and `.../strip/image` serve it.
+  Pillow. The controller below draws more than a label: a key as a tile (a title on a
+  band of colour, a number, a line under it and a spark line or a bar at its foot) and
+  the strip as a screen (the screens' names along its top, and a body of four panels,
+  a graph, a progress bar, a bed's mesh or two machines side by side), each from an
+  `art`, a plain description kept with the words it says (`firmware/deck_draw.py`). A
+  deck cannot be asked what it shows, so what was sent is kept -- its words, its art
+  and a short digest of the picture, `v` -- and `GET /firmware/decks/{id}/keys/{n}/image`
+  and `.../strip/image` serve it.
 - **Heard.** Each report becomes an event with a sequence number: `key` (a key's
   index 0 to 7, pressed or released), `knob-turn` (a knob's index 0 to 3, so many
   steps, negative counter-clockwise), `knob-press` (pressed or released) and `touch`
@@ -96,7 +102,8 @@ keys and strip are drawn as bright as a simulated one's. A simulated deck is pre
 it -- a key, a knob turned a step either way or pressed, the strip tapped -- each the
 event a real deck reports, posted to the deck's routes; a real deck is pressed by hand
 and the window's controls are off. Under the strip's picture its two lines are written
-as the server drew them, as text to read and select: the picture's small line is too
+as the server drew them, as text to read and select, and the line under its screen where
+that says more (what the layout said last, a refusal): the picture's small lines are too
 small to read at the window's width, and the picture stays what the deck was sent.
 [Walkthrough 26](../walkthrough/26-the-stream-deck.md) goes round it, written by
 `tests/e2e/test_deck.py`.
@@ -132,9 +139,16 @@ The knobs jog the garage's two machines. `apothecary/firmware/deck_control.py` r
 layout on a deck:
 
 - **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine (held twice,
-  they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm, and 3 **DISARM** lets go
-  of every machine's control at one press, red while any is armed and grey when none is.
-  It stops nothing -- a move under way finishes -- and the stop keys are the stops.
+  they arm its control, below). Each is drawn as a tile of what its machine is doing, on
+  every screen: the printer's hotend as read, its bed under it and a spark line of both
+  over the last ten minutes; the router's state and its spindle; a job's bar in place of
+  the spark line; the band along its top in its state's colour (red in alarm, amber
+  when it asks something of a person or a job is held, green while it works or its
+  control is armed), the time its control has left under the number while it is armed,
+  and the chosen machine framed in white. Key 2 is the screen's own (below). 3 **DISARM**
+  lets go of every machine's control at one press, red while any is armed and grey when
+  none is. It stops nothing -- a move under way finishes -- and the stop keys are the
+  stops.
 - **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm:
   it sends the router's `$X` through the latch, moves nothing, and keeps the position the
   controller believes. A knob turned while the router is in alarm says to press it. The
@@ -149,9 +163,9 @@ layout on a deck:
   bright red and last, nearest a hand resting on the knobs, stopping every machine this
   server knows of, each by its own dialect's stop and all at once: the garage's two, and
   any other board that answered as a printer or a router.
-- **The knobs**: one to three jog X, Y and Z by their steps of the chosen size; the fourth
-  turns the router's spindle speed in steps of 1000 rpm, or extrudes 1 mm a step on the
-  printer. The spindle is turned only from a reading a few seconds old at most, and never
+- **The knobs**, on the Jog screen alone (below): one to three jog X, Y and Z by their
+  steps of the chosen size; the fourth turns the router's spindle speed in steps of 1000
+  rpm, or extrudes 1 mm a step on the printer. The spindle is turned only from a reading a few seconds old at most, and never
   down to nothing: off is the Machine's, or a stop. A turn made while the machine was
   busy with something else, a home or a probe, is dropped once it is two seconds old and
   the strip says so: it is never sent when the machine comes free.
@@ -162,58 +176,88 @@ plugged in, each is the one board of its kind this server knows, wherever it is 
 Two of a kind and no pin is no machine for the knobs, and both of them for that kind's
 stop key.
 
-The strip's first screen, the knobs', says which machine, whether its control is armed and for how long, the chosen
-machine's newest poll, the deck's own or anyone's (X, Y, Z and the fourth quantity), the
-step, and what the last turn did or why it did nothing.
+The Jog screen says which machine, whether its control is armed and for how long, the
+chosen machine's newest poll, the deck's own or anyone's (X, Y, Z and the fourth
+quantity, each over its knob), the step, and what the last turn did or why it did
+nothing.
 
-## The strip's screens
+## The screens
 
-The strip has three screens, in this order, and a swipe along it walks them
-(`apothecary/firmware/deck_screens.py` holds what each says and the swipe; `deck_control.py`
-holds which is showing):
+The deck has six screens, named along the top of its strip, each name a sixth of the
+strip (`apothecary/firmware/deck_screens.py` holds what each says and how a touch moves
+between them; `deck_control.py` holds which is showing). The first is both machines'; the
+other five are the chosen machine's, each named as that machine calls it:
 
-- **Knobs**, the one above, which the strip starts on. While a job holds the chosen
-  machine's port -- a print or a cut the host streams, or a bed reading a poll saw a moment
-  ago -- it says so in the words the server refuses a jog with (`PortHeld`) and that the
-  jogs are refused; on a router it adds that knob 4 still turns the spindle, since a cut's
-  dialect lets that through.
-- **Progress**: the part the job makes, else the file it ran, how far it is as a number
-  and as a bar, its stage and how long it has run. Where no job of the host's is running
-  but the printer's card is, it shows the card's progress and the time the card reports.
-  No remaining time is drawn, because neither the job's record nor a poll carries one.
-- **Status**: the machine's state -- the job's stage where a job holds the port, since a
-  poll made during a job says the busy word whatever its stage: a print paused is
-  paused -- a printer's hotends and bed, or a router's spindle and feed; and the first
-  thing it asks of a person, from its `todo`, else its alarm. It reads
-  the newest status anyone's poll made, and says how old it is when it is over ten seconds.
+| Screen | printer_1 | cnc_router | Key 2 | What it shows |
+|---|---|---|---|---|
+| `bench` | Bench | Bench | a readout | Both machines, half the strip each: its state, its numbers and its job's bar. |
+| `knobs` | Jog | Jog | **STEP** | X, Y, Z and the fourth quantity over their knobs, the step, what the last turn did. The one the deck starts on. |
+| `home` | Home | Home | **HOME** | Each axis where it stands and its switch: a printer's endstop as its last poll read it, a router's homing as its controller says it will seek, and whether the server has seen its switch. |
+| `progress` | Print | Cut | the job's number | The job, how far it is, its stage and how long it has run. |
+| `status` | Temps | Status | the hotend's, or the spindle's | A printer's hotend and bed as a graph of the last ten minutes; a router's state, pins, spindle and work zero. |
+| `bed` | Bed | Table | **PROBE** | The newest reading of the bed or the table: its mesh as coloured cells, its range, when it was taken and how warm the bed was; a reading under way, its stage. |
 
-A **swipe** is the strip's drag event (`{"kind": "drag", "x", "y", "x_out", "y_out"}`,
-where `x` and `y` are where the finger went down and `x_out` and `y_out` where it came up)
-of 200 pixels or more along the strip's 800: a finger moving left shows the next screen,
-right the one before. It stops at either end and does not wrap. A tap or a long press
-moves nothing. Switching screens draws the strip and nothing more: no line goes to a
-machine, no poll is asked, and no key changes (the stops and the machine keys are the same
-on every screen).
+**Moving between them.** A **tap** (or a long press) on a name shows that screen. A
+**knob pressed** shows the next, and from the last, the first. A **swipe** is the strip's
+drag event (`{"kind": "drag", "x", "y", "x_out", "y_out"}`, where `x` and `y` are where
+the finger went down and `x_out` and `y_out` where it came up) of 200 pixels or more along
+the strip's 800: a finger moving left shows the next screen, right the one before. It
+stops at either end and does not come round. A shorter drag moves nothing. None of it
+sends a line to a machine or asks one for a poll, and every key but key 2 is the same
+on every screen: the machines, DISARM and the stops never move. Choosing the other
+machine keeps the screen: from the printer's Temps, **ROUTER** shows the router's Status.
 
-A job begun on the chosen machine brings Progress forward once, for that job: a swipe
-away from it is never undone, and the next job is another. A job begun on the other
-machine brings nothing forward. A job that has ended stays on Progress, saying how it
+**The knobs move a machine on Jog alone**, where the strip shows what each one moves. On
+any other screen a turn sends nothing, and the strip says the knobs move nothing there; the
+one exception is a router's fourth knob on Cut, which turns its spindle there too, since a
+cut's speed is what a person turns while watching it. Pressing a knob moves on to the next
+screen, and moves no machine.
+
+**Key 2 is the screen's.** On Jog it is **STEP**, cycling 0.1, 1 and 10 mm. On Home it is
+**HOME**, and on Bed **PROBE**: each is held a second (`LONG_PRESS_S`) and let go to act, on
+the screen it was pressed on; a shorter press says to hold it and sends nothing. HOME
+sends the dialect's home of every axis (`G28`, `$H`) through `devices.printer_control`, the
+function behind the Machine's ⌂, so the latch, a router's home not yet proved and a job
+holding the port refuse it as they refuse the page; it is sent on a thread of its own, and
+the strip says *homed*, or why not, when the machine has answered. PROBE begins a reading
+through `devices.start_leveling` with the route's defaults (`POST /firmware/printers/level`:
+a printer's bed probed as it stands, a router's table mapped three by three), refused while
+the latch is down, a job holds the port or a task writes to it. On the other screens key 2
+shows the screen's number -- the job's per cent, the hotend's temperature, the spindle's
+speed -- and a press of it does nothing.
+
+**What is drawn is what anyone's polls read.** Every poll that lands in
+`devices.notify_status`, whoever made it -- a Machine's auto-poll, the Site, a loop, the
+deck while a machine's control is armed -- leaves its numbers in
+`apothecary/firmware/readings.py`: a printer's hotend and bed, each as read and as asked
+for, and a router's spindle and feed, half an hour of them per port, at most two a second.
+The Temps graph and the printer's spark line are drawn from them, and the Bench and every
+key from the newest poll. The deck asks a machine for nothing to draw: a machine no one
+polls is drawn as it was last read, and Temps says how long ago that was.
+
+A job begun on the chosen machine brings Print (or Cut) forward once, for that job: a tap
+or a swipe away from it is never undone, and the next job is another. A job begun on the
+other machine brings nothing forward. A job that has ended stays on Print, saying how it
 ended (done, cancelled or failed, and after how long), until a touch of that screen clears
 it; a touch on another screen leaves it. The screens follow the job's own thread, not a
 poller of their own, and the layout's two-second tick draws the elapsed time.
 
-The Deck window says which screen the strip shows, and changes it, a real deck's as a
-simulated one's: a button for each screen beside it, and the ring's Panels › Machine ›
-Deck › Screen (Knobs, Progress, Status, then Back and Next, a swipe right or left), are
-`PUT /firmware/decks/{id}/control` with a `screen`, its name or `next` or `previous`.
-Chosen this way it is as a swipe is: it stops at either end, draws the strip and nothing
-more, and sends nothing to a machine; unlike a touch, it clears no ended job from
-Progress. Dragged along its strip by the mouse, a quarter of its length or more, a
-simulated deck is swiped; a real deck's strip is a person's to swipe.
+Under each screen's body is its footer: what the screen says of itself, or for a few
+seconds what the layout said last -- a refusal, in red, until something else is said.
+
+The Deck window says which screen the deck shows, and changes it, a real deck's as a
+simulated one's: a button for each screen beside it, named as the chosen machine names
+it, and the ring's Panels › Tools › Deck › Screen (Jog, Progress, Status, Back and Next,
+then Bench, Home and Bed), are `PUT /firmware/decks/{id}/control` with a `screen`, its
+name or `next` or `previous`. Chosen this way it is as a swipe is: it stops at either end,
+draws the strip and nothing more, and sends nothing to a machine; unlike a touch, it clears
+no ended job from Print. Clicked on its strip, a simulated deck is tapped where the mouse
+is, which shows the screen named there; dragged a quarter of its length or more, it is
+swiped. A real deck's strip is a person's to touch.
 
 While a job holds the chosen machine's port, the window's line under the knobs says
-*held* in the words the knobs' screen says it (`screens.held_words`: the server's own
-refusal of a jog, and what the knobs still do), whichever screen the strip shows, not
+*held* in the words the Jog screen says it (`screens.held_words`: the server's own
+refusal of a jog, and what the knobs still do), whichever screen the deck shows, not
 the last thing the knobs did.
 
 **Nothing the deck sends bypasses what bounds a person's jog.** A jog goes through

@@ -1,8 +1,8 @@
 # The tour
 
-The page's journeys, a stage at a time, in a box over the page: the way a person finds
-their way through the app, and the way they say how each part of it is. The box is the
-one place a journey is chosen and stepped.
+The page's journeys, a stage at a time, in a box over the page, or docked as a window
+under the world: the way a person finds their way through the app, and the way they say
+how each part of it is. The box is the one place a journey is chosen and stepped.
 [Walkthrough 34](../walkthrough/34-the-tour.md) goes through the box, and
 [walkthrough 39](../walkthrough/39-the-chain-a-stage-at-a-time.md) through every stage
 it takes the page to.
@@ -22,8 +22,9 @@ hands the next what it made.
 The box has no words of its own. A stage's line is its step's in
 `apothecary/journeys.py`.
 Under it is what there is to try on the stage: the steps of the walkthrough that go
-through it, each a link to its picture, and the pages that show the same thing whole,
-at the command line (`shown_by`, in `apothecary/journeys.py`).
+through it, each a link to the step on its page -- its words and its picture together,
+under the bar that leads back to the docs and the viewer -- and the pages that show the
+same thing whole, at the command line (`shown_by`, in `apothecary/journeys.py`).
 
 ## Opening it
 
@@ -34,7 +35,8 @@ word on them, on any build, with how many of those were said of an earlier build
 so wait for a word again. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Closed, the journey it was on is left: the
 windows stay where they are, the address forgets the journey and its stage, and the
-status line says so. A journey that opened another site (Join a hose, in the universe)
+status line says so, and where to go next: Tour takes the journey up again, ⚙ View ›
+Reset layout puts the page's own layout back. A journey that opened another site (Join a hose, in the universe)
 is left on the site the page was on before the tour, opened again; a site a person
 has opened since is where the page stays. Folded, it leaves nothing. What a stage frames is framed in the
 room of the world the box leaves, the largest beside it or above or below it, and
@@ -56,12 +58,27 @@ forward, and nothing started.
 Opened in a browser that has not taken it before, it starts at the first stage with no
 word on the build the server runs.
 
+## Docked
+
+**⇲** in the box's head, or the ring's **Panels › Windows › Dock tour**, docks it: the
+box is a window of the page's layout, **Tour**, under the world and as wide as it, its
+room a quarter of the world's height at most, so it covers nothing of the world. Wide,
+it lays the journey and its stages on the left and the stage's words and buttons on the
+right. Its tab is dragged, split beside another window or maximised as any window's is.
+It is made for the moment, so a view or a journey laid out keeps it open under the world
+rather than closing it, and the layout this browser remembers leaves it out; that it is
+docked is the box's own, kept with where it stands (`apothecary.tour`), so a reload
+docks it again. Docked, it is not folded, and a stage frames the world's whole window.
+Its window's ✕ is the box's: the tour closes and the journey is left. **⇱**, where ⇲
+was, or Dock tour again, floats it over the page again where it was left, and the world
+has its height back.
+
 ## A stage, and the page taken there
 
 Going to a stage -- a journey chosen in the drop-down, a stage's number, ›, ‹, or a
 word said on the one before -- takes the page there, and ↻ beside the stage's words
-takes it there again. **its page**, beside ↻, is the first walkthrough page the stage
-names, in a tab. The page then does what a person would do to get there, each
+takes it there again. **its page**, beside ↻, is the walkthrough page the stage names
+first, in a tab, at the step it names. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
 - the site the journey stands in opened, where another is, as the banner's ▾ opens
@@ -188,9 +205,11 @@ said of each stage.
 ## The ring
 
 Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back,
-Works, Off (with what the box's field says), Next, Its page (the first walkthrough
-page the stage names, in a tab), Take me here, and Who, the field for the name. It is
-seated after the views, so no cell before it moves.
+Works, Off (with what the box's field says), Next, Its page (the walkthrough page the
+stage names first, at its step, in a tab), Take me here, and Who, the field for the name. It is
+seated after the views, the systems' alone: a journey's view is laid out by the box, and
+has no cell. Panels › Windows › Dock tour, after it, is the box's ⇲ and ⇱: docked under
+the world, or floating over the page again; closed, it opens the box where it says.
 
 ## What it does not do
 
@@ -201,7 +220,7 @@ seated after the views, so no cell before it moves.
 - It does not bring about a state only a fault brings: a router in alarm, a board not
   heard for ten minutes. Those are at their stage as steps to read.
 - It does not arm, start, send or make anything.
-- The box stands over the world: what a stage frames is kept clear of it, and the rest
-  of the world under it is seen once the box is dragged or folded.
+- Floating, the box stands over the world: what a stage frames is kept clear of it, and
+  the rest of the world under it is seen once the box is dragged, folded or docked.
 - Nothing leaves the machine: the feedback is under the state folder, and the server
   answers this machine only.

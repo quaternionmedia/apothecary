@@ -63,7 +63,7 @@ from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import can, dialects, gcode, grbl, occupants, serial_monitor
+from . import can, dialects, gcode, grbl, occupants, readings, serial_monitor
 from .models import (
     PRINT_FILE_ID,
     USB_MAKE_RE,
@@ -176,6 +176,7 @@ def forget_port(port: str) -> None:
     running is left to fail on its own, its board gone; the records on disk are
     ``FirmwareState``'s, which reads them against the port list itself."""
     _LAST_STATUS.pop(port, None)
+    readings.forget(port)
     for held in (_PRINTS, _LEVELING):
         job = held.get(port)
         if job is not None and job.finished is not None:
@@ -450,6 +451,23 @@ class FirmwareState:
                 return False
             self._save(data)
             return True
+
+    def move_bindings(self, site: str, old: str, new: str) -> List[str]:
+        """Each pin of ``site`` to the node ``old`` or to anything inside it, pinned to
+        the same place under ``new`` instead (a node renamed, ``apothecary/renames.py``),
+        in its order and with when it was made; the paths it is pinned to now."""
+        moved: List[str] = []
+        with self._lock:
+            data = self._load()
+            for b in data["bindings"]:
+                path = b.get("path") or ""
+                if b.get("site") != site or not (path == old or path.startswith(old + ".")):
+                    continue
+                b["path"] = new + path[len(old) :]
+                moved.append(b["path"])
+            if moved:
+                self._save(data)
+        return moved
 
     def bindings(self, site: Optional[str] = None) -> List[ManualBinding]:
         rows = [ManualBinding(**b) for b in self._load()["bindings"]]
@@ -1009,6 +1027,7 @@ def last_statuses() -> Dict[str, gcode.PrinterStatus]:
 
 def notify_status(status: gcode.PrinterStatus) -> gcode.PrinterStatus:
     _LAST_STATUS[status.port] = status
+    readings.record(status)  # what a graph of it draws (firmware/readings.py)
     for listener in STATUS_LISTENERS:
         status.synced.extend(listener(status) or [])
     surfaces.changed(MACHINE_STATUS, key=status.port, body=lambda: _as_shown(status))
@@ -2176,8 +2195,15 @@ class PrintJob:
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
-                if starting and len(start) < START_SAID_MOST:
-                    start += lines
+                if starting:
+                    # Heating's reports and the busy lines a probe says are none of it,
+                    # and a long wait for the bed would fill the start's room first.
+                    said = [
+                        s
+                        for s in lines
+                        if not (gcode.is_temperature_line(s) or gcode.BUSY_RE.match(s))
+                    ]
+                    start += said[: max(0, START_SAID_MOST - len(start))]
                 self.sent += 1
                 self._same_boot(link, boots)
                 if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
@@ -2233,15 +2259,18 @@ class PrintJob:
         self.finished = ended  # last: a snapshot that says "not running" names the record
 
 
-# The board's answers kept from a print's start, before its first layer: a probe of a
-# 5 x 5 grid at verbosity 3 says a few lines a point, its mesh and offset a few more.
+# The board's answers kept from a print's start, before its first layer, its heaters'
+# reports and busy lines left out: a probe of a 5 x 5 grid at verbosity 3 says a few lines
+# a point, its mesh and offset a few more.
 START_SAID_MOST = 400
 
 
 def levelled_by(lines: List[str]) -> Optional[dict]:
     """What a print's start had the board say of its levelling (compose.SAID_LINES):
-    whether levelling was on, the probe's offset, the mesh's range and where its probe
-    said the grid lies. None when it said none of them."""
+    whether levelling was on, the probe's offset, the mesh it follows and its range, and
+    where its probe said the grid lies. The mesh is kept as a bed reading keeps one
+    (``LevelingRecord.mesh``: its rows as the board printed them), so the bed a print was
+    laid on is read beside the bed readings. None when it said none of them."""
     on = gcode.parse_leveling_state(lines)
     offset = gcode.parse_probe_offset(lines)
     meshes = gcode.parse_meshes(lines)
@@ -2252,6 +2281,7 @@ def levelled_by(lines: List[str]) -> Optional[dict]:
     said: dict = {"leveling_on": on, "probe_offset": offset}
     if mesh:
         said["mesh_range"] = gcode.mesh_stats(mesh).get("range")
+        said["mesh"] = mesh
     if points:
         said["area"] = gcode.probed_area(points, mesh)
         said["points"] = len(points)
@@ -2525,6 +2555,51 @@ def printer_query(
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )
+
+
+def port_of_board(identity: str) -> Optional[str]:
+    """The port the board a pin names is on now: by its serial number, its make
+    (``usb:vvvv:pppp``) or a port typed as the pin, among the newest scan's devices (as a
+    pin's row finds its board, starting no scan) and then the serial engine's port list.
+    None where no port holds it."""
+    key = identity.strip()
+
+    def names(port: str, serial: Optional[str], vid, pid) -> bool:
+        if key.startswith("/"):
+            return os.path.realpath(key) == os.path.realpath(port)
+        if key.lower().startswith("usb:"):
+            return usb_make(vid, pid) == key.lower()
+        return (serial or "").strip().lower() == key.lower()
+
+    try:
+        scanned = detected_devices(any_age=True)
+    except ToolchainError:
+        scanned = []
+    listed = sorted(ports_now().items())
+    held = set(p for p, _ in listed)
+    for d in scanned:
+        if names(d.port, d.serial_number, d.vid, d.pid) and (not held or d.port in held):
+            return d.port
+    for port, board in listed:
+        if names(port, board.serial_number, board.vid, board.pid):
+            return port
+    return None
+
+
+def nozzle_at(
+    port: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> dict:
+    """Where the nozzle on ``port`` stands, as its board says it (``M114``), and the axes
+    homed since the board started (``GcodeLink.homed``): ``{x, y, z, homed}``."""
+    links = links or gcode.get_printer_links()
+    said = printer_query(port, "M114", state=state, links=links)
+    at = gcode.parse_m114(said.lines)
+    if at is None:
+        raise ToolchainError(f"{port}: M114 said no position ({' | '.join(said.lines)[:200]})")
+    link = links.get(port)
+    return {**at, "homed": sorted(link.homed) if link is not None else []}
 
 
 # --- observed: serial -------------------------------------------------------------

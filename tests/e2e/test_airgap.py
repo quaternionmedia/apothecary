@@ -109,7 +109,7 @@ def test_the_airgap_is_a_window_that_computes_the_parts_own_text(page: Page, url
 
 @pytest.mark.e2e
 def test_the_panel_follows_the_editors_text_and_a_preset_is_written_into_it(page: Page, url: str):
-    """Part › Edit on the airgap part, and its SCAD window from ⊞ Windows: the panel
+    """Part › Edit on the airgap part, and its SCAD editor from ⊞ Windows: the panel
     follows the text as it is typed -- a
     tooth count changed in the text is the panel's within the frame -- and a preset
     chosen in the panel is written into the text, where the editor's check sees it;

@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 288
+VIEWER_CEILING = 285
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -382,7 +382,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 183 / 288, f"{backed} of {own} ring-backed"
+    assert backed / own >= 187 / 292, f"{backed} of {own} ring-backed"
 
 
 def test_motions_controls_are_each_a_cell_a_moving_parts_ring_really_produces():
@@ -603,12 +603,12 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
     assert "view-menu" in census.VIEWER.read_text(encoding="utf-8")
 
 
-def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settings():
+def test_settings_rows_are_counted_and_unbacked_and_settings_is_a_window_alone():
     """The Settings panel's rows are controls of their own, counted from the module
-    that writes them and never ring-backed (the panel has a cell, and no row has one);
-    ⚙ View › Settings is backed by the canvas ring's View › Settings, which the ring
-    really produces. The right button's press and release and the zoom
-    keys are things done to the scene."""
+    that writes them and never ring-backed (the panel has a cell, and no row has one).
+    Settings is a window, ⊞ Windows › Settings and Panels › Tools › Settings: ⚙ View has
+    no item of it and the canvas ring's View no cell. The right button's press and
+    release and the zoom keys are things done to the scene."""
     from apothecary.menu import Context, Pointing, resolve
 
     taken = census.take()
@@ -624,10 +624,13 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
     for name in rows:
         assert by_name[name].source == "settings.js", name
         assert by_name[name].ring_action is None and by_name[name].taken_back is None, name
-    assert by_name["settings-open"].ring_action == "view:settings"
+    assert "settings-open" not in by_name
     ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"])
     view = next(o for o in ring.options if o.label == "View")
-    assert "view:settings" in [c.action for c in view.children]
+    assert "view:settings" not in [c.action for c in view.children]
+    panels = next(o for o in ring.options if o.label == "Panels")
+    tools = next(o for o in panels.children if o.label == "Tools")
+    assert "panel:toggle:settings" in [c.action for c in tools.children]
     listening = {f.key: f for f in taken.found if f.how == "listening"}
     for key in (
         "canvas:pointerdown:onPress",
@@ -637,7 +640,7 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
         "window:keydown:onEscapeKey",
     ):
         assert listening[key].surface == census.GESTURE, key
-    assert listening["settingsOpenBtn:click:openSettings"].ring_action == "view:settings"
+    assert "settingsOpenBtn:click:openSettings" not in listening
 
 
 def test_the_knobs_controls_are_cells_of_panels_machine_knobs():

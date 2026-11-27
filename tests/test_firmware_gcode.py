@@ -1966,7 +1966,12 @@ def test_a_print_keeps_what_its_start_said_of_its_levelling(fake_arduino_cli, sc
     assert job.record.outcome == "done"
     sent = ScriptedTransport.instances[0].sent
     assert sent[sent.index("G29 V3") :][:3] == ["G29 V3", "M420 S1 V", "M851"]
-    assert job.record.detail["start"] == {
+    start = job.record.detail["start"]
+    # The mesh itself, as the board printed it and a bed reading keeps one.
+    mesh = start.pop("mesh")
+    assert mesh == gcode.parse_meshes(ScriptedTransport.instances[0].replies["M420 S1 V"])[0]
+    assert len(mesh) == 3 and all(len(row) == 3 for row in mesh)
+    assert start == {
         "leveling_on": True,
         "probe_offset": {"x": -44.0, "y": -10.0, "z": -3.15},
         "mesh_range": 0.4,
@@ -1984,6 +1989,17 @@ def test_a_print_keeps_what_its_start_said_of_its_levelling(fake_arduino_cli, sc
     job = devices.start_print(port, late.id, links=scripted_links)
     job.thread.join(5)
     assert "start" not in job.record.detail
+
+    # A bed slow to heat reports its temperature for minutes before the probe, and a
+    # probe says it is busy: none of it is kept, so the offset said after the mesh still
+    # is. The board is the one the link holds open.
+    board = ScriptedTransport.instances[0]
+    heating = [f" T:150.00 /150.00 B:{20 + i / 10:.2f} /60.00 @:0 B@:127" for i in range(450)]
+    board.replies = {**board.replies, "M190 S60": [*heating, "ok"]}
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    job.thread.join(5)
+    assert job.record.outcome == "done"
+    assert job.record.detail["start"]["probe_offset"] == {"x": -44.0, "y": -10.0, "z": -3.15}
     assert devices.levelled_by(["echo:Bed Leveling OFF", "ok"]) == {
         "leveling_on": False,
         "probe_offset": None,
@@ -2944,3 +2960,27 @@ def test_the_card_refusal_still_holds_while_a_host_print_streams(scripted_links)
     scripted_links.control.arm(port)
     with pytest.raises(ToolchainError, match="the card is printing"):
         devices.start_print(port, kept.id, links=scripted_links)
+
+
+def test_the_link_knows_the_axes_homed_since_the_board_started(scripted_links):
+    """A `G28` answered `ok` homes what it names, all three where it names none; motors
+    freed (`M84`) are no longer homed, and a board that restarts forgets them all."""
+    port = "/dev/ttyFAKE1"
+    link = scripted_links.open(port, 115200, settle=False)
+    assert link.homed == set()
+    link.command("G28 X Y")
+    assert link.homed == {"X", "Y"}
+    link.command("G28")
+    assert link.homed == {"X", "Y", "Z"}
+    link.command("G29 V3")
+    assert link.homed == {"X", "Y", "Z"}
+    link.command("M84 Z")
+    assert link.homed == {"X", "Y"}
+    link.command("M84")
+    assert link.homed == set()
+    link.command("G28")
+    board = ScriptedTransport.instances[-1]
+    board.pending += b"start\n"
+    link._read_line(1.0)
+    assert link.restarts >= 1 and link.homed == set()
+    assert gcode.homes("G280") == set() and gcode.homes("g28 z") == {"Z"}

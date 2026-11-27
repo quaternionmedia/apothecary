@@ -39,10 +39,11 @@ top, then the part's declared print settings:
 
 The machine's start G-code is composed from the pieces the printer's profile
 names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
-the printer, which homes and does no levelling; ``stored-mesh`` and
-``probe-each-print`` are named there by a person after the bench's levelling
-boxes, each refused where its precondition fails, and a measured first-layer
-offset is a stub. The filament is the one its profile names, or with ``choose`` the
+the printer, which homes and does no levelling, and ``first-layer-offset``, which
+writes nothing into the start: the slice's ``z_offset`` is the offset kept for the
+printer (``first_layer_offset.py``). ``stored-mesh`` and ``probe-each-print`` are
+named there by a person after the bench's levelling boxes, each refused where its
+precondition fails. The filament is the one its profile names, or with ``choose`` the
 one loaded on the printer (``filaments.py``), said in the ``filament`` setting's note.
 
 The three are written as user profiles of the system ones they start from

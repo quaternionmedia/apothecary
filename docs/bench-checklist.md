@@ -43,7 +43,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       Pinned (in Site's tabs) lists every pin as `📌 site › node ← identity`:
       note what each names, and take back any that stands on a node it should
       not. A pin's node says *not connected* in its Device section.
-- [ ] **Plan the router.** Select `cnc_router`, ⚙ View › Machine: its
+- [ ] **Plan the router.** Select `cnc_router`, ⚙ View › Machine view: its
       Machine opens not connected, its head saying so, its Cut card
       alone. Under *makes* choose `router_coupon`, **Toolpath**: the file is
       kept and chosen, listed with what it was written from; the preview
@@ -202,16 +202,26 @@ one machine on the number another held; nothing in them moves a machine.
       235 mm plate (`parts/ender3/slicer.json` `measured.bed_screws`, *not
       measured on printer_1*); a print drawn at the bed's centre in the world
       stands off its centre on the real bed by what this differs.
-- [ ] Where each levelling screw is in the nozzle's coordinates: jog the nozzle
-      over each screw's head and read X and Y from the Machine's position;
-      `measured.bed_screws` holds the frame model's 7.5 and 212.5.
+- [ ] Where each levelling screw is in the nozzle's coordinates: **Home all**,
+      jog the nozzle over each screw's head, and Fixes' **⌖ Here** with that
+      screw chosen; `measured.bed_screws` holds the frame model's 7.5 and 212.5
+      until each is kept. Then the plate's front-left and back-right corners the
+      same way: Fixes draws the plate where they are, and a slice after takes
+      the rectangle between them as its print area (its `printable_area`
+      setting, *measured*), arranged at the plate's middle.
 - [ ] A first layer with the mesh on: a slice that probes first (the Print
       window's levelling *probe first*, or `bed_shims`, which declares it),
       printed and cancelled once its first layer is down. Its drawer's *made*
       row (Part › Feedback) says what the board said as it began: *levelling
-      on*, its probe's offset, the mesh's range, where it probed. A nozzle too
-      close to extrude, or too far to hold, is the probe's Z offset: the
-      one-layer square below with the mesh on, and the new `M851` kept.
+      on*, its probe's offset, the mesh's range, where it probed; the job keeps
+      the mesh itself. A nozzle too close to extrude, or too far to hold, is the
+      first layer's height: the bed wiped with isopropyl, `first_layer_square`
+      sliced (it probes first) and printed, and the Print window's *first layer*
+      row stepped 0.05 mm at a time until the square's lines press flat into one
+      sheet -- round and standing apart, or not holding, a step lower; thin,
+      see-through or scraped, a step higher. Each square's look filed in its
+      drawer. The offset is the printer's own in the app, on top of `M851`,
+      which stays as the bench measured it.
 
 Shims, once the bed's tilt is to be taken out at its mounts
 ([docs/bed-shims.md](bed-shims.md)):
@@ -270,8 +280,10 @@ Shims, once the bed's tilt is to be taken out at its mounts
       which.
 - [ ] With filament loaded: **▶ Print** it, and watch the first layer. Note
       any stutter on long straight moves.
-- [ ] A one-layer square: the Z offset set on the printer's screen to it, and
-      the new `M851` kept.
+- [ ] A one-layer square (`first_layer_square`): the Print window's *first
+      layer* row kept at what it shows (D, the first layer with the mesh on);
+      the Z offset on the printer's screen left alone, so `M851` stays the
+      bench's.
 - [ ] Hotend **200** held two minutes on the temperature chart: within ±2 °C,
       or PID tuned from the printer's menu.
 - [ ] 100 mm of filament extruded from the printer's screen and measured; the
@@ -479,11 +491,14 @@ clear and the tool clear of stock. Start the layout with
 `POST /firmware/decks/{id}/control` `{"on": true}` (or `APOTHECARY_DECK_CONTROL=1`).
 Keep a hand on each machine's own power switch: it is faster than the deck's stop keys.
 
-- [ ] The top row shows **PRINTER**, **ROUTER**, **STEP**, **DISARM** (grey, *nothing
+- [ ] The top row shows **PRINTER** (the hotend's temperature, the bed's under it),
+      **ROUTER** (its state, the spindle under it), **STEP**, **DISARM** (grey, *nothing
       armed*); the bottom row **STOP**
       (printer_1), **STOP** (cnc_router), a dark key and a bright red **STOP ALL** last,
-      under the right hand; the strip says *printer_1 · disarmed* and the printer's X, Y,
-      Z. **ROUTER** turns the second key green and the strip says *cnc_router*.
+      under the right hand; the strip names six screens along its top, *Jog* lit, the
+      printer's X, Y and Z over knobs 1 to 3, and *printer_1 · disarmed* under them.
+      **ROUTER** frames the second key in white and the strip says *cnc_router*. Every
+      word on the keys and the strip reads from where a person stands at the bench.
 - [ ] Disarmed, turn every knob: nothing moves, the strip says *disarmed*, and the control
       latch is still disarmed.
 - [ ] Arming from the deck: hold **ROUTER** for a second and let go: the strip says to long
@@ -518,15 +533,34 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       loaded: one click clockwise pushes 1 mm (`M83`, `G1 E1 F200`), counter-clockwise
       pulls it back. Below Marlin's minimum, the board refuses and the log says so.
       The printer's **STOP** halts it (`M112`) and the page's E-STOP does too.
+- [ ] Tap each name along the top of the strip, **Bench**, **Jog**, **Home**, **Print**,
+      **Temps**, **Bed**: each shows its screen and lights its name, and a tap near the
+      line between two names shows the one the finger is on. Press each knob: the next
+      screen each time, and from Bed the Bench. The events list a `short` touch with its
+      `x` for each tap, and a knob's press and release.
 - [ ] Swipe the strip: draw a finger from its right end to its left, then back. The
-      strip goes knobs, **Progress**, **Status** and back, one screen a swipe, and the
-      events list `drag` with `x` above `x_out` (a finger moving left) and one drag report
-      for the whole stroke, lifted at its end. A swipe is not read twice, and a tap on the
-      strip changes nothing.
-- [ ] Start a print on the printer: the strip brings **Progress** forward once with the
-      file's name, a bar and the stage; swipe to the knobs, which say the print holds the
-      port and the jogs are refused, and the strip stays there. A turn of knob 1 moves
-      nothing. Cancel the print: Progress says *cancelled* until the strip is touched.
+      screens go one along a swipe and stop at either end, and the events list `drag` with
+      `x` above `x_out` (a finger moving left) and one drag report for the whole stroke,
+      lifted at its end. A swipe is not read twice.
+- [ ] Armed, on any screen but Jog, turn every knob: nothing moves, and the strip says the
+      knobs move nothing there. On the router's **Cut**, with the spindle turning, knob 4
+      still changes its speed.
+- [ ] With the printer polled from its Machine for a few minutes while it heats,
+      **Temps** draws the hotend and the bed rising toward their targets, dashed, and
+      **PRINTER**'s key a spark line of the same. Close the Machine: the graph stops
+      where the last poll left it, and the footer says how long ago it was read.
+- [ ] **Home**, printer armed and the bed clear: a short press of **HOME** says to hold
+      it, and nothing moves. Held a second and let go, the printer homes (`G28` in its
+      log) and the strip says *printer_1 homed*. Disarmed, the same hold is refused.
+      On the router, **HOME** is refused until its homing is proved, as the Machine's ⌂ is.
+- [ ] **Bed**, printer armed: **PROBE** held a second begins the bed's reading, as the
+      Machine's Probe does; the strip says its stage while it runs, then the mesh's
+      colours, its range and that it was probed just now.
+- [ ] Start a print on the printer: the deck brings **Print** forward once with the
+      file's name, a bar and the stage, and **PRINTER**'s key its bar; tap **Jog**: the
+      knobs say the print holds the port and the jogs are refused, and the strip stays
+      there. A turn of knob 1 moves nothing. **Bench** shows both machines and the print's
+      bar. Cancel the print: Print says *cancelled* until the strip is touched there.
 
 ## K. The footpedal
 

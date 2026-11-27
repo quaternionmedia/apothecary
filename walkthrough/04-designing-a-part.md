@@ -45,7 +45,7 @@ Apply: the text rendered, its size in it and nothing passed beside it, into the 
 ![Apply draws the variant, marked as not saved](screenshots/04-03-apply-draws-the-variant-marked-as-not-saved.png)
 
 ```
-calibration_cube regenerated: an applied variant, not saved; Part › Save keeps it in git
+calibration_cube regenerated: an applied variant, not saved; Save in the SCAD editor keeps it in git
 envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 ```
 
@@ -97,7 +97,7 @@ calibration_cube from the cache, nothing rendered: drawn as saved
 
 ## 10. Round two, the size typed in its box
 
-A second size, 47.50 mm, typed a key at a time in the box beside the slider, which follows it; checked once, and applied from the part's ring, Part › Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the editor's own Defaults and Apply: the saved part again, nothing rendered.
+A second size, 47.50 mm, typed a key at a time in the box beside the slider, which follows it; checked once, and applied from the part's ring, Part › Apply, as the editor's Apply applies it: rendered, drawn and marked. Then the bar's Revert, which reads Defaults once nothing is staged, and Apply: the saved part again, nothing rendered.
 
 ```
 calibration_cube from the cache, nothing rendered: drawn as saved
@@ -116,10 +116,10 @@ envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 
 ## 12. A size staged and not applied is kept over a reload
 
-A size of 20 mm staged and not applied, and the page reloaded: the browser asks before leaving, the status line names the part with work kept -- its SCAD as edited, the size in it -- and Part › Edit offers it back. Restore stages it again, its line and its control both; Discard would let it go.
+A size of 20 mm staged and not applied, and the page reloaded: the browser asks before leaving, the status line names the part with work kept -- its SCAD as edited, the size in it -- and Part › Edit puts it back: staged again, its line and its control both, not drawn. Revert lets it go.
 
 ```
-Kept in this tab from before it was reloaded: its SCAD edited, size 20. Restore puts it back; Discard lets it go.
+Put back from before the reload: its SCAD edited, size 20. Apply draws it; Revert lets it go.
 ```
 
 ## 13. Two tabs apply at once, and each draws its own

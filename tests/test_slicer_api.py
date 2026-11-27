@@ -85,12 +85,13 @@ def test_the_status_says_each_slicer_the_one_used_and_the_printers(fake_orcaslic
     pieces = {(p["kind"], p["id"]): p for p in body["pieces"]}
     assert not pieces[("start", "home")]["stub"] and not pieces[("filament", "printer")]["stub"]
     assert not pieces[("filament", "choose")]["stub"]
-    for stub in (
-        ("start", "first-layer-offset"),
-        ("declared", "word-print-settings"),
-    ):
+    for stub in (("declared", "word-print-settings"),):
         assert pieces[stub]["stub"] and pieces[stub]["does"], stub
-    for built in (("start", "stored-mesh"), ("start", "probe-each-print")):
+    for built in (
+        ("start", "stored-mesh"),
+        ("start", "probe-each-print"),
+        ("start", "first-layer-offset"),
+    ):
         assert not pieces[built]["stub"] and pieces[built]["does"], built
     assert "M420 S1" in pieces[("start", "stored-mesh")]["does"]
     assert "G29" in pieces[("start", "probe-each-print")]["does"]
@@ -287,7 +288,7 @@ def test_a_slice_levels_as_the_print_window_asks_and_one_that_cannot_is_refused_
     raft = next(s for s in done["slice"]["record"]["settings"] if s["name"] == "raft_layers")
     assert raft["value"] == "3" and "this slice's adhesion 'raft'" in raft["source"]
     start = next(s for s in done["slice"]["record"]["settings"] if s["name"] == "start")
-    assert start["value"] == ["home", "probe-each-print"]
+    assert start["value"] == ["home", "first-layer-offset", "probe-each-print"]
     assert "this slice asked 'probe-each-print'" in start["source"]
     tasks = len(client.get("/slicer/tasks").json())
     # The stored mesh is turned on only under the bound, which a slice for no printer's
@@ -313,12 +314,15 @@ def test_the_part_s_own_first_layer_is_what_it_declares_else_the_printer_s(
     at = {"site": "garage", "printer": "printer_1"}
     r = client.get("/slicer/first-layer", params={"part": "bed_shims", **at})
     assert r.status_code == 200, r.text
-    assert r.json() == {
+    # The first-layer offset is the printer's, whatever the part (test_first_layer_offset.py).
+    body = r.json()
+    assert body.pop("offset")["named"] is True
+    assert body == {
         "levelling": {"value": "probe-each-print", "by": "part"},
         "adhesion": {"by": "part", "brim_width": 0.0},
     }
     r = client.get("/slicer/first-layer", params={"part": "calibration_cube", **at})
-    assert r.json() == {
+    assert {k: v for k, v in r.json().items() if k != "offset"} == {
         "levelling": {"value": "home", "by": "printer"},
         "adhesion": {"by": "printer"},
     }

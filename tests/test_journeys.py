@@ -1,6 +1,7 @@
 """The journeys' registry (apothecary/journeys.py) and what reads it: each journey's
-view, laid out from ⚙ View and the ring's Panels › Windows after the systems'.
-That a view lays its windows out on the page is tests/e2e/test_journeys.py's."""
+view, laid out by the tour going to a stage of it, and listed neither in ⚙ View nor on
+the ring's Panels › Windows, which hold the systems' views alone. That a view lays its
+windows out on the page is tests/e2e/test_journeys.py's."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.simulated import DEVKIT
 from apothecary.site_names import UNIVERSE
-from apothecary.systems import SYSTEMS
+from apothecary.systems import FAMILY, PART, SYSTEMS
 from apothecary.universe import create_universe_site
 from apothecary.viewer import render_fractal_viewer_page
 
@@ -48,7 +49,6 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
     groups = set(PANEL_GROUPS.values()) | {s.group for s in SYSTEMS}
     for journey in JOURNEYS:
         assert re.fullmatch(r"[a-z][a-z0-9-]*", journey.id)
-        assert len(journey.cell) <= 12, journey.cell  # a ring label, where it has one
         assert journey.group in groups, journey.group  # a colour the palette has
         assert journey.name and journey.title, journey.id
         # One scheme: what a person does, and to one thing. The title is the verb.
@@ -103,20 +103,44 @@ def test_every_window_a_journeys_view_lays_out_is_one_the_page_has():
 
 
 def test_the_make_view_holds_the_window_set_a_part_is_made_through():
-    """The part chosen in Site, its numbers in Parameters, the machine's window and its
-    Print window together at the column's foot, Print in front."""
+    """The part chosen in Site, its numbers in Parameters, the machine's window, its
+    Print window and the part's Feedback together at the column's foot, Print in front:
+    the windows its stages name, and no other."""
     named = _layout_windows(by_id("make").view)
     assert {"site", "selected", "part-parameters", "machine", "machine-print"} <= named
     column = by_id("make").view["row"][1]["column"]
-    assert column[-1]["stack"][:2] == ["machine", "machine-print"]
+    assert column[-1]["stack"] == ["machine", "machine-print", "part-feedback"]
     assert column[-1]["active"] == "machine-print"
+    stages = {w for s in by_id("make").steps for w in (*s.forward, *s.owns)}
+    assert named - {"world"} <= stages
 
 
-def test_the_ring_has_a_cell_for_the_first_journey_s_view_after_the_systems():
-    """Panels › Windows is full, so Print a part's view alone has a cell there; the other
-    journeys' views are laid out by the tour alone."""
-    assert VIEWS[len(SYSTEMS) :] == (("make", "Print view"),)
-    assert [j.id for j in JOURNEYS if j.cell] == ["make"]
+def test_a_journey_through_one_system_lays_out_that_system_s_view():
+    """⚙ View's views and the journeys agree on what windows go together: Design a part
+    and Join a hose lay out the Part view, and Run a site the Family view, whose windows
+    are those its stages name."""
+    assert by_id("design").view == by_id("join").view == PART.view
+    assert by_id("run").view == FAMILY.view
+    stages = {w for s in by_id("run").steps for w in (*s.forward, *s.owns)}
+    assert _layout_windows(FAMILY.view) - {"world"} == stages
+
+
+def test_the_procedure_stands_alone_beside_the_world_in_the_family_view():
+    """A window the page opens while the Family view is laid out -- a step's door opening
+    a Machine, whose home is with the tabbed windows (panels.js), the Workspace among them
+    -- must not open over the Procedure: its stack beside the world holds it alone."""
+    beside_the_world = [c for c in FAMILY.view["row"] if "stack" in c]
+    assert beside_the_world == [{"stack": ["procedure"], "size": 30}]
+
+
+def test_a_journey_s_view_is_laid_out_by_the_tour_and_listed_nowhere_else():
+    """A journey is chosen in the Tour box and nowhere else, so its view is neither an
+    entry of ⚙ View nor a cell of the ring's Panels › Windows: those are the systems'
+    views alone, and the page defines each journey's view unlisted."""
+    assert VIEWS == tuple((s.id, s.cell) for s in SYSTEMS)
+    assert not {j.id for j in JOURNEYS} & {vid for vid, _ in VIEWS}
+    assert "listed: false" in SYSTEMS_JS.read_text(encoding="utf-8")
+    assert all("cell" not in entry for entry in manifest())
 
 
 def test_the_page_is_given_the_journeys_and_defines_their_views_from_them_alone():
@@ -243,8 +267,9 @@ def test_calibrate_a_router_goes_from_the_face_chosen_to_the_allowance_kept():
 def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():
     """One journey where Drive a machine hands on: the procedure, the family's members
     and the hub's audit, then the Workspace on the site and on one machine's hour, in a
-    view that holds each half's windows -- the Workspace behind the Procedure in the tall
-    stack, so each is in front in its own stages. No board's Machine is in it."""
+    view that holds each half's windows -- the Procedure tall and alone beside the world,
+    the Workspace in front of Jobs' stack in its own stages, so the two are seen together.
+    No board's Machine is in it."""
     run = by_id("run")
     assert (run.name, run.title, run.group, run.requires) == (
         "Run a site",
@@ -273,8 +298,10 @@ def test_run_a_site_is_the_site_brought_up_through_its_procedure_then_watched():
         "selected",
     } <= named
     assert not any(w == "machine" or w.startswith("machine-") for w in named)
-    tall = run.view["row"][1]
-    assert tall["stack"] == ["procedure", "working"] and tall["active"] == "procedure"
+    assert run.view["row"][1]["stack"] == ["procedure"]
+    column = run.view["row"][2]["column"]
+    workspace = next(s for s in column if "working" in s["stack"])
+    assert workspace["stack"] == ["jobs", "working", "site"]
     assert run.steps[3].puts == (("working", ""),)
     assert run.steps[4].puts == (("fit", "printer_1"), ("working", "printer_1"))
 

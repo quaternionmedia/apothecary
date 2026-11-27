@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. The deck's layout, drawn by the server, with the router chosen
 
-The top row's keys choose the machine and cycle the step; the bottom row holds the stops, one per machine and a bright red STOP ALL last, nearest the knobs. The strip says which machine, its position and that its control is disarmed.
+The top row's first two keys choose the machine, each a tile of what it is doing, the chosen one framed; the third is the screen's own, STEP on Jog, cycling the step. The bottom row holds the stops, one per machine and a bright red STOP ALL last, nearest the knobs. The strip names the deck's six screens along its top, Jog lit, and over each knob what it moves and where the tool is; under them, that its control is disarmed.
 
 ![The deck's layout, drawn by the server, with the router chosen](screenshots/27-01-the-deck-s-layout-drawn-by-the-server-with-the-rou.png)
 
@@ -69,7 +69,7 @@ UNLOCK pressed: it sends the router's `$X` through the latch, the alarm is clear
 
 - **A real deck or machine.** What only they show -- the knobs' feel, a gantry that stops, which stop is faster -- is section J of the bench checklist (docs/bench-checklist.md). The machine's own red button is faster than the deck's stop key, and the docs say so.
 - **The printer.** The same turns jog it as `G91`, `G1 .. F3000`, `G90`, and its fourth knob extrudes within the bound the firmware guide names; tests/test_firmware_deck_control.py holds both.
-- **The strip's picture.** The server draws the time an armed control has left into it, which differs on every run, so it is greyed in the pictures; the window writes its words under it, the time blanked there as everywhere.
+- **The strip's picture, armed.** The server draws the time an armed control has left into it, which differs on every run, so after the first step it is greyed in the pictures; the window writes its words under it, the time blanked there as everywhere.
 
 Run it yourself:
 

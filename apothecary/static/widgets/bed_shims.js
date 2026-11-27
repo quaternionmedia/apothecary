@@ -28,7 +28,12 @@
  * default), then probed twice, a reading each, and turned off after -- the heated pair the
  * shims are computed from, in the Machine's own probe.
  *
- * mountBedShims({ runs, differences, fixes, history }, { base, printer, say, draw, shims, make, measured, probeHot, bedTemperature })
+ * Each window ends on the step after it, its button opening the window that step is in:
+ * Runs a heated pair's Differences, Differences the shims in Fixes, Fixes once they are
+ * made the pair after them, probed hot in Runs. A window short of what it reads names the
+ * window that takes it.
+ *
+ * mountBedShims({ runs, differences, fixes, history }, { base, printer, say, draw, shims, make, measured, probeHot, bedTemperature, open })
  *   printer(): { site, path } of the open Machine's printer, or null
  *   say(text, kind): the page's status line
  *   draw(record, newest): a reading drawn over the printer's bed in the world, and kept
@@ -43,6 +48,8 @@
  *   null where none is typed over the screw's), or null
  *   probeHot(heat, soak): the open Machine's bed probed hot; { said } or { refused }
  *   bedTemperature(): the bed temperature of the filament its Print window holds, or null
+ *   open(id): the window `id` opened and brought to the front ("bed-runs", "bed-differences",
+ *   "bed-fixes"), as the ring's Panels › Machine › Bed cells open them
  *   -> { load(), choose(id), act(verb), story() }
  *   act("make" | "keep" | "probe-hot"): Make these, Keep, Probe hot, as the ring's Panels ›
  *   Machine › Bed cells do them; what it did, or an Error saying why not.
@@ -77,9 +84,13 @@ function heatmap(grid, colour, name) {
 
 function flatOf(grid) { return (grid || []).flat(); }
 
-export function mountBedShims(sections, { base, printer, say, draw, shims, make, stand, measured, probeHot = null, bedTemperature = null }) {
+const WINDOWS = { "bed-runs": "Runs", "bed-differences": "Differences", "bed-fixes": "Fixes" };
+
+export function mountBedShims(sections, { base, printer, say, draw, shims, make, stand, measured, probeHot = null, bedTemperature = null, open = null }) {
     const el = sections;
     let story = null, chosen = null, error = null, loading = null, stood = null;
+    // The place Here keeps next: the one after the place it kept last.
+    let whereNext = null;
     // Probe hot above the runs, drawn once: what is typed there stays as the runs redraw.
     let runsList = null, hotC = null, soakS = null;
     if (el.runs) {
@@ -95,6 +106,12 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
     }
 
     const empty = (text) => `<p class="bed-empty">${esc(text)}</p>`;
+    // The step after a window's, at its foot: what it is, and the window it is in opened.
+    const next = (text, to) => `<p class="bed-next-line">${esc(text)}`
+        + (open && WINDOWS[to] ? ` <button type="button" class="bed-next" data-open="${to}" title="Open ${WINDOWS[to]}: ${esc(text)}">${WINDOWS[to]} ›</button>` : "")
+        + "</p>";
+    // A heated pair: what the floor and the shims are read from.
+    const paired = () => !!(story && story.differences && story.differences.repeatability);
 
     function renderRuns() {
         if (!el.runs) return;
@@ -114,7 +131,9 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
                 + heatmap(r.mesh, (v) => ofRange(v, lo, hi), r.id)
                 + `<div class="bed-run-words"><b>${esc(stamp(r.at))}</b> · ${esc(r.method)} · ${esc(temp)} <span class="bed-warm ${warm}">${esc(warm)}</span>`
                 + ` · range <b>${esc(mm(r.range))}</b> mm${r.note ? `<br>${esc(r.note)}` : ""}</div></div>`;
-        }).join("");
+        }).join("") + (paired()
+            ? next("A heated pair: Differences says what the probe does not repeat between its two readings, and the bow no shim fixes.", "bed-differences")
+            : `<p class="bed-next-line">A heated pair is two readings one after the other: ▤ Probe hot above probes twice.</p>`);
     }
 
     function renderDifferences() {
@@ -130,6 +149,7 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
                 + heatmap(rep.mesh, (v) => ofDifference(v, most), "repeatability") + "</section>");
         } else {
             parts.push(`<section class="bed-diff" data-diff="repeatability">${empty("No heated pair yet: probe twice, one after the other, the bed heated and soaked, for the floor.")}</section>`);
+            parts.push(next("▤ Probe hot in Runs probes the bed twice, heated and held.", "bed-runs"));
         }
         const after = d.after;
         if (after) {
@@ -149,27 +169,56 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
                 + `<p>The levelled readings less the plane through them.${bow.bound != null ? ` The bound for a stored mesh is ${esc(bow.bound)} mm (measured.mesh_range_bound): ${over ? "the bow alone is over it, so no shim brings a reading under it" : "the bow is under it, once the bed is level"}.` : ""}</p>`
                 + heatmap(bow.mesh, (v) => ofDifference(v, most), "bow") + "</section>");
         }
+        if (rep) parts.push(next("The shims this pair calls for, each at its screw, are in Fixes.", "bed-fixes"));
         el.differences.innerHTML = parts.join("");
     }
 
     function bedSvg(s) {
-        const [vx, vy] = story.volume || [220, 220];
+        // The plate where its corners are kept, else the profile's volume from the nozzle's
+        // 0, 0; wide enough for every screw either way.
+        const p = story.plate, fl = p && p.front_left, br = p && p.back_right;
+        const [vx0, vy0] = story.volume || [220, 220];
+        const x0 = Math.min(0, fl ? fl.x : 0), y0 = Math.min(0, fl ? fl.y : 0);
+        const vx = Math.max(vx0, br ? br.x : 0, ...s.shims.map((sh) => sh.x + 7.5)) - x0;
+        const vy = Math.max(vy0, br ? br.y : 0, ...s.shims.map((sh) => sh.y + 7.5)) - y0;
         const W = 220, H = Math.round((W * vy) / vx), k = W / vx;
-        const X = (x) => (x * k).toFixed(1), Y = (y) => (H - y * k).toFixed(1);
+        const X = (x) => ((x - x0) * k).toFixed(1), Y = (y) => (H - (y - y0) * k).toFixed(1);
+        const plate = fl && br
+            ? `<rect class="bed-plate" x="${X(fl.x)}" y="${Y(br.y)}" width="${((br.x - fl.x) * k).toFixed(1)}" height="${((br.y - fl.y) * k).toFixed(1)}"/>`
+            : `<rect class="bed-plate" x="${X(0)}" y="${Y(vy0)}" width="${(vx0 * k).toFixed(1)}" height="${(vy0 * k).toFixed(1)}"/>`;
         const a = s.grid;
         const marks = s.shims.map((sh) => {
             const kind = sh.printed != null ? "shim" : sh.none === "the highest" ? "highest" : "skipped";
             const words = sh.printed != null ? `${sh.printed.toFixed(1)} mm` : sh.none === "the highest" ? "none" : "skipped";
-            const right = sh.x > vx / 2, up = sh.y > vy / 2;
+            const right = sh.x - x0 > vx / 2, up = sh.y - y0 > vy / 2;
             return `<g class="bed-screw ${kind}" data-screw="${esc(sh.label)}" data-printed="${esc(sh.printed ?? "")}">`
                 + `<circle cx="${X(sh.x)}" cy="${Y(sh.y)}" r="5"/>`
                 + `<text x="${X(sh.x)}" y="${Y(sh.y)}" dx="${right ? -8 : 8}" dy="${up ? 14 : -8}" text-anchor="${right ? "end" : "start"}">${esc(sh.label)} ${esc(words)}</text></g>`;
         }).join("");
         return `<svg class="bed-top" viewBox="-10 -10 ${W + 20} ${H + 20}" role="img" aria-label="The bed from above, each screw with its shim" xmlns="http://www.w3.org/2000/svg">`
-            + `<rect class="bed-plate" x="0" y="0" width="${W}" height="${H}"/>`
+            + plate
             + `<rect class="bed-grid" x="${X(a.x[0])}" y="${Y(a.y[1])}" width="${((a.x[1] - a.x[0]) * k).toFixed(1)}" height="${((a.y[1] - a.y[0]) * k).toFixed(1)}"><title>${esc(`the probed grid, placed by ${a.from}`)}</title></rect>`
             + `<text class="bed-front" x="${W / 2}" y="${H + 9}" text-anchor="middle">front</text>`
             + marks + "</svg>";
+    }
+
+    // Where the nozzle stands over each screw and the plate's corners, kept for this
+    // printer or its profile's; Here keeps the place chosen where the nozzle is now.
+    function whereSection() {
+        const place = (x, y) => `${esc(x.toFixed(1))}, ${esc(y.toFixed(1))}`;
+        const screws = (story.screws || []).map((sc) => `<span class="bed-where-screw" data-screw="${esc(sc.label)}" data-kept="${sc.kept ? "1" : ""}"><b>${esc(sc.label)}</b> ${place(sc.x, sc.y)}`
+            + (sc.kept ? "" : ` <span class="bed-default" title="the printer's profile's figure, not where its nozzle stood over this screw: home, jog over it, choose it below and press Here">profile</span>`) + "</span>").join(" · ");
+        const p = story.plate || {};
+        const corner = (c, word) => (p[c] ? `${word} ${place(p[c].x, p[c].y)}` : `${word} not kept`);
+        const plate = p.width != null
+            ? `the plate ${esc(p.width.toFixed(1))} × ${esc(p.depth.toFixed(1))} mm, its front-left corner at ${place(p.front_left.x, p.front_left.y)}`
+            : `the plate's corners: ${corner("front_left", "front-left")}, ${corner("back_right", "back-right")}`;
+        const places = [...(story.screws || []).map((sc) => [sc.name, `${sc.label} screw`]), ["plate_front_left", "plate's front-left corner"], ["plate_back_right", "plate's back-right corner"]];
+        const chosenPlace = places.some(([v]) => v === whereNext) ? whereNext : places[0][0];
+        const options = places.map(([v, w]) => `<option value="${esc(v)}"${v === chosenPlace ? " selected" : ""}>${esc(w)}</option>`).join("");
+        return `<section class="bed-where"><p class="bed-where-said">Where the nozzle stands over each screw (${esc(story.screws_from || "")}): ${screws}; ${plate}.</p>`
+            + `<p><select id="bed-where-what" title="Which place Here keeps: a levelling screw, or a corner of the plate">${options}</select>`
+            + ` <button type="button" id="bed-where-here" title="Keep where ${esc(story.printer)}'s nozzle stands now, as its board says (M114), as the place chosen: Home all first, then jog the nozzle over the screw's head or the plate's corner in the Machine's Control pad">⌖ Here</button></p></section>`;
     }
 
     function renderFixes() {
@@ -179,10 +228,10 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
         const mark = (kept) => (kept ? "" : ` <span class="bed-default" title="the part's default, not this printer's: measure it, set it in Parameters, then Keep">default</span>`);
         const mountLine = m
             ? `<p class="bed-mount" data-hole="${esc(m.hole_d)}" data-outer="${esc(m.outer_d)}" data-kept="${m.hole_kept && m.outer_kept}">Each shim fits a screw hole <b>${esc(m.hole_d)}</b> mm${m.hole_kept && m.screw ? ` (${esc(m.screw)})` : ""}${mark(m.hole_kept)} and a ring <b>${esc(m.outer_d)}</b> mm across${mark(m.outer_kept)}.`
-                + ` <button type="button" id="bed-keep" title="Keep the screw hole and the ring Parameters holds for bed_shims as this printer's, measured: kept in the state folder, used by every slice of the shims after">⇩ Keep from Parameters</button></p>`
+                + ` <button type="button" id="bed-keep" title="Keep the screw hole and the ring Parameters holds for bed_shims, as measured, as this printer's mount: kept in the state folder, used by every slice of the shims after">⇩ Keep mount</button></p>`
             : "";
         const s = story.shims;
-        if (!s || s.error) { el.fixes.innerHTML = empty(s ? s.error : "No reading to level the bed by.") + mountLine; shims(null); return; }
+        if (!s || s.error) { el.fixes.innerHTML = empty(s ? s.error : "No reading to level the bed by.") + next("▤ Probe hot in Runs takes a heated pair, which the shims are read from.", "bed-runs") + whereSection() + mountLine; shims(null); return; }
         const reads = s.runs.map((r) => r.id).join(" and ");
         const lines = s.shims.map((sh) => {
             const what = sh.printed != null
@@ -196,10 +245,12 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
             + bedSvg(s)
             + `<ul class="bed-shims">${lines}</ul>`
             + `<p class="bed-left">Left by rounding and the corners skipped: up to ${esc(mm(s.left))} mm between corners. Left by the plane: the bow, ${esc(mm(s.residual.range))} mm.</p>`
+            + whereSection()
             + mountLine
             + (s.params ? `<p class="bed-stood">These stand on bed_shims, the piece on ${esc(story.printer)}'s bed: its Parameters show them, and a Slice or ⚒ Make of it makes them.</p>` : "")
             + (s.params
                 ? `<p><button type="button" id="bed-make" title="bed_shims at these thicknesses, rendered and sliced for this printer in its Print window: nothing is printed, ▶ Print is a person's">⚒ Make these</button> <code>${esc(s.slice)}</code></p>`
+                    + next("Printed and fitted, the bed is probed hot again in Runs: Differences then sets the pair after the shims against this one.", "bed-runs")
                 : `<p class="bed-empty">No corner needs a shim: the bed is as level as shims make it.</p>`);
         shims(s.shims, m);
         // The shims the readings call for stood on bed_shims, once per set: drawn on the
@@ -248,7 +299,7 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
         const at = printer();
         if (!at) throw new Error("open a printer's Machine: a mount is kept for it");
         const given = measured();
-        if (!given) throw new Error("nothing in Parameters: choose bed_shims, its screw chosen and the mount's outer diameter typed, then Keep");
+        if (!given) throw new Error("nothing in Parameters: choose bed_shims, its screw chosen and the mount's outer diameter typed, then ⇩ Keep mount");
         const body = { outer_d: given.outer_d, ...(given.screw ? { screw: given.screw } : {}), ...(given.hole_d ? { hole_d: given.hole_d } : {}) };
         const r = await fetch(`${base}/bed/${encodeURIComponent(at.site)}/${encodeURIComponent(at.path)}/mount`, {
             method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -257,6 +308,23 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
         if (!r.ok) throw new Error(typeof answer.detail === "string" ? answer.detail : `the server answered ${r.status}`);
         await load();
         return `${at.path}'s shims fit a ${answer.said}`;
+    }
+
+    // Here: where the nozzle stands now kept as the place chosen, and the next place chosen.
+    async function where() {
+        const at = printer();
+        if (!at) throw new Error("open a printer's Machine: its screws are kept for it");
+        const choice = el.fixes.querySelector("#bed-where-what");
+        if (!choice || !choice.value) throw new Error("no place to keep: open Fixes on a printer");
+        const r = await fetch(`${base}/bed/${encodeURIComponent(at.site)}/${encodeURIComponent(at.path)}/where/${encodeURIComponent(choice.value)}`, {
+            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ here: true }),
+        });
+        const answer = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof answer.detail === "string" ? answer.detail : `the server answered ${r.status}`);
+        const values = [...choice.options].map((o) => o.value);
+        whereNext = values[(values.indexOf(choice.value) + 1) % values.length];
+        await load();
+        return `${at.path}: ${answer.said}`;
     }
 
     // Probe hot: the temperature and the hold typed, the open Machine's bed probed hot.
@@ -273,6 +341,7 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
     async function act(verb) {
         if (verb === "keep") return keep();
         if (verb === "probe-hot") return hot();
+        if (verb === "where") return where();
         if (verb !== "make") throw new Error(`no such act: ${verb}`);
         const s = story && story.shims;
         if (!s || s.error || !s.params) throw new Error(s && s.error ? s.error : "no shim to make: Fixes has none");
@@ -292,16 +361,22 @@ export function mountBedShims(sections, { base, printer, say, draw, shims, make,
         if (run) choose(run.dataset.id);
     }
     async function onFixesClick(ev) {
-        const button = ev.target.closest("#bed-make, #bed-keep");
+        const button = ev.target.closest("#bed-make, #bed-keep, #bed-where-here");
         if (!button) return;
-        const [verb, word] = button.id === "bed-keep" ? ["keep", "Keep"] : ["make", "Make these"];
+        const [verb, word] = { "bed-keep": ["keep", "Keep mount"], "bed-where-here": ["where", "Here"] }[button.id] || ["make", "Make these"];
         button.disabled = true;
         try { say(`${word}: ${await act(verb)}`, "success"); } catch (e) { say(`${word}: ${e.message}`, "error"); }
         button.disabled = false;
     }
+    // A window's step after it: that window opened.
+    function onNext(ev) {
+        const button = ev.target.closest(".bed-next");
+        if (button && open) open(button.dataset.open);
+    }
     el.runs.addEventListener("click", onRunsClick);
     el.runs.addEventListener("keydown", onRunsKey);
     el.fixes.addEventListener("click", onFixesClick);
+    for (const body of [el.runs, el.differences, el.fixes, el.history]) if (body) body.addEventListener("click", onNext);
     // A reading kept by the Machine (Probe bed, Probe hot): the runs asked for again.
     const onLeveled = () => { if (printer()) load(); };
     window.addEventListener("apothecary:leveled", onLeveled);

@@ -318,7 +318,9 @@ def test_a_bed_levelled_through_the_tour(page: Page, simulated, walkthrough):
     # Sliced to probe first, the bed not yet level, and with no brim, which would fill
     # each shim's slot and hole.
     said = {s["name"]: s for s in newest["settings"]}
-    assert said["start"]["value"] == ["home", "probe-each-print"], said["start"]
+    assert said["start"]["value"] == ["home", "first-layer-offset", "probe-each-print"], said[
+        "start"
+    ]
     assert said["brim_type"]["value"] == "no_brim", said["brim_type"]
     level = windows.panel(page, "machine-print").locator("#print-level")
     expect(level).to_have_value("probe-each-print")
@@ -458,6 +460,12 @@ def test_probe_hot_heats_holds_probes_twice_and_turns_the_bed_off(page: Page, si
     second = runs.locator(".bed-run", has_text="heated 60 C, soaked 0 s, 2 of 2")
     expect(second).to_have_count(1, timeout=30000)
     expect(runs.locator(".bed-run", has_text="heated 60 C, soaked 0 s, 1 of 2")).to_have_count(1)
+    # A heated pair: Runs names Differences and opens it, and Differences Fixes.
+    runs.locator(".bed-next", has_text="Differences").click()
+    _shown(page, "bed-differences")
+    windows.panel(page, "bed-differences").locator(".bed-next", has_text="Fixes").click()
+    _shown(page, "bed-fixes")
+    expect(windows.panel(page, "bed-fixes")).to_contain_text("Where the nozzle stands")
     assert asked and "60 °C" in asked[0] and "probe it twice" in asked[0], asked
     with httpx.Client(base_url=url, timeout=15.0) as http:
         job = http.get("/firmware/printers/level", params={"port": PRINTER}).json()
@@ -475,3 +483,48 @@ def test_probe_hot_heats_holds_probes_twice_and_turns_the_bed_off(page: Page, si
     expect(page.locator("#control")).to_be_hidden(timeout=5000)
     with httpx.Client(base_url=url, timeout=15.0) as http:
         assert http.get("/firmware/printers/armed").json() == {"armed": {}}
+
+
+@pytest.mark.e2e
+def test_here_keeps_where_the_nozzle_stands_as_the_screw_chosen(page: Page, simulated):
+    """Fixes' Here on a simulated printer_1: refused while X and Y are not homed -- its
+    motors freed, whatever came before -- then the nozzle homed and jogged, kept as the
+    screw chosen, which Fixes no longer marks the profile's; the choice moves on to the
+    next screw."""
+    url = simulated["url"]
+    open_garage(page, url)
+    on_row(page, "printer_1", "Device", "Open")
+    _shown(page, "machine")
+    on_row(page, "printer_1", "Device", "Control", "Arm")
+    control = page.locator("#control")
+    expect(control).to_be_visible(timeout=5000)
+    page.on("dialog", lambda d: d.accept())
+    control.locator("button[data-cmd='M84']").click()  # Motors off: no axis is homed
+    windows.open_window(page, "bed-fixes")
+    fixes = windows.panel(page, "bed-fixes")
+    expect(fixes.locator("#bed-where-here")).to_be_visible(timeout=20000)
+    fr = fixes.locator(".bed-where-screw[data-screw='FR']")
+    fixes.locator("#bed-where-what").select_option("front_right")
+    fixes.locator("#bed-where-here").click()
+    expect(page.locator("#status")).to_contain_text("has not homed X and Y", timeout=15000)
+    windows.show(page, "machine")
+    control.locator("button[data-cmd='HOME']").click()
+    for _ in range(3):
+        control.locator("button[data-jog='X+']").click()
+        page.wait_for_timeout(300)
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        at = http.post(
+            "/firmware/printers/query", json={"port": PRINTER, "command": "M114"}
+        ).json()["lines"]
+    x = gcode.parse_m114(at)["x"]
+    assert x > 0, at
+    windows.show(page, "bed-fixes")
+    fixes.locator("#bed-where-what").select_option("front_right")
+    fixes.locator("#bed-where-here").click()
+    expect(page.locator("#status")).to_contain_text(f"FR kept at X {x:.2f}", timeout=15000)
+    expect(fr).to_have_attribute("data-kept", "1", timeout=10000)
+    expect(fixes.locator("#bed-where-what")).to_have_value("back_right")
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        told = http.get("/bed/garage/printer_1").json()
+    assert next(s for s in told["screws"] if s["label"] == "FR")["x"] == round(x, 2)
+    on_row(page, "printer_1", "Device", "Control", "Disarm")

@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
 
+from . import renames
 from .projects.parts.skeleton import ROOT
 
 # Set in the simulated machines' server's environment, naming its folder: the page's banner and
@@ -246,9 +247,11 @@ def _work_zero_on_the_coupon() -> None:
 def _bring_up():
     """The procedure the garage starts with, on its simulated bench."""
     from .family.procedures import Procedure
+    from .renames import current
 
-    devkit = f"{SITE}:esp32_blink"
-    printer, router = f"{SITE}:{BOARD}", f"{SITE}:{CONTROLLER}"
+    # At the names its nodes have now, however a person renamed them (renames.py).
+    devkit = f"{SITE}:{current(SITE, 'esp32_blink')}"
+    printer, router = f"{SITE}:{current(SITE, BOARD)}", f"{SITE}:{current(SITE, CONTROLLER)}"
     arm = "Arm its control in the Machine window first: GO never does."
     return Procedure(
         steps=[
@@ -287,7 +290,11 @@ def _bring_up():
                 "discipline": "mechanical",
                 "node": router,
                 "notes": arm,
-                "waits": {"subject": f"{SITE}:printer_1", "property": "state", "value": "idle"},
+                "waits": {
+                    "subject": f"{SITE}:{current(SITE, 'printer_1')}",
+                    "property": "state",
+                    "value": "idle",
+                },
                 "family": {"machine": {"home": {"node": router}}},
             },
         ]
@@ -337,14 +344,16 @@ def seed() -> Optional[str]:
         procedures.save(SITE, "bring-up", _bring_up())
     try:
         devices.identify_printer(ROUTER)
-        devices.get_state().set_binding(SITE, CONTROLLER, devices.stable_identity(ROUTER))
+        devices.get_state().set_binding(
+            SITE, renames.current(SITE, CONTROLLER), devices.stable_identity(ROUTER)
+        )
         _work_zero_on_the_coupon()
     except (ToolchainError, OSError) as exc:
         log.warning("simulated: cnc_router's controller not pinned: %s", exc)
     try:
         devices.identify_printer(PRINTER)
         identity = devices.stable_identity(PRINTER)
-        devices.get_state().set_binding(SITE, BOARD, identity)
+        devices.get_state().set_binding(SITE, renames.current(SITE, BOARD), identity)
     except (ToolchainError, OSError) as exc:
         log.warning("simulated: printer_1's mainboard not pinned: %s", exc)
         return None

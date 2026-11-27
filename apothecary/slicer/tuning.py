@@ -13,8 +13,9 @@ next turn, measured from one of those, says whether they took the error out
 and its bundled profiles write them (docs/print-tuning.md says where each was read).
 Each is moved by a named relation with its sign, damped, bounded per turn and held
 inside its limits. ``z_offset`` is said and not applied: printer_1's profile holds it
-at 0 because the board applies the probe's offset at G28, and a measured first-layer
-offset is the start piece ``first-layer-offset``, a stub. A wall's thickness is kept
+at 0 because the board applies the probe's offset at G28, and the first-layer offset its
+slices take is the one kept in its Print window from one-layer squares (the start piece
+``first-layer-offset``, ``first_layer_offset.py``). A wall's thickness is kept
 and said and moves nothing: the slice does not record the width the wall was printed
 at, and the flow follows from that width only through the slicer's model of a line.
 
@@ -191,8 +192,9 @@ SETTINGS: Tuple[Tuned, ...] = (
         says="This value will be added (or subtracted) from all the Z coordinates in the "
         "output G-code.",
         why_not="said, not applied: the printer's profile holds z_offset at 0 because the "
-        "board applies the probe's offset when G28 homes Z, and a measured first-layer "
-        "offset is the start piece first-layer-offset, a stub; building it is the owner's",
+        "board applies the probe's offset when G28 homes Z, and the first-layer offset its "
+        "slices take is the one kept in its Print window from one-layer squares (the start "
+        "piece first-layer-offset)",
     ),
 )
 TUNED = {s.key: s for s in SETTINGS}

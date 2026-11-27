@@ -104,8 +104,6 @@
             display: flex; align-items: center; gap: 0.35rem;
             font-size: 0.85rem; color: #ccc; cursor: pointer; user-select: none;
         }
-        /* An item of the View menu that opens something: Settings. */
-        .view-menu-body .view-menu-item { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
         /* The View menu's views: their heading and an entry each, as wide as the menu,
            a line under them before how the world is drawn. */
         .view-menu-views { align-self: stretch; margin: -0.45rem -0.8rem 0; padding-bottom: 0.3rem; border-bottom: 1px solid #333; }
@@ -594,16 +592,15 @@
                                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stage-actions #apply-btn { flex-grow: 2; }
         #apply-btn { background: #4a9eff; color: #0b0d10; }
-        #revert-btn, #defaults-btn { background: #2a2f38; color: #d7dae0; }
+        #revert-btn { background: #2a2f38; color: #d7dae0; }
         /* Undo and Redo of the staged numbers, and the ghost, under the stage's actions. */
         .stage-more { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
         .stage-more button { padding: 2px 8px; border: 0; border-radius: 4px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; }
         .stage-more .ghost-label { margin-left: auto; color: #9cc4e8; display: flex; align-items: center; gap: 3px; cursor: pointer; }
         .stage-more .ghost-label input { accent-color: #9cc4e8; margin: 0; }
-        /* What this tab kept from before a reload, offered back. */
-        .kept-offer { margin-top: 6px; padding: 5px 7px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
-        .kept-offer[hidden] { display: none; }
-        .kept-offer button { padding: 1px 7px; border: 0; border-radius: 3px; background: #4a4326; color: #f0e6c0; cursor: pointer; font: inherit; }
+        /* What this tab kept from before a reload, put back: said until nothing differs from what is drawn. */
+        .kept-note { margin-top: 6px; padding: 5px 7px; font-size: 11px; color: #e0cf8e; background: #2a2616; border: 1px solid #4a4326; border-radius: 4px; }
+        .kept-note[hidden] { display: none; }
         .ghost-said { font-size: 11px; color: #9cc4e8; margin: 0 0 4px; }
         .ghost-said[hidden] { display: none; }
         /* This tab's recent applies, each drawn again from the cache by a click. */
@@ -641,16 +638,13 @@
                                  border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
         .scad-code { height: 260px; border: 1px solid #2a2f38; border-radius: 4px; overflow: hidden; }
         .scad-code .cm-editor { height: 100%; }
-        /* The Part's SCAD window: the editor fills it, the code taking what the bar
+        /* The Part's SCAD editor window: the editor fills it, the code taking what the bar
            leaves. */
         .panel[data-panel="part-scad"] .panel-body-slot { display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .panel-body-slot > div, .panel[data-panel="part-scad"] [data-section="scad"],
         .panel[data-panel="part-scad"] .scad-slot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
-        .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
-                                  padding: 10px 14px; }
-        .scad-editor.fullscreen .scad-code { flex: 1; height: auto; min-height: 0; }
         .saved-row { padding: 4px 0; border-bottom: 1px solid #23272e; font-size: 11px; }
         .saved-row .saved-variant { background: none; border: 0; padding: 0; color: #4a9eff;
                                     cursor: pointer; font: inherit; font-weight: 600; }
@@ -804,7 +798,6 @@
                     <label class="toolbar-toggle" title="Walls are drawn faded and a click in the world passes through them to what is behind or inside; ticked, a click picks a wall again, until the page is left. A wall's row in Site selects it either way">
                         <input type="checkbox" id="walls-toggle"> Select walls
                     </label>
-                    <button type="button" id="settings-open" class="view-menu-item" title="The shortcuts and automatic zoom, each with its default and a reset, kept by this browser: a tab beside Pictures">Settings</button>
                 </div>
             </details>
             <details id="windows-menu" class="view-menu windows-menu">
@@ -850,7 +843,7 @@
                     <div class="panel-header">Pinned</div>
                     <div class="panel-body" id="site-pinned-body"></div>
                 </div>
-                <div class="panel-section" data-panel="jobs" data-home="site" data-group="Site" title="The jobs of this site's machines -- a print started from a pinned printer's Print card -- the running ones first, then the newest; a row selects its machine and opens it">
+                <div class="panel-section" data-panel="jobs" data-home="site" data-group="Site" title="The jobs of this site's machines -- a print or a cut started from a machine's Print or Cut window -- the running ones first, then the newest; a row opens its machine, and the drawer of the piece it made in Part › Feedback">
                     <div class="panel-header">Jobs</div>
                     <div class="panel-body"><ul id="site-jobs-list" class="site-jobs"></ul></div>
                 </div>
@@ -1463,7 +1456,6 @@
                 // (widgets/settings.js): the ring's key and modifier, the keys that step
                 // in and out, and automatic zoom's. A change applies at once.
                 this.settings = makeSettings();
-                this.settingsOpenBtn = document.getElementById('settings-open');
                 this.ringOpenBtn = document.getElementById('ring-open');
                 this.settings.onChange((values, id) => this.settingsChanged(values, id));
                 this.sayInputs();
@@ -1706,12 +1698,13 @@
                 // Its windows: the page's own, laid out as the page lays them (PAGE_LAYOUT),
                 // those of its own it leaves closed until a person opens one, and every
                 // focused system's (apothecary/systems.py); a board's Machine and its
-                // sections, the armed pad and a rig's Lighting are made for the moment.
+                // sections, the armed pad, a rig's Lighting and the Tour docked are made
+                // for the moment.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
                     known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'bed-runs', 'bed-differences', 'bed-fixes', 'bed-history', 'motion', 'badge', ...knownWindows(SYSTEMS)],
-                    transient: ['control', 'lighting', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
+                    transient: ['control', 'lighting', 'tour', ...KEPT_MACHINES, ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
@@ -1994,8 +1987,8 @@
                 });
                 defineJourneyViews(this.panels, JOURNEYS);
                 // Settings: every shortcut and navigation setting, each with its default
-                // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
-                // from ⚙ View › Settings and the canvas ring's View › Settings.
+                // and a reset (widgets/settings.js) -- a tab beside Pictures, a window of
+                // Tools: ⊞ Windows › Settings, and the ring's Panels › Tools › Settings.
                 this.settingsWidget = null;
                 this.panels.register('settings', {
                     title: 'Settings', group: 'Tools',
@@ -2071,6 +2064,8 @@
                         ? this.machine.handle.level.hot(heat, soak)
                         : { refused: "open a printer's Machine: its bed is probed there" }),
                     bedTemperature: () => this.machine?.handle?.print?.bedTemperature?.() ?? null,
+                    // A window's next step opened as Panels › Machine › Bed opens it.
+                    open: (id) => this.panels.open(id),
                 });
                 window.apothecaryBedShims = this.bedShims;
                 const bedLoad = () => this.bedShims.load();
@@ -2307,9 +2302,23 @@
                 // in a box over the page, opened from the header or the ring. It is where a
                 // journey is chosen and stepped, so the box closed is the journey left: one
                 // closed while the page was on its way to a stage leaves it on arriving.
+                // Docked, the box is the Tour window, under the world (panels.js's
+                // "under"), made for the moment: a view laid out keeps it open there.
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
+                    dock: {
+                        show: (box) => {
+                            this.panels.register('tour', {
+                                title: 'Tour', body: box, home: 'under',
+                                hint: 'The tour, docked under the world: its ⇱ floats it over the page again, its ✕ closes it and leaves its journey',
+                                onClose: () => this.tourPop.windowClosed(),
+                            });
+                            this.panels.open('tour');
+                        },
+                        hide: () => this.panels.unregister('tour'),
+                        isShown: () => this.panels.isOpen('tour'),
+                    },
                     // What a stage framed is framed again once the box shows what the
                     // stage said, which can make it taller over the world.
                     settled: () => {
@@ -2442,13 +2451,11 @@
                 // and out while the world has the keys; Backspace steps out.
                 window.addEventListener('keydown', (e) => this.onZoomKey(e));
                 // Escape: a menu folded, then a drag in progress put back, then the
-                // selection let go (the ring, a fullscreen editor and the picture chosen
-                // in Pictures take theirs first).
+                // selection let go (the ring, a maximised SCAD editor and the picture
+                // chosen in Pictures take theirs first).
                 window.addEventListener('keydown', (e) => this.onEscapeKey(e));
                 // Ctrl+S, while a part's editor is open, saves its variant from anywhere.
                 window.addEventListener('keydown', (e) => this.onSaveKey(e));
-                // ⚙ View › Settings: the Settings panel, its tab in front.
-                this.settingsOpenBtn.addEventListener('click', () => this.openSettings());
                 // ? brings the hint bar back (and puts it away again).
                 window.addEventListener('keydown', (e) => this.onHintKey(e));
                 // o (Settings' See-through windows): the windows see-through, or solid again.
@@ -2730,11 +2737,11 @@
             }
             // The room of the world's window the Tour box leaves: the largest of the room
             // beside it and above or below it, as fractions of the window from its top
-            // left ({ x, y, w, h }); the whole window where the box is closed or lies
-            // elsewhere.
+            // left ({ x, y, w, h }); the whole window where the box is closed, docked
+            // (a window of its own), or lies elsewhere.
             freeOfTheBox() {
                 const whole = { x: 0, y: 0, w: 1, h: 1 }, v = this.viewRect();
-                const el = this.tourPop?.isOpen() ? document.getElementById('tour-pop') : null;
+                const el = this.tourPop?.isOpen() && !this.tourPop.isDocked() ? document.getElementById('tour-pop') : null;
                 if (!el || !v.width || !v.height) return whole;
                 const box = el.getBoundingClientRect(), gap = 8;
                 const l = Math.max(v.left, box.left), r = Math.min(v.left + v.width, box.right);
@@ -2819,7 +2826,7 @@
 
             // Escape, one rung at a time: the View menu folded; a drag in progress put back
             // where it began, nothing saved; then the selection let go. The ring, a
-            // fullscreen editor and the picture chosen in Pictures take theirs before it,
+            // maximised SCAD editor and the picture chosen in Pictures take theirs before it,
             // and a box typed in keeps its own.
             onEscapeKey(event) {
                 if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
@@ -3010,9 +3017,9 @@
                     // selected -- focusing alone leaves the panel unbuilt.
                     this.selectFocusedPart();
                     // A part with work this tab kept from before a reload: said, and its
-                    // editor offers it back.
+                    // editor puts it back as it opens.
                     const kept = this.keptHere();
-                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit offers back` : ''}`, 'success');
+                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit puts back` : ''}`, 'success');
                     // The scan shells out to arduino-cli (a second or two): asked
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
@@ -4262,7 +4269,6 @@
                     this.detailModeEl.dispatchEvent(new Event('change'));
                     return `Detail: ${DETAIL_LABELS[this.detailModeEl.value]}`;
                 }
-                if (verb === 'settings') return this.openSettings();
                 if (verb === 'layers') return this.openLayers();
                 // One level more or less, as the Layers window's stepper.
                 if (verb === 'depth:less' || verb === 'depth:more') {
@@ -4309,14 +4315,6 @@
                 if (verb === 'only') return scope.showOnly(id, set) ? this.layersSaid({ layer: id, only: true }) : `${name}: already the only one of its set shown`;
                 if (verb === 'all') return scope.showAll(set) ? this.layersSaid({ layers: set, all: true }) : `${name}: every one of its set is shown already`;
                 return null;
-            }
-
-            // ⚙ View › Settings, and the ring's View › Settings: the Settings panel, its
-            // tab in front, the menu folded away. Answers what the status line says.
-            openSettings() {
-                this.viewMenuEl.open = false;
-                this.panels.open('settings');
-                return 'Settings: the shortcuts and automatic zoom, each with its default and a reset';
             }
 
             // A setting changed (widgets/settings.js), or all of them reset (id null):
@@ -5240,8 +5238,15 @@
                             : ''}
                     </div>`;
                 const at = camera ? ' title="Where its lens is"' : '';
+                // A machine's name is a field: a name typed renames it, its path with it,
+                // and what is kept under its old path moves to the new one (renames.py).
+                const nameRow = statusWords
+                    ? `<div class="prop-row"><label for="name-input">Name</label>
+                         <input type="text" id="name-input" value="${esc(node.name)}" maxlength="64" spellcheck="false"
+                           title="Rename ${esc(node.name)}: letters, digits, _ and -, no dot. Its path changes with it, and its board's pin, plan, filament, first-layer offset, tuning, bed places, slices, jobs and drawers move to the new one. Refused while the bench is at work"></div>`
+                    : `<div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>`;
                 this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
+                    ${nameRow}
                     ${statusRow}
                     <div class="prop-row pos-row"><label${at}>Position</label>
                         <span class="axis">X</span><input type="number" id="pos-x" aria-label="X in mm" step="10" value="${fieldMm(node.position.x)}">
@@ -5267,6 +5272,11 @@
                 const statusSelect = this.selectedBodyEl.querySelector('#status-select');
                 if (statusSelect) {
                     statusSelect.addEventListener('change', (e) => this.submitStatus(node.name, e.target.value));
+                }
+                const nameInput = this.selectedBodyEl.querySelector('#name-input');
+                if (nameInput) {
+                    const path = this.selectedName;
+                    nameInput.addEventListener('change', (e) => this.renameMachine(path, e.target.value));
                 }
                 this.bindZoomInAffordance(node);
             }
@@ -5393,8 +5403,9 @@
                             : `${ref} from the cache, nothing rendered`;
                         // Its own text with other values in it is its numbers applied, said so.
                         const numbers = this.partStages[target.key]?.tied && this.valuesOnly(target, body.sentScad);
-                        if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
-                        const keep = this.partStages[target.key]?.tied ? '; Part › Save keeps it in git' : '';
+                        // The next step named where it is: Save, beside the name, in the SCAD editor.
+                        if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Save in the SCAD editor keeps it in git`;
+                        const keep = this.partStages[target.key]?.tied ? '; Save in the SCAD editor keeps it in git' : '';
                         return variant ? `${how}: an applied variant, not saved${keep}` : `${how}: drawn as saved`;
                     },
                 };
@@ -5565,8 +5576,7 @@
                       <div id="stage-summary" class="clean">No staged changes</div>
                       <div class="stage-actions">
                         <button type="button" id="apply-btn" disabled title="Render what is staged and draw it in this tab (F6 or Ctrl+Enter in the SCAD editor)">Apply</button>
-                        <button type="button" id="revert-btn" title="Put what is staged back to what is drawn">Revert</button>
-                        ${target.part ? `<button type="button" id="defaults-btn" title="Stage the part's own values">Defaults</button>` : ''}
+                        <button type="button" id="revert-btn" title="Put what is staged back to what is drawn, a step of Undo">Revert</button>
                       </div>
                       <div class="stage-more">
                         <button type="button" id="undo-btn" disabled title="Undo the last change: a part's draft, its text and its controls both, a step back; a piece's or a camera's staged numbers (Ctrl+Z, outside a box being typed in)">↶ Undo</button>
@@ -5575,9 +5585,7 @@
                       </div>
                       <div id="part-build-note" class="build-note" hidden></div>
                       <div id="part-queue" class="queue-said" hidden></div>
-                      <div id="kept-offer" class="kept-offer" hidden><span class="kept-said"></span>
-                        <button type="button" id="kept-restore" title="Put back what this tab had before it was reloaded">Restore</button>
-                        <button type="button" id="kept-discard" title="Let it go: what is drawn stays">Discard</button></div>
+                      <div id="kept-note" class="kept-note" role="status" hidden></div>
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     </div>
@@ -5800,6 +5808,7 @@
                 if (busy !== !!this.stageBusy) { this.stageBusy = busy; this.placeStageBar(); }
                 this.markStagedControls(diff);
                 this.refreshUndoButtons(target);
+                this.showGoingBack(target, count);
                 this.showBuildNote(target);
                 // What this tab keeps of it, should it be reloaded.
                 this.keepWork(target);
@@ -5820,6 +5829,8 @@
                     return;
                 }
                 if (!count) {
+                    // What was put back from before a reload is let go of: nothing differs now.
+                    if (!this.textDiffersFromDrawn(target)) this.partEl('#kept-note')?.setAttribute('hidden', '');
                     summary.className = 'clean';
                     summary.textContent = 'No staged changes';
                     this.greyed(apply, 'nothing is staged against what is drawn: change a number first');
@@ -5912,9 +5923,11 @@
                     if (this.toSaved(target)) this.drawSaved(target);
                     else if (this.stagedValid) this.applyEditor(target);
                 };
-                this.partEl('#revert-btn').onclick = () => this.revertStaged(target);
-                const defaults = this.partEl('#defaults-btn');
-                if (defaults) defaults.onclick = () => this.stageDefaults(target);
+                // Revert, or Defaults once nothing is staged: what showGoingBack made it.
+                this.partEl('#revert-btn').onclick = (ev) => {
+                    if (ev.currentTarget.dataset.does === 'defaults') this.stageDefaults(target);
+                    else this.revertStaged(target);
+                };
                 const say = ({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error');
                 this.partEl('#undo-btn').onclick = () => say(this.undoStaged(target));
                 this.partEl('#redo-btn').onclick = () => say(this.redoStaged(target));
@@ -5923,8 +5936,6 @@
                     ghost.checked = this.ghostShown;
                     ghost.onchange = () => say(this.setGhost(ghost.checked));
                 }
-                this.partEl('#kept-restore').onclick = () => say(this.restoreKept(target));
-                this.partEl('#kept-discard').onclick = () => say(this.discardKept(target));
             }
 
             // One value staged by a control: a step of undo (a slider dragged through
@@ -5991,6 +6002,28 @@
                     if (name in stage.staged) wrap.setValue(stage.staged[name]);
                 }
                 this.refreshStage();
+            }
+
+            // The bar's one button that goes back, a step further each press: Revert while
+            // anything is staged against what is drawn; once nothing is, Defaults, where the
+            // part's own numbers are not what is staged; else greyed, saying why. Part ›
+            // Revert and Part › Defaults on the ring are its two steps.
+            showGoingBack(target, count) {
+                const button = this.partEl('#revert-btn');
+                if (!button) return;
+                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
+                const staged = count > 0 || this.textDiffersFromDrawn(target) || this.toSaved(target);
+                const own = stage?.tied ? !scad || scad.text === scad.own
+                    : !stage?.defaults || Object.entries(stage.defaults).every(([k, v]) => sameValue(stage.staged[k], v));
+                const defaults = !staged && Boolean(target.part) && !own;
+                button.dataset.does = defaults ? 'defaults' : 'revert';
+                button.textContent = defaults ? 'Defaults' : 'Revert';
+                const tip = defaults
+                    ? "Stage the part's own numbers -- its SCAD as saved -- a step of Undo; Apply then draws the saved part"
+                    : 'Put what is staged back to what is drawn, a step of Undo';
+                const why = staged || defaults ? null
+                    : target.part ? "nothing is staged, and the part's own numbers are what is drawn" : 'nothing is staged: its numbers are what is drawn';
+                setReason(button, why, tip);
             }
 
             refreshUndoButtons(target) {
@@ -6367,6 +6400,14 @@
                 this.invalidate?.();
             }
 
+            // Whether the SCAD in the editor is other than the SCAD drawn: typed and not yet
+            // rendered, or a tied part's values staged in it and not applied. SCAD only read
+            // (a part built by Python, a made piece) follows its numbers, and never differs.
+            textDiffersFromDrawn(target) {
+                const scad = this.scadStages[target?.key];
+                return Boolean(scad && scad.editable && scad.text !== null && scad.text !== (scad.drawnText ?? scad.own));
+            }
+
             // Whether a part is drawn from a variant this tab applied -- its numbers
             // moved, or its SCAD edited -- rather than as saved.
             drawnIsVariant(target) {
@@ -6507,7 +6548,8 @@
                     this.renderHistory(target);
                     this.showPresets(target, spec);
                     this.showJoin(target);
-                    this.offerKeptWork(target);
+                    stage.built = true;
+                    this.restoreKeptWork(target);
                     this.focusEditor();
                 } catch (err) {
                     console.error(err);
@@ -6559,7 +6601,8 @@
                 this.bindStageActions(target);
                 this.refreshStage();
                 this.renderHistory(target);
-                this.offerKeptWork(target);
+                stage.built = true;
+                this.restoreKeptWork(target);
                 this.focusEditor();
             }
 
@@ -6941,12 +6984,13 @@
                 if (this.scadEditor && this.scadTarget?.key === target.key) this.scadEditor.mark(messages ?? []);
             }
 
-            // ---- what a tab keeps, and offers back ----------------------------
+            // ---- what a tab keeps, and puts back ------------------------------
             //
             // A part's work -- numbers staged and not applied, its SCAD edited -- is kept
-            // in the tab's own storage as it changes, so a reload offers it back in the
-            // part's editor (Restore, Discard); a tab that keeps nothing offers nothing.
-            // Leaving with work not rendered, or SCAD not saved, asks first.
+            // in the tab's own storage as it changes, so after a reload the part's editor
+            // puts it back as it opens: staged, a step of Undo, and Revert lets it go. A
+            // tab that keeps nothing puts nothing back. Leaving with work not rendered, or
+            // SCAD not saved, asks first.
 
             readKeptWork() {
                 const kept = {};
@@ -6991,75 +7035,57 @@
             }
 
             // The editor of a target that had work kept before a reload, other than what it
-            // now shows: offered back, saying what it was.
-            offerKeptWork(target) {
-                const offer = this.partEl('#kept-offer');
-                if (!offer || this.partSection.dataset.target !== target.key) return;
+            // now shows: put back as it opens -- once its SCAD is in the editor, so the text
+            // goes back with the numbers -- and said, in the note under the bar and on the
+            // status line. What the address draws stays drawn until Apply.
+            restoreKeptWork(target) {
+                if (this.partSection?.dataset.target !== target.key) return;
                 const kept = this.keptWork[target.key];
-                const stage = this.partStages[target.key], scad = this.scadStages[target.key];
-                if (!kept) {
-                    if (stage) stage.offerPending = false;
-                    offer.hidden = true;
-                    return;
-                }
-                const numbers = stage?.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => stage && k in stage.staged && !sameValue(stage.staged[k], v));
-                // Its SCAD not read yet: what was kept stays kept, and is asked about again once it is.
-                const waiting = Boolean(target.scadUrl && !scad);
-                const text = kept.scad && scad && kept.scad !== scad.text ? kept.scad : null;
+                const stage = this.partStages[target.key];
+                if (!kept) { if (stage) stage.offerPending = false; return; }
+                // Kept as it was, not overwritten, until it is put back: once its controls are
+                // built (a part whose SCAD is the one draft known to be so) and its SCAD is
+                // in the editor, whichever is last.
                 if (stage) stage.offerPending = true;
-                if (waiting && !numbers.length) return;
-                if (!numbers.length && text === null && !waiting) {
-                    delete this.keptWork[target.key];
-                    if (stage) stage.offerPending = false;
-                    offer.hidden = true;
-                    return;
-                }
-                // A tied part's text kept: the values in it that differ from what is shown.
-                const values = text !== null && stage?.tied
-                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
-                    : [];
-                const what = [
-                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
-                    numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
-                ].filter(Boolean).join(', and ');
-                offer.querySelector('.kept-said').textContent = `Kept in this tab from before it was reloaded: ${what}. Restore puts it back; Discard lets it go.`;
-                offer.hidden = false;
+                if (!stage?.built || (target.scadUrl && !(this.scadStages[target.key] && this.scadTarget?.key === target.key && this.scadEditor))) return;
+                const { ok, said } = this.restoreKept(target);
+                if (ok) this.setStatus(said, 'success');
             }
 
             restoreKept(target) {
                 const kept = this.keptWork[target.key];
                 const stage = this.partStages[target.key], scad = this.scadStages[target.key];
-                if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to restore` };
+                if (!kept || !stage) return { ok: false, said: `${target.label}: nothing kept to put back` };
                 delete this.keptWork[target.key];
                 stage.offerPending = false;
-                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k]) => k in stage.staged);
+                const numbers = stage.tied ? [] : Object.entries(kept.staged ?? {}).filter(([k, v]) => k in stage.staged && !sameValue(stage.staged[k], v));
                 if (numbers.length) {
                     this.noteUndo(stage);
                     for (const [k, v] of numbers) stage.staged[k] = v;
                     this.showStaged(target);
                 }
-                let text = false;
-                if (kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor) {
+                const text = kept.scad && scad && kept.scad !== scad.text && this.scadTarget?.key === target.key && this.scadEditor ? kept.scad : null;
+                // A tied part's text: the values in it that differ from what is shown.
+                const values = text !== null && stage.tied
+                    ? Object.entries(this.valuesOfText(stage, text)).filter(([k, v]) => v !== undefined && !sameValue(v, stage.staged[k]))
+                    : [];
+                if (text !== null) {
                     if (kept.from) scad.from = kept.from;
                     // A tied part's: put back staged, checked, and drawn by Apply, as a
                     // control's move is; else as typed: checked, and rendered once it reads.
-                    if (stage.tied) this.scadEditor.replaceText(kept.scad);
-                    else this.scadEditor.setText(kept.scad);
-                    text = true;
+                    if (stage.tied) this.scadEditor.replaceText(text);
+                    else this.scadEditor.setText(text);
                 }
-                this.partEl('#kept-offer')?.setAttribute('hidden', '');
                 this.keepWork(target, { now: true });
-                const what = [text ? (stage.tied ? 'its edited SCAD, staged: checked, and Apply draws it' : 'its edited SCAD, checked and rendered once it reads') : null, numbers.length ? `${numbers.length} number${numbers.length > 1 ? 's' : ''} staged` : null].filter(Boolean).join(' and ');
-                return { ok: true, said: `${target.label}: restored from before the reload, ${what || 'nothing that differed'}` };
-            }
-
-            discardKept(target) {
-                delete this.keptWork[target.key];
-                const stage = this.partStages[target.key];
-                if (stage) stage.offerPending = false;
-                this.partEl('#kept-offer')?.setAttribute('hidden', '');
-                this.keepWork(target, { now: true });
-                return { ok: true, said: `${target.label}: what this tab kept from before the reload is let go; what is drawn stays` };
+                const what = [
+                    text !== null ? `its SCAD edited${kept.from ? ` from ${kept.from}` : ''}${values.length ? `, ${values.map(([k, v]) => `${k} ${described(v)}`).join(', ')}` : ''}` : null,
+                    numbers.length ? `${numbers.map(([k, v]) => `${k} ${described(v)}`).join(', ')} staged` : null,
+                ].filter(Boolean).join(', and ');
+                const note = this.partEl('#kept-note');
+                if (!what) { note?.setAttribute('hidden', ''); return { ok: false, said: `${target.label}: what was kept is what is drawn` }; }
+                const next = text !== null && !stage.tied ? 'checked, and drawn once it reads' : 'Apply draws it';
+                if (note) { note.textContent = `Put back from before the reload: ${what}. ${next[0].toUpperCase()}${next.slice(1)}; Revert lets it go.`; note.hidden = false; }
+                return { ok: true, said: `${target.label}: put back from before the reload, ${what}: ${next}, and Revert lets it go` };
             }
 
             // The parts of this site with work kept from before a reload.
@@ -7795,14 +7821,14 @@
 
             // ---- the SCAD editor ----------------------------------------
             //
-            // In the Part's SCAD window: the target's SCAD in CodeMirror
+            // In the Part's SCAD editor window: the target's SCAD in CodeMirror
             // (widgets/scad_editor.js), its file's name as the API gives it
             // (source_file), which OpenSCAD's messages name it by. A part's own SCAD
             // is edited; a part built by Python, and a made piece, are read. Typing is checked once it stops
             // (evaluated, not rendered: POST .../draft/check) and rendered soon after
             // a check that passes, as Apply renders, the draft beside the part. Save
-            // keeps it, and the numbers staged, as a variant in git. Fullscreen covers
-            // the page (Esc or its button puts it back). Each part's editor is kept while
+            // keeps it, and the numbers staged, as a variant in git. Fullscreen maximises
+            // its window (Esc in it puts it back). Each part's editor is kept while
             // another is selected -- its text, its undo, where it was scrolled -- and
             // OpenSCAD's keys work inside it: F5 checks and draws, F6 and Ctrl+Enter
             // apply, Ctrl+S saves a variant.
@@ -7846,7 +7872,7 @@
                     const handlers = {
                         onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
-                        onFullscreen: () => this.toggleScadFullscreen(),
+                        onEscape: () => this.scadWindowBack(),
                         onCheck: () => this.checkAndDraw(target),
                         onApply: () => this.applyKey(target),
                         onName: () => { scad.replacing = null; },
@@ -7879,18 +7905,16 @@
                     else if (scad.text === own) editor.say("The part's own SCAD: edit it here; it is checked once typing stops and rendered once it reads.");
                     else editor.say(scad.text === scad.savedText && scad.from ? `The variant ${scad.from}, as saved.` : 'Edited, not saved: Save keeps it in git.');
                     if (editable) await this.loadSavedVariants(target);
-                    this.offerKeptWork(target);
+                    this.restoreKeptWork(target);
                 } catch (err) {
                     console.error(err);
                     if (slot) slot.textContent = `Could not open the SCAD: ${err.message}`;
                 }
             }
 
-            // The editor let go of: back in Selected and not over the page, and out of the
-            // page, kept for when its part is edited again.
+            // The editor let go of: out of the page, kept for when its part is edited again.
             releaseScadEditor() {
                 if (!this.scadEditor) return;
-                if (this.scadEditor.isFullscreen()) this.scadEditor.fullscreen(false);
                 this.scadEditor.root.remove();
                 this.scadEditor = null;
                 this.scadTarget = null;
@@ -8211,8 +8235,12 @@
                 const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
                 editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed. ${merging}`, 'valid');
                 const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
+                // The next step: the header's ⚒ Make, which takes the variant drawn to the
+                // machine it names; else, with a printer pinned, the ring's Slice.
                 const printer = this.pinnedPrinter();
-                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD window says how to make it the part\'s source.';
+                const make = !this.makeHereEl.hidden && this.makeHereEl.dataset.on ? this.makeHereEl.textContent.trim() : null;
+                const next = make ? ` Next, ${make}, in the header, takes it there to be made.`
+                    : printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD editor says how to make it the part\'s source.';
                 const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed.${next}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
@@ -8273,17 +8301,29 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // Fullscreen: the editor over the whole page; again, or Esc, puts it back.
+            // Fullscreen: the SCAD editor's window maximised over the layout, as its stack's
+            // own button and a double-click on its tab do; again, or Esc in it, puts it back.
             toggleScadFullscreen() {
                 const editor = this.scadEditor;
                 if (!editor) return null;
-                const on = !editor.isFullscreen();
-                editor.fullscreen(on);
+                const on = !this.panels.isMaximised('part-scad');
+                if (on) this.systems.part.showSection('scad');
+                this.panels.maximise('part-scad', on);
+                editor.measure();
+                if (on) editor.focus();
                 return on;
             }
 
-            // The ring's Part › Save, Variants, Float and Fullscreen: the part's editor
-            // opened, its SCAD loaded, then what its buttons do.
+            // Esc in the SCAD editor: its window put back, when it is maximised. Whether it was.
+            scadWindowBack() {
+                if (!this.panels.isMaximised('part-scad')) return false;
+                this.panels.maximise('part-scad', false);
+                this.scadEditor?.measure();
+                return true;
+            }
+
+            // The ring's Part › Save, Variants and View › Fullscreen: the part's editor
+            // opened, its SCAD loaded, then what its buttons do, or its window maximised.
             async scadOn(path) {
                 const target = await this.editorOn(path);
                 if (!target || !target.scadUrl) return null;
@@ -8297,22 +8337,20 @@
                 return this.saveScad(target);
             }
 
-            // Part › View › SCAD: the part's SCAD window, beside the world, the editor in it.
+            // Part › View › SCAD editor: the part's SCAD editor, a window beside the world.
             async scadWindowOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD to show` };
                 this.systems.part.showSection('scad');
                 this.scadEditor?.measure();
-                return { ok: true, said: `${target.label}'s SCAD, in its window beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
+                return { ok: true, said: `${target.label}'s SCAD, in its SCAD editor beside the world: checked as typing stops, rendered once it reads; Save keeps it` };
             }
 
             async fullscreenScadOn(path) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no SCAD editor` };
-                // Over the page from its window, which is open for it.
-                if (!this.scadEditor?.isFullscreen()) this.systems.part.showSection('scad');
                 const on = this.toggleScadFullscreen();
-                return { ok: true, said: on ? `${target.label}'s SCAD editor covers the page; Esc, its button or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
+                return { ok: true, said: on ? `${target.label}'s SCAD editor maximised over the windows; Esc in it, its window's restore or Part › View › Fullscreen puts it back` : `${target.label}'s SCAD editor is back where it was` };
             }
 
             // Apply: the staged set goes to the target -- a part's STL rendered
@@ -8443,6 +8481,33 @@
             // (only meaningful at focusPath.length === 0 -- see
             // renderSelectedPanel's comment on why).
             // ---------------------------------------------------------------
+
+            // A machine renamed (PUT /sites/{site}/machines/{path}/name): the site drawn
+            // again at its new path, the machine selected there, and what moved said.
+            async renameMachine(path, name) {
+                const was = path.split('.').pop();
+                name = (name || '').trim();
+                if (!name || name === was) { this.renderSelectedPanel(); return false; }
+                this.setStatus(`Renaming ${was} to ${name}...`, 'loading');
+                try {
+                    const response = await fetch(
+                        `${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/machines/${encodeURIComponent(path)}/name`,
+                        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }
+                    );
+                    const body = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(body.detail || `rename refused (${response.status})`);
+                    await this.loadSite(this.siteName);
+                    this.selectPath(body.path);
+                    const moved = body.moved.length ? `; moved: ${body.moved.join(', ')}` : '';
+                    const failed = body.failed.length ? `; not moved: ${body.failed.join('; ')}` : '';
+                    this.setStatus(`${was} is ${name} now${moved}${failed}`, body.failed.length ? 'error' : 'success');
+                    return true;
+                } catch (err) {
+                    this.setStatus(`${was} not renamed: ${err.message}`, 'error');
+                    this.renderSelectedPanel();
+                    return false;
+                }
+            }
 
             async submitStatus(name, status) {
                 this.setStatus(`Updating ${name} status...`, 'loading');
@@ -8718,11 +8783,15 @@
             }
 
             // The header's count: Problems opened and in front (the world alone ended),
-            // scrolled to its top.
+            // scrolled to its top, and the status line saying what it holds and what next.
             openProblems() {
                 this.panels.open('problems');
                 const slot = this.problemListEl.closest('.panel-body-slot');
                 if (slot) slot.scrollTop = 0;
+                const n = this.violations.length;
+                this.setStatus(n
+                    ? `Problems: ${n} in ${this.siteName}'s layout; a row selects its piece, at its level`
+                    : `Problems: none in ${this.siteName}'s layout; whether a part is ready to make is its Readiness, under Part`, 'success');
             }
 
             // Pinned in front: mounted the first time, listed again each time after,
@@ -9133,7 +9202,7 @@
             // so its tool, its bed and its pieces move with no Machine open: only while the
             // server holds the machine's link (a pin, a scan or a Machine opened it; the
             // world opens no port, and lets one released stay released), and never while a
-            // Machine is open on the port, whose own watcher and auto-poll tick-box are the
+            // Machine is open on the port, whose own watcher and poll choice are the
             // say there. `followed` (port -> kind), from syncWorldMarks, is what is drawn;
             // without it, whether each is live is looked at again. The board model is told
             // only what changes: a watch set again schedules its board's next poll afresh.
@@ -9504,8 +9573,8 @@
                 if (!this.openMachine(printer)) return { refused: this.noMachine(printer, 'Print') };
                 const handle = this.machine && this.machine.handle;
                 if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Print again` };
-                if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print from here can make` };
-                return { said: `${printer}'s Machine makes ${piece}: choose its file in Print from here, then ▶ Print` };
+                if (!(await handle.print.choose(piece))) return { refused: `${piece} is not among the parts ${printer}'s Print window can make` };
+                return { said: `${printer}'s Machine makes ${piece}: choose its file in its Print window, then ▶ Print` };
             }
             // A print that stopped, tried again from Part › Feedback: the piece sliced again
             // for the printer that made it, in its Print window, with `how` chosen there --
@@ -9752,7 +9821,7 @@
                 if (entered) {
                     await new Promise((go) => requestAnimationFrame(() => requestAnimationFrame(go)));
                     this.onResize();
-                    if (this.tourPop?.isOpen() && !this.tourPop.isFolded()) {
+                    if (this.tourPop?.isOpen() && !this.tourPop.isDocked() && !this.tourPop.isFolded()) {
                         const free = this.freeOfTheBox();
                         if (free.w * free.h < 0.5) { this.tourPop.fold(true); did.push('the box folded to its head, the world beside it being narrow: its title unfolds it'); }
                     }
@@ -9934,13 +10003,15 @@
                 // page no longer on the journey's site was moved by a person, and stays.
                 const back = this.siteBeforeTour;
                 this.siteBeforeTour = null;
+                // Where to go next: the journey again, or the page's own layout.
+                const next = 'Tour takes it up again, ⚙ View › Reset layout puts the page\'s own back';
                 if (back && back !== this.siteName && this.siteName === journey.site && SITE_NAMES.includes(back)) {
                     this.setStatus(`Left ${journey.name}: opening ${back} again, where the page was before the tour`, 'success');
                     return this.chooseSite(back).then(() => {
-                        if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are`, 'success');
+                        if (this.siteName === back) this.setStatus(`Left ${journey.name}: ${back} opened again, where the page was before the tour; its windows stay where they are. ${next}`, 'success');
                     });
                 }
-                this.setStatus(`Left ${journey.name}: its windows stay where they are`, 'success');
+                this.setStatus(`Left ${journey.name}: its windows stay where they are. ${next}`, 'success');
             }
             // A window a person chose moves the Tour box to the step that owns it, and
             // moves nothing else. One chosen while the page is on its way to a stage is
@@ -10034,6 +10105,11 @@
                             variantFor: (path) => { const node = this.nodeByPath(path); const ref = node ? node.part_ref : path; return ref ? this.variantByPart[ref] ?? null : null; },
                             afterPrint: (job) => this.afterPrint(job),
                             afterHello: (sketch) => this.afterHello(sketch),
+                            // A row of its jobs pressed: the piece the job made, its drawer.
+                            openDrawer: async (job) => {
+                                const opened = await this.openFeedback(job.part.path, { job: job.id });
+                                this.setStatus(opened.refused ? `${job.input.name}: ${opened.refused}` : `${opened.said}: its ${job.kind} of ${job.input.name}, ${job.outcome}`, opened.refused ? 'error' : 'success');
+                            },
                             // A plan whose pinned board has come up: the board's own
                             // Machine in its place, once the page's scan names it.
                             onFound: async (path) => {
@@ -11699,9 +11775,9 @@
         ];
         // The part editor's buttons, by the cell of Part each one is.
         const PART_VERBS = [
-            ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
+            ['#apply-btn', 'part:apply'], ['#revert-btn:not([data-does="defaults"])', 'part:revert'], ['#revert-btn[data-does="defaults"]', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
-            ['#scad-save', 'part:save'], ['#scad-fullscreen', 'part:fullscreen'], ['#join-btn', 'part:adapter'],
+            ['#scad-save', 'part:save'], ['#join-btn', 'part:adapter'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
         const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
@@ -12080,6 +12156,23 @@
                     if (r.refused) refuse(r.refused); else viewer.setStatus(`${r.said}${tail}`, 'success');
                     return;
                 }
+                // Panels › Machine › Rename: the Name field of the machine selected, else of
+                // the machine whose Machine is open, chosen in Selected, for a name typed.
+                if (action === 'machine:rename') {
+                    const selected = viewer.selectedName && viewer.statusWordsFor(viewer.nodeByPath(viewer.selectedName), viewer.selectedName)
+                        ? viewer.selectedName : null;
+                    const bearer = !selected && viewer.machine && viewer.machine.path ? viewer.statusBearerFor(viewer.machine.path) : null;
+                    const path = selected || (bearer ? viewer.pathOf(bearer) : null);
+                    if (!path) { refuse('Select a machine, or open its Machine: Rename names it in Selected'); return; }
+                    if (path !== viewer.selectedName) viewer.selectPath(path);
+                    viewer.panels.open('selected');
+                    const field = document.getElementById('name-input');
+                    if (!field) { refuse(`${path} has no name to type here`); return; }
+                    field.focus();
+                    field.select();
+                    viewer.setStatus(`Type ${path}'s new name in Selected, then Enter${tail}`, 'success');
+                    return;
+                }
                 // Panels › Windows: the world alone or every window back (~), and the
                 // page's own layout again.
                 if (action === 'panel:world:toggle') {
@@ -12140,7 +12233,7 @@
                     viewer.revertStagedOn(path).then(answered);
                     return;
                 }
-                // Part › Save, Variants, Float and Fullscreen: what the SCAD editor's own do.
+                // Part › Save and Variants: what the SCAD editor's own do; Fullscreen, its window maximised.
                 if (action === 'part:save') {
                     viewer.saveScadOn(path).then(answered);
                     return;
@@ -12379,7 +12472,7 @@
         // The header's Tour and the tour box's controls, by the cell each one is
         // (Panels › Windows › Tour, widgets/tour_popover.js).
         const TOUR_VERBS = [
-            ['#tour-pop-open', 'tour:toggle'], ['.tour-pop-close', 'tour:toggle'], ['.tour-pop-back', 'tour:back'],
+            ['#tour-pop-open', 'tour:toggle'], ['.tour-pop-close', 'tour:toggle'], ['.tour-pop-dock', 'tour:dock'], ['.tour-pop-back', 'tour:back'],
             ['.tour-pop-works', 'tour:works'], ['.tour-pop-off', 'tour:off'], ['.tour-pop-next', 'tour:next'],
             ['.tour-pop-page', 'tour:page'], ['.tour-pop-put', 'tour:put'], ['.tour-pop-by', 'tour:by'],
         ];
@@ -12391,7 +12484,7 @@
         // The list, from the canvas ring: each row at this level is a piece the
         // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
         // the View menu, the cell View (its items, View's cells; its views, cells of
-        // Panels › Windows); the Windows menu, Panels › Windows; the Tour, its box and the Procedure's buttons, their cells;
+        // Panels › Windows); the Windows menu, Panels; the Tour, its box and the Procedure's buttons, their cells;
         // and the Bench's buttons, its verbs under Panels › Tools › Bench.
         const UNIVERSE_SITE = {{ universe | tojson }};
         let procedureWatched = null;
@@ -12402,9 +12495,10 @@
             if (viewer.layersWidget) viewer.layersWidget.refresh();
             const pairs = [];
             // A menu of the header is the ring its cell opens: ⚙ View is View (its views
-            // are cells of Panels › Windows), ⊞ Windows is Panels › Windows.
+            // are cells of Panels › Windows), ⊞ Windows is Panels, a cell per group of
+            // windows, as it lists every window by its group.
             pairs.push([viewer.viewMenuEl.querySelector('summary'), ['view']]);
-            pairs.push([viewer.windowsMenuEl.querySelector('summary'), ['panels', 'panel:windows']]);
+            pairs.push([viewer.windowsMenuEl.querySelector('summary'), ['panels']]);
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             // The crumb a step out goes to wears the ring's Step out, which the ring has
             // inside a site. Out of a site, the universe's crumb is Site › the universe, which
@@ -12425,7 +12519,6 @@
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
-            pairs.push([viewer.settingsOpenBtn, 'view:settings']);
             // The header's Docs: Panels › Tools › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
             // The header's Tour and the tour's box: Panels › Windows › Tour.
@@ -12446,6 +12539,9 @@
             // An armed printer's pad, popped out or put back: Panels › Machine › Control pad.
             const padToggle = document.getElementById('ctl-pop');
             if (padToggle) pairs.push([padToggle, 'panel:pad']);
+            // A machine's Name in Selected: Panels › Machine › Rename.
+            const nameField = document.getElementById('name-input');
+            if (nameField) pairs.push([nameField, 'machine:rename']);
             // The Deck window's controls and a pad's Knobs here: Panels › Tools › Deck.
             if (window.apothecaryDeck && window.apothecaryDeck.pairs) pairs.push(...window.apothecaryDeck.pairs());
             for (const el of document.querySelectorAll('#deck-here')) pairs.push([el, 'deck:here']);

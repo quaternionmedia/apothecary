@@ -357,7 +357,8 @@ def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: st
     expect(page.locator("#status")).to_contain_text("Take turn: nothing is filed of this piece yet")
     rings.on_row(page, "footpedal", "Part", "View", "Feedback", "Measure")
     expect(page.locator("#status")).to_contain_text(
-        "read the piece: x, y, z, each in mm in its row, then Keep"
+        "read the piece: x, y, z, each in mm in its row; or choose what it shows under seen, "
+        "or type a note; then Keep"
     )
     record = next(
         r
@@ -368,7 +369,7 @@ def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: st
     rows = '#feedback-measure-plan input[data-feature="{}"]'
     feedback.locator(rows.format("x")).fill(f"{x + 0.2:.3f} {x + 0.22:.3f}")
     feedback.locator(rows.format("y")).fill(f"{y + 0.1:.3f}")
-    feedback.locator("#feedback-measure-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(page.locator("#status")).to_contain_text(
         "turn-1 filed in footpedal's drawer, for printer_1: footpedal read at 2 features: "
         "no term determined",
@@ -463,7 +464,7 @@ def test_the_filament_loaded_and_a_fault_seen_tune_the_printers_next_slices(page
     seen = feedback.locator('#feedback-seen-faults select[data-fault="stringing"]')
     expect(seen).to_be_visible(timeout=10000)
     seen.select_option("2")
-    feedback.locator("#feedback-seen-keep").click()
+    feedback.locator("#feedback-keep").click()
     expect(page.locator("#status")).to_contain_text(
         "look-1 filed in footpedal's drawer, for printer_1: footpedal looked at: stringing "
         "clear; proposed: filament_retraction_length 4 mm -> 4.5 mm",

@@ -1,9 +1,10 @@
 """The page's journeys: the paths a person takes through its windows.
 
 A journey's windows are laid out together as a view, as each focused system's are
-(systems.py): listed in the header's ⚙ View › Views and on the ring's Panels ›
-Windows after the systems', and defined on the page from this registry by
-static/systems.js. docs/plans/journeys-2026-11-11.md plans them.
+(systems.py), defined on the page from this registry by static/systems.js and laid
+out by the tour going to a stage of it: ⚙ View and the ring's Panels › Windows list
+the systems' views alone, so a journey is chosen in one place.
+docs/plans/journeys-2026-11-11.md plans them.
 
 A view is written as a system's is (systems.py's ``Layout``): window ids, a
 ``stack`` of tabs, a ``row`` or ``column`` of them, the world's window as
@@ -42,7 +43,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from .site_names import UNIVERSE
-from .systems import PART, Layout
+from .systems import FAMILY, PART, Layout
 
 
 @dataclass(frozen=True)
@@ -137,10 +138,6 @@ class Journey:
     # What the tour does for every stage of it, before the stage's own ``puts``: the
     # machine whose window it opens and the piece it chooses.
     staged_on: Tuple[Tuple[str, str], ...] = ()
-    # Its view's cell under the ring's Panels › Windows, as a system's view's is, and
-    # its entry in ⚙ View › Views. That ring is full, so only Print a part has
-    # one: the others' views are laid out by the tour alone.
-    cell: str = ""
     # The ids of the journeys it was made of, whose stages it keeps under their own
     # ids: a word kept on one of theirs is this journey's stage's (tour.feedback).
     made_of: Tuple[str, ...] = ()
@@ -257,19 +254,17 @@ DESIGN = Journey(
 # Print a part on a machine: a part chosen in Site, its numbers in Parameters, the
 # machine's Print window to slice it and draw its path, the job in Jobs, and the piece
 # printed measured or looked at in its part's cabinet, Part › Feedback, either fed back
-# to the printer (docs/print-tuning.md). The machine's window and its Print window share
-# a stack at the column's foot, Print in front. Its stages that are Cut a part's too --
-# Choose, See, the one that starts the job, Measure -- say the same things the same way.
+# to the printer (docs/print-tuning.md). The machine's window, its Print window and the
+# part's Feedback share a stack at the column's foot, Print in front: the windows its
+# stages name and no other. Its stages that are Cut a part's too -- Choose, See, the one
+# that starts the job, Measure -- say the same things the same way.
 MAKE = Journey(
     id="make",
     title="Print",
-    cell="Print view",
     group="Machine",
     requires="machine",
     opened_by="a machine's badge or its row in Site, or Slice on a part's ring",
-    view=_machine_view(
-        "machine-print", "part-feedback", "pictures", "bench", "settings", active="machine-print"
-    ),
+    view=_machine_view("machine-print", "part-feedback", active="machine-print"),
     name="Print a part",
     staged_on=(("machine", "printer_1"), ("part", "footpedal"), ("makes", "footpedal")),
     steps=(
@@ -564,7 +559,8 @@ BOARD = Journey(
 
 
 # Drive a machine: the Stream Deck +, drawn by the server, whose knobs jog the
-# machine chosen on it once that machine's control is armed.
+# machine chosen on it once that machine's control is armed, and whose screens show what
+# each machine is doing.
 HANDS = Journey(
     id="hands",
     title="Drive",
@@ -614,6 +610,19 @@ HANDS = Journey(
                 "27-the-deck-jogging-the-machines.md#5",
             ),
         ),
+        Step(
+            "screens",
+            "Screens",
+            "its six screens, named along its strip: a tap on a name shows one, a knob pressed "
+            "the next; Temps draws the printer's heaters, the Bench both machines",
+            forward=("deck",),
+            shown_by=(
+                "41-the-deck-while-a-print-streams.md#1",
+                "41-the-deck-while-a-print-streams.md#3",
+                "41-the-deck-while-a-print-streams.md#4",
+                "41-the-deck-while-a-print-streams.md#5",
+            ),
+        ),
     ),
 )
 
@@ -621,29 +630,15 @@ HANDS = Journey(
 # Run a site: brought up, then watched. The procedure, each step a member's of the
 # family and fired through the hub on GO; the members, each with its door; the hub's
 # audit of what it delivered; then the Workspace, the site as its evidence has it, and
-# one machine's hour of it. The Family system's view with the Workspace behind the
-# Procedure in the tall stack beside the world, and Site behind Jobs.
+# one machine's hour of it. The Family system's own view, as Design a part's is the
+# Part's: the Procedure tall beside the world, and the Workspace and Site behind Jobs.
 RUN = Journey(
     id="run",
     title="Run",
     group="Family",
     requires="procedure",
     opened_by="⊞ Windows › Procedure",
-    view={
-        "row": [
-            {"world": True, "size": 34},
-            {"stack": ["procedure", "working"], "size": 30, "active": "procedure"},
-            {
-                "column": [
-                    {"stack": ["family-members"], "size": 20},
-                    {"stack": ["family-deliveries"], "size": 26},
-                    {"stack": ["jobs", "site", "pinned"], "size": 22, "active": "jobs"},
-                    {"stack": ["selected"], "size": 32},
-                ],
-                "size": 36,
-            },
-        ]
-    },
+    view=FAMILY.view,
     name="Run a site",
     made_of=("bring-up", "watch"),
     steps=(
@@ -978,7 +973,8 @@ LEVEL = Journey(
             "what a shim fits, measured at the bench and typed in bed_shims' Parameters: the "
             "bed screw chosen, M3 or M4, the hole typed over where it needs another; a "
             "mount's outer diameter where it meets the bed, read with calipers, as the ring; "
-            "then Keep mount in Fixes keeps both as printer_1's",
+            "then Keep mount in Fixes keeps both as printer_1's. Where each screw is: Home all "
+            "in printer_1's Machine, jog the nozzle over the screw, and Here in Fixes keeps it",
             forward=("part-parameters", "bed-fixes"),
             owns=("part-parameters", "selected"),
             puts=(("part", "bed_shims"),),
@@ -1028,8 +1024,7 @@ LEVEL = Journey(
 )
 
 
-# In the order of the chain, each handing the next what it made; a view's cell on the
-# ring is the first's alone. Calibrate a router follows Cut a part: the router that cut
+# In the order of the chain, each handing the next what it made. Calibrate a router follows Cut a part: the router that cut
 # a part is trued by a piece made to be measured. Level a bed, Compose a badge and Join a
 # hose come last, each a part made and handed back to a machine: the shims a printer's
 # readings compute, to Print a part; a badge composed in a window, to Print a part or Cut
@@ -1054,19 +1049,31 @@ def by_id(journey_id: str) -> Journey:
     return next(j for j in JOURNEYS if j.id == journey_id)
 
 
+def _now(site: str, put: Tuple[str, str]) -> List[str]:
+    """A put as the page reads it: its piece at the name it has now, however a person
+    renamed it (``apothecary/renames.py``); a part's name is no piece's and stays."""
+    from .renames import current
+
+    verb, subject = put
+    if verb in ("pin", "picture", "shapes") and ":" in subject:
+        piece, _, rest = subject.partition(":")
+        return [verb, f"{current(site, piece)}:{rest}"]
+    return [verb, current(site, subject)]
+
+
 def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
-    """Every journey (or those given: a test's own) as the page reads it: plain JSON."""
+    """Every journey (or those given: a test's own) as the page reads it: plain JSON,
+    each put at the names its site's pieces have now."""
     return [
         {
             "id": j.id,
             "title": j.title,
-            "cell": j.cell,
             "group": j.group,
             "requires": j.requires,
             "opened_by": j.opened_by,
             "view": j.view,
             "name": j.name,
-            "staged_on": [list(put) for put in j.staged_on],
+            "staged_on": [_now(j.site, put) for put in j.staged_on],
             "site": j.site,
             "steps": [
                 {
@@ -1076,7 +1083,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
                     "forward": list(s.forward),
                     "owns": list(s.owns),
                     "draws": s.draws,
-                    "puts": [list(put) for put in s.puts],
+                    "puts": [_now(j.site, put) for put in s.puts],
                     "stands_alone": s.stands_alone,
                 }
                 for s in j.steps

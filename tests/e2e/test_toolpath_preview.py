@@ -393,7 +393,7 @@ def _selected(page: Page, url: str, node: str | None) -> None:
 
 
 def _from_view(page: Page) -> None:
-    """⚙ View › Machine, as a person presses it, greyed or not."""
+    """⚙ View › Machine view, as a person presses it, greyed or not."""
     windows.from_the_view_menu(page, "machine")
 
 
@@ -422,7 +422,7 @@ def _framed(page: Page, node: str) -> dict:
 def test_view_machine_opens_the_selected_machine_and_lands_on_its_file_s_path(
     page: Page, url: str, kind: str
 ):
-    """A machine selected, its Machine not open, its file kept: ⚙ View › Machine opens
+    """A machine selected, its Machine not open, its file kept: ⚙ View › Machine view opens
     the Machine, lays its windows out, draws the whole of the file's path in the world
     and frames it, the slider that goes through it beside it."""
     machine = MACHINES[kind]
@@ -498,7 +498,7 @@ def test_view_machine_lands_on_the_path_in_a_site_reached_through_the_universe(
     page: Page, url: str
 ):
     """The garage stepped into from its piece in the universe is the garage: its
-    router selected, ⚙ View › Machine opens the Machine and draws and frames the
+    router selected, ⚙ View › Machine view opens the Machine and draws and frames the
     file's path, as it does in the garage opened by its address."""
     machine = MACHINES["router"]
     _keep_only(url, machine)

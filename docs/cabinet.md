@@ -34,9 +34,11 @@ Machine and, where the job made a part's piece, its drawer beside it.
 
 A drawer's **made** row (Part › Feedback) says how the piece was made: its values -- a
 variant's, those drawn, or the part's own -- and, for a print, how its start levelled
-(probe first, the stored mesh, or home only), its skirt, brim and raft, and what
+(probe first, the stored mesh, or home only) and the printer's first-layer offset where
+it was not 0 (*the nozzle 0.05 mm lower*), its skirt, brim and raft, and what
 the board said of its levelling as the print began: levelling on or off, the probe's
-offset, the mesh's range and where the probe said the grid lies (`job.levelled`). A
+offset, the mesh's range and where the probe said the grid lies (`job.levelled`, which
+keeps the mesh itself too, as a bed reading keeps one). A
 start that probes or turns the stored mesh on has the board say them (`M420 S1 V`,
 `M851`); the print keeps its answers from before its first layer
 (`devices.levelled_by`). The drawer's answer also carries what the part declares of its
@@ -139,11 +141,13 @@ for a print that stopped, **stopped**, where, and the tries
 ([above](#a-print-that-stopped)); **measured**, a row for each
 of a print's dimensions, its designed size, a field, and its newest reading with how far
 it is from the design, within its tolerance or outside it (the tolerance and whose it is
-said after the rows), or one field of a cut's sizes, with **Keep** (Enter in a row keeps
-too); a dimension clicked on the part in the world, with Measure shown, marks its row and
-gives it the caret;
-**seen**, each fault none to bad, with **Keep look**; **note**, with **Keep note**; Take
-turn and Undo turn; the tuning's history; and what the drawer holds, an undone filing
+said after the rows), or one field of a cut's sizes; a dimension clicked on the part in
+the world, with Measure shown, marks its row and gives it the caret; **seen**, each fault
+none to bad; **note**; then one **Keep** (Enter in any of their fields keeps too), which
+files whichever of them is typed or chosen, each a filing of its own -- a turn, a look, a
+note -- with Take turn and Undo turn beside it, the status line naming the step after
+each: Take turn once a turn or a look is filed, a Slice in the printer's Print window
+once a turn is taken; the tuning's history; and what the drawer holds, an undone filing
 struck through, a measured filing's checks under it. Machine › Print and Cut print and
 cut: they measure nothing.
 
