@@ -288,6 +288,10 @@ STANDS = {
     ("board", "hear"): lambda page: _says(page, "machine-sketch", "should run"),
     ("hands", "deck"): lambda page: (_selected("stream_deck")(page), _says(page, "deck", DECK)),
     ("hands", "knobs"): lambda page: (_on(PRINTER)(page), _says(page, "machine", "Control")),
+    # The six screens are named along the strip, which the Deck window shows as drawn.
+    ("hands", "screens"): lambda page: expect(
+        windows.panel(page, "deck").locator(".deck-strip-tap img:visible")
+    ).to_have_count(1, timeout=15000),
     # The procedure it says is the simulated garage's own, which is named bring-up.
     ("run", "steps"): lambda page: (
         page.wait_for_function(f"() => {VIEWER}.machine === null"),
