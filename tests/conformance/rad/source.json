@@ -1,7 +1,7 @@
 {
   "repository": "quaternionmedia/rad",
   "path": "conformance/vectors.json",
-  "commit": "d5e418264370234efcf9e62d7ef2ac4be2ac54c3",
+  "commit": "1df42efd7a26dcffd0c0c5670f69ded4a8b41d29",
   "coordinate": "0.0.2",
   "sha256": "17da5a98b9dc12631286edc9dd9f805cc5992b4a62144b714024202ac0fe8694",
   "replayed": ["search"],
