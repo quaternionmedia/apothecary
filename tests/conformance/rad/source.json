@@ -1,0 +1,9 @@
+{
+  "repository": "quaternionmedia/rad",
+  "path": "conformance/vectors.json",
+  "commit": "1df42efd7a26dcffd0c0c5670f69ded4a8b41d29",
+  "coordinate": "0.0.2",
+  "sha256": "17da5a98b9dc12631286edc9dd9f805cc5992b4a62144b714024202ac0fe8694",
+  "replayed": ["search"],
+  "notes": "rad's conformance vectors, copied byte for byte from the commit named, never edited here. tests/test_ring_search.py replays the suites listed under `replayed` against apothecary/menu.py and apothecary/static/ring.js, and fails when the file's hash or coordinate is not the one named. To take a newer coordinate: copy the file from rad at the commit that carries it, then write that commit, its coordinate and the file's sha256 here."
+}

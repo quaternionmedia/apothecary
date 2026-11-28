@@ -11949,8 +11949,19 @@
         // verbs): a piece's Print opens the Machine's Print, Device › Flash its
         // Flashing, Part › Edit the part's Parameters.
         async function carry(intent) {
+            const before = viewer.statusEl.textContent;
             await carryVerb(intent);
             viewer.openSectionsFor(intent.action);
+            if (intent.searched) remind(intent.label, intent.searched, before);
+        }
+        // A choice made by typing in the ring says, after what it did, the keys that would
+        // have made it, so the next time is pressed (docs/viewer.md, "The ring"): after the
+        // verb's own words when it said some, else on its own.
+        function remind(label, keys, before) {
+            const said = viewer.statusEl.textContent;
+            const next = `next time, ${keys}`;
+            if (said && said !== before) viewer.setStatus(`${said} · ${next}`, viewer.statusType);
+            else viewer.setStatus(`${label}: ${next}`, 'success');
         }
         async function carryVerb(intent) {
             const action = intent.action, path = intent.context.targets[0] || '';
@@ -12606,6 +12617,15 @@
             ...ringKeys(),
             whatFor,
             onIntent: carry,
+            // Typing in the ring finds the page's own keys too, after its options; one chosen
+            // is pressed, and a ring entered by a search says its keys as a choice does.
+            shortcuts: () => viewer.settings.shortcuts(),
+            keyLabel: (combo) => viewer.settings.keyLabel(combo),
+            onSearched: (found) => {
+                const before = viewer.statusEl.textContent;
+                if (found.press) found.press();
+                remind(found.label, found.keys, before);
+            },
             onResolved: async (ring, spec) => {
                 if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
                 if (spec.context.pointing === 'device') {

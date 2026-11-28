@@ -13,7 +13,8 @@
  * drawn under them (panels.js), and how opaque each is then; the key that turns it.
  *
  * makeSettings() is the store the page reads: values(), set(id, value), reset(id),
- * resetAll(), holder(combo) -- whose a key is -- and onChange(fn), told at once of
+ * resetAll(), holder(combo) -- whose a key is -- shortcuts() -- the viewer's own keys,
+ * as the ring's search finds them -- and onChange(fn), told at once of
  * every change, so nothing waits for a reload. What differs from the defaults is kept
  * under one key of this browser's storage; a browser that keeps nothing (storage
  * refused, a private window) has the defaults, and every setting still works for the
@@ -105,6 +106,24 @@ export function keyLabel(combo) {
     return [...mods, word].join("+");
 }
 
+/* The viewer's own keys as the ring's search finds them (ring.js searchShortcuts): one
+ * entry per thing a key does, by what it does -- `key` the first key that does it, as
+ * keys.js names it, and `label` every key that does, as a person reads them ("~ or `").
+ * The shortcuts' keys are this store's; the projector's act on its own page, not here. */
+export function pageShortcuts(store) {
+    const values = store.values();
+    const byDoes = new Map();
+    const add = (combo, does) => {
+        if (!combo || !does) return;
+        if (!byDoes.has(does)) byDoes.set(does, []);
+        const keys = byDoes.get(does);
+        if (!keys.includes(combo)) keys.push(combo);
+    };
+    for (const s of SETTINGS) if (s.kind === "key" && !s.id.startsWith("projector")) add(values[s.id], s.label);
+    for (const [combo, does] of Object.entries(FIXED)) add(combo, does);
+    return [...byDoes].map(([does, keys]) => ({ key: keys[0], does, label: keys.map(keyLabel).join(" or ") }));
+}
+
 export function modifierLabel(name) {
     return MODIFIER_LABELS[name] || MODIFIER_LABELS.ctrl;
 }
@@ -187,6 +206,10 @@ export function makeSettings({ storageKey = SETTINGS_KEY } = {}) {
             if (holder) return { ok: false, said: `${keyLabel(s.def)}, its default, is taken: ${holder}. Change that first, or Reset all` };
             return api.set(id, s.def);
         },
+        /* The viewer's own keys as the ring's search finds them (pageShortcuts), and how a
+         * key is written for a person (keyLabel). */
+        shortcuts: () => pageShortcuts(api),
+        keyLabel,
         /* Every setting back to its default at once, whatever holds what. */
         resetAll() {
             Object.assign(values, defaults());

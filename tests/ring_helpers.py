@@ -92,3 +92,28 @@ def every_action(rings: Sequence[Ring]) -> Dict[str, str]:
     for ring in rings:
         walk_options(ring.options)
     return found
+
+
+def rad_options(items: Sequence[dict]) -> list:
+    """rad's MenuSpec items (its conformance vectors' ``menus``) as the ring's options: a
+    leaf's action is rad's id, marked as rad's so no verb of the page's is named."""
+    return [
+        Option(
+            id=item["id"],
+            label=item["label"],
+            enabled=item.get("enabled", True),
+            destructive=item.get("destructive", False),
+            **(
+                {"children": rad_options(item["children"])}
+                if "children" in item
+                else {"action": f"rad:{item['id']}"}
+            ),
+        )
+        for item in items
+    ]
+
+
+def rad_ring(vectors: dict, name: str) -> Ring:
+    """One of the trees rad's vectors run their search cases on, as a resolved ring."""
+    menu = vectors["menus"][name]
+    return Ring(title=menu.get("title"), options=rad_options(menu["items"]))
